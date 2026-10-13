@@ -461,6 +461,21 @@ pub fn move_to(
         .optional()?
         .ok_or_else(|| DbError::NotFound(format!("collection entry {id}")))?;
 
+    // Ids are per-tenant counters: a binder or deck that is not in this
+    // tenant's database is not found, whatever another tenant calls it.
+    for (table, target) in [("binders", binder_id), ("decks", deck_id)] {
+        if let Some(t) = target {
+            let found: bool = conn.query_row(
+                &format!("SELECT EXISTS(SELECT 1 FROM {table} WHERE id = ?1)"),
+                [t],
+                |r| r.get(0),
+            )?;
+            if !found {
+                return Err(DbError::NotFound(format!("{table} {t}")));
+            }
+        }
+    }
+
     let tx = conn.transaction()?;
     tx.execute(
         "UPDATE collection SET binder_id = ?2, deck_id = ?3 WHERE id = ?1",

@@ -324,7 +324,7 @@ check "setup.sh scaffolds the knob commented out" "1" \
 # access.env scaffold lives in config-lib.sh (db-g6ku: extracted so deploy.sh
 # can scaffold it for existing instances). Dumpstar is multi-tenant from day one,
 # so the test pins that the scaffold carries the switch exactly once, not
-# whether it is commented (pokedumpster's opt-in default).
+# whether it is commented (the source site's opt-in default).
 check "access.env scaffold carries DUMPSTAR_MULTITENANT once" "1" \
 	"$(grep -Ec '^#?DUMPSTAR_MULTITENANT=1$' "${REPO_DIR}/deploy/config-lib.sh" || true)"
 # systemd EnvironmentFile does not strip trailing # comments from value lines,

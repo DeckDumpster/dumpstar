@@ -322,11 +322,11 @@ check "setup.sh does not" "0" \
 check "setup.sh scaffolds the knob commented out" "1" \
 	"$(grep -c '^#DUMPSTAR_STORE_ROOT=' "${REPO_DIR}/deploy/setup.sh" || true)"
 # access.env scaffold lives in config-lib.sh (db-g6ku: extracted so deploy.sh
-# can scaffold it for existing instances). Must not enable multi-tenant on CI
-# instances: they bind 0.0.0.0 — an uncommented DUMPSTAR_MULTITENANT=1 makes
-# them refuse to start.
-check "access.env scaffold has DUMPSTAR_MULTITENANT commented out" "1" \
-	"$(grep -c '^#DUMPSTAR_MULTITENANT=1$' "${REPO_DIR}/deploy/config-lib.sh" || true)"
+# can scaffold it for existing instances). Dumpstar is multi-tenant from day one,
+# so the test pins that the scaffold carries the switch exactly once, not
+# whether it is commented (pokedumpster's opt-in default).
+check "access.env scaffold carries DUMPSTAR_MULTITENANT once" "1" \
+	"$(grep -Ec '^#?DUMPSTAR_MULTITENANT=1$' "${REPO_DIR}/deploy/config-lib.sh" || true)"
 # systemd EnvironmentFile does not strip trailing # comments from value lines,
 # so value lines must carry no inline comments.
 check "access.env scaffold has no inline comments on value lines" "0" \
@@ -3603,8 +3603,8 @@ check "deploy scaffolds access.env for existing instance" "present" \
 	"$([ -f "$ACCESS19" ] && echo present || echo absent)"
 check "scaffolded file has mode 600" "600" \
 	"$(stat -c '%a' "$ACCESS19" 2>/dev/null || echo missing)"
-check "scaffolded file has DUMPSTAR_MULTITENANT commented out" "1" \
-	"$(grep -c '^#DUMPSTAR_MULTITENANT=1$' "$ACCESS19" || true)"
+check "scaffolded file carries DUMPSTAR_MULTITENANT once" "1" \
+	"$(grep -Ec '^#?DUMPSTAR_MULTITENANT=1$' "$ACCESS19" || true)"
 
 # Second run must not overwrite an existing file (idempotence).
 printf '# custom\nDUMPSTAR_MULTITENANT=1\n' > "$ACCESS19"

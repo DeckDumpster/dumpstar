@@ -11,9 +11,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use rusqlite::{Transaction, params};
 
 use crate::Catalog;
+use crate::crosswalk::{self, OfficialPrinting};
 use crate::error::{CatalogError, Result};
 use crate::landing::Provenance;
-use crate::crosswalk::{self, OfficialPrinting};
 use crate::record::{AlarmRecord, CatalogPayload, FORMAT};
 use crate::swu::{self, CrawlMarker};
 use crate::tcgcsv::{self, GroupInfo, GroupKind};
@@ -92,7 +92,12 @@ pub fn apply(catalog: &mut Catalog, bytes: &[u8], prov: &Provenance) -> Result<A
         swu::SRC_OFFICIAL => {
             let mut page = crate::official::parse_page(bytes)?;
             let mut known = BTreeMap::new();
-            for c in page.payload.cards.iter().filter(|c| c.card_id.starts_with(crate::official::PLACEHOLDER)) {
+            for c in page
+                .payload
+                .cards
+                .iter()
+                .filter(|c| c.card_id.starts_with(crate::official::PLACEHOLDER))
+            {
                 let hit: Option<String> = tx
                     .query_row(
                         "SELECT card_id FROM cards WHERE card_id NOT LIKE 'n:%' AND name = ?1 AND subtitle IS ?2 LIMIT 1",
@@ -408,7 +413,10 @@ fn put_alarms(tx: &Transaction, alarms: &[AlarmRecord], replace: &[&str]) -> Res
             params![a.kind, a.key, a.severity, a.detail],
         )?;
     }
-    let keep: BTreeSet<(&str, &str)> = alarms.iter().map(|a| (a.kind.as_str(), a.key.as_str())).collect();
+    let keep: BTreeSet<(&str, &str)> = alarms
+        .iter()
+        .map(|a| (a.kind.as_str(), a.key.as_str()))
+        .collect();
     for kind in replace {
         let existing: Vec<String> = tx
             .prepare("SELECT key FROM alarms WHERE kind = ?1")?
@@ -416,7 +424,10 @@ fn put_alarms(tx: &Transaction, alarms: &[AlarmRecord], replace: &[&str]) -> Res
             .collect::<std::result::Result<_, _>>()?;
         for key in existing {
             if !keep.contains(&(*kind, key.as_str())) {
-                n += tx.execute("DELETE FROM alarms WHERE kind = ?1 AND key = ?2", params![kind, key])?;
+                n += tx.execute(
+                    "DELETE FROM alarms WHERE kind = ?1 AND key = ?2",
+                    params![kind, key],
+                )?;
             }
         }
     }
@@ -437,7 +448,9 @@ const JOIN_KINDS: &[&str] = &[
 /// (the fake, or before the first price sync) is left exactly as it is.
 fn rejoin(tx: &Transaction, r: &mut ApplyReport) -> Result<()> {
     let products: Vec<tcgcsv::ProductRecord> = tx
-        .prepare("SELECT product_id, group_id, name, number FROM tcgcsv_products ORDER BY product_id")?
+        .prepare(
+            "SELECT product_id, group_id, name, number FROM tcgcsv_products ORDER BY product_id",
+        )?
         .query_map([], |row| {
             Ok(tcgcsv::ProductRecord {
                 product_id: row.get(0)?,
@@ -501,7 +514,13 @@ fn rejoin(tx: &Transaction, r: &mut ApplyReport) -> Result<()> {
     let want: BTreeSet<(String, String, String)> = joined
         .links
         .iter()
-        .map(|l| (l.product_id.to_string(), l.sub_type_name.clone(), l.printing_id.clone()))
+        .map(|l| {
+            (
+                l.product_id.to_string(),
+                l.sub_type_name.clone(),
+                l.printing_id.clone(),
+            )
+        })
         .collect();
     let have: Vec<(String, String, String)> = tx
         .prepare("SELECT source_id, sub_type_name, printing_id FROM printing_source_id WHERE source = 'tcgcsv'")?

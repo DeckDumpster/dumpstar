@@ -24,7 +24,11 @@ pub const PAGE_SIZE: u32 = 100;
 pub const PLACEHOLDER: &str = "n:";
 
 pub fn card_name_key(c: &CardRecord) -> String {
-    crate::crosswalk::name_key(&format!("{}{}", c.name, c.subtitle.as_deref().unwrap_or("")))
+    crate::crosswalk::name_key(&format!(
+        "{}{}",
+        c.name,
+        c.subtitle.as_deref().unwrap_or("")
+    ))
 }
 
 /// Move placeholder-id cards and printings onto the real card whose name key
@@ -177,18 +181,20 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
             ));
             continue;
         };
-        let exp = rel(a, "expansion").and_then(|e| e.get("attributes")).unwrap();
+        let exp = rel(a, "expansion")
+            .and_then(|e| e.get("attributes"))
+            .unwrap();
         if !payload.sets.iter().any(|s| s.set_code == set_code) {
-        payload.sets.push(SetRecord {
-            set_code: set_code.clone(),
-            name: exp
-                .get("name")
-                .and_then(Value::as_str)
-                .unwrap_or(&set_code)
-                .to_string(),
-            release_date: None,
-            sort_order: exp.get("sortValue").and_then(Value::as_i64).unwrap_or(0),
-        });
+            payload.sets.push(SetRecord {
+                set_code: set_code.clone(),
+                name: exp
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or(&set_code)
+                    .to_string(),
+                release_date: None,
+                sort_order: exp.get("sortValue").and_then(Value::as_i64).unwrap_or(0),
+            });
         }
 
         let vt = rel(a, "variantTypes")
@@ -210,9 +216,14 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
             });
         let foil = vt_name.ends_with(" Foil")
             || vt.and_then(|v| v.get("foil")).and_then(Value::as_bool) == Some(true);
-        let variant = vt_name.strip_suffix(" Foil").unwrap_or(&vt_name).to_string();
+        let variant = vt_name
+            .strip_suffix(" Foil")
+            .unwrap_or(&vt_name)
+            .to_string();
 
-        if seen_cards.insert(card_id.clone()) || (variant == "Standard" && !foil && std_cards.insert(card_id.clone())) {
+        if seen_cards.insert(card_id.clone())
+            || (variant == "Standard" && !foil && std_cards.insert(card_id.clone()))
+        {
             let card = CardRecord {
                 card_id: card_id.clone(),
                 name: text(a, "title").unwrap_or_default(),
@@ -229,7 +240,11 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
                         .iter()
                         .filter_map(|k| text(a, k))
                         .collect();
-                    if parts.is_empty() { None } else { Some(parts.join("\n")) }
+                    if parts.is_empty() {
+                        None
+                    } else {
+                        Some(parts.join("\n"))
+                    }
                 },
             };
             // The Standard non-foil entry defines the card; any other entry

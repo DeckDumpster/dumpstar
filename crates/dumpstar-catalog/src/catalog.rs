@@ -38,7 +38,9 @@ impl Catalog {
         use rusqlite::OptionalExtension;
         Ok(self
             .conn
-            .query_row("SELECT value FROM sync_state WHERE key = ?1", [key], |r| r.get(0))
+            .query_row("SELECT value FROM sync_state WHERE key = ?1", [key], |r| {
+                r.get(0)
+            })
             .optional()?)
     }
 

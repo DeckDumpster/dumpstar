@@ -54,6 +54,8 @@ enum Command {
     Outbox(outbox::OutboxArgs),
     /// Apply the SWU catalog (fetch, land raw, apply idempotently); a timer job.
     CatalogApply(catalog::CatalogApplyArgs),
+    /// Check the SWU catalog for alarms (missing price day, unmatched printings); a timer job.
+    CatalogCheck(catalog::CatalogCheckArgs),
 }
 
 /// Serialised access to process-wide origin overrides (ENV_TCGCSV_BASE_URL etc.)
@@ -76,5 +78,6 @@ fn main() -> anyhow::Result<()> {
         Command::Import(args) => import::run(args),
         Command::Outbox(args) => outbox::run(args),
         Command::CatalogApply(args) => catalog::run(args),
+        Command::CatalogCheck(args) => catalog::check(args),
     }
 }

@@ -72,7 +72,12 @@ pub fn group_table() -> Vec<GroupRow> {
             };
             let variants = f
                 .next()
-                .map(|v| v.split('|').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+                .map(|v| {
+                    v.split('|')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect()
+                })
                 .unwrap_or_default();
             Some(GroupRow {
                 group_id,
@@ -132,7 +137,11 @@ pub fn parse_products(bytes: &[u8]) -> Result<Vec<ProductRecord>> {
             Ok(ProductRecord {
                 product_id: p.get("productId").and_then(Value::as_i64).ok_or_else(bad)?,
                 group_id: p.get("groupId").and_then(Value::as_i64).ok_or_else(bad)?,
-                name: p.get("name").and_then(Value::as_str).ok_or_else(bad)?.into(),
+                name: p
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .ok_or_else(bad)?
+                    .into(),
                 number: p
                     .get("extendedData")
                     .and_then(Value::as_array)
@@ -175,9 +184,12 @@ pub fn parse_prices(bytes: &[u8], observed_on: &str) -> Result<Vec<PriceRecord>>
 /// the day it names is the day its prices describe.
 pub fn stamp_day(stamp: &str) -> Option<&str> {
     let d = stamp.trim().get(..10)?;
-    let ok = d
-        .bytes()
-        .enumerate()
-        .all(|(i, b)| if i == 4 || i == 7 { b == b'-' } else { b.is_ascii_digit() });
+    let ok = d.bytes().enumerate().all(|(i, b)| {
+        if i == 4 || i == 7 {
+            b == b'-'
+        } else {
+            b.is_ascii_digit()
+        }
+    });
     ok.then_some(d)
 }

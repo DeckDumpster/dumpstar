@@ -1,0 +1,33 @@
+[package]
+name = "dumpstar-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "dumpstar"
+path = "src/main.rs"
+
+[dependencies]
+dumpstar-core.workspace = true
+dumpstar-db.workspace = true
+dumpstar-derive.workspace = true
+dumpstar-ingest.workspace = true
+dumpstar-keys.workspace = true
+dumpstar-lake.workspace = true
+dumpstar-server.workspace = true
+rusqlite.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+# The raw-coverage gate in `data.rs` drives a whole acquisition phase, which
+# builds its own upstream clients — so it needs the in-process fake upstream
+# to point them at. Test tier only; the feature is off in the binary.
+dumpstar-ingest = { workspace = true, features = ["test-support"] }
+tempfile.workspace = true
+flate2.workspace = true
+tar.workspace = true

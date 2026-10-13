@@ -1,0 +1,382 @@
+#!/usr/bin/env bash
+#
+# Run independent CI gates concurrently, capped, with the disk floor checked
+# before every dispatch (pd-2nl9, item 4 of pd-6onp).
+#
+# Sourced by deploy/ci.sh. Defines functions and runs nothing.
+#
+# ── WHAT THIS IS FOR ────────────────────────────────────────────────────────
+#
+# Eleven of deploy/ci.sh's gates stand up their own containers and share
+# nothing: litestream, drill, alarming, recreate, upgrade, tenant-header,
+# schema-version, the three lake gates and refresh. Each already derives every
+# name it uses — network, container, volume, image tag, unit prefix, temp dir —
+# from its own prefix plus a per-checkout hash, because concurrent polecats
+# already run whole CI suites beside each other. That isolation is what makes
+# running them at the same time a scheduling change rather than a correctness
+# one, and tests/ci/parallel_test.sh asserts the prefixes stay distinct.
+#
+# They are latency, not throughput: the box has four cores and the gates spend
+# their time waiting on containers to come up, replicate, and stop. Sequentially
+# they add up to most of a CI run's wall clock.
+#
+# ── THE CAP IS A RESOURCE DECISION, NOT A TUNING KNOB ───────────────────────
+#
+# Three at a time by default, four at the very most. Each of these gates stands
+# up two or three containers — a MinIO, sometimes a JVM (Nessie), sometimes a
+# whole dumpstar instance with a Litestream sidecar. Above four the failures stop
+# looking like resource exhaustion and start looking like flaky gates, which is
+# the worst possible outcome for a suite whose job is to be believed.
+#
+# ── THE BOX THESE NUMBERS CAME FROM IS NOT THE BOX CI RUNS ON ──────────────
+#
+# Both constants below were measured on the shared runner: a 15G box with four
+# cores that ALSO ran prod and every other CI run, serialised behind one runner.
+# Since #118 each run gets its own ephemeral VM — 8 GiB and four cores, with
+# nothing else on it. Same cores, about half the RAM, none of the neighbours.
+#
+# That is a different experiment, and neither number has been re-run against it.
+# The cap could be too conservative now (the contention that forced it down to
+# two was partly prod's) or still exactly right (half the RAM, and these gates
+# are memory-bound, not CPU-bound). Re-measure before trusting it either way;
+# runner-deps.sh reports the machine on every run so the comparison is possible
+# at all, which it was not when these numbers were written.
+#
+# DUMPSTAR_CI_JOBS lowers it — 1 is a serial run, which is the first thing to try
+# when a parallel run misbehaves. A value above the ceiling is clamped out loud
+# rather than honoured silently.
+#
+# ── THE DISK FLOOR IS CHECKED BEFORE EVERY DISPATCH ─────────────────────────
+#
+# deploy/ci.sh checks the floor once at startup, which was enough when one gate
+# ran at a time and the previous gate's teardown had already returned the disk.
+# Three at a time can be three images, three volumes and three MinIO stores
+# deep at once, so the check moves inside the loop: before every job is
+# launched, never once per batch.
+#
+# Below the floor with gates still running, the runner HOLDS — it launches
+# nothing new and waits for a running gate to finish and return its space, then
+# asks again. That is the whole reason it is a hold and not an abort: the
+# thing most likely to fix a low-disk moment is the gate that is about to tear
+# itself down. Below the floor with NOTHING running, there is nothing left to
+# wait for, and the run fails naming the gates that never started rather than
+# filling the disk to find out.
+#
+# It is the same guard deploy/diskcheck.sh --floor installs everywhere else,
+# invoked as a subprocess, so DUMPSTAR_DISK_FLOOR_GB moves both. Nothing here
+# re-derives a threshold.
+#
+# ── A FAILURE IS NEVER MASKED ───────────────────────────────────────────────
+#
+# Every queued gate runs. A gate that fails does not cancel the others, and the
+# others passing does not soften it: each gate's full output is printed under
+# its own name, the summary table marks it FAIL, and dumpstar_par_run returns
+# non-zero, which under deploy/ci.sh's `set -e` ends the run red. Sequentially
+# the first failure stopped the suite; in parallel the wave finishes, so one
+# red run now reports every gate that was already broken instead of only the
+# earliest one.
+#
+# ── OUTPUT ──────────────────────────────────────────────────────────────────
+#
+# Concurrent gates cannot share a terminal without shredding each other's
+# output, and a shredded CI log is a gate nobody can diagnose. Each gate writes
+# to its own file and the whole file is printed, verbatim and contiguous, at the
+# moment that gate finishes. Nothing is summarised away, nothing is dropped, and
+# a line printed by one gate can never land inside another's.
+
+# The queue. dumpstar_par_reset clears it; dumpstar_par_add appends.
+DUMPSTAR_PAR_LABELS=()
+DUMPSTAR_PAR_CMDS=()
+
+# Live children, keyed by pid, so a caller's EXIT trap can take them down with
+# it — see dumpstar_par_kill_all. Entries are removed as gates finish: a pid the
+# kernel has already recycled belongs to somebody else, and signalling it would
+# be the worst kind of bug to ship in a cleanup path.
+declare -A DUMPSTAR_PAR_LIVE=()
+
+_DUMPSTAR_PAR_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# The filesystems the floor is measured on. deploy/ci.sh overwrites this with
+# DUMPSTAR_CI_DISK_PATHS — every disk a run writes to — so this is only ever the
+# fallback for a caller that names none. The list lives THERE and not here, and
+# so does the enumeration of what is on it: a second copy of either is how one
+# of them stops covering a disk (pd-20ia, pd-6jyd).
+DUMPSTAR_PAR_DISK_PATHS=("$HOME")
+
+# The floor gate itself, as a path to a script taking `--floor <path>...`.
+# Overridable so tests/ci/parallel_test.sh can drive the hold branch from a stub
+# whose answer changes mid-run — a real disk cannot be made to do that on cue,
+# and the branch that waits is the one worth proving. §4 of that test runs the
+# REAL script against an impossible floor, so both halves are covered.
+DUMPSTAR_PAR_DISKCHECK="${DUMPSTAR_PAR_DISKCHECK:-${_DUMPSTAR_PAR_LIB_DIR}/diskcheck.sh}"
+
+# How many gates at once. See the header: 3 by default, 4 is the ceiling.
+DUMPSTAR_PAR_JOBS_CEILING=4
+
+dumpstar_par_reset() {
+	DUMPSTAR_PAR_LABELS=()
+	DUMPSTAR_PAR_CMDS=()
+	DUMPSTAR_PAR_LIVE=()
+}
+
+# dumpstar_par_add <label> <command> [args...]
+#
+# The label names the gate in the log, the summary and its own output file, so
+# it is restricted to what is safe in all three. argv is quoted here rather than
+# left as a string for the caller to get right.
+dumpstar_par_add() {
+	local label="$1"
+	shift
+	case "$label" in
+	'' | *[!a-z0-9-]*)
+		echo "dumpstar_par_add: '${label}' is not a usable gate label ([a-z0-9-]+)" >&2
+		return 2
+		;;
+	esac
+	[ "$#" -gt 0 ] || {
+		echo "dumpstar_par_add: ${label} has no command" >&2
+		return 2
+	}
+	DUMPSTAR_PAR_LABELS+=("$label")
+	DUMPSTAR_PAR_CMDS+=("$(printf '%q ' "$@")")
+}
+
+dumpstar_par_count() { printf '%s\n' "${#DUMPSTAR_PAR_LABELS[@]}"; }
+
+# Take down anything still running. For a caller's EXIT trap: a cancelled CI run
+# would otherwise leave gates behind still holding containers. SIGTERM, not
+# SIGKILL, so each gate's own EXIT trap gets to remove what it created.
+dumpstar_par_kill_all() {
+	local pid
+	for pid in "${!DUMPSTAR_PAR_LIVE[@]}"; do
+		kill -TERM "$pid" 2>/dev/null || true
+	done
+}
+
+# Is there room on disk to start one more gate? Quiet when the answer is yes —
+# the floor is reported once by deploy/ci.sh at startup and does not need
+# repeating fifteen times.
+_dumpstar_par_disk_ok() {
+	local out rc=0
+	out="$(bash "$DUMPSTAR_PAR_DISKCHECK" --floor "${DUMPSTAR_PAR_DISK_PATHS[@]}" 2>&1)" || rc=$?
+	[ "$rc" -eq 0 ] && return 0
+	printf '%s\n' "$out" >&2
+	return 1
+}
+
+# Print one finished gate's whole log under its own name, and record the result.
+# Reads and writes dumpstar_par_run's locals — bash scopes dynamically, and
+# keeping them local there is what makes the runner re-entrant.
+_dumpstar_par_finish() { # _dumpstar_par_finish <pid> <exit status>
+	local pid="$1" frc="$2"
+	# _dumpstar_par_reap only ever waits on gate pids, so a pid with no label is a
+	# bug in this file rather than something a caller can cause. Named as one:
+	# under `set -u` the bare lookup would abort the run from inside a harvest
+	# path, which is how it presented the first time (see §5b of the test).
+	[ -n "${_PAR_LABEL_OF[$pid]:-}" ] || {
+		echo "dumpstar_par_run: harvested pid ${pid}, which is not a queued gate" >&2
+		return 1
+	}
+	local label="${_PAR_LABEL_OF[$pid]}"
+	local secs=$(($(date +%s) - ${_PAR_START_OF[$pid]}))
+	local status=ok
+
+	unset "DUMPSTAR_PAR_LIVE[$pid]"
+	running=$((running - 1))
+	if [ "$frc" -ne 0 ]; then
+		# 124 is timeout(1) saying it fired; 137 is the -k SIGKILL that follows
+		# when the gate ignored TERM. Distinguished from a plain FAIL because
+		# they call for opposite reading: a FAIL means the gate ran and its
+		# assertions did not hold, a TIMEOUT means the gate never reached them
+		# and its log ends mid-sentence. Reading the second as the first is how
+		# a hang gets triaged as a flaky assertion.
+		case "$frc" in
+		124 | 137) status=TIME ;;
+		*) status=FAIL ;;
+		esac
+		failed+=("$label")
+	fi
+
+	echo ""
+	echo "──────── ${label}: ${status} (${secs}s, exit ${frc}) ────────"
+	cat "${logdir}/${label}.log" 2>/dev/null || true
+	if [ "$status" = TIME ]; then
+		echo "    !! ${label} was still running after ${gate_timeout}s and was stopped."
+		echo "       Its log above ends where it stopped making progress — that is"
+		echo "       the last thing it did, not the thing it failed on."
+		echo "       Raise the bound for this run with DUMPSTAR_CI_GATE_TIMEOUT=<secs>."
+	fi
+	echo "──────── end ${label} ────────"
+	results+=("$(printf '%-4s  %-16s %5ss' "$status" "$label" "$secs")")
+}
+
+# Block until at least one gate finishes, then harvest it.
+_dumpstar_par_reap() {
+	local pid="" frc=0
+	# The pid list is not decoration. A bare `wait -n` waits on ANY child of the
+	# calling shell, so a caller that keeps a background job of its own beside
+	# the wave has that job harvested here as though it were a gate — which
+	# killed a whole wave mid-run, from a cleanup path, with an unbound-variable
+	# error. deploy/ci.sh happens to start no background job today; that is a
+	# fact about ci.sh, not a property of this runner, and the next `&` added to
+	# it would be nobody's idea of a change that could break CI. Listing the
+	# gates makes it one.
+	wait -n -p pid "${!DUMPSTAR_PAR_LIVE[@]}" || frc=$?
+	# `wait -n` without a pid to report means there was nothing to wait for,
+	# which the caller's `running` counter says cannot happen. Treat it as the
+	# bug it would be rather than looping forever on it.
+	[ -n "$pid" ] || {
+		echo "dumpstar_par_run: wait -n returned no pid with ${running} gate(s) running" >&2
+		return 1
+	}
+	_dumpstar_par_finish "$pid" "$frc"
+}
+
+# Run the queue. Returns 0 only if every queued gate ran and passed.
+dumpstar_par_run() {
+	local total="${#DUMPSTAR_PAR_LABELS[@]}"
+	if [ "$total" -eq 0 ]; then
+		echo "    (no gates queued — nothing to run in parallel)"
+		return 0
+	fi
+
+	# TWO, not three (2026-08-13), measured on the SHARED runner — see the header:
+	# that box is no longer what CI runs on. Three concurrent container gates each
+	# stand up a 1 GB nessie JVM, a MinIO, the app and a litestream sidecar; measured
+	# during CI that box sat at 0 free of 16 GB with swap 100% consumed. No kernel
+	# OOM kills, so it is contention rather than a hard limit — but it is enough to
+	# make replication lag by seconds, and two litestream gates were failing on that
+	# lag rather than on anything they assert. Red CI costs more than the ~13 min the
+	# third slot bought (pd-2nl9 measured 1982s -> 1175s at three).
+	#
+	# On the ephemeral VM the same gates ran 17 in 964s at two (2026-09-15). Whether
+	# three fits in 8 GiB without prod beside it is unmeasured; the ~13 min is why
+	# it is worth measuring rather than assuming.
+	local cap="${DUMPSTAR_CI_JOBS:-2}"
+	case "$cap" in
+	'' | *[!0-9]*)
+		echo "ERROR: DUMPSTAR_CI_JOBS='${cap}' is not a positive integer." >&2
+		return 1
+		;;
+	esac
+	[ "$cap" -ge 1 ] || {
+		echo "ERROR: DUMPSTAR_CI_JOBS must be at least 1." >&2
+		return 1
+	}
+	if [ "$cap" -gt "$DUMPSTAR_PAR_JOBS_CEILING" ]; then
+		echo "    DUMPSTAR_CI_JOBS=${cap} is above the ${DUMPSTAR_PAR_JOBS_CEILING} this box is sized for — using ${DUMPSTAR_PAR_JOBS_CEILING}."
+		cap="$DUMPSTAR_PAR_JOBS_CEILING"
+	fi
+
+	# Per-gate wall-clock ceiling. Generous on purpose: the longest real gate
+	# measured here is well under ten minutes, so 30 exists to catch a gate that
+	# has STOPPED rather than one that is merely slow. A bound this loose costs
+	# nothing on a healthy run and cannot false-fail a slow box, which is the
+	# only way a timeout earns its place — one that trips on load teaches
+	# everyone to re-run rather than to read it.
+	local gate_timeout="${DUMPSTAR_CI_GATE_TIMEOUT:-1800}"
+	case "$gate_timeout" in
+	'' | *[!0-9]*)
+		echo "ERROR: DUMPSTAR_CI_GATE_TIMEOUT='${gate_timeout}' is not a positive integer." >&2
+		return 1
+		;;
+	esac
+	[ "$gate_timeout" -ge 1 ] || {
+		echo "ERROR: DUMPSTAR_CI_GATE_TIMEOUT must be at least 1." >&2
+		return 1
+	}
+
+	local logdir
+	logdir="$(mktemp -d "${TMPDIR:-/tmp}/dumpstar-par.XXXXXX")"
+
+	local -A _PAR_LABEL_OF=() _PAR_START_OF=()
+	local -a results=() failed=()
+	local next=0 running=0 held=0
+	local t0
+	t0="$(date +%s)"
+
+	echo "    ${total} gate(s), ${cap} at a time, disk floor checked before each one."
+
+	while [ "$next" -lt "$total" ] || [ "$running" -gt 0 ]; do
+		while [ "$next" -lt "$total" ] && [ "$running" -lt "$cap" ]; do
+			if ! _dumpstar_par_disk_ok; then
+				if [ "$running" -gt 0 ]; then
+					echo "    [hold]  ${DUMPSTAR_PAR_LABELS[$next]} — below the disk floor; waiting for a running gate to finish"
+					held=$((held + 1))
+					break
+				fi
+				# Nothing running means nothing is going to give the space
+				# back. Say which gates never started; a run that stops here
+				# is red, and the reason is a disk, not a gate.
+				echo "" >&2
+				echo "ERROR: below the disk floor with no gate running — refusing to start more." >&2
+				echo "       ${total} queued, $((total - next)) never started:" >&2
+				local i
+				for ((i = next; i < total; i++)); do
+					echo "         ${DUMPSTAR_PAR_LABELS[$i]}" >&2
+				done
+				rm -rf "$logdir"
+				return 1
+			fi
+
+			local label="${DUMPSTAR_PAR_LABELS[$next]}"
+			echo "    [start] ${label}"
+			# </dev/null: a gate must never inherit the run's stdin and
+			# block on it.
+			#
+			# timeout: a gate must never run unbounded either. A gate's output
+			# is buffered to its own log and printed only when it finishes, so
+			# one that hangs is not merely slow, it is SILENT — and because
+			# this loop blocks in wait -n, the whole wave stops with it. That
+			# is not hypothetical: on 2026-09-15 tests/alarming/run.sh lost its
+			# object store, waited, and took the GitHub job to its 90-minute
+			# cap, so the run was cancelled and reported nothing about ANY
+			# tier, including the sixteen gates that had already finished.
+			# Bounding each gate turns that into one TIMEOUT line beside
+			# fifteen real results.
+			#
+			# TERM then KILL, the same escalation dumpstar_par_kill_all uses and
+			# for the same reason: each gate's EXIT trap is what removes its
+			# containers, volumes and units, and a SIGKILLed gate leaks all
+			# three. GNU timeout signals the child's whole process group, so a
+			# gate blocked inside podman goes down with its helpers.
+			timeout -s TERM -k 30 "$gate_timeout" \
+				bash -c 'eval "$1"' _ "${DUMPSTAR_PAR_CMDS[$next]}" \
+				>"${logdir}/${label}.log" 2>&1 </dev/null &
+			local pid=$!
+			_PAR_LABEL_OF[$pid]="$label"
+			_PAR_START_OF[$pid]="$(date +%s)"
+			DUMPSTAR_PAR_LIVE[$pid]=1
+			next=$((next + 1))
+			running=$((running + 1))
+		done
+
+		_dumpstar_par_reap || {
+			rm -rf "$logdir"
+			return 1
+		}
+	done
+
+	local elapsed=$(($(date +%s) - t0))
+	local serial=0 line
+	echo ""
+	echo "    ── parallel gates: ${total} in ${elapsed}s (cap ${cap}) ──"
+	for line in "${results[@]}"; do
+		echo "       ${line}"
+		serial=$((serial + $(printf '%s' "$line" | awk '{print $3+0}')))
+	done
+	echo "       ${serial}s of gate time in ${elapsed}s of wall clock."
+	[ "$held" -eq 0 ] || echo "       ${held} dispatch(es) held by the disk floor."
+
+	rm -rf "$logdir"
+
+	if [ "${#failed[@]}" -gt 0 ]; then
+		echo ""
+		echo "    FAILED: ${failed[*]}" >&2
+		# The caller wants the names for its own diagnostics line.
+		DUMPSTAR_PAR_FAILED="${failed[*]}"
+		return 1
+	fi
+	DUMPSTAR_PAR_FAILED=""
+	return 0
+}

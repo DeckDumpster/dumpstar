@@ -1,0 +1,11 @@
+start_page: /collection
+involves:
+  - "search input [data-testid=search-input]"
+  - "inline error row [data-testid=search-error] with message + position"
+fixture_data:
+  bad_query: "xyz:1"
+notes: >
+  Navigate to /collection. Type "xyz:1" into [data-testid=search-input].
+  After the debounce the server returns HTTP 400 and the page shows
+  [data-testid=search-error] containing "unknown keyword" and "position".
+  Clearing the input hides the error and restores results.

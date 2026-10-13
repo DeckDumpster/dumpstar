@@ -1,0 +1,5 @@
+2026-08-12T06:00:00+00:00 box systemd[1060]: Starting dumpstar-refresh@prod.service - Dumpstar nightly catalog refresh (prod)...
+2026-08-12T06:45:00+00:00 box systemd[1060]: dumpstar-refresh@prod.service: start operation timed out. Terminating.
+2026-08-12T06:45:00+00:00 box systemd[1060]: dumpstar-refresh@prod.service: Failed with result 'timeout'.
+2026-08-12T06:45:00+00:00 box systemd[1060]: Failed to start dumpstar-refresh@prod.service - Dumpstar nightly catalog refresh (prod).
+2026-08-12T06:45:00+00:00 box systemd[1060]: dumpstar-refresh@prod.service: Triggering OnFailure= dependencies.

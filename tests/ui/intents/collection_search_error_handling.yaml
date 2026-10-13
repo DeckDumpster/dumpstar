@@ -1,0 +1,12 @@
+# Scenario: An invalid query shows a parse error with its position
+#
+# Related:
+#   issues: [dumpstar-idf.10]
+#   pull_requests: []
+
+description: >
+  When I type a query the parser can't understand — like "xyz:1" with an
+  unknown keyword — the Collection page shows an inline error beneath the
+  search box naming the problem ("unknown keyword") and the character
+  position, instead of silently returning nothing. Clearing the box
+  removes the error and restores my collection.

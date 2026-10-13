@@ -1622,6 +1622,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             max_price: Some(250.00),
             priority: Some(3),
             notes: "Charizard ex SIR — top of the want list.".into_some(),
+            ..Default::default()
         },
     )?;
     wishlist::add(
@@ -1632,6 +1633,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             max_price: Some(120.00),
             priority: Some(2),
             notes: "Pikachu ex SIR from Surging Sparks.".into_some(),
+            ..Default::default()
         },
     )?;
     wishlist::add(
@@ -1642,6 +1644,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             max_price: Some(300.00),
             priority: Some(1),
             notes: "Already ordered — kept as a price watch.".into_some(),
+            ..Default::default()
         },
     )?;
 

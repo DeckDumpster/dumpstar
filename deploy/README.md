@@ -598,7 +598,7 @@ way to hand the script a liveness set or to switch the check off.
 ## Production (`prod` on `star.dumpster.cards`)
 
 - **Origin port: `127.0.0.1:8091`** (`DUMPSTAR_PROD_PORT` in `units-lib.sh`; 8090 is
-  pokedumpster's). The Quadlet publishes loopback only, so the only path in is the
+  the other site's). The Quadlet publishes loopback only, so the only path in is the
   Cloudflare tunnel. The tunnel route and the Access application are dashboard
   steps (bead sp-qmkwly), not scripts.
 - **Config**: `setup.sh` and `deploy.sh` both scaffold through `config-lib.sh`.

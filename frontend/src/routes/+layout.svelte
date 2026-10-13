@@ -4,7 +4,7 @@
 	// app. Imported here and nowhere else; see the header of tokens.css.
 	import '$lib/styles/tokens.css';
 	import { breadcrumbs, type Crumb } from '$lib/breadcrumbs.svelte';
-	import Pokeball from '$lib/components/Pokeball.svelte';
+	import DeathStar from '$lib/components/DeathStar.svelte';
 	import { api } from '$lib/api';
 
 	let { children } = $props();
@@ -61,7 +61,7 @@
 {#if !flush && !isHome}
 	<header>
 		<a class="logo" href="/" aria-label="Home">
-			<Pokeball />
+			<DeathStar />
 		</a>
 		<nav class="crumbs" aria-label="Breadcrumb">
 			{#each crumbs as crumb, i (i + crumb.label)}

@@ -29,6 +29,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import YAML from "yaml";
 
 import {
+  accessToken,
   cleanupSnapshot,
   discoverBaseUrl,
   discoverContainer,
@@ -133,6 +134,12 @@ test.afterAll(async () => {
 for (const t of discoverTests()) {
   test(t.name, async ({ page }) => {
     test.skip(skipReason !== null, skipReason ?? "");
+    const token = await accessToken();
+    if (token !== null) {
+      await page.context().setExtraHTTPHeaders({
+        "Cf-Access-Jwt-Assertion": token,
+      });
+    }
 
     // ── Generation mode ────────────────────────────────────────────────
     const generateThis =

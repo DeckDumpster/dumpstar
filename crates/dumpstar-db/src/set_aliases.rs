@@ -31,7 +31,13 @@ pub struct SetAlias {
 /// minimal test catalog) is skipped rather than tripping the FK. Idempotent.
 /// Returns the number of aliases actually written.
 pub fn reconcile(conn: &mut Connection) -> Result<usize> {
-    let seed: Vec<SetAlias> = serde_json::from_str(SET_ALIASES_SEED)?;
+    reconcile_from(conn, SET_ALIASES_SEED)
+}
+
+/// [`reconcile`] over an explicit JSON document, so a test can carry its own
+/// seed rather than depend on whatever the shipped file holds today.
+pub(crate) fn reconcile_from(conn: &mut Connection, json: &str) -> Result<usize> {
+    let seed: Vec<SetAlias> = serde_json::from_str(json)?;
     let tx = conn.transaction()?;
     let mut written = 0usize;
     for a in &seed {
@@ -48,9 +54,15 @@ pub fn reconcile(conn: &mut Connection) -> Result<usize> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::open_shared;
+
+    /// A test-owned seed: the shipped file starts empty for Star Wars: Unlimited.
+    pub(crate) const TEST_SEED: &str = r#"[
+      {"alias": "Scarlet & Violet Promo", "set_code": "svp"},
+      {"alias": "Mega Evolution Promos", "set_code": "mep"}
+    ]"#;
 
     #[test]
     fn reconcile_seeds_aliases_for_present_sets_only() {
@@ -59,7 +71,7 @@ mod tests {
         let mut conn = open_shared(&shared).unwrap();
         // Fresh catalog carries no sets → the seed rows are all skipped
         // (their FK targets are absent) rather than erroring.
-        let n = reconcile(&mut conn).unwrap();
+        let n = reconcile_from(&mut conn, TEST_SEED).unwrap();
         assert_eq!(n, 0);
 
         // Add the two promo sets, then reconcile writes both aliases.
@@ -70,7 +82,7 @@ mod tests {
             [],
         )
         .unwrap();
-        let n = reconcile(&mut conn).unwrap();
+        let n = reconcile_from(&mut conn, TEST_SEED).unwrap();
         assert_eq!(n, 2);
 
         // Case-insensitive lookup lands the canonical code.

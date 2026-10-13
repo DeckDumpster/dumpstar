@@ -23,7 +23,6 @@
 use std::sync::Arc;
 
 use dumpstar_derive::DeriveClock;
-use dumpstar_ingest::landing::Wire;
 use dumpstar_lake::RawLanding;
 
 /// Enables landing without a command-line flag — how the containerised
@@ -97,17 +96,4 @@ pub fn require(clock: &DeriveClock) -> anyhow::Result<Arc<RawLanding>> {
         landing.describe()
     );
     Ok(Arc::new(landing))
-}
-
-/// The wire a client fetches on: writing through to `landing` when there is
-/// one, and otherwise exactly the client that existed before any of this.
-///
-/// There is no replay arm here, and there cannot be: constructing one needs a
-/// [`ReplaySource`](dumpstar_ingest::landing::ReplaySource) over `raw/`, and
-/// nothing this binary links implements one.
-pub fn wire(landing: Option<&Arc<RawLanding>>) -> Wire {
-    match landing {
-        Some(landing) => Wire::default().landing_in(Arc::clone(landing)),
-        None => Wire::default(),
-    }
 }

@@ -764,7 +764,18 @@ mod tests {
         )
         .unwrap();
 
-        let seeds = reconcile_ingest_dependent_seeds(&mut conn).unwrap();
+        let seeds = IngestSeeds {
+            set_aliases: crate::set_aliases::reconcile_from(
+                &mut conn,
+                crate::set_aliases::tests::TEST_SEED,
+            )
+            .unwrap(),
+            catalog_prices: crate::catalog_prices::reconcile_from(
+                &mut conn,
+                crate::catalog_prices::tests::TEST_SEED,
+            )
+            .unwrap(),
+        };
         assert_eq!(seeds.set_aliases, 1, "the alias for the set just created");
         assert_eq!(seeds.catalog_prices, 1, "the override for the printing");
         assert_eq!(count(&conn, "set_aliases"), 1);
@@ -772,7 +783,18 @@ mod tests {
 
         // …and the same group run again moves nothing: this is the end of a
         // build, so it has to be a fixed point rather than the first of two.
-        let again = reconcile_ingest_dependent_seeds(&mut conn).unwrap();
+        let again = IngestSeeds {
+            set_aliases: crate::set_aliases::reconcile_from(
+                &mut conn,
+                crate::set_aliases::tests::TEST_SEED,
+            )
+            .unwrap(),
+            catalog_prices: crate::catalog_prices::reconcile_from(
+                &mut conn,
+                crate::catalog_prices::tests::TEST_SEED,
+            )
+            .unwrap(),
+        };
         assert_eq!(count(&conn, "set_aliases"), 1);
         assert_eq!(count(&conn, "catalog_price_overrides"), 1);
         assert_eq!(again, seeds, "an idempotent upsert rewrites the same rows");

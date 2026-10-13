@@ -242,7 +242,7 @@ mod tests {
             .unwrap();
             crate::latest_prices::refresh_latest_prices(&c).unwrap();
             // The shipped seed only lands now that the printings exist.
-            crate::catalog_prices::reconcile(&mut c).unwrap();
+            crate::catalog_prices::reconcile_from(&mut c, crate::catalog_prices::tests::TEST_SEED).unwrap();
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         (dir, conn)
@@ -292,7 +292,7 @@ mod tests {
     #[test]
     fn a_catalog_override_fills_a_gap_the_feed_leaves() {
         let (_d, conn) = fixture();
-        // basep-10-normal has no tcgplayer_product_id; the shipped seed
+        // basep-10-normal has no tcgplayer_product_id; the test seed
         // carries it at $61.
         assert_eq!(price_of(&conn, "basep-10-normal"), Some(61.0));
         // And a catalog printing with neither source prices as nothing,
@@ -380,7 +380,7 @@ mod tests {
             .unwrap();
             crate::latest_prices::refresh_latest_prices(&c).unwrap();
             // The seed still carries basep-10-normal at $61 …
-            crate::catalog_prices::reconcile(&mut c).unwrap();
+            crate::catalog_prices::reconcile_from(&mut c, crate::catalog_prices::tests::TEST_SEED).unwrap();
             assert!(crate::catalog_prices::has_override(&c, "basep-10-normal").unwrap());
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();

@@ -560,7 +560,6 @@ mod tests {
             "GET /api/binders",
             "GET /api/decks",
             "GET /api/wishlist",
-            "GET /api/variants",
             "GET /api/conditions",
         ];
         for route in unauthenticated_routes {

@@ -3,8 +3,7 @@
 //!
 //! `data/overrides/catalog_prices.json` is the canonical source, reconciled
 //! into the shared `catalog_price_overrides` table at `dumpstar setup` /
-//! [`crate::open_shared`] time — the same curated-patch layer as
-//! `data/overrides/variant_augmentations.json`.
+//! [`crate::open_shared`] time.
 //!
 //! **Why the catalog and not the tenant.** These prices used to be
 //! hand-entered per user into the tenant's `manual_prices`. That was the
@@ -46,11 +45,17 @@ pub struct CatalogPriceOverride {
 /// Re-seed `catalog_price_overrides` from the JSON. Idempotent upsert.
 ///
 /// A row whose printing is absent from *this* catalog is skipped rather than
-/// tripping the FK — a minimal test catalog carries neither `basep` nor most
-/// of the sets the real one does, exactly as [`crate::set_aliases::reconcile`]
+/// tripping the FK — a minimal test catalog carries few of the sets the real
+/// one does, exactly as [`crate::set_aliases::reconcile`]
 /// handles the same case. Returns the number of overrides actually written.
 pub fn reconcile(conn: &mut Connection) -> Result<usize> {
-    let seed: Vec<CatalogPriceOverride> = serde_json::from_str(CATALOG_PRICES_SEED)?;
+    reconcile_from(conn, CATALOG_PRICES_SEED)
+}
+
+/// [`reconcile`] over an explicit JSON document, so a test can carry its own
+/// seed rather than depend on whatever the shipped file holds today.
+pub(crate) fn reconcile_from(conn: &mut Connection, json: &str) -> Result<usize> {
+    let seed: Vec<CatalogPriceOverride> = serde_json::from_str(json)?;
     let tx = conn.transaction()?;
     let mut written = 0usize;
     for o in &seed {
@@ -78,9 +83,17 @@ pub fn has_override(conn: &Connection, printing_id: &str) -> Result<bool> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::open_shared;
+
+    /// A test-owned seed: the shipped file starts empty for Star Wars: Unlimited.
+    pub(crate) const TEST_SEED: &str = r#"[
+      {"printing_id": "basep-10-normal", "price": 61.0,
+       "observed_at": "2026-05-29T06:18:59Z", "note": "test seed"},
+      {"printing_id": "basep-14-normal", "price": 29.0,
+       "observed_at": "2026-05-29T06:21:13Z", "note": "test seed"}
+    ]"#;
 
     fn catalog_with_basep(dir: &std::path::Path) -> Connection {
         let conn = open_shared(&dir.join("shared.sqlite")).unwrap();
@@ -111,7 +124,7 @@ mod tests {
         // A fresh catalog has no printings at all — every seed row is
         // skipped rather than failing the FK.
         let mut conn = open_shared(&dir.path().join("shared.sqlite")).unwrap();
-        assert_eq!(reconcile(&mut conn).unwrap(), 0);
+        assert_eq!(reconcile_from(&mut conn, TEST_SEED).unwrap(), 0);
     }
 
     #[test]
@@ -119,12 +132,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut conn = catalog_with_basep(dir.path());
 
-        assert_eq!(reconcile(&mut conn).unwrap(), 1);
+        assert_eq!(reconcile_from(&mut conn, TEST_SEED).unwrap(), 1);
         assert!(has_override(&conn, "basep-10-normal").unwrap());
         assert!(!has_override(&conn, "basep-14-normal").unwrap());
 
         // Second pass writes the same row again, and there is still one.
-        reconcile(&mut conn).unwrap();
+        reconcile_from(&mut conn, TEST_SEED).unwrap();
         let n: i64 = conn
             .query_row("SELECT COUNT(*) FROM catalog_price_overrides", [], |r| {
                 r.get(0)
@@ -137,7 +150,7 @@ mod tests {
     fn reconcile_overwrites_a_locally_edited_price() {
         let dir = tempfile::tempdir().unwrap();
         let mut conn = catalog_with_basep(dir.path());
-        reconcile(&mut conn).unwrap();
+        reconcile_from(&mut conn, TEST_SEED).unwrap();
         conn.execute(
             "UPDATE catalog_price_overrides SET price = 1.0 WHERE printing_id = 'basep-10-normal'",
             [],
@@ -146,7 +159,7 @@ mod tests {
 
         // The seed file is the source of truth — the catalog converges back
         // to it, which is what makes the JSON the thing to edit.
-        reconcile(&mut conn).unwrap();
+        reconcile_from(&mut conn, TEST_SEED).unwrap();
         let p: f64 = conn
             .query_row(
                 "SELECT price FROM catalog_price_overrides WHERE printing_id = 'basep-10-normal'",

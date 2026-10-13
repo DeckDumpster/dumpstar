@@ -25,14 +25,14 @@ const INGEST_DATE: &str = "2026-08-11";
 /// Two groups, and a product/price payload for each.
 fn tcgcsv_route(target: &str, _n: usize) -> Reply {
     match target {
-        "/3/groups" => Reply::ok(
+        "/79/groups" => Reply::ok(
             r#"{"results":[
                  {"groupId":1,"name":"Base Set","abbreviation":"BS","publishedOn":"1999-01-09"},
                  {"groupId":2,"name":"Jungle","abbreviation":"JU","publishedOn":"1999-06-16"}
                ]}"#,
         ),
-        "/3/1/products" | "/3/2/products" => Reply::ok(r#"{"results":[]}"#),
-        "/3/1/prices" | "/3/2/prices" => Reply::ok(r#"{"results":[]}"#),
+        "/79/1/products" | "/79/2/products" => Reply::ok(r#"{"results":[]}"#),
+        "/79/1/prices" | "/79/2/prices" => Reply::ok(r#"{"results":[]}"#),
         other => Reply::status(404, format!(r#"{{"error":"no route for {other}"}}"#)),
     }
 }
@@ -163,13 +163,13 @@ fn the_manifest_describes_the_bytes_that_were_stored() {
 fn a_run_that_fails_partway_leaves_a_manifest_that_says_so() {
     // Groups, then the first group's products, then a 503.
     let upstream = FakeUpstream::start(|target, _| match target {
-        "/3/groups" => Reply::ok(
+        "/79/groups" => Reply::ok(
             r#"{"results":[
                  {"groupId":1,"name":"Base Set","abbreviation":"BS","publishedOn":"1999-01-09"},
                  {"groupId":2,"name":"Jungle","abbreviation":"JU","publishedOn":"1999-06-16"}
                ]}"#,
         ),
-        "/3/1/products" => Reply::ok(r#"{"results":[]}"#),
+        "/79/1/products" => Reply::ok(r#"{"results":[]}"#),
         _ => Reply::status(503, "upstream is down"),
     });
     let tmp = tempfile::tempdir().unwrap();
@@ -192,7 +192,7 @@ fn a_run_that_fails_partway_leaves_a_manifest_that_says_so() {
     assert!(prices.parts.is_empty());
     assert_eq!(prices.failures.len(), 1);
     assert_eq!(prices.failures[0].status, Some(503));
-    assert!(prices.failures[0].url.ends_with("/3/1/prices"));
+    assert!(prices.failures[0].url.ends_with("/79/1/prices"));
 
     // Finalizing with the acquisition error keeps it incomplete and records
     // the error; the datasets that did succeed are still marked complete.
@@ -219,8 +219,8 @@ fn a_run_that_fails_partway_leaves_a_manifest_that_says_so() {
 fn a_retry_lands_beside_the_first_attempt_not_on_it() {
     let upstream = FakeUpstream::start(|target, n| match (target, n) {
         // The first run's groups call fails; the retry's succeeds.
-        ("/3/groups", 0) => Reply::status(503, "upstream is down"),
-        ("/3/groups", _) => Reply::ok(r#"{"results":[{"groupId":1,"name":"Base Set"}]}"#),
+        ("/79/groups", 0) => Reply::status(503, "upstream is down"),
+        ("/79/groups", _) => Reply::ok(r#"{"results":[{"groupId":1,"name":"Base Set"}]}"#),
         _ => Reply::ok(r#"{"results":[]}"#),
     });
     let tmp = tempfile::tempdir().unwrap();

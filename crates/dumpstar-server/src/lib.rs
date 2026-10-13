@@ -46,9 +46,8 @@ pub struct AppState {
     /// The data dir — read by `/api/backup-status` for the `.backup-last-ok`
     /// freshness marker the host-side Layer 1 checker writes (ivq.5).
     data_dir: Arc<PathBuf>,
-    /// Cloudflare Access JWT validation state (JWKS cache + config). `None`
-    /// when Access is not configured — the layer passes all requests through.
-    pub(crate) access: Option<Arc<access::AccessState>>,
+    /// Cloudflare Access JWT validation state (JWKS cache + config).
+    pub(crate) access: Arc<access::AccessState>,
 }
 
 /// An error rendered as an HTTP response. `DbError::NotFound` → 404,
@@ -178,6 +177,30 @@ fn compression() -> CompressionLayer<impl Predicate + 'static> {
     )
 }
 
+/// Mark every `/api` response `private, no-store`.
+///
+/// The bodies under `/api` are one tenant's data, chosen by a credential the
+/// URL does not carry: the same `GET /api/collection` is a different answer for
+/// each caller. A shared cache between the origin and the browser (Cloudflare,
+/// a corporate proxy) keys on the URL, so any response it was allowed to keep
+/// could be served to the next tenant. This is set on the way out for every
+/// response under the prefix, errors and the public routes included, and
+/// overwrites whatever a handler set: a handler cannot opt out.
+async fn api_responses_are_private(
+    req: axum::extract::Request,
+    next: middleware::Next,
+) -> Response {
+    let is_api = req.uri().path() == "/api" || req.uri().path().starts_with("/api/");
+    let mut resp = next.run(req).await;
+    if is_api {
+        resp.headers_mut().insert(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static("private, no-store"),
+        );
+    }
+    resp
+}
+
 /// Build the Axum router. `/health` and `/api/*` are handled by Rust; the
 /// SvelteKit bundle under `/_app` and `/robots.txt` are served as files;
 /// every other path returns the SPA's `index.html` so SvelteKit handles
@@ -228,19 +251,15 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
         .route_service("/robots.txt", ServeFile::new(static_dir.join("robots.txt")))
         .with_state(state)
         .fallback(get(spa))
+        .layer(middleware::from_fn(api_responses_are_private))
         // Outermost, so it sees the final response of every route above.
         .layer(compression())
 }
 
 /// Everything `dumpstar serve` needs to stand the HTTP app up.
 pub struct ServeConfig {
-    /// The tenant this process serves when `multi_tenant` is off — i.e.
-    /// `$DUMPSTAR_USER` — and the collection database it resolves to.
-    pub tenant: String,
-    pub user_db: PathBuf,
     /// The directory holding one database per tenant, and the registry that
-    /// says which of them a handle is served from. Read only when
-    /// `multi_tenant` is on; `tenant`/`user_db` are ignored in that mode.
+    /// says which of them an identity is served from.
     pub tenants_dir: PathBuf,
     pub registry_db: PathBuf,
     pub shared_db: PathBuf,
@@ -248,51 +267,16 @@ pub struct ServeConfig {
     pub data_dir: PathBuf,
     pub host: IpAddr,
     pub port: u16,
-    /// Per-request tenant resolution. **Off unless explicitly switched on.**
-    /// There is no authentication in front of it, so an instance with this
-    /// on lets any caller name any tenant — see `deploy/TENANTS.md`.
-    pub multi_tenant: bool,
-    /// Cloudflare Access configuration. `None` when Access is not configured —
-    /// the authentication layer is skipped and the server starts without it.
-    /// When `Some`, all three fields are required and a JWKS fetch failure is a
-    /// startup failure. See `access::AccessConfig::from_env_if_configured`.
-    pub access: Option<access::AccessConfig>,
+    /// Cloudflare Access configuration. Mandatory: there is no mode without
+    /// it. A JWKS fetch failure is a startup failure. See
+    /// `access::AccessConfig::from_env`.
+    pub access: access::AccessConfig,
 }
 
-/// Refuse multi-tenant mode when Cloudflare Access is not configured.
-///
-/// Multi-tenant resolution now requires Cloudflare Access: every request must
-/// carry a valid JWT and the verified email must be bound to a tenant in the
-/// registry. Without an Access configuration the JWT layer accepts nothing, so
-/// multi-tenant mode would refuse every request rather than serving any tenant.
-///
-/// Single-tenant mode is unaffected — the tenant is fixed at startup and no
-/// JWT is required.
-fn check_multitenant_access(multi_tenant: bool, access_configured: bool) -> anyhow::Result<()> {
-    if !multi_tenant || access_configured {
-        return Ok(());
-    }
-    anyhow::bail!(
-        "refusing to start: multi-tenant resolution is on but Cloudflare Access is not \
-         configured.\n\
-         \n\
-         In multi-tenant mode every request must carry a valid Cloudflare Access JWT; the \
-         verified email in the JWT determines which tenant's collection is served. Without \
-         Access configured the JWT layer will reject every request.\n\
-         \n\
-         Set {} and {} (and optionally {}), or drop --multi-tenant / DUMPSTAR_MULTITENANT.",
-        access::TEAM_DOMAIN_ENV,
-        access::AUD_ENV,
-        access::JWKS_URL_ENV,
-    )
-}
-
-/// Start the HTTP server. In single-tenant mode the collection database is
-/// opened up front — so a missing catalog (`dumpstar setup` not run) fails at
-/// startup rather than on the first request.
+/// Start the HTTP server. The shared catalog is opened up front — so a missing
+/// catalog (`dumpstar setup` not run) fails at startup rather than on the
+/// first request.
 pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
-    // Access config must be present when multi-tenant is on.
-    check_multitenant_access(cfg.multi_tenant, cfg.access.is_some())?;
     // Idempotent shared-catalog convergence on startup. `dumpstar setup` and
     // the nightly `dumpstar-lake-derive shared` normally own shared schema —
     // the refresh used to be on that list and is not since pd-lunn, because
@@ -320,26 +304,10 @@ pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
             Arc::new(dumpstar_db::search_meta::load_flags(&shared)?),
         )
     };
-    // Cloudflare Access JWT validation — opt-in by configuration. When the
-    // three Access env vars are set, primes the JWKS cache; a failed fetch is a
-    // startup failure. When not configured, `None` here makes the layer a
-    // passthrough and the server starts without authentication.
-    let access = match cfg.access {
-        Some(cfg) => Some(access::AccessState::new(cfg).await?),
-        None => {
-            println!("dumpstar: Cloudflare Access is NOT configured — /api is unauthenticated");
-            None
-        }
-    };
-    let tenants = if cfg.multi_tenant {
-        println!(
-            "dumpstar: MULTI-TENANT resolution is ON — every request must carry a valid \
-             Cloudflare Access JWT and the verified email must be bound to a tenant."
-        );
-        Tenants::multi(cfg.tenants_dir, cfg.shared_db, &cfg.registry_db)?
-    } else {
-        Tenants::single(&cfg.tenant, cfg.user_db, cfg.shared_db)?
-    };
+    // Cloudflare Access JWT validation: primes the JWKS cache; a failed fetch
+    // is a startup failure.
+    let access = access::AccessState::new(cfg.access).await?;
+    let tenants = Tenants::new(cfg.tenants_dir, cfg.shared_db, &cfg.registry_db)?;
     let state = AppState {
         tenants: Arc::new(tenants),
         registry,
@@ -401,7 +369,7 @@ mod tests {
         dir: &std::path::Path,
         shared: &std::path::Path,
         tenants: Tenants,
-        access: Option<Arc<access::AccessState>>,
+        access: Arc<access::AccessState>,
     ) -> Router {
         let registry = {
             let c = dumpstar_db::open_shared(shared).unwrap();
@@ -422,22 +390,13 @@ mod tests {
         app(state, dir.join("static"), data_dir)
     }
 
-    /// A single-tenant test router — the production shape.
+    /// A test router with one tenant, `u`, bound to `u@example.com`.
     async fn test_app() -> (tempfile::TempDir, Router, TestAccessFixture) {
-        let fx = TestAccessFixture::new().await;
-        let dir = tempfile::tempdir().unwrap();
-        let shared = seed(dir.path());
-        let tenants = Tenants::single(
-            "collection",
-            dir.path().join("tenants").join("collection.sqlite"),
-            shared.clone(),
-        )
-        .unwrap();
-        let router = router_for(dir.path(), &shared, tenants, Some(fx.access.clone()));
+        let (dir, router, _tenants_dir, fx) = multi_tenant_app(&["u"]).await;
         (dir, router, fx)
     }
 
-    /// A multi-tenant test router with `handles` provisioned, each with an
+    /// A test router with `handles` provisioned, each with an
     /// email binding `<handle>@example.com`.
     async fn multi_tenant_app(
         handles: &[&str],
@@ -467,8 +426,8 @@ mod tests {
         let router = router_for(
             dir.path(),
             &shared,
-            Tenants::multi(tenants_dir.clone(), shared.clone(), &registry_db).unwrap(),
-            Some(fx.access.clone()),
+            Tenants::new(tenants_dir.clone(), shared.clone(), &registry_db).unwrap(),
+            fx.access.clone(),
         );
         (dir, router, tenants_dir, fx)
     }
@@ -1155,231 +1114,552 @@ mod tests {
 
     // ---- tenant resolution and isolation ------------------------------------
 
-    /// Each tenant's JWT email resolves to their own database only.
-    #[tokio::test]
-    async fn one_tenant_cannot_reach_another_tenants_collection() {
-        let (_d, router, _dir, fx) = multi_tenant_app(&["alice", "bob"]).await;
-        let alice_tok = fx.valid_token("alice@example.com");
-        let bob_tok = fx.valid_token("bob@example.com");
+    /// The cross-tenant isolation gate (the `isolation` CI tier runs exactly
+    /// `tests::isolation`). A test in here is a claim about what one tenant
+    /// can never do to another, so it lives where the tier's filter finds it.
+    mod isolation {
+        use super::*;
 
-        let created = router
-            .clone()
-            .oneshot(request(
-                "POST",
-                "/api/collection",
-                Some(&alice_tok),
-                Some(ADD_CARD),
-            ))
-            .await
-            .unwrap();
-        assert_eq!(created.status(), StatusCode::CREATED);
+        /// Each tenant's JWT email resolves to their own database only.
+        #[tokio::test]
+        async fn one_tenant_cannot_reach_another_tenants_collection() {
+            let (_d, router, _dir, fx) = multi_tenant_app(&["alice", "bob"]).await;
+            let alice_tok = fx.valid_token("alice@example.com");
+            let bob_tok = fx.valid_token("bob@example.com");
 
-        let bobs = router
-            .clone()
-            .oneshot(request("GET", "/api/collection", Some(&bob_tok), None))
-            .await
-            .unwrap();
-        assert_eq!(bobs.status(), StatusCode::OK);
-        let body = body_string(bobs).await;
-        assert_eq!(
-            body.trim(),
-            "[]",
-            "bob's collection must not contain alice's card: {body}"
-        );
+            let created = router
+                .clone()
+                .oneshot(request(
+                    "POST",
+                    "/api/collection",
+                    Some(&alice_tok),
+                    Some(ADD_CARD),
+                ))
+                .await
+                .unwrap();
+            assert_eq!(created.status(), StatusCode::CREATED);
 
-        let stolen = router
-            .clone()
-            .oneshot(request("DELETE", "/api/collection/1", Some(&bob_tok), None))
-            .await
-            .unwrap();
-        assert_eq!(
-            stolen.status(),
-            StatusCode::NOT_FOUND,
-            "bob deleted a row out of alice's collection"
-        );
+            let bobs = router
+                .clone()
+                .oneshot(request("GET", "/api/collection", Some(&bob_tok), None))
+                .await
+                .unwrap();
+            assert_eq!(bobs.status(), StatusCode::OK);
+            let body = body_string(bobs).await;
+            assert_eq!(
+                body.trim(),
+                "[]",
+                "bob's collection must not contain alice's card: {body}"
+            );
 
-        let alices = router
-            .oneshot(request("GET", "/api/collection", Some(&alice_tok), None))
-            .await
-            .unwrap();
-        assert!(body_string(alices).await.contains("sv3pt5-1-normal"));
-    }
+            let stolen = router
+                .clone()
+                .oneshot(request("DELETE", "/api/collection/1", Some(&bob_tok), None))
+                .await
+                .unwrap();
+            assert_eq!(
+                stolen.status(),
+                StatusCode::NOT_FOUND,
+                "bob deleted a row out of alice's collection"
+            );
 
-    /// An unbound email is a 403 and does not create a database.
-    #[tokio::test]
-    async fn an_unbound_email_is_a_403_and_creates_nothing() {
-        let (_d, router, tenants_dir, fx) = multi_tenant_app(&["alice"]).await;
-        let tok = fx.valid_token("mallory@example.com");
-        let before = std::fs::read_dir(&tenants_dir).unwrap().count();
-        let resp = router
-            .oneshot(request("GET", "/api/collection", Some(&tok), None))
-            .await
-            .unwrap();
-        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
-        assert_eq!(std::fs::read_dir(&tenants_dir).unwrap().count(), before);
-    }
+            let alices = router
+                .oneshot(request("GET", "/api/collection", Some(&alice_tok), None))
+                .await
+                .unwrap();
+            assert!(body_string(alices).await.contains("sv3pt5-1-normal"));
+        }
 
-    /// In single-tenant mode, any authenticated caller reaches the one
-    /// collection — the JWT is validated but its email is not looked up.
-    #[tokio::test]
-    async fn with_the_flag_off_any_identity_reaches_the_single_tenant() {
-        let (_d, router, fx) = test_app().await;
-        let tok = fx.valid_token("u@example.com");
+        /// An unbound email is a 403 and does not create a database.
+        #[tokio::test]
+        async fn an_unbound_email_is_a_403_and_creates_nothing() {
+            let (_d, router, tenants_dir, fx) = multi_tenant_app(&["alice"]).await;
+            let tok = fx.valid_token("mallory@example.com");
+            let before = std::fs::read_dir(&tenants_dir).unwrap().count();
+            let resp = router
+                .oneshot(request("GET", "/api/collection", Some(&tok), None))
+                .await
+                .unwrap();
+            assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+            assert_eq!(std::fs::read_dir(&tenants_dir).unwrap().count(), before);
+        }
 
-        let created = router
-            .clone()
-            .oneshot(request(
-                "POST",
-                "/api/collection",
-                Some(&tok),
-                Some(ADD_CARD),
-            ))
-            .await
-            .unwrap();
-        assert_eq!(created.status(), StatusCode::CREATED);
+        /// The acceptance list at the HTTP boundary: a bound email is a 200, an
+        /// unbound one a 403 naming the fix, and no token, a garbage token and
+        /// every entry of the negative-JWT list a 401 — with nothing provisioned
+        /// by any of them.
+        #[tokio::test]
+        async fn the_access_gate_at_the_router() {
+            let (_d, router, tenants_dir, fx) = multi_tenant_app(&["alice"]).await;
+            let databases = || {
+                std::fs::read_dir(&tenants_dir)
+                    .unwrap()
+                    .filter_map(|e| e.ok()?.file_name().into_string().ok())
+                    .filter(|n| n.ends_with(".sqlite"))
+                    .collect::<Vec<_>>()
+            };
+            let before = databases();
+            let status = |tok: Option<String>| {
+                let router = router.clone();
+                async move {
+                    let resp = router
+                        .oneshot(request("GET", "/api/collection", tok.as_deref(), None))
+                        .await
+                        .unwrap();
+                    (resp.status(), body_string(resp).await)
+                }
+            };
 
-        // A different email — still resolves to the single collection.
-        let other_tok = fx.valid_token("someone-else@example.com");
-        let claimed = router
-            .oneshot(request("GET", "/api/collection", Some(&other_tok), None))
-            .await
-            .unwrap();
-        assert_eq!(claimed.status(), StatusCode::OK);
-        assert!(body_string(claimed).await.contains("sv3pt5-1-normal"));
-    }
+            let (s, _) = status(Some(fx.valid_token("alice@example.com"))).await;
+            assert_eq!(s, StatusCode::OK);
 
-    /// A leftover `x-dumpstar-tenant` header cannot be used to reach another
-    /// tenant's collection. The header is not read; resolution is from the JWT
-    /// email only. Sending bob's handle alongside alice's JWT still gives alice.
-    #[tokio::test]
-    async fn leftover_tenant_header_cannot_escalate_to_another_tenant() {
-        let (_d, router, _dir, fx) = multi_tenant_app(&["alice", "bob"]).await;
-        let alice_tok = fx.valid_token("alice@example.com");
+            let (s, body) = status(Some(fx.valid_token("mallory@example.com"))).await;
+            assert_eq!(s, StatusCode::FORBIDDEN);
+            assert!(
+                body.contains("dumpstar tenant identity add")
+                    && body.contains("mallory@example.com"),
+                "the 403 must name the fix: {body}"
+            );
 
-        // Alice adds a card.
-        let created = router
-            .clone()
-            .oneshot(request(
-                "POST",
-                "/api/collection",
-                Some(&alice_tok),
-                Some(ADD_CARD),
-            ))
-            .await
-            .unwrap();
-        assert_eq!(created.status(), StatusCode::CREATED);
+            let e = "alice@example.com";
+            let negatives = [
+                ("no token", None),
+                ("garbage", Some("not.a.jwt".to_string())),
+                ("expired", Some(fx.expired_token(e))),
+                ("nbf", Some(fx.not_yet_valid_token(e))),
+                ("wrong aud", Some(fx.wrong_aud_token(e))),
+                ("wrong iss", Some(fx.wrong_issuer_token(e))),
+                ("unknown kid", Some(fx.unknown_kid_token(e))),
+                ("tampered", Some(fx.tampered_token(e))),
+                ("alg=none", Some(fx.alg_none_token(e))),
+                (
+                    "HS256 with the public key",
+                    Some(fx.alg_hs256_pubkey_token(e)),
+                ),
+            ];
+            for (name, tok) in negatives {
+                let (s, body) = status(tok).await;
+                assert_eq!(
+                    s,
+                    StatusCode::UNAUTHORIZED,
+                    "{name} was not rejected: {body}"
+                );
+            }
+            assert_eq!(databases(), before, "a request provisioned a database");
+        }
 
-        // Now alice sends a request with her own JWT but a header claiming to
-        // be bob. Resolution ignores the header; she still reaches alice's DB.
-        let resp = router
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("GET")
-                    .uri("/api/collection")
-                    .header(access::JWT_HEADER, &alice_tok)
-                    .header("x-dumpstar-tenant", "bob")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
-        let body = body_string(resp).await;
-        assert!(
-            body.contains("sv3pt5-1-normal"),
-            "alice's header claim resolved to the wrong collection: {body}"
-        );
-    }
+        /// Detach takes access away; reattach gives it back, with the data.
+        #[tokio::test]
+        async fn reattach_restores_access() {
+            let (d, router, _tenants_dir, fx) = multi_tenant_app(&["alice"]).await;
+            let tok = fx.valid_token("alice@example.com");
+            let get = || {
+                router
+                    .clone()
+                    .oneshot(request("GET", "/api/collection", Some(&tok), None))
+            };
+            let created = router
+                .clone()
+                .oneshot(request(
+                    "POST",
+                    "/api/collection",
+                    Some(&tok),
+                    Some(ADD_CARD),
+                ))
+                .await
+                .unwrap();
+            assert_eq!(created.status(), StatusCode::CREATED);
 
-    // ---- check_multitenant_access (sync, no HTTP) ----------------------------------------
+            let reg = dumpstar_db::open_registry(&d.path().join("registry.sqlite")).unwrap();
+            let alice = dumpstar_db::registry::detach(&reg, "alice").unwrap();
+            assert_eq!(get().await.unwrap().status(), StatusCode::FORBIDDEN);
 
-    #[test]
-    fn multi_tenant_without_access_refuses() {
-        let err = check_multitenant_access(true, false).unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains(access::TEAM_DOMAIN_ENV), "{msg}");
-        assert!(msg.contains(access::AUD_ENV), "{msg}");
-    }
+            dumpstar_db::registry::reattach(&reg, &alice.database_id).unwrap();
+            let resp = get().await.unwrap();
+            assert_eq!(resp.status(), StatusCode::OK);
+            assert!(body_string(resp).await.contains("sv3pt5-1-normal"));
+        }
 
-    #[test]
-    fn multi_tenant_with_access_configured_starts() {
-        check_multitenant_access(true, true).unwrap();
-    }
+        /// A leftover `x-dumpstar-tenant` header cannot be used to reach another
+        /// tenant's collection. The header is not read; resolution is from the JWT
+        /// email only. Sending bob's handle alongside alice's JWT still gives alice.
+        #[tokio::test]
+        async fn leftover_tenant_header_cannot_escalate_to_another_tenant() {
+            let (_d, router, _dir, fx) = multi_tenant_app(&["alice", "bob"]).await;
+            let alice_tok = fx.valid_token("alice@example.com");
 
-    #[test]
-    fn single_tenant_is_unaffected_by_access_config() {
-        check_multitenant_access(false, false).unwrap();
-        check_multitenant_access(false, true).unwrap();
-    }
+            // Alice adds a card.
+            let created = router
+                .clone()
+                .oneshot(request(
+                    "POST",
+                    "/api/collection",
+                    Some(&alice_tok),
+                    Some(ADD_CARD),
+                ))
+                .await
+                .unwrap();
+            assert_eq!(created.status(), StatusCode::CREATED);
 
-    /// Single-tenant mode without Access configured is the production shape.
-    /// The access layer must not block /api/ requests when `state.access` is
-    /// `None` — it installs a synthetic placeholder identity so `tenant::layer`
-    /// can call `access::current()` without error; `Tenants::resolve` ignores
-    /// it in single-tenant mode.
-    #[tokio::test]
-    async fn single_tenant_without_access_serves_api() {
-        let dir = tempfile::tempdir().unwrap();
-        let shared = seed(dir.path());
-        let user_db = dir.path().join("tenants").join("collection.sqlite");
-        dumpstar_db::open_user(&user_db).unwrap();
-        let tenants = Tenants::single("collection", user_db, shared.clone()).unwrap();
-        // access: None — the production single-tenant shape.
-        let router = router_for(dir.path(), &shared, tenants, None);
-        let resp = router
-            .oneshot(
-                Request::builder()
-                    .uri("/api/collection")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(
-            resp.status(),
-            StatusCode::OK,
-            "single-tenant mode with no Access config must serve /api/ routes"
-        );
-    }
-
-    #[tokio::test]
-    async fn there_is_no_database_outside_a_resolved_request() {
-        let fx = TestAccessFixture::new().await;
-        let dir = tempfile::tempdir().unwrap();
-        let shared = seed(dir.path());
-        let state = AppState {
-            tenants: Arc::new(
-                Tenants::single(
-                    "collection",
-                    dir.path().join("tenants").join("collection.sqlite"),
-                    shared,
+            // Now alice sends a request with her own JWT but a header claiming to
+            // be bob. Resolution ignores the header; she still reaches alice's DB.
+            let resp = router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/collection")
+                        .header(access::JWT_HEADER, &alice_tok)
+                        .header("x-dumpstar-tenant", "bob")
+                        .body(Body::empty())
+                        .unwrap(),
                 )
-                .unwrap(),
-            ),
-            registry: Arc::new(Default::default()),
-            flags: Arc::new(Vec::new()),
-            data_dir: Arc::new(dir.path().to_path_buf()),
-            access: Some(fx.access.clone()),
-        };
+                .await
+                .unwrap();
+            assert_eq!(resp.status(), StatusCode::OK);
+            let body = body_string(resp).await;
+            assert!(
+                body.contains("sv3pt5-1-normal"),
+                "alice's header claim resolved to the wrong collection: {body}"
+            );
+        }
 
-        let unscoped = blocking(&state, |c| {
-            Ok(c.query_row("SELECT count(*) FROM collection", [], |r| {
-                r.get::<_, i64>(0)
-            })?)
-        })
-        .await;
-        assert!(unscoped.is_err(), "a connection without a resolved tenant");
+        #[tokio::test]
+        async fn there_is_no_database_outside_a_resolved_request() {
+            let (dir, _router, tenants_dir, fx) = multi_tenant_app(&["u"]).await;
+            let shared = dir.path().join("shared.sqlite");
+            let registry_db = dir.path().join("registry.sqlite");
+            let database_id = {
+                let reg = dumpstar_db::open_registry(&registry_db).unwrap();
+                dumpstar_db::registry::lookup(&reg, "u")
+                    .unwrap()
+                    .unwrap()
+                    .database_id
+            };
+            let state = AppState {
+                tenants: Arc::new(Tenants::new(tenants_dir, shared, &registry_db).unwrap()),
+                registry: Arc::new(Default::default()),
+                flags: Arc::new(Vec::new()),
+                data_dir: Arc::new(dir.path().to_path_buf()),
+                access: fx.access.clone(),
+            };
 
-        let scoped = tenant::test_support::as_tenant(
-            "collection",
-            blocking(&state, |c| {
+            let unscoped = blocking(&state, |c| {
                 Ok(c.query_row("SELECT count(*) FROM collection", [], |r| {
                     r.get::<_, i64>(0)
                 })?)
-            }),
-        )
-        .await;
-        assert_eq!(scoped.unwrap(), 0);
+            })
+            .await;
+            assert!(unscoped.is_err(), "a connection without a resolved tenant");
+
+            let scoped = tenant::test_support::as_tenant(
+                &database_id,
+                blocking(&state, |c| {
+                    Ok(c.query_row("SELECT count(*) FROM collection", [], |r| {
+                        r.get::<_, i64>(0)
+                    })?)
+                }),
+            )
+            .await;
+            assert_eq!(scoped.unwrap(), 0);
+        }
+
+        /// Tenant A creates a row in every tenant-owned resource the API
+        /// exposes by id; tenant B, holding a perfectly valid JWT of their
+        /// own, can neither read, change nor delete any of them, and A's rows
+        /// are untouched afterwards. Row ids are per-database counters, so B
+        /// naming id 1 is exactly the guess an attacker would make.
+        #[tokio::test]
+        async fn tenant_b_cannot_read_change_or_delete_tenant_a_rows() {
+            let (_d, router, _dir, fx) = multi_tenant_app(&["alice", "bob"]).await;
+            let a = fx.valid_token("alice@example.com");
+            let b = fx.valid_token("bob@example.com");
+            let send = |method: &'static str, uri: &'static str, tok: &str, body: Option<&str>| {
+                let router = router.clone();
+                let req = request(method, uri, Some(tok), body);
+                async move {
+                    let resp = router.oneshot(req).await.unwrap();
+                    (resp.status(), body_string(resp).await)
+                }
+            };
+
+            for (uri, body) in [
+                ("/api/collection", ADD_CARD),
+                ("/api/wishlist", r#"{"card_id":"sv3pt5-1"}"#),
+                ("/api/binders", r#"{"name":"alice-binder"}"#),
+                ("/api/decks", r#"{"name":"alice-deck"}"#),
+            ] {
+                let (s, out) = send("POST", uri, &a, Some(body)).await;
+                assert_eq!(s, StatusCode::CREATED, "alice could not seed {uri}: {out}");
+            }
+
+            // B sees none of it in any listing...
+            for uri in [
+                "/api/collection",
+                "/api/wishlist",
+                "/api/binders",
+                "/api/decks",
+            ] {
+                let (s, out) = send("GET", uri, &b, None).await;
+                assert_eq!(s, StatusCode::OK, "{uri}");
+                assert_eq!(out.trim(), "[]", "bob's {uri} lists alice's rows: {out}");
+            }
+
+            // ...cannot fetch, edit or delete a row by id...
+            for (method, uri, body) in [
+                ("GET", "/api/collection/1", None),
+                ("PUT", "/api/collection/1", Some(r#"{"notes":"pwned"}"#)),
+                ("DELETE", "/api/collection/1", None),
+                ("PUT", "/api/wishlist/1", Some(r#"{"notes":"pwned"}"#)),
+                ("DELETE", "/api/wishlist/1", None),
+                ("GET", "/api/binders/1", None),
+                ("PUT", "/api/binders/1", Some(r#"{"name":"pwned"}"#)),
+                ("DELETE", "/api/binders/1", None),
+                ("GET", "/api/decks/1", None),
+                ("PUT", "/api/decks/1", Some(r#"{"name":"pwned"}"#)),
+                ("DELETE", "/api/decks/1", None),
+            ] {
+                let (s, out) = send(method, uri, &b, body).await;
+                assert_eq!(
+                    s,
+                    StatusCode::NOT_FOUND,
+                    "bob reached alice's row with {method} {uri}: {out}"
+                );
+            }
+
+            // ...and everything is still there, unchanged, for A.
+            for (uri, needle) in [
+                ("/api/collection", "sv3pt5-1-normal"),
+                ("/api/wishlist", "sv3pt5-1"),
+                ("/api/binders", "alice-binder"),
+                ("/api/decks", "alice-deck"),
+            ] {
+                let (s, out) = send("GET", uri, &a, None).await;
+                assert_eq!(s, StatusCode::OK, "{uri}");
+                assert!(
+                    out.contains(needle),
+                    "alice lost {needle} from {uri}: {out}"
+                );
+                assert!(!out.contains("pwned"), "bob's write reached {uri}: {out}");
+            }
+        }
+
+        /// Routes that are deliberately reachable without a credential. Adding
+        /// to this list is the deliberate edit the ratchet below demands.
+        const PUBLIC_API_ROUTES: &[&str] = &["/backup-status"];
+
+        /// Every route literal registered in `src/routes/*.rs`, found by
+        /// reading the source — so a route added tomorrow is in the set without
+        /// anyone remembering to list it.
+        fn registered_route_paths() -> Vec<String> {
+            let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/routes");
+            let mut paths = Vec::new();
+            for entry in std::fs::read_dir(dir).unwrap() {
+                let text = std::fs::read_to_string(entry.unwrap().path()).unwrap();
+                let production = match text.find("#[cfg(test)]") {
+                    Some(i) => &text[..i],
+                    None => &text,
+                };
+                let mut rest = production;
+                while let Some(i) = rest.find(".route(") {
+                    rest = rest[i + ".route(".len()..].trim_start();
+                    if let Some(lit) = rest.strip_prefix('"') {
+                        let end = lit.find('"').unwrap();
+                        paths.push(lit[..end].to_string());
+                    }
+                }
+            }
+            paths.sort();
+            paths.dedup();
+            paths
+        }
+
+        /// A request carrying no credential at all, to `uri` with `method`.
+        async fn tokenless(router: &Router, method: &str, uri: &str) -> Response {
+            router
+                .clone()
+                .oneshot(request(method, uri, None, None))
+                .await
+                .unwrap()
+        }
+
+        /// The ratchet over authenticated routes. Every route the source
+        /// registers must answer a tokenless request with a 401 on at least one
+        /// method and never with anything but a 401, a 405 or the SPA shell on
+        /// the others — unless it is in [`PUBLIC_API_ROUTES`]. A route added
+        /// to either router without the access layer in front of it fails here.
+        #[tokio::test]
+        async fn every_registered_route_requires_a_token_unless_listed_public() {
+            let (_d, router, _fx) = test_app().await;
+            let paths = registered_route_paths();
+            assert!(
+                paths.len() > 40,
+                "the route scan found {} routes; it has stopped reading the source",
+                paths.len()
+            );
+            for p in PUBLIC_API_ROUTES {
+                assert!(
+                    paths.iter().any(|q| q == p),
+                    "{p} is listed public but no longer registered; delete it from the list"
+                );
+            }
+
+            for path in paths {
+                if PUBLIC_API_ROUTES.contains(&path.as_str()) {
+                    continue;
+                }
+                let concrete = path.replace("{printing_id}", "x").replace(['{', '}'], "");
+                let concrete = concrete
+                    .split('/')
+                    .map(|seg| {
+                        if seg == "id" || seg == "set" || seg == "number" || seg == "code" {
+                            "1"
+                        } else {
+                            seg
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("/");
+                // A route is mounted either at `/api` or, for the collection
+                // module, under `/api/collection`.
+                let mut rejected = false;
+                for prefix in ["", "/collection"] {
+                    let tail = if concrete == "/" {
+                        ""
+                    } else {
+                        concrete.as_str()
+                    };
+                    let uri = format!("/api{prefix}{tail}");
+                    for method in ["GET", "POST", "PUT", "DELETE", "PATCH"] {
+                        let resp = tokenless(&router, method, &uri).await;
+                        let status = resp.status();
+                        let is_shell = status == StatusCode::OK
+                            && resp
+                                .headers()
+                                .get(header::CONTENT_TYPE)
+                                .is_some_and(|v| v.to_str().unwrap().starts_with("text/html"));
+                        match status {
+                            StatusCode::UNAUTHORIZED => rejected = true,
+                            StatusCode::METHOD_NOT_ALLOWED => {}
+                            _ if is_shell => {}
+                            _ => panic!(
+                                "{method} {uri} answered {status} to a request with no token; \
+                                 put the route behind the access layer, or list it in \
+                                 PUBLIC_API_ROUTES if it is meant to be public"
+                            ),
+                        }
+                    }
+                }
+                assert!(
+                    rejected,
+                    "route {path} never answered 401; the ratchet cannot see it"
+                );
+            }
+        }
+
+        /// The public list is also true in the other direction: a listed
+        /// public route really is reachable with no credential.
+        #[tokio::test]
+        async fn listed_public_routes_need_no_token() {
+            let (_d, router, _fx) = test_app().await;
+            for p in PUBLIC_API_ROUTES {
+                let resp = tokenless(&router, "GET", &format!("/api{p}")).await;
+                assert_eq!(resp.status(), StatusCode::OK, "{p}");
+            }
+        }
+
+        const PRIVATE_NO_STORE: &str = "private, no-store";
+
+        fn assert_private_no_store(what: &str, resp: &Response) {
+            let values: Vec<_> = resp
+                .headers()
+                .get_all(header::CACHE_CONTROL)
+                .iter()
+                .map(|v| v.to_str().unwrap().to_string())
+                .collect();
+            assert_eq!(
+                values,
+                vec![PRIVATE_NO_STORE.to_string()],
+                "{what} ({}) must carry exactly `Cache-Control: {PRIVATE_NO_STORE}`",
+                resp.status()
+            );
+        }
+
+        /// Every `/api` response — success, client error, auth failure, an
+        /// unmatched path, the public route — is private and no-store, so no
+        /// shared cache between the origin and a tenant's browser can hold one
+        /// tenant's body and hand it to another.
+        #[tokio::test]
+        async fn every_api_response_is_private_no_store() {
+            let (_d, router, _dir, fx) = multi_tenant_app(&["alice"]).await;
+            let alice = fx.valid_token("alice@example.com");
+            let mallory = fx.valid_token("mallory@example.com");
+            let cases = vec![
+                (
+                    "200 json",
+                    "GET",
+                    "/api/collection",
+                    Some(alice.clone()),
+                    None,
+                ),
+                (
+                    "201 created",
+                    "POST",
+                    "/api/collection",
+                    Some(alice.clone()),
+                    Some(ADD_CARD),
+                ),
+                (
+                    "404 by id",
+                    "GET",
+                    "/api/collection/999",
+                    Some(alice.clone()),
+                    None,
+                ),
+                (
+                    "400 bad query",
+                    "GET",
+                    "/api/collection/search?q=%28",
+                    Some(alice.clone()),
+                    None,
+                ),
+                (
+                    "export download",
+                    "GET",
+                    "/api/export/json",
+                    Some(alice.clone()),
+                    None,
+                ),
+                ("403 unbound", "GET", "/api/collection", Some(mallory), None),
+                ("401 no token", "GET", "/api/collection", None, None),
+                (
+                    "401 garbage token",
+                    "GET",
+                    "/api/collection",
+                    Some("not.a.jwt".into()),
+                    None,
+                ),
+                ("public route", "GET", "/api/backup-status", None, None),
+                (
+                    "unmatched /api path",
+                    "GET",
+                    "/api/no-such-route",
+                    None,
+                    None,
+                ),
+            ];
+            for (what, method, uri, tok, body) in cases {
+                let resp = router
+                    .clone()
+                    .oneshot(request(method, uri, tok.as_deref(), body))
+                    .await
+                    .unwrap();
+                assert_private_no_store(what, &resp);
+            }
+
+            // Outside /api nothing changes: the SPA shell is not tenant data.
+            let shell = tokenless(&router, "GET", "/").await;
+            assert!(shell.headers().get(header::CACHE_CONTROL).is_none());
+        }
     }
 }

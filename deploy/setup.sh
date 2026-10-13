@@ -332,6 +332,34 @@ fi
 # config-lib.sh so deploy.sh can scaffold it for existing instances too).
 dumpstar_scaffold_access_env "$INSTANCE" "$LS_CONF_DIR"
 
+# A --test instance is verified against a throwaway JWKS, never Cloudflare: the
+# server checks a JWT on every /api request and has no bypass, so the instance
+# is started WITH Access configured and the UI tests present a token signed by
+# the key in ${LS_CONF_DIR}/test-jwks (UI_TEST_JWKS_DIR). The JWKS server is a
+# transient user unit so it outlives this script, and is stopped by
+# `systemctl --user stop dumpstar-test-jwks-${INSTANCE}`.
+if [ "$TEST" = true ]; then
+    # shellcheck source=tests/lib/access.sh
+    . "$REPO_DIR/tests/lib/access.sh"
+    TEST_JWKS_UNIT="dumpstar-test-jwks-${INSTANCE}"
+    TEST_JWKS_DIR="${LS_CONF_DIR}/test-jwks"
+    systemctl --user stop "$TEST_JWKS_UNIT" 2>/dev/null || true
+    rm -rf "$TEST_JWKS_DIR"
+    mkdir -p "$TEST_JWKS_DIR"
+    systemd-run --user --quiet --unit "$TEST_JWKS_UNIT" \
+        python3 "$REPO_DIR/tests/lib/test_jwks.py" serve "$TEST_JWKS_DIR"
+    for _ in $(seq 1 100); do
+        [ -f "$TEST_JWKS_DIR/jwks.json" ] && break
+        sleep 0.1
+    done
+    if [ ! -f "$TEST_JWKS_DIR/jwks.json" ]; then
+        echo "ERROR: the test JWKS server wrote no jwks.json (python3 needs cryptography and PyJWT)."
+        exit 1
+    fi
+    access_env_file "$TEST_JWKS_DIR" "${LS_CONF_DIR}/access.env"
+    echo "    Test Access config written to ${LS_CONF_DIR}/access.env (JWKS unit ${TEST_JWKS_UNIT})."
+fi
+
 systemctl --user daemon-reload
 
 # --- Optional data volume seeding ------------------------------------------

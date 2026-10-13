@@ -23,16 +23,15 @@
 #
 # ── WHAT IT ASSERTS ─────────────────────────────────────────────────────────
 #   §3 A JWKS server is started; alice's email is bound in the data directory.
-#   §4 Multi-tenant without Access vars refuses to start — Cloudflare Access
-#      is required, not optional.
+#   §4 Without Access vars the server refuses to start — Cloudflare Access
+#      is required, not optional, and there is no switch that changes that.
 #   §5 A valid JWT for a bound email is served — the happy path.
 #   §6 A valid JWT for an unbound email is a 403, naming the fix.
 #   §7 An invalid JWT is a 401 — the server rejects it before resolving.
 #   §8 No JWT at all is a 401 — there is no ambient identity.
 #   §9 Nothing above provisioned anything new.
-#  §10 SINGLE-TENANT MODE IS UNAFFECTED — no JWT is required, no email is
-#      checked. This is the only mode production MUST run unless the full
-#      Access setup is in place.
+#  §10 Detach removes access and reattach restores it; purge refuses a live
+#      row and a handle.
 #
 # Prod-safe: its own image tag, container name, temp directory and port. It
 # touches no dumpstar-* unit, no dumpstar-*-data volume, no bucket.
@@ -214,35 +213,34 @@ check "alice's email is bound" "1" \
 ALICE_TOKEN=$(python3 "${REPO_DIR}/tests/lib/test_jwks.py" issue "$JWKS_DIR" alice@example.com)
 UNBOUND_TOKEN=$(python3 "${REPO_DIR}/tests/lib/test_jwks.py" issue "$JWKS_DIR" unbound@example.com)
 
-log "4. multi-tenant WITHOUT Access vars refuses to start"
-# The guard (check_multitenant_access) requires DUMPSTAR_ACCESS_TEAM_DOMAIN and
-# DUMPSTAR_ACCESS_AUD at startup. Without them the server exits immediately —
-# §5 onwards can only be reached by testing AGAINST this guard, not by removing
-# it. An escape hatch that nobody ever tests closed is indistinguishable from a
-# guard that has been deleted.
-start_app -e DUMPSTAR_MULTITENANT=1 -e DUMPSTAR_USER=alice
+log "4. WITHOUT Access vars the server refuses to start"
+# access::AccessConfig::from_env requires DUMPSTAR_ACCESS_TEAM_DOMAIN,
+# DUMPSTAR_ACCESS_AUD and DUMPSTAR_ACCESS_JWKS_URL at startup. Without them the
+# server exits immediately — §5 onwards can only be reached by testing AGAINST
+# this guard, not by removing it. There is no single-tenant mode and no switch
+# to fall back to.
+start_app
 check "it never listens" "down" "$(wait_up)"
 check "the process exited non-zero" "exited/1" "$(app_state)"
-# ANCHOR ON THE REFUSAL LINE, NOT THE PHRASE. check_multitenant_access bails with
-# a multi-line message that says "Cloudflare Access" on two of its lines, so
-# `grep -c 'Cloudflare Access'` scores 2 for a CORRECT refusal and this check
-# failed on green code (PR #145). The sentence below appears exactly once and is
-# the one the check is named after.
+# ANCHOR ON THE REFUSAL LINE, NOT THE PHRASE: the message names Access more than
+# once, so a bare `grep -c 'Cloudflare Access'` would score a correct refusal 2.
 check "and said that Cloudflare Access was missing" "1" \
-	"$(podman logs "$APP_CTR" 2>&1 | grep -c 'refusing to start: multi-tenant resolution is on' || true)"
+	"$(podman logs "$APP_CTR" 2>&1 | grep -c 'refusing to start: Cloudflare Access is not configured' || true)"
+stop_app
+# A partial configuration is a refusal too, and names what is missing.
+start_app -e DUMPSTAR_ACCESS_TEAM_DOMAIN="$JWKS_ISSUER" -e DUMPSTAR_ACCESS_AUD="$JWKS_AUD"
+check "a partial config never listens" "down" "$(wait_up)"
+check "and names the missing JWKS url" "1" \
+	"$(podman logs "$APP_CTR" 2>&1 | grep -c 'DUMPSTAR_ACCESS_JWKS_URL not set' || true)"
 stop_app
 
-log "5. multi-tenant with Access: a bound email JWT is served"
+log "5. with Access configured: a bound email JWT is served"
 # The three Access vars configure the JWT verifier. JWKS_URL points to our
 # test JWKS server, which the container reaches via host.containers.internal.
-# DUMPSTAR_USER is set even with resolution on: dumpstar serve resolves the
-# process's own collection up front either way.
 start_app \
-	-e DUMPSTAR_MULTITENANT=1 \
 	-e DUMPSTAR_ACCESS_TEAM_DOMAIN="$JWKS_ISSUER" \
 	-e DUMPSTAR_ACCESS_AUD="$JWKS_AUD" \
-	-e DUMPSTAR_ACCESS_JWKS_URL="$JWKS_URL" \
-	-e DUMPSTAR_USER=alice
+	-e DUMPSTAR_ACCESS_JWKS_URL="$JWKS_URL"
 require_up "the server came up with Access configured"
 check "alice's JWT is served" "200" "$(api_status "$ALICE_TOKEN")"
 
@@ -271,17 +269,22 @@ check "the tenant databases are exactly the ones we made" "$BEFORE_FILES" \
 check "and nothing was created beside the catalog" "absent" \
 	"$([ -e "${DATA}/collection.sqlite" ] && echo present || echo absent)"
 
-log "10. SINGLE-TENANT MODE IS UNAFFECTED — no JWT is required"
-# Production's mode. In single-tenant mode the access layer is not wired at all:
-# there is no DUMPSTAR_MULTITENANT=1 and no Access config. Requests without a JWT
-# — or with an invalid one — are served normally. This is the gate that must
-# not be changed by improvements to multi-tenant security.
-stop_app
-start_app -e DUMPSTAR_USER=alice
-require_up "the server came up in single-tenant mode"
-check "anonymous request is served" "200" "$(api_status_anonymous)"
-check "invalid JWT header is ignored" "200" "$(api_status not.a.valid.jwt)"
-check "alice's JWT header is also fine but unneeded" "200" "$(api_status "$ALICE_TOKEN")"
+log "10. detach removes access, reattach restores it, purge is guarded"
+ALICE_ID=$(sqlite3 "file:${DATA}/registry.sqlite?mode=ro" \
+	"SELECT database_id FROM user WHERE handle='alice';")
+# purge refuses a live row and a handle; nothing is removed by either.
+check "purge refuses a live user" "1" \
+	"$(dumpstar tenant purge "$ALICE_ID" --yes 2>&1 | grep -c 'still active' || true)"
+check "purge refuses a handle" "nonzero" \
+	"$(dumpstar tenant purge alice --yes >/dev/null 2>&1 && echo zero || echo nonzero)"
+check "alice's database is still there" "1" "$(tenant_files | grep -c "^${ALICE_ID}.sqlite$" || true)"
+dumpstar tenant detach alice --yes >/dev/null
+check "detached: alice's JWT -> 403" "403" "$(api_status "$ALICE_TOKEN")"
+check "reattach refuses a handle" "nonzero" \
+	"$(dumpstar tenant reattach alice >/dev/null 2>&1 && echo zero || echo nonzero)"
+dumpstar tenant reattach "$ALICE_ID" >/dev/null
+check "reattached: alice's JWT -> 200" "200" "$(api_status "$ALICE_TOKEN")"
+check "reattach provisioned nothing new" "$BEFORE_FILES" "$(tenant_files)"
 
 log "RESULT"
 echo "  ${pass} passed, ${fail} failed"
@@ -290,6 +293,6 @@ echo "  ${pass} passed, ${fail} failed"
 	podman logs "$APP_CTR" 2>&1 | tail -30 | sed 's/^/  /'
 	exit 1
 }
-echo "  PASS — Access config required for multi-tenant, JWT verified against JWKS,"
-echo "         bound email is served, unbound is 403, invalid is 401, and"
-echo "         single-tenant mode requires no auth at all."
+echo "  PASS — Access config required to start, JWT verified against JWKS,"
+echo "         bound email is served, unbound is 403, invalid or absent is 401,"
+echo "         and reattach restores what detach removed."

@@ -62,11 +62,10 @@ FIXTURES="${REPO_DIR}/tests/ui/fixtures"
 # Bounded condition polling, in one place for every harness (pd-86er).
 # shellcheck source=tests/lib/wait.sh
 . "${REPO_DIR}/tests/lib/wait.sh"
-
-# The shipped image, built here or — when deploy/ci.sh already built it once for
-# every gate in the run — tagged from that one. See deploy/image-lib.sh.
-# shellcheck source=deploy/image-lib.sh
-. "${REPO_DIR}/deploy/image-lib.sh"
+# The test Access identity provider: the server verifies a JWT on every /api
+# request, so this gate starts it WITH Access configured and presents a token.
+# shellcheck source=tests/lib/access.sh
+. "${REPO_DIR}/tests/lib/access.sh"
 
 # PER-CHECKOUT, for the reason deploy/ci.sh derives its instance the same way:
 # several polecats run this concurrently from their own worktrees, and a fixed
@@ -83,6 +82,7 @@ PORT=""
 
 WORK=${WORK:-$(mktemp -d "${TMPDIR:-/tmp}/pd-upgrade.XXXXXX")}
 DATA="$WORK/data"
+JWKS_DIR="$WORK/jwks"
 
 pass=0
 fail=0
@@ -105,6 +105,7 @@ cleanup() {
 		return
 	fi
 	podman rm -f --ignore "$APP_CTR" >/dev/null 2>&1 || true
+	access_stop
 	# The image too (pd-5aba). The tag carries the checkout hash, so every
 	# worktree that ever ran this gate left one behind and nothing collected
 	# them: handles-* and upgrade-* were the bulk of the leaked images found
@@ -125,7 +126,7 @@ start_app() {
 	# An EMPTY host port in the mapping is how Podman is asked to choose one —
 	# the same `:8080` deploy/setup.sh writes into the Quadlet unit for PORT=0.
 	podman run -d --name "$APP_CTR" -p "127.0.0.1:${PDUP_PORT:-}:8080" \
-		-v "${DATA}:/data:Z" "$IMAGE" >/dev/null
+		-v "${DATA}:/data:Z" "${ACCESS_ARGS[@]}" "$IMAGE" >/dev/null
 	# Read back off the container rather than from `podman port`: the mapping is
 	# fixed at create time and inspect still reports it after the process has
 	# exited, which is exactly the case §7 asserts on.
@@ -194,11 +195,15 @@ dumpstar() { podman run --rm -v "${DATA}:/data:Z" --entrypoint dumpstar "$IMAGE"
 # The collection as the app serves it, hashed. Comparing this across the
 # migration is the assertion: an empty, short or reordered collection all fail,
 # where "the server answered 200" would not.
-collection_hash() { curl -sf "http://127.0.0.1:${PORT}/api/export/csv" | sha256sum | cut -d' ' -f1; }
-collection_lines() { curl -sf "http://127.0.0.1:${PORT}/api/export/csv" | grep -c . || true; }
+collection_hash() { curl -sf -H "Cf-Access-Jwt-Assertion: $TOKEN" "http://127.0.0.1:${PORT}/api/export/csv" | sha256sum | cut -d' ' -f1; }
+collection_lines() { curl -sf -H "Cf-Access-Jwt-Assertion: $TOKEN" "http://127.0.0.1:${PORT}/api/export/csv" | grep -c . || true; }
 
 # The tenant databases on the volume, by filename stem.
 tenant_stems() { ls "${DATA}/tenants" 2>/dev/null | sed -n 's/\.sqlite$//p' | sort; }
+
+access_start "$JWKS_DIR"
+mapfile -t ACCESS_ARGS < <(access_env_args)
+TOKEN="$(access_token "$JWKS_DIR" collection@example.com)"
 
 log "1. the shipped image"
 dumpstar_image_ensure "$IMAGE" "$REPO_DIR" >/dev/null

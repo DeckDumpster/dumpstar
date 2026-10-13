@@ -1,0 +1,58 @@
+{
+  "format": "dumpstar-swu-catalog/1",
+  "sets": [
+    {"set_code": "SOR", "name": "Spark of Rebellion", "release_date": "2024-03-08", "sort_order": 1},
+    {"set_code": "SHD", "name": "Shadows of the Galaxy", "release_date": "2024-07-12", "sort_order": 2}
+  ],
+  "cards": [
+    {"card_id": "1001", "name": "Luke Skywalker", "subtitle": "Faithful Friend", "card_type": "Leader",
+     "cost": 6, "power": 4, "hp": 7, "aspects": ["Vigilance", "Heroism"], "traits": ["Force", "Rebel"],
+     "arenas": ["Ground"], "rules_text": "On Attack: Give a Shield token to a unit."},
+    {"card_id": "1002", "name": "Millennium Falcon", "subtitle": "Piece of Junk", "card_type": "Unit",
+     "cost": 3, "power": 3, "hp": 4, "aspects": ["Cunning"], "traits": ["Vehicle", "Transport"],
+     "arenas": ["Space"], "rules_text": "When Played: You may play a Rebel unit from your hand."},
+    {"card_id": "1003", "name": "Vanquish", "subtitle": null, "card_type": "Event",
+     "cost": 5, "power": null, "hp": null, "aspects": ["Command"], "traits": [],
+     "arenas": [], "rules_text": "Defeat a non-leader unit."}
+  ],
+  "printings": [
+    {"printing_id": "2001:Normal", "card_id": "1001", "set_code": "SOR", "number": "5", "variant": "Standard", "finish": "Normal",
+     "rarity": "Special", "artist": "Borja Pindado", "image_url": null, "official_card_uid": "2001",
+     "tcgcsv_product_id": 900001, "tcgcsv_sub_type_name": "Normal"},
+    {"printing_id": "2001:Foil", "card_id": "1001", "set_code": "SOR", "number": "5", "variant": "Standard", "finish": "Foil",
+     "rarity": "Special", "artist": "Borja Pindado", "image_url": null, "official_card_uid": "2001",
+     "tcgcsv_product_id": 900001, "tcgcsv_sub_type_name": "Foil"},
+    {"printing_id": "2002:Normal", "card_id": "1001", "set_code": "SOR", "number": "262", "variant": "Hyperspace", "finish": "Normal",
+     "rarity": "Special", "artist": "Borja Pindado", "image_url": null, "official_card_uid": "2002",
+     "tcgcsv_product_id": 900002, "tcgcsv_sub_type_name": "Normal"},
+    {"printing_id": "2002:Foil", "card_id": "1001", "set_code": "SOR", "number": "262", "variant": "Hyperspace", "finish": "Foil",
+     "rarity": "Special", "artist": "Borja Pindado", "image_url": null, "official_card_uid": "2002",
+     "tcgcsv_product_id": 900002, "tcgcsv_sub_type_name": "Foil"},
+    {"printing_id": "2003:Normal", "card_id": "1002", "set_code": "SOR", "number": "193", "variant": "Standard", "finish": "Normal",
+     "rarity": "Rare", "artist": "Matt Ferguson", "image_url": null, "official_card_uid": "2003",
+     "tcgcsv_product_id": 900003, "tcgcsv_sub_type_name": "Normal"},
+    {"printing_id": "2004:Normal", "card_id": "1002", "set_code": "SHD", "number": "500", "variant": "Showcase", "finish": "Normal",
+     "rarity": "Legendary", "artist": "Kuroimori", "image_url": null, "official_card_uid": "2004",
+     "tcgcsv_product_id": 900004, "tcgcsv_sub_type_name": "Normal"},
+    {"printing_id": "2005:Normal", "card_id": "1003", "set_code": "SOR", "number": "P01", "variant": "Promo", "finish": "Normal",
+     "rarity": "Common", "artist": null, "image_url": null, "official_card_uid": "2005",
+     "tcgcsv_product_id": null, "tcgcsv_sub_type_name": null}
+  ],
+  "prices": [
+    {"tcgcsv_product_id": 900001, "tcgcsv_sub_type_name": "Normal", "observed_on": "2026-10-11", "low": 3.0, "mid": 5.0, "high": 9.0, "market": 4.5, "direct_low": null},
+    {"tcgcsv_product_id": 900001, "tcgcsv_sub_type_name": "Normal", "observed_on": "2026-10-12", "low": 3.1, "mid": 5.1, "high": 9.1, "market": 4.6, "direct_low": null},
+    {"tcgcsv_product_id": 900001, "tcgcsv_sub_type_name": "Foil", "observed_on": "2026-10-12", "low": 20.0, "mid": 25.0, "high": 40.0, "market": 24.0, "direct_low": 19.0},
+    {"tcgcsv_product_id": 900004, "tcgcsv_sub_type_name": "Normal", "observed_on": "2026-10-12", "low": 60.0, "mid": 80.0, "high": 120.0, "market": 75.0, "direct_low": null},
+    {"tcgcsv_product_id": 999999, "tcgcsv_sub_type_name": "Normal", "observed_on": "2026-10-12", "low": 1.0, "mid": 1.0, "high": 1.0, "market": 1.0, "direct_low": null}
+  ],
+  "formats": [
+    {"format_id": "premier", "name": "Premier", "rules": {"min_deck_size": "50", "max_copies": "3", "sideboard_size": "10"}},
+    {"format_id": "twin_suns", "name": "Twin Suns", "rules": {"min_deck_size": "50", "max_copies": "1"}}
+  ],
+  "legality": [
+    {"format_id": "premier", "card_id": "1001", "status": "legal"},
+    {"format_id": "premier", "card_id": "1002", "status": "banned"},
+    {"format_id": "premier", "card_id": "1003", "status": "legal"},
+    {"format_id": "twin_suns", "card_id": "1001", "status": "legal"}
+  ]
+}

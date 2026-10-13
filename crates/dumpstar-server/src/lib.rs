@@ -1526,6 +1526,95 @@ mod tests {
             assert!(!out.contains("pwned") && !out.contains("sold"), "{out}");
         }
 
+        /// Browse: every catalogued set has a page, and the owned overlay on the
+        /// sets index, the set page and the card detail is the asking tenant's
+        /// own collection and nobody else's.
+        #[tokio::test]
+        async fn browse_serves_every_set_and_counts_only_the_tenants_own_copies() {
+            let (d, router, _dir, fx) = multi_tenant_app(&["alice", "bob"]).await;
+            {
+                let c = dumpstar_db::open_shared(&d.path().join("shared.sqlite")).unwrap();
+                c.execute_batch(
+                    "INSERT INTO sets (set_code, name, series) VALUES ('empty', 'Empty', 'S'); \
+                     INSERT INTO sets (set_code, name, series) VALUES ('two', 'Two', 'S'); \
+                     INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
+                       VALUES ('two-1', 'two', '1', 1, 'A'), ('two-2', 'two', '2', 2, 'B'); \
+                     INSERT INTO printings (printing_id, card_id, variant) \
+                       VALUES ('two-1-normal', 'two-1', 'normal'), ('two-1-foil', 'two-1', 'foil'), \
+                              ('two-2-normal', 'two-2', 'normal');",
+                )
+                .unwrap();
+            }
+            let a = fx.valid_token("alice@example.com");
+            let b = fx.valid_token("bob@example.com");
+            let get = |tok: &str, uri: String| {
+                let router = router.clone();
+                let req = request("GET", &uri, Some(tok), None);
+                async move {
+                    let resp = router.oneshot(req).await.unwrap();
+                    let status = resp.status();
+                    let body = body_string(resp).await;
+                    (
+                        status,
+                        serde_json::from_str::<serde_json::Value>(&body).unwrap(),
+                    )
+                }
+            };
+            for pid in ["two-1-normal", "two-1-foil", "two-2-normal"] {
+                let resp = router
+                    .clone()
+                    .oneshot(request(
+                        "POST",
+                        "/api/collection",
+                        Some(&a),
+                        Some(&format!(
+                            r#"{{"printing_id":"{pid}","source":"manual_id"}}"#
+                        )),
+                    ))
+                    .await
+                    .unwrap();
+                assert_eq!(resp.status(), StatusCode::CREATED, "{pid}");
+            }
+
+            for (tok, who, want_cards, want_copies) in [(&a, "alice", 2, 3), (&b, "bob", 0, 0)] {
+                let (s, sets) = get(tok, "/api/sets".into()).await;
+                assert_eq!(s, StatusCode::OK);
+                let rows = sets.as_array().unwrap();
+                for code in ["sv3pt5", "empty", "two"] {
+                    let row = rows.iter().find(|r| r["set_code"] == code);
+                    let row = row.unwrap_or_else(|| panic!("{who}: set {code} missing"));
+                    let (s, page) = get(tok, format!("/api/sets/{code}/binder")).await;
+                    assert_eq!(s, StatusCode::OK, "{who}: set {code} has no page");
+                    if code == "two" {
+                        assert_eq!(row["owned_cards"], want_cards, "{who} index");
+                        let owned: i64 = page["slots"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .flat_map(|s| s["printings"].as_array().unwrap())
+                            .map(|p| p["owned_count"].as_i64().unwrap())
+                            .sum();
+                        assert_eq!(owned, want_copies, "{who} set page overlay");
+                    } else {
+                        assert_eq!(row["owned_cards"], 0, "{who} {code}");
+                    }
+                }
+                let (s, card) = get(tok, "/api/card/two/1".into()).await;
+                assert_eq!(s, StatusCode::OK);
+                let printings = card["printings"].as_array().unwrap();
+                assert_eq!(printings.len(), 2, "card detail lists every printing");
+                let owned: i64 = printings
+                    .iter()
+                    .map(|p| p["owned_count"].as_i64().unwrap())
+                    .sum();
+                assert_eq!(
+                    owned,
+                    if who == "alice" { 2 } else { 0 },
+                    "{who} card detail"
+                );
+            }
+        }
+
         /// A 100,000-copy collection lists in one gzip response that decodes to
         /// every row, and the same route for another tenant stays empty.
         #[tokio::test]

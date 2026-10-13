@@ -1,57 +1,32 @@
 name: CI
 
-# deploy.yml has shipped to prod on every push to master since it was added, with
-# nothing gating it. PR #7 merged and deployed without a single test having run in
-# CI — the suite existed, but only ever as something a human or a polecat ran by
-# hand. This is that gate.
+# EACH RUN GETS ITS OWN MACHINE. The suite runs on a VM provisioned for this run
+# and destroyed after it, through DeckDumpster/ephemeral-ci (provision, then
+# teardown). `spill: ec2` falls back to EC2 when the hypervisor is full, after
+# `spill-after-seconds: '60'`. What lives here is what runs ON the VM:
+# deploy/runner-deps.sh and deploy/ci.sh.
 #
-# EACH RUN GETS ITS OWN MACHINE. The suite runs on a Proxmox VM cloned for this
-# run and destroyed after it. The VM lifecycle is DeckDumpster/ephemeral-ci, the
-# same two composite actions deckdumpster uses; what lives here is what runs ON
-# the VM — deploy/runner-deps.sh and deploy/ci.sh.
-#
-# WHAT THAT CHANGED, because three comments in this file used to depend on the
-# opposite. CI ran on one long-lived box, and that box being the only runner was
-# load-bearing for a warm CARGO_TARGET_DIR, for a tree-hash cache on a host path,
-# and for the serialisation that made a shared target directory safe at all. All
-# three are gone with it:
-#
-#   - CARGO_TARGET_DIR / CARGO_HOME pointed at /workspaces on the old box. That
-#     path does not exist here and every run compiles cold. The warning attached
-#     to them — "two runs writing one target directory corrupts builds in ways
-#     that present as flaky tests; BEFORE ADDING A SECOND RUNNER, move to sccache
-#     or per-runner target dirs" — is now satisfied by construction rather than
-#     by there happening to be one runner. Runs are isolated because they are on
-#     different machines.
-#
-#   - The tree-hash cache keyed on /workspaces/ci-tree-cache. On a VM that has
-#     never run anything, every lookup misses and every store evaporates, so the
-#     steps were removed rather than left to log a miss they can never avoid.
-#     deploy/ci-cache.sh stays for local use. If the cold build cost justifies it,
-#     the warm caches belong baked into the Proxmox template, where each clone
-#     gets a copy-on-write copy — isolated, unlike the shared directory they
-#     replace.
-#
-#   - Runs no longer queue behind each other. Several PRs pushed together now get
-#     several VMs.
+# Needs repository secrets and variables (TS_OAUTH_*, RUNNER_REG_PAT, PVE_*,
+# AWS_SPILL_ROLE_ARN, TEMPLATE_VMID, ...). Until
+# they are granted the provision job cannot get a runner and the PR waits on it.
 
 on:
   pull_request:
-    # BASE branches, not head. `[master]` alone meant that every PR an epic opens
+    # BASE branches, not head. `[main]` alone meant that every PR an epic opens
     # into its own integration branch got NO CI AT ALL — the event simply never
     # matched, so there was no run to be queued, cancelled or approved.
     #
     # Six PRs (#31-#36, the lakehouse epic) sat like that on 2026-08-13. They read
-    # as mergeable because the ruleset's required `test` check only guards master,
+    # as mergeable because the ruleset's required `test` check only guards main,
     # and an admin bypass reports CLEAN regardless. Two of them had in fact FAILED
     # their only evidence — a hand-run `workflow_dispatch`, which polecats had
     # reached for precisely because nothing else was firing.
     #
     # An epic's children are the reviewable unit (a polecat branch is the PR
     # source), so they have to be gated individually. Gating only the eventual
-    # integration -> master PR hides a broken child until the whole epic lands.
+    # integration -> main PR hides a broken child until the whole epic lands.
     branches:
-      - master
+      - main
       - 'integration/**'
   # `force_spill` runs the job on EC2 on demand instead of Proxmox (provision's
   # `spill: ec2-only`). For the Concierge and the spill probe proof after a
@@ -122,7 +97,7 @@ jobs:
   #
   # The commit status step below posts BOTH `gate` and `test`. `test` stays for
   # the duration of the transition to queue mode: the `pr-required` ruleset on
-  # master requires a status check called `test`, and dropping it before the
+  # main requires a status check called `test`, and dropping it before the
   # ruleset is updated would block every PR indefinitely — a required check that
   # never reports does not fail the PR, it prevents the merge box from going green.
   gate:
@@ -265,7 +240,7 @@ jobs:
       #   gate  — Spira's merge queue reads this. The check-run name (`gate`, from
       #           the job name) is one signal; the commit status is what survives a
       #           workflow_dispatch that precedes a PR.
-      #   test  — the `pr-required` ruleset on master requires this context during
+      #   test  — the `pr-required` ruleset on main requires this context during
       #           the transition to queue mode. Drop it before the ruleset is updated
       #           and every PR blocks indefinitely: a required check that never
       #           reports does not FAIL the PR, it prevents the merge box going green.

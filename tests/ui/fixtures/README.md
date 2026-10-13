@@ -1,6 +1,6 @@
 # Intents UI Test Fixture
 
-Deterministic Pokémon fixture for PokeDumpster's intents UI-testing harness.
+Deterministic Pokémon fixture for Dumpstar's intents UI-testing harness.
 The harness snapshots/restores these two files before each test (see
 `conftest.ts`); the running server opens them as its shared catalog and
 user collection.
@@ -8,15 +8,15 @@ user collection.
 ## Regenerating
 
 ```bash
-cargo run -p pkdump-cli -- seed-fixture
+cargo run -p dumpstar-cli -- seed-fixture
 # or, into an explicit directory:
-cargo run -p pkdump-cli -- seed-fixture --out tests/ui/fixtures
+cargo run -p dumpstar-cli -- seed-fixture --out tests/ui/fixtures
 ```
 
 The command does a clean rebuild: it deletes any existing `shared.sqlite` /
-`collection.sqlite`, recreates them through `pkdump_db::open_shared` /
+`collection.sqlite`, recreates them through `dumpstar_db::open_shared` /
 `connect_user` (so the schema and the shipped seeds are applied), then seeds
-deterministic rows. User data is inserted through the `pkdump-db` repository
+deterministic rows. User data is inserted through the `dumpstar-db` repository
 functions so app-layer validation runs.
 
 **Both files are byte-stable.** Two regenerations of an unchanged seeder

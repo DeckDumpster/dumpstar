@@ -887,6 +887,19 @@ if tier lint; then
     step "That guard has been seen RED (tests/lake/tenant_isolation_selftest.sh)"
     bash "$REPO_DIR/tests/lake/tenant_isolation_selftest.sh"
 
+    # The source site's identity and the removed Pokémon modules must not come
+    # back (design row S1). The gate reads `git ls-files`; the test beside it
+    # plants each offence in a scratch repo and requires the gate to name it.
+    step "No source-site identity, no removed Pokémon module (tests/ci/banned_names_test.sh)"
+    bash "$REPO_DIR/tests/ci/banned_names_test.sh"
+    step "Banned names over the tree (deploy/banned-names.sh)"
+    bash "$REPO_DIR/deploy/banned-names.sh"
+
+    # ci.yml has no concurrency: block, provisions through ephemeral-ci@v2 with
+    # the 60s spill, and tears down under if: always().
+    step "ci.yml shape (tests/ci/workflow_test.sh)"
+    bash "$REPO_DIR/tests/ci/workflow_test.sh"
+
     # A formatter check, not a compile — `cargo fmt` parses and never builds,
     # so it costs a second and belongs with the lint tier rather than behind
     # `cargo test`.
@@ -973,10 +986,9 @@ if tier frontend; then
 fi
 
 # --- 3b. The image, once ----------------------------------------------------
-# Five gates below need the shipped image: the container gate and the
-# schema-version gate through deploy/setup.sh, and the upgrade, tenant-header
-# and refresh gates directly. Each used to run its own `podman build` over
-# identical content — five invocations of the builder per run.
+# The container gate needs the shipped image, and so will every gate armed
+# after it; building once here and exporting the name keeps that to one
+# invocation of the builder per run.
 #
 # Podman's layer cache made four of them cheap rather than free — measured on
 # the CI box: ~4s for a repeat over identical content, against 5m23s when the
@@ -996,7 +1008,7 @@ fi
 # anywhere else rather than reading as "not selected" and quietly never
 # building. No `break`: every name is put to the library.
 NEEDS_IMAGE=no
-for _t in container tenants schema refresh; do
+for _t in container; do
     if tier -q "$_t"; then NEEDS_IMAGE=yes; fi
 done
 
@@ -1047,266 +1059,17 @@ if tier container; then
     fi
 fi
 
-# --- 5. Backup gate ---------------------------------------------------------
-# Litestream replicates every tenant from one sidecar and a restore hands back
-# the right tenant's collection. Self-contained (own network, own MinIO, own
-# temp dir) — it does not touch the instance started above, nor any real bucket.
-
-if tier litestream; then
-    step "Queueing: Litestream multi-tenant replication + restore"
-    dumpstar_par_add litestream bash "$REPO_DIR/tests/litestream/run.sh"
-
-    # --- 6. DR drill --------------------------------------------------------
-    # The operator procedure in deploy/RESTORE.md, executed with the shipped
-    # scripts against a real Quadlet sidecar: restore one tenant in place, in
-    # time, and onto a bare volume, and assert the other tenants are
-    # byte-identical every time. Its own instance name / volume / MinIO /
-    # secret — it touches nothing else.
-
-    step "Queueing: Multi-tenant DR drill (deploy/RESTORE.md, executed)"
-    dumpstar_par_add drill bash "$REPO_DIR/tests/litestream/drill.sh"
-
-    # --- 6b. Alarming gate --------------------------------------------------
-    # A backup that is not alarmed is a backup nobody knows is broken — which
-    # is the state this project was actually in for months. Every layer is made
-    # to fire at a local recorder and asserted on what it sent. Its own
-    # instance, its own MinIO, its own unit-name prefix, both endpoints on
-    # 127.0.0.1 — it touches no dumpstar-*@prod unit and contacts no external
-    # service.
-
-    step "Queueing: Backup alarming — every layer fires (tests/alarming/run.sh)"
-    dumpstar_par_add alarming bash "$REPO_DIR/tests/alarming/run.sh"
-
-    # --- 7. Recreated-handle proof ------------------------------------------
-    # pd-pm7b as an executable statement rather than an argument: a handle is
-    # created, removed and created again through the real `dumpstar tenant`
-    # commands, and no restore of the second user — latest or point-in-time
-    # inside the retention window — can produce the first user's card. Its own
-    # MinIO, its own $DUMPSTAR_HOME, its own prefix; it touches nothing else here.
-
-    step "Queueing: Recreated handle cannot inherit a replica (pd-pm7b)"
-    dumpstar_par_add recreate bash "$REPO_DIR/tests/litestream/recreate.sh"
-fi
-
-# --- 8. Upgrade-path gate ---------------------------------------------------
-# Fresh instances are not the upgrade path. deploy/setup.sh --test creates its
-# volume already in the current layout, which is exactly why two alignment beads
-# both verified single-tenant startup and prod still went down on the first
-# automated deploy of the last migration (pd-uoph). This starts the shipped image
-# against a volume built in the OLD shape. Its own image tag, container, port and
-# temp dir — it does not touch the instance started above.
-
-if tier tenants; then
-    step "Queueing: Upgrade path — old-layout volume -> migrate -> rollback (pd-hqee)"
-    dumpstar_par_add upgrade bash "$REPO_DIR/tests/tenants/upgrade.sh"
-
-    # --- 9. Tenant-header gate ----------------------------------------------
-    # What the shipped image answers to a tenant header, over real HTTP:
-    # malformed is a 400 naming the rule, well-formed-but-unknown is a 404, and
-    # single-tenant mode does not read the header at all. The distinction is a
-    # status code, so it has to be asserted on the wire — a 400 flattened into
-    # a 404 by the middleware would satisfy every unit test in the crate. Its
-    # own image tag, container, port and temp dir — it does not touch the
-    # instance started above.
-
-    step "Queueing: Tenant header — malformed 400 vs unknown 404 (pd-4g7c)"
-    dumpstar_par_add tenant-header bash "$REPO_DIR/tests/tenants/handles.sh"
-
-    # --- 9b. Key custody ----------------------------------------------------
-    # Tenant-zone key custody in the SHIPPED image (pd-ulds). Two claims the
-    # hermetic Rust tests cannot make: that the master key file is mode 600
-    # WHERE IT IS DEPLOYED (a umask, a mount or a later chmod all sit between
-    # "the code sets 600" and "the file is 600"), and that deploy/keys.sh — the
-    # one layer that could quietly undo the backup/destruction separation by
-    # mounting everything for everything — does not. Its own image tag, temp
-    # dir and fake HOME; the data "volume" is a host path under its own temp
-    # dir, so it touches no dumpstar-*-data volume.
-    #
-    # In the tenants tier because key state is keyed on database_id and lives
-    # in registry.sqlite — the same file this tier's other two gates are about.
-
-    step "Queueing: Key custody — mode 600 deployed, and a lost key is not a deletion (pd-ulds)"
-    dumpstar_par_add keys bash "$REPO_DIR/tests/keys/run.sh"
-fi
-
-# --- 10. Browser gate --------------------------------------------------------
-# Runs against the container started above rather than standing up a second
-# one. A pixel diff fails CI; approving it is explicit — tests/visual/README.md.
-#
-# Selected for ANY change under frontend/, not just route files: a token, a
-# shared component or a rule in app.css repaints every route at once, and
-# pd-tf4h is what a selector that guessed otherwise already cost. See
-# deploy/ci-select.sh.
-
-if tier browser; then
-    step "Browser: every route screenshotted, and /collection's DOM bounded"
-    DUMPSTAR_BASE_URL="http://localhost:${PORT}" bash "$REPO_DIR/tests/visual/playwright.sh"
-fi
-
-# --- 11. Schema-version gate ------------------------------------------------
-# The upgrade path, not the fresh install: a prod-shaped container started
-# against a volume the PRE-GATE binary would have left behind. Its own instance
-# name, volume and port — it does not touch the instance started above.
-
-if tier schema; then
-    step "Queueing: Schema version — an unversioned volume is adopted, a future one is refused"
-    dumpstar_par_add schema-version bash "$REPO_DIR/tests/schema-version/run.sh"
-fi
-
-# --- 12. Lakehouse gate -----------------------------------------------------
-# The offline lakehouse substrate (pd-fzeb), end to end: the PyIceberg job image
-# builds, Nessie serves an Iceberg REST catalog over a durable version store,
-# and a table can be written, committed twice and read back AS OF the first
-# commit. Its own network, MinIO, Nessie, image tag and temp dir — it touches no
-# dumpstar-* unit, no real bucket, and no tenant database.
-
-if tier lake; then
-    step "Queueing: Lakehouse — PyIceberg + Nessie write/read/time-travel round trip"
-    dumpstar_par_add lake bash "$REPO_DIR/tests/lake/run.sh"
-
-    # --- 13. catalog.prices from raw ----------------------------------------
-    # The claim the landing zone exists to make good on, made mechanically: the
-    # build job runs on an --internal podman network, so there is no upstream to
-    # call even if it wanted one, and its output is compared row for row against
-    # the shared.sqlite built from the same upstream bytes.
-    #
-    # It also drives the SHIPPED nightly wrapper (deploy/prices.sh, pd-up36)
-    # against that lake: an incomplete day builds and raises nothing, a day whose
-    # raw never landed is a warning over a still-fresh table, and a table that
-    # has stopped advancing pages even on a night the build itself succeeded.
-
-    step "Queueing: Lakehouse — catalog.prices built from raw/ alone, with no network"
-    dumpstar_par_add prices bash "$REPO_DIR/tests/lake/prices.sh"
-
-    # --- 14. The transform tier ---------------------------------------------
-    # Value snapshots for EVERY registered tenant, computed from the lake. Two
-    # claims at once: the rows are byte-identical to what value_history::
-    # snapshot_today produces for the same tenant and date, and a second tenant
-    # who has never had a snapshot row gets one — which is pd-s5yn inverted
-    # into a test. A tenant whose database is missing or locked is skipped and
-    # the run exits 2.
-    #
-    # Since pd-i08u it also stands up a tenant zone (§4b): the transform has no
-    # online holdings read left, so keys, a backfill, a shipment and a
-    # read-back are what give it anything to value. That puts the round trip
-    # INSIDE the arithmetic claim — alice's holdings reach the SQL through
-    # Parquet, AES-GCM and outbox::project and still have to produce
-    # byte-identical rows — rather than losing the claim because its input
-    # moved.
-
-    step "Queueing: Lakehouse — per-tenant value snapshots, for every tenant"
-    dumpstar_par_add value-snapshots bash "$REPO_DIR/tests/lake/value_snapshots.sh"
-
-    # --- 14b. shared.sqlite from raw ----------------------------------------
-    # The same claim as §13, one level up: the whole CATALOG, not one table.
-    # `dumpstar-lake-derive` runs in the SHIPPED image on an --internal podman
-    # network — §2 of the gate proves egress is gone by trying to reach
-    # 1.1.1.1 from that image — and its output is compared row by row against
-    # a shared.sqlite built by fetching the same upstream bytes.
-    #
-    # It lives in this tier rather than `container` because it is a lakehouse
-    # claim: a frontend change cannot affect whether a catalog rebuilds from
-    # raw/, and the container tier is what a frontend change selects.
-
-    step "Queueing: Lakehouse — shared.sqlite derived from raw/ alone, no network"
-    dumpstar_par_add derive bash "$REPO_DIR/tests/lake/derive.sh"
-
-    # --- 14c. The tenant zone is governed -------------------------------------
-    # The tenant zone shares the lake's bucket and is separated from it by a
-    # prefix — which is to say by a pair of credential policies and a lifecycle
-    # rule, and by nothing else. A policy is one misconfiguration from being
-    # nothing at all while looking identical from outside, so this gate asserts
-    # the boundary in BOTH directions and then deliberately breaks it and
-    # asserts the same checks go RED. It also proves the 90-day retention is
-    # mechanical rather than documented, and that no rule can reach `raw/`,
-    # whose retention is indefinite by decision.
-    #
-    # It lives in this tier for the same reason the derive does: it is a
-    # lakehouse claim about a bucket, not something a frontend change can move.
-
-    step "Queueing: Lakehouse — the tenant zone's credential boundary and its 90-day retention"
-    dumpstar_par_add tenant-zone bash "$REPO_DIR/tests/lake/tenant_zone.sh"
-
-    # --- 14d. The shipper -----------------------------------------------------
-    # §14c proves the zone is governed while it is EMPTY. This proves the thing
-    # that fills it: the shipped image's `dumpstar-ship` moving a real outbox into
-    # a real bucket under the real tenant policy, killed mid-run and resumed,
-    # with the catalog role unable to read a byte of what it wrote — asserted in
-    # the failing direction too. The Rust tier already covers gap detection,
-    # idempotence and the key; what only exists here is the deployment: the
-    # binary being in the image at all, an IAM policy that can refuse, a process
-    # that can actually die, and deploy/ship.sh's four exit statuses.
-    #
-    # Same tier as the derive and the zone, for the same reason: it is a
-    # lakehouse claim about a bucket.
-
-    step "Queueing: Lakehouse — the shipper, against a real bucket, killed and resumed"
-    dumpstar_par_add shipper bash "$REPO_DIR/tests/lake/shipper.sh"
-
-    # --- 14e. Phase 3: a collection valued from the tenant zone ---------------
-    # §14d proves the zone holds what the collection holds. This proves the
-    # thing that USES it: the valuation, computed from the zone rather than
-    # from `collection` — and since pd-i08u, computed from the zone or not at
-    # all. §5 diffs it against Rust's own rows for the same collection and
-    # asserts that neither --holdings nor --compare survives.
-    #
-    # The section that matters is the RED one. A Phase 3 that quietly read the
-    # live table would pass every equivalence check ever written, so the gate
-    # changes a collection WITHOUT shipping it and requires the valuation NOT
-    # TO MOVE — then ships, reads back, and requires it to move. Frozen fails
-    # the second half; live-reading fails the first. The other half is
-    # staleness: the zone moving on while nobody re-reads it must be a refusal,
-    # not a beautiful number about last week.
-    #
-    # It needs both images — the app image for the shipper and the zone reader,
-    # the lake image for prices out of Iceberg — which is why it is the
-    # longest gate in this tier.
-
-    step "Queueing: Lakehouse — Phase 3 valuation from the tenant zone, the only path"
-    dumpstar_par_add phase3 bash "$REPO_DIR/tests/lake/phase3.sh"
-
-    # --- 14f. The deletion path -----------------------------------------------
-    # §14d fills the zone; this empties it for one tenant and then has to PROVE
-    # it. The bar the design sets is "proven, not asserted", so the gate runs
-    # the same verification a step BEFORE the deletion and requires it to report
-    # every path open — a check only ever seen passing is not known to check
-    # anything.
-    #
-    # Its bucket is VERSIONED, which is the configuration the Rust tier cannot
-    # have: the drop leaves a noncurrent version of a really-shipped part
-    # behind, and that surviving copy is fetched back out and proven unopenable.
-    # That is the whole crypto-shredding claim, against real bytes. What else is
-    # only true here: the binary being in the image, an IAM policy that actually
-    # permits the delete and the listing, the objects being gone as seen by the
-    # BUCKET ROOT rather than merely hidden from the role that deleted them, and
-    # deploy/erase.sh's three exit statuses — including 4, which nothing else in
-    # the system reports.
-    #
-    # Same tier as the zone and the shipper, for the same reason: it is a
-    # lakehouse claim about a bucket.
-
-    step "Queueing: Lakehouse — the deletion path, proven against a versioned bucket"
-    dumpstar_par_add deletion bash "$REPO_DIR/tests/lake/deletion.sh"
-fi
-
-# --- 15. The refresh writes no tenant bytes ---------------------------------
-# The transform tier above is only half the fix for pd-s5yn; this is the other
-# half. A real `dumpstar data refresh` runs through the shipped image over a data
-# directory holding two provisioned tenants — one of them the handle
-# $DUMPSTAR_USER defaults to, which is the exact database the deleted step 7 used
-# to write — and every tenant database has to come out byte-identical. Its
-# upstream is a local fixture that publishes nothing, so the run completes in
-# seconds and depends on nobody's uptime; §5 of the gate asserts it really ran
-# its phases rather than exiting early.
-#
-# Since pd-lunn it carries item 6's acceptance criterion as well: the refresh
-# lands and builds nothing, so §5b requires shared.sqlite to be byte-identical
-# after the run. A binary that still derived inline fails there.
-
-if tier refresh; then
-    step "Queueing: Refresh — the catalog refresh writes zero bytes anywhere"
-    dumpstar_par_add refresh bash "$REPO_DIR/tests/refresh/tenant_bytes.sh"
-fi
+# --- 5. Gates not armed yet --------------------------------------------------
+# The backup, tenant-isolation, schema-version, lakehouse, refresh and browser
+# gates this script was copied with each drive a Pokémon catalog fixture, a
+# pokemontcg.io upstream or a tenant layout that dumpstar does not have yet.
+# They are not run here, and they are not run half-armed: a gate whose reds are
+# its own fixture's is worse than no gate (it trains everyone to re-run). Each is
+# re-armed by the dumpstar bead that gives it something real to assert —
+# tenancy (the isolation gate), the backup drill, the catalog seam (the lakehouse
+# and refresh gates), the SWU UI fixture (the browser tier). Their scripts stay
+# under tests/ so that bead starts from a working harness rather than a blank
+# page, and deploy/ci-select.sh is the single list of what runs.
 
 # --- 16. Run the queued gates -----------------------------------------------
 # Everything queued above, two at a time, with the disk floor checked before

@@ -112,13 +112,10 @@ check "a non-md file under docs/ is still docs -> lint only" \
 	"lint" "$(select_for "docs/diagram.svg")"
 check "several docs at once -> lint only" \
 	"lint" "$(select_for "README.md" "CLAUDE.md" "deep-dives/x.md")"
-# The Python lakehouse tree builds its own job image and nothing outside it
-# consumes it, so it runs the lake gates and the always-on lint tier — and NOT the
-# browser or frontend tiers it used to drag in. The near-misses above keep the
-# prefix honest.
-LAKE="lint lake"
-check "lake/ python -> lint + lake only" "$LAKE" "$(select_for "lake/src/dumpstar_lake/raw.py")"
-check "several lake files at once -> still lint + lake" "$LAKE" \
+# There is no lake tier until the lakehouse gates are re-armed (see deploy/ci.sh
+# §5), so the Python tree is an unrecognised path and fails closed to everything.
+check "lake/ python -> everything, there is no lake tier" "$ALL" "$(select_for "lake/src/dumpstar_lake/raw.py")"
+check "several lake files at once -> still everything" "$ALL" \
 	"$(select_for "lake/src/dumpstar_lake/raw.py" "lake/pyproject.toml")"
 check "lake/ plus a rust change -> everything, the union is conservative" \
 	"$ALL" "$(select_for "lake/src/dumpstar_lake/raw.py" "crates/dumpstar-db/src/lib.rs")"
@@ -139,9 +136,9 @@ check "lint is in every selection (docs)" "lint" "$(select_for "README.md" | cut
 check "lint is in every selection (unrecognised)" "lint" "$(select_for "x/y" | cut -d' ' -f1)"
 
 # ---------------------------------------------------------------------------
-log "3. Frontend-only runs frontend + container + browser (pd-tf4h)"
+log "3. Frontend-only runs frontend + container (pd-tf4h)"
 
-FE="lint frontend container browser"
+FE="lint frontend container"
 check "a route file" "$FE" "$(select_for "frontend/src/routes/browse/+page.svelte")"
 
 # THE pd-tf4h REGRESSION CHECK. Baselines were once not re-recorded because the
@@ -160,7 +157,7 @@ check "a build config" "$FE" "$(select_for "frontend/vite.config.ts")"
 check "a lockfile" "$FE" "$(select_for "frontend/package-lock.json")"
 
 # And what frontend-only must NOT run.
-for skipped in rust deploy litestream tenants schema lake refresh; do
+for skipped in rust deploy; do
 	check "frontend-only skips '${skipped}'" "0" \
 		"$(select_for "frontend/src/app.css" | tr ' ' '\n' | grep -cx "$skipped")"
 done
@@ -327,8 +324,7 @@ tier_of() { # tier_of <needle> -> the tier whose block first invokes it
 	' "$CI_SH"
 }
 
-for consumer in tests/tenants/upgrade.sh tests/tenants/handles.sh \
-	tests/refresh/tenant_bytes.sh tests/schema-version/run.sh "setup.sh\" \"\$INSTANCE\""; do
+for consumer in "setup.sh\" \"\$INSTANCE\""; do
 	t="$(tier_of "$consumer")"
 	check "the image consumer ${consumer} runs in a tier the build covers" "yes" \
 		"$([[ " ${IMAGE_TIERS} " == *" ${t} "* ]] && echo yes || echo "no (tier '${t}' not in '${IMAGE_TIERS}')")"

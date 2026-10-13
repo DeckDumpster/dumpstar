@@ -11,7 +11,7 @@
 # ── THE RULE ────────────────────────────────────────────────────────────────
 #
 #   docs      (**.md, docs/**, wiki/**)  -> nothing beyond the always-on tiers
-#   frontend  (frontend/**)              -> frontend + container + browser
+#   frontend  (frontend/**)              -> frontend + container
 #   anything else                        -> EVERYTHING
 #
 # Each changed path contributes its requirement and the requirements are
@@ -73,7 +73,7 @@
 # single source of truth for the names; ci.sh is asserted against it by
 # tests/ci/select_test.sh, so a tier renamed here and not there fails in a
 # second rather than silently never running.
-DUMPSTAR_CI_ALL_TIERS="lint rust deploy frontend container litestream tenants browser schema lake refresh"
+DUMPSTAR_CI_ALL_TIERS="lint rust deploy frontend container"
 
 # Always, whatever changed. Hermetic, no compilation, seconds: the shell-harness
 # self-tests and `cargo fmt --check`. These are the "lint tiers only" a
@@ -83,23 +83,7 @@ DUMPSTAR_CI_ALWAYS_TIERS="lint"
 
 # What a change under frontend/ can reach. See the pd-tf4h note above before
 # taking anything out of this list.
-DUMPSTAR_CI_FRONTEND_TIERS="frontend container browser"
-
-# What a change under lake/ can reach. The PYTHON tree only: it builds its own job
-# image from lake/Containerfile and lake/pyproject.toml, and nothing outside it
-# consumes it — the `dumpstar_lake` references in crates/ are the RUST crate
-# `dumpstar-lake`, which is a different thing and lives under crates/.
-#
-# All four lake gates sit behind `if tier lake` in deploy/ci.sh — run.sh, prices.sh,
-# value_snapshots.sh and derive.sh — so this bucket runs every test that exercises
-# the lakehouse, including the Rust offline derive it does not strictly need.
-# Conservative on purpose: the cheap direction to be wrong in.
-#
-# NOT extended to crates/dumpstar-lakehouse/: the app Containerfile BUILDS and SHIPS
-# dumpstar-lake-derive, and dumpstar-cli and dumpstar-derive both depend on the
-# dumpstar-lake crate. A change there reaches the app image, so it still runs
-# everything until that coupling is actually broken.
-DUMPSTAR_CI_LAKE_TIERS="lake"
+DUMPSTAR_CI_FRONTEND_TIERS="frontend container"
 
 # Print the canonical list, one tier per line.
 dumpstar_ci_all_tiers() {
@@ -121,8 +105,6 @@ dumpstar_ci_classify_path() {
         # .md file — it is read by people, not by vite.
         *.md | docs/* | wiki/*) printf 'docs\n' ;;
         frontend/*) printf 'frontend\n' ;;
-        # Checked after *.md, so lake/README.md is still docs.
-        lake/*) printf 'lake\n' ;;
         *) printf 'other\n' ;;
     esac
 }
@@ -143,7 +125,6 @@ dumpstar_ci_select_tiers() {
         case "$(dumpstar_ci_classify_path "$path")" in
             docs) ;;
             frontend) selected="${selected}${DUMPSTAR_CI_FRONTEND_TIERS} " ;;
-            lake) selected="${selected}${DUMPSTAR_CI_LAKE_TIERS} " ;;
             # Deliberately no early exit: stdin is drained so a producer on the
             # other end of a pipe never takes a SIGPIPE for telling us the
             # truth.

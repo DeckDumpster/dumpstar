@@ -1,27 +1,18 @@
-// Variant display metadata, fetched once from /api/variants and read
-// synchronously thereafter. Replaces the ad-hoc label/rank/color/short
+// Variant display metadata, read synchronously. Replaces the ad-hoc label/rank/color/short
 // heuristics that used to live in api.ts and a couple of route files —
 // the data model owns this, the frontend just renders.
 
-import { api } from './api';
 import type { Variant } from './types/Variant';
 
 class VariantsStore {
 	map = $state<Record<string, Variant>>({});
 	loaded = $state(false);
-	private loading: Promise<void> | null = null;
 
+	// There is no server-side variant table yet: Star Wars: Unlimited's variant
+	// model arrives with the catalog seam. Until then every code renders as
+	// itself through the fallbacks below.
 	async load(): Promise<void> {
-		if (this.loaded) return;
-		if (this.loading) return this.loading;
-		this.loading = (async () => {
-			const list = await api.variants();
-			const m: Record<string, Variant> = {};
-			for (const v of list) m[v.code] = v;
-			this.map = m;
-			this.loaded = true;
-		})();
-		return this.loading;
+		this.loaded = true;
 	}
 }
 

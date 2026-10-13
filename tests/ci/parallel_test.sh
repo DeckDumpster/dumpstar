@@ -444,13 +444,10 @@ log "7. deploy/ci.sh queues every gate, under a real tier, and runs the queue on
 
 # THE refactor's failure mode. A gate that stopped being invoked would leave no
 # trace in a green run, so each one is located by its own path.
-GATES="tests/litestream/run.sh tests/litestream/drill.sh tests/alarming/run.sh
-tests/litestream/recreate.sh tests/tenants/upgrade.sh tests/tenants/handles.sh
-tests/schema-version/run.sh tests/lake/run.sh tests/lake/prices.sh
-tests/lake/value_snapshots.sh tests/lake/derive.sh tests/lake/tenant_zone.sh
-tests/lake/shipper.sh tests/lake/phase3.sh tests/lake/deletion.sh
-tests/refresh/tenant_bytes.sh
-tests/keys/run.sh"
+# Empty on purpose: every container gate this script was copied with is unarmed
+# (deploy/ci.sh section 5) until the bead that gives it something real to assert
+# re-arms it, and adds its script here in the same commit as its queue line.
+GATES=""
 
 for g in $GATES; do
 	check "${g} is queued exactly once" "1" \

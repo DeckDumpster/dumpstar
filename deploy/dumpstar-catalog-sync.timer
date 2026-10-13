@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily Dumpstar SWU catalog and price sync (%i)
+
+[Timer]
+# tcgcsv refreshes around 20:00 UTC (its own FAQ); one hour of slack. The
+# check timer below treats a day as due at 22:00 UTC, an hour after this starts.
+OnCalendar=*-*-* 21:00:00 UTC
+RandomizedDelaySec=120
+Persistent=true
+
+[Install]
+WantedBy=timers.target

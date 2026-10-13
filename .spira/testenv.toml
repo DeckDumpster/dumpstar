@@ -1,0 +1,45 @@
+# Declares deploy/ci.sh's tiers to testenv (testenv/DESIGN.md §2.1.1), so
+# `testenv --suites <tier> <branch> dumpstar` runs what CI runs for that tier.
+# Tier names mirror DUMPSTAR_CI_ALL_TIERS in deploy/ci-select.sh; keep them in step
+# (tests/ci/select_test.sh holds this file to that list). Each tier is
+# `DUMPSTAR_CI_TIERS=<tier> bash deploy/ci.sh`, the explicit-list path, which runs
+# exactly that tier with no floor added.
+# The image is the builder base the Containerfile names. It stands in for CI's
+# host runner: lint and rust need only a toolchain, bash and git. deploy, frontend
+# and container need podman (and node, systemd) which this image does not carry,
+# so they are declared — CI runs them — but only work where those are reachable;
+# they are not in `default`.
+image = "docker.io/library/rust:1.94-slim-bookworm"
+workdir = "/work"
+timeout = 1800
+default = ["lint", "rust"]
+
+[tier.lint]
+argv = ["bash", "deploy/ci.sh"]
+env = { DUMPSTAR_CI_TIERS = "lint" }
+timeout = 600
+
+[tier.rust]
+argv = ["bash", "deploy/ci.sh"]
+env = { DUMPSTAR_CI_TIERS = "rust" }
+timeout = 1800
+
+[tier.isolation]
+argv = ["bash", "deploy/ci.sh"]
+env = { DUMPSTAR_CI_TIERS = "isolation" }
+timeout = 1800
+
+[tier.deploy]
+argv = ["bash", "deploy/ci.sh"]
+env = { DUMPSTAR_CI_TIERS = "deploy" }
+timeout = 900
+
+[tier.frontend]
+argv = ["bash", "deploy/ci.sh"]
+env = { DUMPSTAR_CI_TIERS = "frontend" }
+timeout = 900
+
+[tier.container]
+argv = ["bash", "deploy/ci.sh"]
+env = { DUMPSTAR_CI_TIERS = "container" }
+timeout = 2400

@@ -108,6 +108,7 @@ fn identical_content_under_a_new_hash_writes_nothing() {
         fetched_at: now().to_rfc3339(),
         sha256: sha256_hex(reserialised.as_bytes()),
         bytes: 0,
+        as_of: None,
     };
     let mut c = Catalog::open_writer(&e.db).unwrap();
     let report = apply(&mut c, reserialised.as_bytes(), &prov).unwrap();
@@ -157,6 +158,7 @@ fn a_payload_that_fails_to_parse_is_still_landed() {
                 source: "fake".into(),
                 url: "fake://bad".into(),
                 bytes: b"not json".to_vec(),
+                as_of: None,
             }])
         }
     }
@@ -331,6 +333,7 @@ fn landing_twice_keeps_the_first_provenance() {
         source: "fake".into(),
         url: "fake://x".into(),
         bytes: b"{}".to_vec(),
+        as_of: None,
     };
     let a = land(&e.raw, &p, now()).unwrap();
     let later = now() + chrono::Duration::hours(1);

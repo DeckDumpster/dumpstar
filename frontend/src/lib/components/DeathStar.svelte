@@ -1,5 +1,5 @@
 <script lang="ts">
-	// The Dumpstar mark — red strokes on transparent, DD-style.
+	// The Dumpstar mark — the second Death Star, red strokes on transparent, DD-style.
 	// One source of truth for every place that renders the logo
 	// (breadcrumb chrome, /collection brand, home hero).
 	let {
@@ -17,16 +17,18 @@
 	height={size}
 	xmlns="http://www.w3.org/2000/svg"
 	aria-hidden="true"
-	style:--pokeball-stroke={stroke}
+	style:--deathstar-stroke={stroke}
 >
-	<circle cx="12" cy="12" r="10" fill="none" stroke-width="2" />
-	<line x1="2.5" y1="12" x2="21.5" y2="12" stroke-width="2" />
-	<circle cx="12" cy="12" r="3.2" fill="none" stroke-width="2" />
+	<path d="M2.15 13.74 A10 10 0 1 1 10.26 21.85" fill="none" stroke-width="2" />
+	<path d="M2.15 13.74 L5.5 15 L7 13.2 M10.26 21.85 L9 18.5 L6.5 17.5 L5.5 15" fill="none" stroke-width="1.5" />
+	<circle cx="15.5" cy="8.2" r="2.4" fill="none" stroke-width="1.75" />
+	<line x1="8" y1="12" x2="22" y2="12" stroke-width="1.75" />
 </svg>
 
 <style>
+	path,
 	circle,
 	line {
-		stroke: var(--pokeball-stroke);
+		stroke: var(--deathstar-stroke);
 	}
 </style>

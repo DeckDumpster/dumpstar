@@ -1,0 +1,15 @@
+[Unit]
+Description=Dumpstar SWU catalog and price sync (%i)
+# Fetches the official catalog (at most one crawl a day) and the tcgcsv prices,
+# lands both raw, then applies them to shared.sqlite. Nothing in the request
+# path does any of this.
+After=network-online.target
+Wants=network-online.target
+OnFailure=dumpstar-alert@%n.service
+
+[Service]
+Type=oneshot
+# A dead official API still lets the prices through; the job exits non-zero for
+# it, which is what pages.
+ExecStart=/bin/sh -c 'exec podman exec systemd-dumpstar-%i dumpstar catalog-apply --swu'
+TimeoutStartSec=1800

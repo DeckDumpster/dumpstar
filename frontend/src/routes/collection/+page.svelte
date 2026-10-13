@@ -19,7 +19,7 @@
 	}
 	import CardModal from '$lib/components/CardModal.svelte';
 	import ValueHistoryModal from '$lib/components/ValueHistoryModal.svelte';
-	import Pokeball from '$lib/components/Pokeball.svelte';
+	import DeathStar from '$lib/components/DeathStar.svelte';
 	import { Button, EmptyState, SectionHeader, Toolbar } from '$lib/components/ui';
 	import type { CollectionRow } from '$lib/types/CollectionRow';
 	import type { SearchRow } from '$lib/types/SearchRow';
@@ -1137,7 +1137,7 @@
 >
 	<Toolbar gap="md">
 		<a class="brand" href="/" aria-label="Home" title="Home">
-			<span class="brandmark"><Pokeball size={26} /></span>
+			<span class="brandmark"><DeathStar size={26} /></span>
 		</a>
 		<div class="searchwrap">
 			<input

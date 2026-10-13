@@ -7,6 +7,9 @@ pub struct RawPayload {
     pub source: String,
     pub url: String,
     pub bytes: Vec<u8>,
+    /// The day the upstream says this data describes (YYYY-MM-DD), when that is
+    /// not in the bytes themselves: tcgcsv price rows carry no date.
+    pub as_of: Option<String>,
 }
 
 /// Anything that can produce raw catalog payloads. Fetching is its whole job:
@@ -28,6 +31,7 @@ impl CatalogSource for FakeSource {
             source: "fake".into(),
             url: FAKE_URL.into(),
             bytes: FAKE_CATALOG.as_bytes().to_vec(),
+            as_of: None,
         }])
     }
 }

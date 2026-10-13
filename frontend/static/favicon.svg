@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e94560" stroke-width="2">
 	<title>Dumpstar</title>
 	<!--
-	  The same mark as src/lib/components/Pokeball.svelte, at the same geometry.
+	  The same mark as src/lib/components/DeathStar.svelte, at the same geometry.
 	  A favicon is a static asset the browser fetches outside the document, so it
 	  cannot resolve a CSS custom property: #e94560 is the crimson-500 reference
 	  step spelled out, and this file is the one place in the project where that
@@ -12,7 +12,8 @@
 	  image/svg+xml is parsed as XML, which forbids it inside a comment, and the
 	  browser drops the whole image with no console error.)
 	-->
-	<circle cx="12" cy="12" r="10" />
-	<line x1="2.5" y1="12" x2="21.5" y2="12" />
-	<circle cx="12" cy="12" r="3.2" />
+	<path d="M2.15 13.74 A10 10 0 1 1 10.26 21.85" />
+	<path d="M2.15 13.74 L5.5 15 L7 13.2 M10.26 21.85 L9 18.5 L6.5 17.5 L5.5 15" stroke-width="1.5" />
+	<circle cx="15.5" cy="8.2" r="2.4" stroke-width="1.75" />
+	<line x1="8" y1="12" x2="22" y2="12" stroke-width="1.75" />
 </svg>

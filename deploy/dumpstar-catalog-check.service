@@ -1,0 +1,11 @@
+[Unit]
+Description=Dumpstar SWU catalog alarm check (%i)
+# Fails (and so pages through OnFailure=) while any alarm is open: a price day
+# that never arrived, a printing priced by tcgcsv and absent from the official
+# API or the reverse, a group no official set accounts for, or a thin price day.
+OnFailure=dumpstar-alert@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'exec podman exec systemd-dumpstar-%i dumpstar catalog-check'
+TimeoutStartSec=120

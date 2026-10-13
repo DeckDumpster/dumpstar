@@ -3,6 +3,7 @@
 //! The clap command tree grows as features land (PLAN.md §2, §5). The
 //! `ingest` subcommand arrives with a later task.
 
+mod catalog;
 mod collection;
 mod data;
 mod db;
@@ -51,6 +52,8 @@ enum Command {
     Import(import::ImportArgs),
     /// Emit current holdings as outbox events — backfill, redrive, DR.
     Outbox(outbox::OutboxArgs),
+    /// Apply the SWU catalog (fetch, land raw, apply idempotently); a timer job.
+    CatalogApply(catalog::CatalogApplyArgs),
 }
 
 /// Serialised access to process-wide origin overrides (ENV_TCGCSV_BASE_URL etc.)
@@ -72,5 +75,6 @@ fn main() -> anyhow::Result<()> {
         Command::Export(args) => export::run(args),
         Command::Import(args) => import::run(args),
         Command::Outbox(args) => outbox::run(args),
+        Command::CatalogApply(args) => catalog::run(args),
     }
 }

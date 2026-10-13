@@ -3,15 +3,11 @@
 //!
 //! # Resolution is driven by a verified identity
 //!
-//! In multi-tenant mode, [`Tenants::resolve`] takes a [`crate::access::VerifiedIdentity`]
+//! [`Tenants::resolve`] takes a [`crate::access::VerifiedIdentity`]
 //! — a proof-carrying type whose constructor is private to `access`. The only
 //! source is [`crate::access::layer`], which verified a Cloudflare Access JWT.
 //! The email from that verified identity is looked up in the user registry; if
 //! it is bound to an active tenant, that tenant's database is served.
-//!
-//! With the flag off — production, and every existing UI test — this module
-//! is inert: [`Tenants::resolve`] ignores the identity entirely and hands back
-//! the single tenant the process was started with.
 //!
 //! # The email is a lookup key, not a filename
 //!
@@ -40,10 +36,8 @@
 //! 3. [`assert_isolated`] fails the open unless the connection is wired to
 //!    exactly this tenant's file plus the one read-only shared catalog.
 //! 4. A request cannot reach a database without a [`crate::access::VerifiedIdentity`]
-//!    in scope: [`crate::access::layer`] always runs first and its constructor is
-//!    private. In multi-tenant mode (Access configured) a valid Cloudflare JWT is the
-//!    only source; in single-tenant mode the layer installs a synthetic placeholder
-//!    that `Tenants::resolve` ignores.
+//!    in scope: [`crate::access::layer`] always runs first, its constructor is
+//!    private, and a valid Cloudflare JWT is the only source.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -55,8 +49,8 @@ use axum::middleware::Next;
 use axum::response::Response;
 use rusqlite::Connection;
 
+use dumpstar_db::DbError;
 use dumpstar_db::registry::{self, UserState};
-use dumpstar_db::{DbError, validate_tenant_name};
 
 use crate::{AppError, AppState};
 
@@ -67,10 +61,8 @@ use crate::{AppError, AppState};
 /// the middleware. So a route cannot name a tenant of its own choosing —
 /// including its own, including the default one.
 ///
-/// What it holds is *storage*, not identity: in multi-tenant mode the
-/// `database_id` the registry issued, and in single-tenant mode the one
-/// tenant name the process was started with (whose database it was given
-/// outright). It is never the handle a request sent — that string stops at
+/// What it holds is *storage*, not identity: the `database_id` the registry
+/// issued. It is never the handle a request sent — that string stops at
 /// the registry lookup.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TenantId(String);
@@ -88,81 +80,47 @@ impl std::fmt::Display for TenantId {
     }
 }
 
-/// Which tenant a request is served as.
-enum Mode {
-    /// Resolution off. One tenant for the life of the process — the one
-    /// `$DUMPSTAR_USER` named — and the request is not consulted.
-    Single { id: TenantId, db: PathBuf },
-    /// Resolution on. Every request names a handle; the registry says which
-    /// database that handle is served from, and that database must already
-    /// exist under `dir`.
-    ///
-    /// The registry connection is opened once and held: it is consulted on
-    /// every request, and a per-request open would put the data root's
-    /// directory entries in the hot path for no gain. One mutex, because a
-    /// `rusqlite::Connection` is not `Sync` — the lookup is a single indexed
-    /// `SELECT` on a table with one row per user.
-    Multi {
-        dir: PathBuf,
-        registry: Mutex<Connection>,
-    },
-}
-
 /// The set of collection databases this process may serve, and the open
 /// connections to them.
 ///
-/// One connection per tenant, opened on first use and kept for the life of
-/// the process, each behind its own mutex — so two tenants' requests do not
-/// serialise against each other the way two requests for the same tenant do.
+/// Every request names an identity; the registry says which database that
+/// identity is served from, and that database must already exist under `dir`.
+///
+/// The registry connection is opened once and held: it is consulted on every
+/// request, and a per-request open would put the data root's directory entries
+/// in the hot path for no gain. One mutex, because a `rusqlite::Connection` is
+/// not `Sync` — the lookup is a single indexed `SELECT` on a table with one row
+/// per user.
+///
+/// One collection connection per tenant, opened on first use and kept for the
+/// life of the process, each behind its own mutex — so two tenants' requests do
+/// not serialise against each other the way two requests for the same tenant do.
 pub struct Tenants {
-    mode: Mode,
+    dir: PathBuf,
+    registry: Mutex<Connection>,
     shared_db: PathBuf,
     open: Mutex<HashMap<TenantId, Arc<Mutex<Connection>>>>,
 }
 
 impl Tenants {
-    /// Single-tenant: serve exactly `tenant`, from `user_db`, whatever any
-    /// request says. This is the default and the only thing production runs.
-    ///
-    /// The connection is opened here rather than lazily so that a missing
-    /// catalog (`dumpstar setup` not run) is a startup failure, as it was
-    /// before tenants existed, and not a 500 on the first request.
-    pub fn single(tenant: &str, user_db: PathBuf, shared_db: PathBuf) -> Result<Self, DbError> {
-        validate_tenant_name(tenant)?;
-        let id = TenantId(tenant.to_string());
-        let tenants = Tenants {
-            mode: Mode::Single {
-                id: id.clone(),
-                db: user_db,
-            },
-            shared_db,
-            open: Mutex::new(HashMap::new()),
-        };
-        tenants.connection(&id)?;
-        Ok(tenants)
-    }
-
-    /// Multi-tenant: serve whichever user each request names, resolving the
-    /// handle through the registry at `registry_db` to a database under
-    /// `tenants_dir`. Collection connections open lazily, on first request
-    /// per tenant.
+    /// Serve whichever user each request's verified identity is bound to,
+    /// resolving the email through the registry at `registry_db` to a database
+    /// under `tenants_dir`.
     ///
     /// No *collection* is created here or by [`Tenants::resolve`]: a user
     /// exists because `dumpstar tenant create` registered them and made their
-    /// database, and a request naming anyone else gets a 404. The registry
+    /// database, and an identity bound to no one gets a 403. The registry
     /// itself is opened — and its schema applied — up front, so a data root
-    /// that has never had a user registered comes up and answers 404 rather
+    /// that has never had a user registered comes up and answers 403 rather
     /// than failing the first request with a missing file.
-    pub fn multi(
+    pub fn new(
         tenants_dir: PathBuf,
         shared_db: PathBuf,
         registry_db: &Path,
     ) -> Result<Self, DbError> {
         Ok(Tenants {
-            mode: Mode::Multi {
-                dir: tenants_dir,
-                registry: Mutex::new(dumpstar_db::open_registry(registry_db)?),
-            },
+            dir: tenants_dir,
+            registry: Mutex::new(dumpstar_db::open_registry(registry_db)?),
             shared_db,
             open: Mutex::new(HashMap::new()),
         })
@@ -170,12 +128,9 @@ impl Tenants {
 
     /// The tenant this request is served as.
     ///
-    /// In single-tenant mode the identity is not consulted — it is not a way
-    /// to switch tenants on an instance that did not opt in.
-    ///
-    /// In multi-tenant mode the identity's **email** is a lookup key: it is
-    /// compared against `user_identity.email` as a bound parameter, and is
-    /// then done with. Two answers:
+    /// The identity's **email** is a lookup key: it is compared against
+    /// `user_identity.email` as a bound parameter, and is then done with. Two
+    /// answers:
     ///
     /// * no active binding for this email — **403**, naming the command to add one.
     /// * bound — the `database_id` on their row, never the email.
@@ -183,10 +138,7 @@ impl Tenants {
         &self,
         identity: &crate::access::VerifiedIdentity,
     ) -> Result<TenantId, AppError> {
-        let (dir, registry) = match &self.mode {
-            Mode::Single { id, .. } => return Ok(id.clone()),
-            Mode::Multi { dir, registry } => (dir, registry),
-        };
+        let (dir, registry) = (&self.dir, &self.registry);
         let email = identity.email();
         let found = registry
             .lock()
@@ -229,36 +181,16 @@ impl Tenants {
         if let Some(conn) = open.get(id) {
             return Ok(conn.clone());
         }
-        let path = self.db_path(id)?;
+        // [`dumpstar_db::tenant_db_file`] and not an interpolation here: it
+        // refuses anything that is not a ULID the registry minted, so the last
+        // step before a path exists is a check that the string came from us.
+        // Nothing off the wire can satisfy it.
+        let path = dumpstar_db::tenant_db_file(&self.dir, id.as_str())?;
         let conn = dumpstar_db::connect_user(&path, &self.shared_db)?;
         assert_isolated(&conn, &path, &self.shared_db)?;
         let handle = Arc::new(Mutex::new(conn));
         open.insert(id.clone(), handle.clone());
         Ok(handle)
-    }
-
-    /// The database file `id` is served from.
-    ///
-    /// In single-tenant mode any id but the configured one is an error
-    /// rather than a path: resolution can only mint the one id, so a second
-    /// one reaching here means the wiring is wrong, and a wrong path here is
-    /// the one mistake that would serve a tenant someone else's collection.
-    fn db_path(&self, id: &TenantId) -> Result<PathBuf, DbError> {
-        match &self.mode {
-            Mode::Single { id: only, db } => {
-                if id != only {
-                    return Err(DbError::Env(format!(
-                        "tenant {id:?} requested from a single-tenant process serving {only:?}"
-                    )));
-                }
-                Ok(db.clone())
-            }
-            // [`dumpstar_db::tenant_db_file`] and not an interpolation here:
-            // it refuses anything that is not a ULID the registry minted, so
-            // the last step before a path exists is a check that the string
-            // came from us. Nothing off the wire can satisfy it.
-            Mode::Multi { dir, .. } => dumpstar_db::tenant_db_file(dir, id.as_str()),
-        }
     }
 }
 
@@ -402,38 +334,12 @@ mod tests {
             )
             .unwrap();
         }
-        let tenants = Tenants::multi(tenants_dir.clone(), shared, &registry_db).unwrap();
+        let tenants = Tenants::new(tenants_dir.clone(), shared, &registry_db).unwrap();
         (tenants, tenants_dir, reg)
     }
 
     fn status(result: Result<TenantId, AppError>) -> StatusCode {
         result.expect_err("resolved when it should not have").0
-    }
-
-    /// Flag off: the identity is not consulted — it cannot move a request off
-    /// the tenant the process was started with.
-    #[test]
-    fn single_tenant_mode_ignores_identity() {
-        let dir = tempfile::tempdir().unwrap();
-        let shared = catalog(dir.path());
-        let tenants =
-            Tenants::single("collection", dir.path().join("collection.sqlite"), shared).unwrap();
-
-        // Any identity maps to the fixed single tenant.
-        assert_eq!(
-            tenants
-                .resolve(&test_identity("anyone@example.com"))
-                .unwrap()
-                .as_str(),
-            "collection"
-        );
-        assert_eq!(
-            tenants
-                .resolve(&test_identity("nobody@example.com"))
-                .unwrap()
-                .as_str(),
-            "collection"
-        );
     }
 
     /// Flag on and email not bound: a 403 naming the fix command. There is no
@@ -593,14 +499,12 @@ mod tests {
         assert!(Arc::ptr_eq(&a, &tenants.connection(&alice).unwrap()));
     }
 
-    /// A single-tenant process asked for some other tenant must error, not
-    /// hand back the one collection it holds under another name.
+    /// A connection for an id the registry never minted is refused, not
+    /// mapped to some path.
     #[test]
-    fn single_tenant_mode_refuses_a_foreign_id() {
+    fn a_foreign_id_has_no_connection() {
         let dir = tempfile::tempdir().unwrap();
-        let shared = catalog(dir.path());
-        let tenants =
-            Tenants::single("collection", dir.path().join("collection.sqlite"), shared).unwrap();
+        let (tenants, _tenants_dir, _reg) = provisioned(dir.path(), &["alice"]);
         assert!(tenants.connection(&TenantId("alice".into())).is_err());
     }
 }

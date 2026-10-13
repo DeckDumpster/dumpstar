@@ -322,11 +322,10 @@ check "setup.sh does not" "0" \
 check "setup.sh scaffolds the knob commented out" "1" \
 	"$(grep -c '^#DUMPSTAR_STORE_ROOT=' "${REPO_DIR}/deploy/setup.sh" || true)"
 # access.env scaffold lives in config-lib.sh (db-g6ku: extracted so deploy.sh
-# can scaffold it for existing instances). Dumpstar is multi-tenant from day one,
-# so the test pins that the scaffold carries the switch exactly once, not
-# whether it is commented (the source site's opt-in default).
-check "access.env scaffold carries DUMPSTAR_MULTITENANT once" "1" \
-	"$(grep -Ec '^#?DUMPSTAR_MULTITENANT=1$' "${REPO_DIR}/deploy/config-lib.sh" || true)"
+# can scaffold it for existing instances). There is no multi-tenant switch to
+# scaffold: Access is mandatory and the server refuses to start without it.
+check "access.env scaffold carries no multi-tenant switch" "0" \
+	"$(grep -c 'DUMPSTAR_MULTITENANT' "${REPO_DIR}/deploy/config-lib.sh" || true)"
 # systemd EnvironmentFile does not strip trailing # comments from value lines,
 # so value lines must carry no inline comments.
 check "access.env scaffold has no inline comments on value lines" "0" \
@@ -3603,16 +3602,16 @@ check "deploy scaffolds access.env for existing instance" "present" \
 	"$([ -f "$ACCESS19" ] && echo present || echo absent)"
 check "scaffolded file has mode 600" "600" \
 	"$(stat -c '%a' "$ACCESS19" 2>/dev/null || echo missing)"
-check "scaffolded file carries DUMPSTAR_MULTITENANT once" "1" \
-	"$(grep -Ec '^#?DUMPSTAR_MULTITENANT=1$' "$ACCESS19" || true)"
+check "scaffolded file carries no multi-tenant switch" "0" \
+	"$(grep -c 'DUMPSTAR_MULTITENANT' "$ACCESS19" || true)"
 
 # Second run must not overwrite an existing file (idempotence).
-printf '# custom\nDUMPSTAR_MULTITENANT=1\n' > "$ACCESS19"
+printf '# custom\nDUMPSTAR_ACCESS_CUSTOM=1\n' > "$ACCESS19"
 PATH="${WORK}/bin19:${ORIG_PATH}" \
 	HOME="$FAKE19" \
 	bash "${REPO_DIR}/deploy/deploy.sh" prod > /dev/null 2>&1 || true
 check "a second deploy does not overwrite access.env" "1" \
-	"$(grep -c '^DUMPSTAR_MULTITENANT=1$' "$ACCESS19" || true)"
+	"$(grep -c '^DUMPSTAR_ACCESS_CUSTOM=1$' "$ACCESS19" || true)"
 
 reset_store
 

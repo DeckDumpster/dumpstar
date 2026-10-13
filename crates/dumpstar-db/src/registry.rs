@@ -233,6 +233,51 @@ pub fn detach(conn: &Connection, handle: &str) -> Result<User> {
     })
 }
 
+/// Make a detached user live again — the inverse of [`detach`]. Returns the
+/// reattached row.
+///
+/// Addressed by `database_id`, the same way [`delete`] is: a detached row
+/// keeps its real handle, but by now that handle may belong to someone else,
+/// and the id is what says which bytes are meant. The row goes back to
+/// `state = 'active'` with `retired_at` cleared, and the identity bindings it
+/// held come back with it through the `user_identity_sync_state` trigger.
+///
+/// Refuses anything that is not detached. A handle or an email that a live
+/// user holds in the meantime is a [`DbError::Conflict`] from the partial
+/// unique indexes, not from a check-then-update, and the transaction leaves
+/// the row detached.
+pub fn reattach(conn: &Connection, database_id: &str) -> Result<User> {
+    let user = find(conn, database_id)?
+        .ok_or_else(|| DbError::NotFound(format!("no user with database id {database_id:?}")))?;
+    if user.state != UserState::Detached {
+        return Err(DbError::Conflict(format!(
+            "user {:?} is not detached — nothing to reattach",
+            user.handle
+        )));
+    }
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "UPDATE user SET state = ?2, retired_at = NULL WHERE database_id = ?1",
+        params![database_id, UserState::Active.as_str()],
+    )
+    .map_err(|e| {
+        conflict(
+            e,
+            format!(
+                "cannot reattach {:?}: its handle or one of its identity emails is held by a \
+                 live user now — `dumpstar tenant rename` or `identity remove` that one first",
+                user.handle
+            ),
+        )
+    })?;
+    tx.commit()?;
+    Ok(User {
+        state: UserState::Active,
+        retired_at: None,
+        ..user
+    })
+}
+
 /// The user whose collection lives in `database_id`, if any.
 ///
 /// The inverse of the map: a file on disk back to whoever it belongs to.
@@ -725,6 +770,80 @@ mod tests {
             detach(&conn, "alice").unwrap_err(),
             DbError::NotFound(_)
         ));
+    }
+
+    #[test]
+    fn reattach_restores_the_row_and_its_identity_bindings() {
+        let (_dir, conn) = registry();
+        let alice = insert(&conn, "alice").unwrap();
+        identity_add(&conn, &alice.database_id, "alice@test.local", None, None).unwrap();
+        detach(&conn, "alice").unwrap();
+        assert_eq!(lookup_by_email(&conn, "alice@test.local").unwrap(), None);
+
+        let back = reattach(&conn, &alice.database_id).unwrap();
+
+        assert_eq!(back.state, UserState::Active);
+        assert_eq!(back.retired_at, None);
+        assert_eq!(back.database_id, alice.database_id);
+        assert_eq!(lookup(&conn, "alice").unwrap(), Some(back.clone()));
+        assert_eq!(
+            lookup_by_email(&conn, "alice@test.local").unwrap(),
+            Some(back)
+        );
+    }
+
+    #[test]
+    fn reattach_refuses_a_user_that_is_not_detached() {
+        let (_dir, conn) = registry();
+        let alice = insert(&conn, "alice").unwrap();
+        assert!(matches!(
+            reattach(&conn, &alice.database_id).unwrap_err(),
+            DbError::Conflict(_)
+        ));
+        assert!(matches!(
+            reattach(&conn, "01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap_err(),
+            DbError::NotFound(_)
+        ));
+    }
+
+    /// The handle was released, so someone else may hold it now. Reattaching
+    /// must not give two live users one name, and must say how to get out.
+    #[test]
+    fn reattach_refuses_when_the_handle_has_been_taken() {
+        let (_dir, conn) = registry();
+        let first = insert(&conn, "alice").unwrap();
+        detach(&conn, "alice").unwrap();
+        let second = insert(&conn, "alice").unwrap();
+
+        let err = reattach(&conn, &first.database_id).unwrap_err();
+        assert!(matches!(err, DbError::Conflict(_)), "{err:?}");
+        assert!(err.to_string().contains("rename"), "{err}");
+        assert_eq!(lookup(&conn, "alice").unwrap(), Some(second));
+        assert_eq!(
+            find(&conn, &first.database_id).unwrap().unwrap().state,
+            UserState::Detached
+        );
+    }
+
+    #[test]
+    fn reattach_refuses_when_an_identity_is_bound_elsewhere_now() {
+        let (_dir, conn) = registry();
+        let first = insert(&conn, "alice").unwrap();
+        identity_add(&conn, &first.database_id, "a@test.local", None, None).unwrap();
+        detach(&conn, "alice").unwrap();
+        let second = insert(&conn, "alice2").unwrap();
+        identity_add(&conn, &second.database_id, "a@test.local", None, None).unwrap();
+
+        let err = reattach(&conn, &first.database_id).unwrap_err();
+        assert!(matches!(err, DbError::Conflict(_)), "{err:?}");
+        assert_eq!(
+            find(&conn, &first.database_id).unwrap().unwrap().state,
+            UserState::Detached
+        );
+        assert_eq!(
+            lookup_by_email(&conn, "a@test.local").unwrap(),
+            Some(second)
+        );
     }
 
     #[test]

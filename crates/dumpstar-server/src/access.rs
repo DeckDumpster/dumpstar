@@ -5,17 +5,15 @@
 //! `CF_Authorization` cookie. The token is verified against the team's published
 //! JWKS: RS256 only, with issuer, audience, `exp`, and `nbf` all checked.
 //!
-//! # Opt-in by configuration
+//! # Mandatory
 //!
-//! The layer is **opt-in**: setting all three env vars below enables it. When
-//! none are set the server starts without authentication — suitable for CI,
-//! tests, and local development. A partial configuration (some but not all vars
-//! set) is a misconfiguration and the server refuses to start.
-//!
-//! When the layer is active, it is completely fail-closed: a missing or invalid
-//! token returns 401 with no fallthrough. There is no `DUMPSTAR_AUTH_DISABLED`,
-//! no skip-on-loopback, and no debug mode. Tests use real RS256 keys through an
-//! in-process JWKS server; they do not need a bypass.
+//! Access verification is not optional: all three env vars below must be set
+//! or the server refuses to start, naming every one that is missing. There is
+//! no single-tenant mode, no opt-in switch and no development bypass — no
+//! `DUMPSTAR_AUTH_DISABLED`, no skip-on-loopback, no debug mode. A missing or
+//! invalid token is a 401 with no fallthrough. CI and local development run a
+//! real RS256 JWKS server (in-process in the unit tests, `tests/lib/test_jwks.py`
+//! in the container tests).
 //!
 //! # Configuration
 //!
@@ -26,7 +24,7 @@
 //!   derived from the team domain so that test infrastructure can point at a
 //!   localhost server without faking the `iss` claim
 //!
-//! When configured, the JWKS is fetched at startup. A failed fetch is a failed
+//! The JWKS is fetched at startup. A failed fetch is a failed
 //! startup.
 //!
 //! # Key cache
@@ -85,36 +83,33 @@ pub struct AccessConfig {
 }
 
 impl AccessConfig {
-    /// Read the three required env vars. Fails if any is absent.
+    /// Read the three required env vars. Fails — naming every absent one —
+    /// if any is missing; there is no configuration under which the server
+    /// runs without Access.
     pub fn from_env() -> anyhow::Result<Self> {
-        let team_domain = std::env::var(TEAM_DOMAIN_ENV)
-            .map_err(|_| anyhow::anyhow!("{TEAM_DOMAIN_ENV} is required"))?;
-        let aud = std::env::var(AUD_ENV).map_err(|_| anyhow::anyhow!("{AUD_ENV} is required"))?;
-        let jwks_url = std::env::var(JWKS_URL_ENV)
-            .map_err(|_| anyhow::anyhow!("{JWKS_URL_ENV} is required"))?;
+        let get = |name: &str| std::env::var(name).ok().filter(|v| !v.trim().is_empty());
+        let (team_domain, aud, jwks_url) = (get(TEAM_DOMAIN_ENV), get(AUD_ENV), get(JWKS_URL_ENV));
+        let missing: Vec<&str> = [
+            (TEAM_DOMAIN_ENV, team_domain.is_none()),
+            (AUD_ENV, aud.is_none()),
+            (JWKS_URL_ENV, jwks_url.is_none()),
+        ]
+        .into_iter()
+        .filter_map(|(n, absent)| absent.then_some(n))
+        .collect();
+        let (Some(team_domain), Some(aud), Some(jwks_url)) = (team_domain, aud, jwks_url) else {
+            anyhow::bail!(
+                "refusing to start: Cloudflare Access is not configured ({} not set). \
+                 Every request must carry a verified Access JWT and there is no mode \
+                 without it; set {TEAM_DOMAIN_ENV}, {AUD_ENV} and {JWKS_URL_ENV}.",
+                missing.join(", ")
+            );
+        };
         Ok(AccessConfig {
             team_domain,
             aud,
             jwks_url,
         })
-    }
-
-    /// Read the three env vars only when at least one is present in the
-    /// environment. Returns `None` when none of the three are set — Access is
-    /// not configured, and the server starts without the authentication layer.
-    /// Returns `Err` when at least one is set but the set is incomplete: a
-    /// partial configuration is a misconfiguration, not a quiet skip.
-    ///
-    /// This is the configuration-as-enablement idiom: setting up the config IS
-    /// enabling the layer. There is no separate opt-in flag.
-    pub fn from_env_if_configured() -> anyhow::Result<Option<Self>> {
-        let any_set = [TEAM_DOMAIN_ENV, AUD_ENV, JWKS_URL_ENV]
-            .iter()
-            .any(|v| std::env::var(v).is_ok());
-        if !any_set {
-            return Ok(None);
-        }
-        Ok(Some(Self::from_env()?))
     }
 }
 
@@ -368,29 +363,14 @@ fn extract_token(req: &axum::http::request::Parts) -> Option<String> {
 /// Middleware: verify the Cloudflare Access JWT, then run the rest of the
 /// request with the identity in scope. Applied to `/api` as a `route_layer`.
 ///
-/// When `state.access` is `None` (Access not configured, single-tenant mode
-/// only — `check_multitenant_access` refuses multi-tenant without Access), the
-/// request passes through with a synthetic placeholder identity. The identity
-/// is still placed in scope so `tenant::layer` can call `access::current()`
-/// without error; in single-tenant mode `Tenants::resolve` ignores it.
-///
-/// When the layer IS active it is completely fail-closed — no token means 401.
+/// Completely fail-closed — no token means 401, and there is no path that
+/// puts an identity in scope without verifying one.
 pub(crate) async fn layer(
     State(state): State<AppState>,
     request: Request,
     next: Next,
 ) -> Result<Response, AppError> {
-    let Some(access) = state.access.as_ref() else {
-        // No Access config → single-tenant passthrough. Install a placeholder
-        // so `access::current()` in tenant::layer does not fail; the value is
-        // never consulted (Tenants::resolve ignores the identity in single mode).
-        return Ok(CURRENT
-            .scope(
-                VerifiedIdentity::new(String::new(), String::new()),
-                next.run(request),
-            )
-            .await);
-    };
+    let access = &state.access;
     let (parts, body) = request.into_parts();
     let token = extract_token(&parts).ok_or_else(|| {
         AppError(
@@ -812,4 +792,49 @@ mod tests {
             "HS256-signed-with-public-key token must be 401 (algorithm confusion)"
         );
     }
+
+    /// There is no configuration without Access: each missing variable is
+    /// named, and the set of three is the only thing that parses.
+    #[test]
+    fn config_requires_all_three_variables() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let all = [
+            (TEAM_DOMAIN_ENV, "https://t.example"),
+            (AUD_ENV, "aud"),
+            (JWKS_URL_ENV, "http://127.0.0.1:1/jwks"),
+        ];
+        let set = |skip: Option<&str>| {
+            for (k, v) in all {
+                unsafe {
+                    if Some(k) == skip {
+                        std::env::remove_var(k);
+                    } else {
+                        std::env::set_var(k, v);
+                    }
+                }
+            }
+        };
+        set(None);
+        assert!(AccessConfig::from_env().is_ok());
+        for (missing, _) in all {
+            set(Some(missing));
+            let err = AccessConfig::from_env()
+                .err()
+                .expect("started without Access");
+            assert!(err.to_string().contains(missing), "{err}");
+        }
+        for (k, _) in all {
+            unsafe { std::env::remove_var(k) };
+        }
+        let err = AccessConfig::from_env()
+            .err()
+            .expect("started with no Access at all");
+        let msg = err.to_string();
+        assert!(
+            msg.contains(TEAM_DOMAIN_ENV) && msg.contains(AUD_ENV) && msg.contains(JWKS_URL_ENV),
+            "{msg}"
+        );
+    }
+
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 }

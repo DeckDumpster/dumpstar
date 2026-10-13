@@ -46,9 +46,8 @@ pub struct AppState {
     /// The data dir — read by `/api/backup-status` for the `.backup-last-ok`
     /// freshness marker the host-side Layer 1 checker writes (ivq.5).
     data_dir: Arc<PathBuf>,
-    /// Cloudflare Access JWT validation state (JWKS cache + config). `None`
-    /// when Access is not configured — the layer passes all requests through.
-    pub(crate) access: Option<Arc<access::AccessState>>,
+    /// Cloudflare Access JWT validation state (JWKS cache + config).
+    pub(crate) access: Arc<access::AccessState>,
 }
 
 /// An error rendered as an HTTP response. `DbError::NotFound` → 404,
@@ -234,13 +233,8 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
 
 /// Everything `dumpstar serve` needs to stand the HTTP app up.
 pub struct ServeConfig {
-    /// The tenant this process serves when `multi_tenant` is off — i.e.
-    /// `$DUMPSTAR_USER` — and the collection database it resolves to.
-    pub tenant: String,
-    pub user_db: PathBuf,
     /// The directory holding one database per tenant, and the registry that
-    /// says which of them a handle is served from. Read only when
-    /// `multi_tenant` is on; `tenant`/`user_db` are ignored in that mode.
+    /// says which of them an identity is served from.
     pub tenants_dir: PathBuf,
     pub registry_db: PathBuf,
     pub shared_db: PathBuf,
@@ -248,51 +242,16 @@ pub struct ServeConfig {
     pub data_dir: PathBuf,
     pub host: IpAddr,
     pub port: u16,
-    /// Per-request tenant resolution. **Off unless explicitly switched on.**
-    /// There is no authentication in front of it, so an instance with this
-    /// on lets any caller name any tenant — see `deploy/TENANTS.md`.
-    pub multi_tenant: bool,
-    /// Cloudflare Access configuration. `None` when Access is not configured —
-    /// the authentication layer is skipped and the server starts without it.
-    /// When `Some`, all three fields are required and a JWKS fetch failure is a
-    /// startup failure. See `access::AccessConfig::from_env_if_configured`.
-    pub access: Option<access::AccessConfig>,
+    /// Cloudflare Access configuration. Mandatory: there is no mode without
+    /// it. A JWKS fetch failure is a startup failure. See
+    /// `access::AccessConfig::from_env`.
+    pub access: access::AccessConfig,
 }
 
-/// Refuse multi-tenant mode when Cloudflare Access is not configured.
-///
-/// Multi-tenant resolution now requires Cloudflare Access: every request must
-/// carry a valid JWT and the verified email must be bound to a tenant in the
-/// registry. Without an Access configuration the JWT layer accepts nothing, so
-/// multi-tenant mode would refuse every request rather than serving any tenant.
-///
-/// Single-tenant mode is unaffected — the tenant is fixed at startup and no
-/// JWT is required.
-fn check_multitenant_access(multi_tenant: bool, access_configured: bool) -> anyhow::Result<()> {
-    if !multi_tenant || access_configured {
-        return Ok(());
-    }
-    anyhow::bail!(
-        "refusing to start: multi-tenant resolution is on but Cloudflare Access is not \
-         configured.\n\
-         \n\
-         In multi-tenant mode every request must carry a valid Cloudflare Access JWT; the \
-         verified email in the JWT determines which tenant's collection is served. Without \
-         Access configured the JWT layer will reject every request.\n\
-         \n\
-         Set {} and {} (and optionally {}), or drop --multi-tenant / DUMPSTAR_MULTITENANT.",
-        access::TEAM_DOMAIN_ENV,
-        access::AUD_ENV,
-        access::JWKS_URL_ENV,
-    )
-}
-
-/// Start the HTTP server. In single-tenant mode the collection database is
-/// opened up front — so a missing catalog (`dumpstar setup` not run) fails at
-/// startup rather than on the first request.
+/// Start the HTTP server. The shared catalog is opened up front — so a missing
+/// catalog (`dumpstar setup` not run) fails at startup rather than on the
+/// first request.
 pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
-    // Access config must be present when multi-tenant is on.
-    check_multitenant_access(cfg.multi_tenant, cfg.access.is_some())?;
     // Idempotent shared-catalog convergence on startup. `dumpstar setup` and
     // the nightly `dumpstar-lake-derive shared` normally own shared schema —
     // the refresh used to be on that list and is not since pd-lunn, because
@@ -320,26 +279,10 @@ pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
             Arc::new(dumpstar_db::search_meta::load_flags(&shared)?),
         )
     };
-    // Cloudflare Access JWT validation — opt-in by configuration. When the
-    // three Access env vars are set, primes the JWKS cache; a failed fetch is a
-    // startup failure. When not configured, `None` here makes the layer a
-    // passthrough and the server starts without authentication.
-    let access = match cfg.access {
-        Some(cfg) => Some(access::AccessState::new(cfg).await?),
-        None => {
-            println!("dumpstar: Cloudflare Access is NOT configured — /api is unauthenticated");
-            None
-        }
-    };
-    let tenants = if cfg.multi_tenant {
-        println!(
-            "dumpstar: MULTI-TENANT resolution is ON — every request must carry a valid \
-             Cloudflare Access JWT and the verified email must be bound to a tenant."
-        );
-        Tenants::multi(cfg.tenants_dir, cfg.shared_db, &cfg.registry_db)?
-    } else {
-        Tenants::single(&cfg.tenant, cfg.user_db, cfg.shared_db)?
-    };
+    // Cloudflare Access JWT validation: primes the JWKS cache; a failed fetch
+    // is a startup failure.
+    let access = access::AccessState::new(cfg.access).await?;
+    let tenants = Tenants::new(cfg.tenants_dir, cfg.shared_db, &cfg.registry_db)?;
     let state = AppState {
         tenants: Arc::new(tenants),
         registry,
@@ -401,7 +344,7 @@ mod tests {
         dir: &std::path::Path,
         shared: &std::path::Path,
         tenants: Tenants,
-        access: Option<Arc<access::AccessState>>,
+        access: Arc<access::AccessState>,
     ) -> Router {
         let registry = {
             let c = dumpstar_db::open_shared(shared).unwrap();
@@ -422,22 +365,13 @@ mod tests {
         app(state, dir.join("static"), data_dir)
     }
 
-    /// A single-tenant test router — the production shape.
+    /// A test router with one tenant, `u`, bound to `u@example.com`.
     async fn test_app() -> (tempfile::TempDir, Router, TestAccessFixture) {
-        let fx = TestAccessFixture::new().await;
-        let dir = tempfile::tempdir().unwrap();
-        let shared = seed(dir.path());
-        let tenants = Tenants::single(
-            "collection",
-            dir.path().join("tenants").join("collection.sqlite"),
-            shared.clone(),
-        )
-        .unwrap();
-        let router = router_for(dir.path(), &shared, tenants, Some(fx.access.clone()));
+        let (dir, router, _tenants_dir, fx) = multi_tenant_app(&["u"]).await;
         (dir, router, fx)
     }
 
-    /// A multi-tenant test router with `handles` provisioned, each with an
+    /// A test router with `handles` provisioned, each with an
     /// email binding `<handle>@example.com`.
     async fn multi_tenant_app(
         handles: &[&str],
@@ -467,8 +401,8 @@ mod tests {
         let router = router_for(
             dir.path(),
             &shared,
-            Tenants::multi(tenants_dir.clone(), shared.clone(), &registry_db).unwrap(),
-            Some(fx.access.clone()),
+            Tenants::new(tenants_dir.clone(), shared.clone(), &registry_db).unwrap(),
+            fx.access.clone(),
         );
         (dir, router, tenants_dir, fx)
     }
@@ -1219,13 +1153,79 @@ mod tests {
         assert_eq!(std::fs::read_dir(&tenants_dir).unwrap().count(), before);
     }
 
-    /// In single-tenant mode, any authenticated caller reaches the one
-    /// collection — the JWT is validated but its email is not looked up.
+    /// The acceptance list at the HTTP boundary: a bound email is a 200, an
+    /// unbound one a 403 naming the fix, and no token, a garbage token and
+    /// every entry of the negative-JWT list a 401 — with nothing provisioned
+    /// by any of them.
     #[tokio::test]
-    async fn with_the_flag_off_any_identity_reaches_the_single_tenant() {
-        let (_d, router, fx) = test_app().await;
-        let tok = fx.valid_token("u@example.com");
+    async fn the_access_gate_at_the_router() {
+        let (_d, router, tenants_dir, fx) = multi_tenant_app(&["alice"]).await;
+        let databases = || {
+            std::fs::read_dir(&tenants_dir)
+                .unwrap()
+                .filter_map(|e| e.ok()?.file_name().into_string().ok())
+                .filter(|n| n.ends_with(".sqlite"))
+                .collect::<Vec<_>>()
+        };
+        let before = databases();
+        let status = |tok: Option<String>| {
+            let router = router.clone();
+            async move {
+                let resp = router
+                    .oneshot(request("GET", "/api/collection", tok.as_deref(), None))
+                    .await
+                    .unwrap();
+                (resp.status(), body_string(resp).await)
+            }
+        };
 
+        let (s, _) = status(Some(fx.valid_token("alice@example.com"))).await;
+        assert_eq!(s, StatusCode::OK);
+
+        let (s, body) = status(Some(fx.valid_token("mallory@example.com"))).await;
+        assert_eq!(s, StatusCode::FORBIDDEN);
+        assert!(
+            body.contains("dumpstar tenant identity add") && body.contains("mallory@example.com"),
+            "the 403 must name the fix: {body}"
+        );
+
+        let e = "alice@example.com";
+        let negatives = [
+            ("no token", None),
+            ("garbage", Some("not.a.jwt".to_string())),
+            ("expired", Some(fx.expired_token(e))),
+            ("nbf", Some(fx.not_yet_valid_token(e))),
+            ("wrong aud", Some(fx.wrong_aud_token(e))),
+            ("wrong iss", Some(fx.wrong_issuer_token(e))),
+            ("unknown kid", Some(fx.unknown_kid_token(e))),
+            ("tampered", Some(fx.tampered_token(e))),
+            ("alg=none", Some(fx.alg_none_token(e))),
+            (
+                "HS256 with the public key",
+                Some(fx.alg_hs256_pubkey_token(e)),
+            ),
+        ];
+        for (name, tok) in negatives {
+            let (s, body) = status(tok).await;
+            assert_eq!(
+                s,
+                StatusCode::UNAUTHORIZED,
+                "{name} was not rejected: {body}"
+            );
+        }
+        assert_eq!(databases(), before, "a request provisioned a database");
+    }
+
+    /// Detach takes access away; reattach gives it back, with the data.
+    #[tokio::test]
+    async fn reattach_restores_access() {
+        let (d, router, _tenants_dir, fx) = multi_tenant_app(&["alice"]).await;
+        let tok = fx.valid_token("alice@example.com");
+        let get = || {
+            router
+                .clone()
+                .oneshot(request("GET", "/api/collection", Some(&tok), None))
+        };
         let created = router
             .clone()
             .oneshot(request(
@@ -1238,14 +1238,14 @@ mod tests {
             .unwrap();
         assert_eq!(created.status(), StatusCode::CREATED);
 
-        // A different email — still resolves to the single collection.
-        let other_tok = fx.valid_token("someone-else@example.com");
-        let claimed = router
-            .oneshot(request("GET", "/api/collection", Some(&other_tok), None))
-            .await
-            .unwrap();
-        assert_eq!(claimed.status(), StatusCode::OK);
-        assert!(body_string(claimed).await.contains("sv3pt5-1-normal"));
+        let reg = dumpstar_db::open_registry(&d.path().join("registry.sqlite")).unwrap();
+        let alice = dumpstar_db::registry::detach(&reg, "alice").unwrap();
+        assert_eq!(get().await.unwrap().status(), StatusCode::FORBIDDEN);
+
+        dumpstar_db::registry::reattach(&reg, &alice.database_id).unwrap();
+        let resp = get().await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(body_string(resp).await.contains("sv3pt5-1-normal"));
     }
 
     /// A leftover `x-dumpstar-tenant` header cannot be used to reach another
@@ -1292,75 +1292,24 @@ mod tests {
         );
     }
 
-    // ---- check_multitenant_access (sync, no HTTP) ----------------------------------------
-
-    #[test]
-    fn multi_tenant_without_access_refuses() {
-        let err = check_multitenant_access(true, false).unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains(access::TEAM_DOMAIN_ENV), "{msg}");
-        assert!(msg.contains(access::AUD_ENV), "{msg}");
-    }
-
-    #[test]
-    fn multi_tenant_with_access_configured_starts() {
-        check_multitenant_access(true, true).unwrap();
-    }
-
-    #[test]
-    fn single_tenant_is_unaffected_by_access_config() {
-        check_multitenant_access(false, false).unwrap();
-        check_multitenant_access(false, true).unwrap();
-    }
-
-    /// Single-tenant mode without Access configured is the production shape.
-    /// The access layer must not block /api/ requests when `state.access` is
-    /// `None` — it installs a synthetic placeholder identity so `tenant::layer`
-    /// can call `access::current()` without error; `Tenants::resolve` ignores
-    /// it in single-tenant mode.
-    #[tokio::test]
-    async fn single_tenant_without_access_serves_api() {
-        let dir = tempfile::tempdir().unwrap();
-        let shared = seed(dir.path());
-        let user_db = dir.path().join("tenants").join("collection.sqlite");
-        dumpstar_db::open_user(&user_db).unwrap();
-        let tenants = Tenants::single("collection", user_db, shared.clone()).unwrap();
-        // access: None — the production single-tenant shape.
-        let router = router_for(dir.path(), &shared, tenants, None);
-        let resp = router
-            .oneshot(
-                Request::builder()
-                    .uri("/api/collection")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(
-            resp.status(),
-            StatusCode::OK,
-            "single-tenant mode with no Access config must serve /api/ routes"
-        );
-    }
-
     #[tokio::test]
     async fn there_is_no_database_outside_a_resolved_request() {
-        let fx = TestAccessFixture::new().await;
-        let dir = tempfile::tempdir().unwrap();
-        let shared = seed(dir.path());
+        let (dir, _router, tenants_dir, fx) = multi_tenant_app(&["u"]).await;
+        let shared = dir.path().join("shared.sqlite");
+        let registry_db = dir.path().join("registry.sqlite");
+        let database_id = {
+            let reg = dumpstar_db::open_registry(&registry_db).unwrap();
+            dumpstar_db::registry::lookup(&reg, "u")
+                .unwrap()
+                .unwrap()
+                .database_id
+        };
         let state = AppState {
-            tenants: Arc::new(
-                Tenants::single(
-                    "collection",
-                    dir.path().join("tenants").join("collection.sqlite"),
-                    shared,
-                )
-                .unwrap(),
-            ),
+            tenants: Arc::new(Tenants::new(tenants_dir, shared, &registry_db).unwrap()),
             registry: Arc::new(Default::default()),
             flags: Arc::new(Vec::new()),
             data_dir: Arc::new(dir.path().to_path_buf()),
-            access: Some(fx.access.clone()),
+            access: fx.access.clone(),
         };
 
         let unscoped = blocking(&state, |c| {
@@ -1372,7 +1321,7 @@ mod tests {
         assert!(unscoped.is_err(), "a connection without a resolved tenant");
 
         let scoped = tenant::test_support::as_tenant(
-            "collection",
+            &database_id,
             blocking(&state, |c| {
                 Ok(c.query_row("SELECT count(*) FROM collection", [], |r| {
                     r.get::<_, i64>(0)

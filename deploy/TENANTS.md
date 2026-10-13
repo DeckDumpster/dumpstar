@@ -3,11 +3,12 @@
 Every tenant gets its own collection database. The card catalog stays a single
 shared copy, `ATTACH`ed read-only per connection exactly as it always was.
 
-> **Status: multi-tenant with Cloudflare Access.** Resolution is off by
-> default — `dumpstar serve` opens the one collection `$DUMPSTAR_USER` names,
-> exactly as it always did. Production runs with `DUMPSTAR_MULTITENANT=1` and
-> Cloudflare Access JWT verification; every `/api` request must carry a valid
-> token, and the verified email must be bound to a tenant in the registry.
+> **Status: multi-tenant, always, behind Cloudflare Access.** There is no
+> single-tenant mode, no opt-in switch and no development bypass. `dumpstar
+> serve` refuses to start unless all three Access settings are present; every
+> `/api` request must carry a valid token, and the verified email must be bound
+> to a tenant in the registry. CI and local development run a real test JWKS
+> server (`tests/lib/test_jwks.py`).
 
 ## Layout
 
@@ -237,66 +238,35 @@ Reading is not opening. `list` reads each file's header directly, so it neither
 stamps nor applies schema — and it still reports a user the server itself
 refuses, which is the case an operator is usually running it for.
 
-## Serving more than one tenant
+## How a request finds its tenant
 
-`dumpstar serve` serves exactly one collection. Which one is decided at startup
-from `$DUMPSTAR_USER`, and no request can change it. That is the default, that is
-what production runs, and with it a tenant header is not read at all — send one
-and nothing happens.
+The Cloudflare Access JWT in each `/api` request is validated (RS256 only;
+issuer, audience, `exp` and `nbf` checked), the verified email is looked up in
+the user registry, and the matching tenant's database is served.
 
-Passing `--multi-tenant` (or `DUMPSTAR_MULTITENANT=1`) switches on per-request
-resolution instead: the Cloudflare Access JWT in each `/api` request is
-validated, the verified email is looked up in the user registry, and the
-matching tenant's database is served.
-
-```bash
-dumpstar serve --multi-tenant
-# The browser carries the CF_Authorization cookie set by the Access gateway.
-```
-
-### Read this before you turn it on
-
-**Cloudflare Access is required.** With the flag on, every request must carry a
-valid RS256 JWT signed by your Access team's key. The email in the verified JWT
-is looked up in the user registry; only an email bound to an active tenant
-reaches any database. An unbound email is a **403**, not a 404 that creates
-anything.
-
-Which is why:
-
-- **The server refuses to start** with the flag on and Access not configured
-  (`DUMPSTAR_ACCESS_TEAM_DOMAIN` and `DUMPSTAR_ACCESS_AUD` unset). Not a warning —
-  a refusal; see below.
-- The flag is off unless explicitly set, and `DUMPSTAR_MULTITENANT` only counts
-  `1`, `true` or `yes` as on — `DUMPSTAR_MULTITENANT=0` does not switch it on by
-  the mere fact of being set.
-- The server prints a warning line at startup when it is on.
-- The mechanism is a **header**, not a hostname or a URL prefix. A browser does
-  not send it on its own, so a multi-tenant instance cannot be driven by
-  pointing a browser at it — the frontend is unchanged and remains
-  single-tenant. Browser-reachable multi-tenancy waits on the identity epic.
-- **Production runs multi-tenant** (db-i7bi). `deploy/dumpstar.container`
-  loads `~/.config/dumpstar/prod/access.env` via `EnvironmentFile`, which sets
-  `DUMPSTAR_MULTITENANT=1` and the three Access variables. See "Configuring
-  Access for a deployment" below.
+- no token, a malformed token, or any invalid one (expired, not yet valid, wrong
+  `aud`, wrong `iss`, unknown `kid`, tampered, `alg=none`, HS256 signed with the
+  public key) — **401**;
+- a valid token whose email is bound to no active tenant — **403**, naming
+  `dumpstar tenant identity add <handle> --email <email>`; nothing is created;
+- a valid token for a bound email — that tenant's database.
 
 ### The refusal
 
-The refusal is the mechanism:
+The refusal is the mechanism. All three of `DUMPSTAR_ACCESS_TEAM_DOMAIN`,
+`DUMPSTAR_ACCESS_AUD` and `DUMPSTAR_ACCESS_JWKS_URL` must be set, and the JWKS
+must be fetchable at startup:
 
 ```
-$ dumpstar serve --multi-tenant
-Error: refusing to start: multi-tenant resolution is on but Cloudflare Access
-is not configured.
-...
+$ dumpstar serve
+Error: refusing to start: Cloudflare Access is not configured (DUMPSTAR_ACCESS_TEAM_DOMAIN,
+DUMPSTAR_ACCESS_AUD, DUMPSTAR_ACCESS_JWKS_URL not set). ...
 ```
 
-Set the three Access env vars (`DUMPSTAR_ACCESS_TEAM_DOMAIN`, `DUMPSTAR_ACCESS_AUD`,
-optionally `DUMPSTAR_ACCESS_JWKS_URL`) and the server will start.
-
-**Single-tenant mode is unaffected** — its tenant is fixed at startup and no
-request can change it. The container entrypoint's `--host 0.0.0.0` is fine
-and stays.
+Detaching a tenant (`dumpstar tenant detach <handle> --yes`) removes access and
+keeps the data; `dumpstar tenant reattach <database_id>` restores it, with the
+identity bindings it had. `dumpstar tenant purge <database_id> --yes` destroys a
+*detached* collection and refuses a live one, and refuses a handle.
 
 ### What isolation rests on
 
@@ -314,10 +284,8 @@ up, all in `crates/dumpstar-server/src/tenant.rs`:
   `main` = that tenant's file and `shared` = the catalog, and fails otherwise.
 - A request **cannot reach a database without a `VerifiedIdentity`**: `access::layer`
   runs before `tenant::layer` (outermost `route_layer` first) and
-  `VerifiedIdentity`'s constructor is private to `access`. In multi-tenant mode a
-  valid Cloudflare JWT is the only source; in single-tenant mode the layer installs a
-  synthetic placeholder that `Tenants::resolve` ignores, so the invariant holds in
-  both modes.
+  `VerifiedIdentity`'s constructor is private to `access`. A
+  valid Cloudflare JWT is the only source.
 
 **The email is a lookup key, not a filename.** What the identity carries is an
 *email address*; what a request is served from is `tenants/<database_id>.sqlite`,
@@ -367,8 +335,8 @@ hatch nobody tests closed is indistinguishable from a guard that was deleted.
 
 `deploy/dumpstar.container` loads `~/.config/dumpstar/{{INSTANCE}}/access.env`.
 `deploy/setup.sh` scaffolds the file on every setup; values default to
-commented-out, so instances stay single-tenant until the file is filled in.
-To enable multi-tenant mode for an instance:
+commented-out, and the server will not start until the file is filled in.
+To configure an instance:
 
 ```bash
 # setup.sh writes a template if the file does not exist:
@@ -377,7 +345,6 @@ bash deploy/setup.sh <instance>
 # Then fill in the three values from the Cloudflare Zero Trust dashboard
 # (Access > Applications > your app > AUD tag):
 editor ~/.config/dumpstar/<instance>/access.env
-#   DUMPSTAR_MULTITENANT=1
 #   DUMPSTAR_ACCESS_TEAM_DOMAIN=https://<team>.cloudflareaccess.com
 #   DUMPSTAR_ACCESS_AUD=<64-char hex>
 #   DUMPSTAR_ACCESS_JWKS_URL=https://<team>.cloudflareaccess.com/cdn-cgi/access/certs
@@ -392,10 +359,10 @@ curl -s -o /dev/null -w '%{http_code}' http://localhost:<port>/api/collection
 # Expected: 401
 ```
 
-The file is optional and not in the repo. CI test instances that call
-`deploy/setup.sh --test` get the scaffold and should fill nothing in — the
-`EnvironmentFile=-` prefix means the missing file is silently skipped,
-leaving those instances single-tenant.
+The file is not in the repo and is not optional: the unit loads it as a
+mandatory `EnvironmentFile=`, and the server refuses to start with it empty.
+Test instances (`deploy/setup.sh --test`) therefore need a test JWKS server and
+its three values — never a bypass.
 
 **The AUD tag is an environment fact, not a secret**, but it is
 instance-specific and only readable from the Cloudflare dashboard. The team

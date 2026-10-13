@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/dumpstar-catalog",
     "crates/dumpstar-cli",
     "crates/dumpstar-core",
     "crates/dumpstar-db",
@@ -23,6 +24,7 @@ repository = "https://github.com/DeckDumpster/dumpstar"
 
 [workspace.dependencies]
 # Internal crates
+dumpstar-catalog = { path = "crates/dumpstar-catalog" }
 dumpstar-core = { path = "crates/dumpstar-core" }
 dumpstar-db = { path = "crates/dumpstar-db" }
 dumpstar-derive = { path = "crates/dumpstar-derive" }

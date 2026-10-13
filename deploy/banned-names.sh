@@ -44,7 +44,7 @@ mapfile -t files < <(git ls-files | grep -v '^fixtures/swu/' || true)
 
 for f in "${files[@]}"; do
     if [[ "${f,,}" =~ ${identity,,} ]]; then
-        report "$f" "path carries the old identity"
+        report "$f" "path carries the old identity '${BASH_REMATCH[0]}'"
     fi
     if [[ "$f" =~ $module_files ]]; then
         report "$f" "a removed Pokémon module file"
@@ -56,9 +56,9 @@ done
 # Content. -I skips binary files (the committed SQLite fixtures are checked by
 # the harness that regenerates them).
 if [ "${#files[@]}" -gt 0 ]; then
-    while IFS=: read -r path line _; do
-        [ -n "$path" ] && report "$path:$line" "text carries the old identity"
-    done < <(git grep -I -n -i -E "$identity" -- "${files[@]}" || true)
+    while IFS=: read -r path line name; do
+        [ -n "$path" ] && report "$path:$line" "text carries the old identity '$name'"
+    done < <(git grep -I -n -i -o -E "$identity" -- "${files[@]}" || true)
 
     while IFS=: read -r path line _; do
         [ -n "$path" ] && report "$path:$line" "declares a removed Pokémon module"

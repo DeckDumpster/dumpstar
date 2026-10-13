@@ -39,14 +39,31 @@ INSTANCE="${1:-prod}"
 CONF_DIR="${DUMPSTAR_CONF_DIR:-$HOME/.config/dumpstar/$INSTANCE}"
 [ -f "$CONF_DIR/alerts.env" ] && . "$CONF_DIR/alerts.env"
 
-URL="${DUMPSTAR_HEARTBEAT_URL:-}"
 PING="${DUMPSTAR_UPTIME_PING_URL:-}"
 TIMEOUT="${DUMPSTAR_HEARTBEAT_TIMEOUT:-10}"
 
+# THE ORIGIN, NOT THE PUBLIC HOSTNAME (sp-kaj3xv). By default the probe target is
+# read from the instance's own Quadlet unit: http://127.0.0.1:<published port>/health.
+# A probe of star.dumpster.cards would go through Cloudflare, the tunnel and Access,
+# so it would fail for reasons that are not the server's (a dashboard edit, an Access
+# policy) and would answer 200 from an edge error page's cache for reasons that are
+# not either. DUMPSTAR_HEARTBEAT_URL may still name a target, but only a loopback one.
+# shellcheck source=deploy/units-lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/units-lib.sh"
+URL="${DUMPSTAR_HEARTBEAT_URL:-}"
 if [ -z "$URL" ]; then
-    echo "heartbeat: DUMPSTAR_HEARTBEAT_URL unset for '${INSTANCE}' — nothing to probe" >&2
-    exit 0
+    URL="$(dumpstar_origin_url "$INSTANCE")" || {
+        echo "heartbeat: ${INSTANCE} has no installed unit publishing on loopback — cannot find its origin" >&2
+        exit 1
+    }
 fi
+case "$URL" in
+    http://127.0.0.1[:/]* | http://localhost[:/]* | http://\[::1\][:/]*) ;;
+    *)
+        echo "heartbeat: refusing ${URL} — the serving check probes the origin on loopback, not a public hostname" >&2
+        exit 1
+        ;;
+esac
 
 # --fail so a 5xx is a failure rather than a page of error text, and -sS so a real
 # problem still prints a reason. No retry on purpose: a retry here would paper over

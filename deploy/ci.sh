@@ -900,6 +900,9 @@ if tier lint; then
     step "ci.yml shape (tests/ci/workflow_test.sh)"
     bash "$REPO_DIR/tests/ci/workflow_test.sh"
 
+    step "deploy.yml shape (tests/ci/deploy_workflow_test.sh)"
+    bash "$REPO_DIR/tests/ci/deploy_workflow_test.sh"
+
     # A formatter check, not a compile — `cargo fmt` parses and never builds,
     # so it costs a second and belongs with the lint tier rather than behind
     # `cargo test`.
@@ -1033,30 +1036,15 @@ fi
 
 PORT=""
 if tier container; then
-    step "Building and starting '--test' container instance..."
-    bash "$SCRIPT_DIR/setup.sh" "$INSTANCE" --test
-    systemctl --user start "$SERVICE_NAME" || { dump_unit_diagnostics "$SERVICE_NAME"; exit 1; }
-
-    step "Waiting for the server to answer..."
-    # Asked four times a second rather than once every two: the check is a
-    # `podman port` and a loopback curl, both cheap, and the two-second interval
-    # was most of the time this step took on a server that was already up
-    # (pd-86er). The 60-second bound is unchanged.
-    server_answering() {
-        PORT=$(podman port "$CONTAINER" 8080/tcp 2>/dev/null | head -1 | cut -d: -f2 || true)
-        if [ -n "$PORT" ] && curl -sf -o /dev/null "http://localhost:${PORT}/"; then
-            echo "    Server is up on port ${PORT}."
-            return 0
-        fi
-        PORT=""
-        return 1
-    }
-    wait_until 60 0.25 server_answering || true
-    if [ -z "$PORT" ]; then
-        echo "ERROR: server failed to start within timeout."
-        dump_unit_diagnostics "$SERVICE_NAME"
-        exit 1
-    fi
+    # The production unit, against real podman and systemd: it starts, serves
+    # /health on loopback only, and the serving check fails when the container is
+    # killed (design row S5). The script builds its own throwaway instance through
+    # setup.sh --test, and configures Access against a test JWKS server because the
+    # server refuses to start without one; the plain "start it and curl /" step this
+    # replaces could not pass for that reason. PORT stays empty: no gate below this
+    # point is armed yet to need a running instance (section 5).
+    step "Production unit: starts, loopback-only, serving check (tests/deploy/prod_unit.sh)"
+    bash "$REPO_DIR/tests/deploy/prod_unit.sh" "$INSTANCE"
 fi
 
 # --- 5. Gates not armed yet --------------------------------------------------

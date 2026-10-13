@@ -1,0 +1,41 @@
+[Unit]
+Description=Dumpstar server ({{INSTANCE}})
+After=network-online.target
+Wants=network-online.target
+# The app runs continuously. OnFailure fires when the unit enters `failed` —
+# which requires the start limit to be reachable. With RestartSec=10 in
+# [Service], five crashes in 300 seconds (a genuine crash-loop trips it in
+# ~50s) exhausts the burst while an ordinary restart after a deploy does not
+# come close. Too tight and a transient blip takes the site down permanently
+# until someone intervenes; too loose and it never fires (today's shape, with
+# the inherited 10s/5 defaults). 300s/5 is the chosen trade. (db-rl3o)
+StartLimitIntervalSec=300
+StartLimitBurst=5
+OnFailure=dumpstar-alert@%n.service
+
+[Container]
+Image=localhost/dumpstar:{{INSTANCE}}
+Environment=DUMPSTAR_HOME=/data
+# Per-instance Cloudflare Access config and multi-tenant mode flag.
+# deploy/setup.sh scaffolds this file on every setup (including CI instances),
+# so it always exists. Values default to commented-out, meaning single-tenant.
+# Values: DUMPSTAR_MULTITENANT, DUMPSTAR_ACCESS_TEAM_DOMAIN, DUMPSTAR_ACCESS_AUD,
+# DUMPSTAR_ACCESS_JWKS_URL. See "Configuring Access for a deployment" in
+# deploy/TENANTS.md, and deploy/setup.sh for the scaffold command.
+EnvironmentFile=%h/.config/dumpstar/{{INSTANCE}}/access.env
+# Bind to loopback only: a Cloudflare Access logout revokes the session at
+# the edge, but the server verifies tokens locally (no revocation check) and
+# accepts them until exp. Binding to 127.0.0.1 closes the path that bypasses
+# the edge — only the cloudflared tunnel (loopback) reaches the container.
+# (db-a5g0)
+PublishPort=127.0.0.1:{{PORT}}:8080
+Volume=dumpstar-{{INSTANCE}}-data:/data:Z
+AutoUpdate=local
+
+[Service]
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

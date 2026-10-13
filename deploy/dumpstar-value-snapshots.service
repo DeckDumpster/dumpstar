@@ -1,0 +1,90 @@
+[Unit]
+Description=Dumpstar per-tenant value snapshots (%i)
+# pd-8m5c. The transform tier on a timer. `dumpstar data refresh` used to end with
+# a step 7 that snapshotted the ONE collection $DUMPSTAR_USER resolves to; that
+# step is deleted (pd-hkbc), so this unit is now the ONLY thing that records
+# today's value for anybody. Without it a merged PR #16 is an operational
+# regression: value history simply stops advancing, quietly, on every box.
+#
+# {{REPO_DIR}} is sed-substituted by deploy/units-lib.sh (single-clone
+# deployment). Installed for every instance, enabled for none — see the timer.
+#
+# ── ORDERING: after the refresh, never beside it ────────────────────────────
+# The transform values a collection from `catalog.prices`, which is built from
+# the bytes the nightly refresh lands. Running the two concurrently would value
+# today's collection against a half-written catalog, so the ordering is declared
+# rather than assumed:
+#
+#   After=dumpstar-refresh@%i.service   — a systemd ordering dependency, enforced
+#   whenever both units have a job in the queue. If the refresh is still running
+#   (its own TimeoutStartSec is 1800s, so it may be) when this unit's timer
+#   fires, this unit's start job WAITS for it instead of racing it. That is the
+#   guarantee; it does not depend on how long either job actually takes.
+#
+# The timer's calendar entry is derived from the declared bounds of whichever
+# unit is LAST in the chain before this one — since pd-i08u that is the
+# shipment, not the refresh. See dumpstar-value-snapshots.timer.
+#
+# Deliberately NOT `Wants=dumpstar-refresh@%i.service`: the refresh is a oneshot
+# without RemainAfterExit, so a Wants= would find it inactive and re-run the
+# whole catalog fetch a second time every night.
+After=dumpstar-refresh@%i.service
+# …and after the offline catalog derive (pd-1uem), which is one of the OTHER
+# units that fire at 07:00. Same shape and same reasoning as the line above: an
+# ordering dependency, never a Wants=, so nothing re-runs anything.
+After=dumpstar-derive@%i.service
+# …and after the nightly catalog.prices build (pd-up36), which is the unit that
+# fills the table this job reads. Until it existed, this job valued every
+# tenant's collection from whatever day someone last built by hand — correct
+# arithmetic over stale prices, advancing nightly. With this line the chain is
+# total: land -> derive -> prices -> ship -> transform, in sequence however long
+# each takes. Declared here rather than as a Before= over there because that is
+# where every ordering line in this set lives: next to the job that has to wait.
+After=dumpstar-prices@%i.service
+# …and after the shipment and its read-back (pd-i08u), which is the line that
+# makes this job possible at all now. The online holdings read is deleted: this
+# job values a collection out of `zone_holdings`, and `dumpstar-ship holdings` —
+# the second half of deploy/ship.sh — is the only thing that writes it. Run
+# beside or before that unit and every tenant is either refused (no staging
+# table) or valued at whatever the last read-back left behind. Same shape as
+# the lines above and NOT a Wants=, for the same reason.
+#
+# The direction reversed here: until pd-i08u, dumpstar-ship@ was ordered After=
+# THIS unit, on the narrower ground that the two must not write one SQLite file
+# at once. That is still true and still guaranteed — an ordering dependency
+# constrains both units whichever one declares it — but the reason is now a
+# data dependency, and it points this way.
+After=dumpstar-ship@%i.service
+# The lake is reached over the network (Nessie on the lake network, S3 beyond it).
+After=network-online.target
+Wants=network-online.target
+# The same guard the Nessie unit carries: a box with no lake configuration at all
+# skips rather than failing. It is only half a guard, deliberately — deploy/setup.sh
+# scaffolds lake.env commented out, so on any box that has been set up the file
+# exists and this condition passes. The other half is in the wrapper, which refuses
+# with the command to run when the instance has no lake job image or network; a
+# condition cannot ask podman anything.
+ConditionPathExists=%h/.config/dumpstar/lake.env
+# Layer 2 (dumpstar-ivq.3): push the journal tail on a real failure. Exit 2
+# is not one — see SuccessExitStatus below.
+OnFailure=dumpstar-alert@%n.service
+
+[Service]
+Type=oneshot
+# ── 0 / 2 / 1 ARE THREE DIFFERENT ANSWERS ──────────────────────────────────
+#   0  every registered tenant was snapshotted.
+#   2  the run COMPLETED and at least one tenant was skipped — a database that
+#      is registered but absent, or one another process holds a write lock on.
+#      That is a normal partial run (a tenant mid-import, a restore in flight),
+#      and a unit that treated it as failure would page on it and leave the
+#      timer's last run sitting red. It is a SUCCESS here, and the wrapper says
+#      PARTIAL in the journal and pushes a warning so it is not silent either.
+#   1  the run never started: no registry, no catalog, an empty lake. A failure,
+#      and OnFailure= above pages for it.
+SuccessExitStatus=2
+ExecStart=/bin/sh -c 'exec bash {{REPO_DIR}}/deploy/value-snapshots.sh %i'
+# The scan is every price partition at or before today, reduced as it streams,
+# then one SQLite transaction per tenant. Measured in seconds on a real lake;
+# the ceiling is here so a Nessie that never answers fails the unit rather than
+# hanging the timer until the next one.
+TimeoutStartSec=1800

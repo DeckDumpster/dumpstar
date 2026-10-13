@@ -33,6 +33,17 @@ impl Catalog {
         Ok(Self { conn })
     }
 
+    /// A resume point recorded by a finished fetch (see [`crate::swu`]).
+    pub fn sync_state(&self, key: &str) -> Result<Option<String>> {
+        use rusqlite::OptionalExtension;
+        Ok(self
+            .conn
+            .query_row("SELECT value FROM sync_state WHERE key = ?1", [key], |r| {
+                r.get(0)
+            })
+            .optional()?)
+    }
+
     pub fn conn(&self) -> &Connection {
         &self.conn
     }

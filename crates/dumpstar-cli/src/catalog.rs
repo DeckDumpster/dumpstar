@@ -1,12 +1,25 @@
-//! `dumpstar catalog-apply` — the SWU catalog apply job, run by a timer.
+//! `dumpstar catalog-apply` — the SWU catalog apply job, run by a timer — and
+//! `dumpstar catalog-check`, the alarm check run by another.
 //!
-//! Fetch → land → apply, against `shared.sqlite`. Only the fake source exists
-//! until the official-API and tcgcsv adapters land (design row S7).
+//! Fetch → land → apply, against `shared.sqlite`. `--swu` is the live job: the
+//! official API crawl (at most one a day) and then the tcgcsv prices. The two
+//! run independently, so a dead official API still lets prices through; the job
+//! still exits non-zero for it.
 
 use std::path::PathBuf;
+use std::time::Duration;
 
+use chrono::Utc;
 use clap::Args;
-use dumpstar_catalog::{FakeSource, job};
+use dumpstar_catalog::fetch::HttpFetch;
+use dumpstar_catalog::swu::{
+    KEY_OFFICIAL_CRAWLED_ON, KEY_OFFICIAL_SINCE, KEY_TCGCSV_LAST_UPDATED, OFFICIAL_BASE,
+    OfficialSource, TCGCSV_BASE, TcgcsvSource,
+};
+use dumpstar_catalog::{Catalog, CatalogSource, FakeSource, check, job};
+
+/// The pause between two calls to an upstream.
+const PAUSE: Duration = Duration::from_millis(250);
 
 #[derive(Args)]
 pub struct CatalogApplyArgs {
@@ -17,30 +30,103 @@ pub struct CatalogApplyArgs {
     #[arg(long)]
     raw_dir: Option<PathBuf>,
     /// Use the built-in hand-written fake catalog.
-    #[arg(long)]
+    #[arg(long, conflicts_with = "swu")]
     fake: bool,
+    /// Fetch the official catalog and the tcgcsv prices.
+    #[arg(long)]
+    swu: bool,
+    /// Origin of the official API (test-tier).
+    #[arg(long, default_value = OFFICIAL_BASE)]
+    official_base: String,
+    /// Origin of tcgcsv (test-tier).
+    #[arg(long, default_value = TCGCSV_BASE)]
+    tcgcsv_base: String,
 }
 
-pub fn run(args: CatalogApplyArgs) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        args.fake,
-        "only --fake is available until the SWU source adapters land"
-    );
-    let shared = match args.shared_db {
+#[derive(Args)]
+pub struct CatalogCheckArgs {
+    /// Shared catalog database path (default: ~/.dumpstar/shared.sqlite).
+    #[arg(long)]
+    shared_db: Option<PathBuf>,
+}
+
+fn shared_path(p: Option<PathBuf>) -> anyhow::Result<PathBuf> {
+    Ok(match p {
         Some(p) => p,
         None => dumpstar_db::shared_db_path()?,
-    };
-    let raw = match args.raw_dir {
-        Some(p) => p,
-        None => dumpstar_db::dumpstar_home()?.join("raw").join("swu"),
-    };
-    for r in job::run_once(&FakeSource, &raw, &shared, chrono::Utc::now())? {
+    })
+}
+
+fn run_source(
+    name: &str,
+    source: &dyn CatalogSource,
+    raw: &std::path::Path,
+    shared: &std::path::Path,
+) -> anyhow::Result<()> {
+    let reports = job::run_once(source, raw, shared, Utc::now())?;
+    if reports.is_empty() {
+        println!("{name}: nothing to fetch");
+    }
+    for r in reports {
         println!(
-            "landed {} sha256={} applied={:?}",
+            "{name}: landed {} sha256={} applied={:?}",
             r.landed.path.display(),
             r.landed.provenance.sha256,
             r.applied
         );
     }
+    Ok(())
+}
+
+pub fn run(args: CatalogApplyArgs) -> anyhow::Result<()> {
+    anyhow::ensure!(args.fake || args.swu, "choose --swu (live) or --fake");
+    let shared = shared_path(args.shared_db)?;
+    let raw = match args.raw_dir {
+        Some(p) => p,
+        None => dumpstar_db::dumpstar_home()?.join("raw").join("swu"),
+    };
+    if args.fake {
+        return run_source("fake", &FakeSource, &raw, &shared);
+    }
+    let http = HttpFetch::new(PAUSE)?;
+    let state = |key: &str| -> anyhow::Result<Option<String>> {
+        Ok(Catalog::open_writer(&shared)?.sync_state(key)?)
+    };
+    let mut failed = Vec::new();
+    let official = OfficialSource {
+        http: &http,
+        base: args.official_base,
+        since: state(KEY_OFFICIAL_SINCE)?,
+        crawled_on: state(KEY_OFFICIAL_CRAWLED_ON)?,
+        today: Utc::now().format("%Y-%m-%d").to_string(),
+    };
+    if let Err(e) = run_source("official", &official, &raw, &shared) {
+        eprintln!("official: {e:#}");
+        failed.push("official");
+    }
+    let tcgcsv = TcgcsvSource {
+        http: &http,
+        base: args.tcgcsv_base,
+        last_updated: state(KEY_TCGCSV_LAST_UPDATED)?,
+    };
+    if let Err(e) = run_source("tcgcsv", &tcgcsv, &raw, &shared) {
+        eprintln!("tcgcsv: {e:#}");
+        failed.push("tcgcsv");
+    }
+    anyhow::ensure!(failed.is_empty(), "failed: {}", failed.join(", "));
+    Ok(())
+}
+
+/// Print every open alarm and fail when there is one. A timer runs this with
+/// `OnFailure=` the alert unit, so a skipped price day, a printing one upstream
+/// lacks, or a thin price day pages.
+pub fn check(args: CatalogCheckArgs) -> anyhow::Result<()> {
+    let catalog = Catalog::open_readonly(&shared_path(args.shared_db)?)?;
+    let alarms = check::run(catalog.conn(), Utc::now())?;
+    for a in &alarms {
+        println!("ALARM {} {}: {}", a.kind, a.key, a.detail);
+    }
+    anyhow::ensure!(alarms.is_empty(), "{} catalog alarm(s)", alarms.len());
+    println!("catalog check: no alarms");
     Ok(())
 }

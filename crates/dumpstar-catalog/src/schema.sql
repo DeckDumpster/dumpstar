@@ -108,3 +108,36 @@ CREATE TABLE IF NOT EXISTS applied_payloads (
     source           TEXT NOT NULL,
     url              TEXT NOT NULL
 );
+
+-- Alarms raised by the join and the apply step. A row is an open alarm; the
+-- join's kinds are recomputed on every join and rows that no longer hold are
+-- deleted. severity 'alarm' fails `catalog-check`; 'info' is counted only.
+CREATE TABLE IF NOT EXISTS alarms (
+    kind             TEXT NOT NULL,
+    key              TEXT NOT NULL,
+    severity         TEXT NOT NULL CHECK (severity IN ('alarm', 'info')),
+    detail           TEXT NOT NULL,
+    PRIMARY KEY (kind, key)
+) WITHOUT ROWID;
+
+-- Where each upstream's incremental fetch resumes. ISO-8601 strings only; a
+-- write never moves a key backwards.
+CREATE TABLE IF NOT EXISTS sync_state (
+    key              TEXT PRIMARY KEY,
+    value            TEXT NOT NULL
+) WITHOUT ROWID;
+
+-- tcgcsv's view, stored verbatim-ish so the join can be re-run whenever either
+-- side changes. Sealed products are rows with a NULL number.
+CREATE TABLE IF NOT EXISTS tcgcsv_groups (
+    group_id         INTEGER PRIMARY KEY,
+    name             TEXT NOT NULL,
+    abbreviation     TEXT
+);
+CREATE TABLE IF NOT EXISTS tcgcsv_products (
+    product_id       INTEGER PRIMARY KEY,
+    group_id         INTEGER NOT NULL,
+    name             TEXT NOT NULL,
+    number           TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_tcgcsv_products_group ON tcgcsv_products(group_id);

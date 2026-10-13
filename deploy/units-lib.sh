@@ -95,6 +95,8 @@ DUMPSTAR_HOST_WIDE_UNIT_FILES=(
     dumpstar-refresh@.service          dumpstar-refresh@.timer
     dumpstar-derive@.service           dumpstar-derive@.timer
     dumpstar-prices@.service           dumpstar-prices@.timer
+    dumpstar-catalog-sync@.service     dumpstar-catalog-sync@.timer
+    dumpstar-catalog-check@.service    dumpstar-catalog-check@.timer
     dumpstar-value-snapshots@.service  dumpstar-value-snapshots@.timer
     dumpstar-ship@.service             dumpstar-ship@.timer
     dumpstar-backup-check@.service     dumpstar-backup-check@.timer
@@ -223,6 +225,17 @@ _dumpstar_units_install_host_wide() {
         _dumpstar_units_render "${systemd_user_dir}/dumpstar-prices@.${ext}" nostamp \
             "$repo_dir/deploy/dumpstar-prices.${ext}" \
             -e "s|{{REPO_DIR}}|${repo_dir}|g"
+    done
+
+    # --- The SWU catalog sync and its alarm check (dumpstar 7) --------------
+    # Installed for every instance, enabled for none: arming a timer that
+    # fetches from two upstreams is an operator's act on an instance.
+    for unit in catalog-sync catalog-check; do
+        for ext in service timer; do
+            _dumpstar_units_render "${systemd_user_dir}/dumpstar-${unit}@.${ext}" nostamp \
+                "$repo_dir/deploy/dumpstar-${unit}.${ext}" \
+                -e "s|{{REPO_DIR}}|${repo_dir}|g"
+        done
     done
 
     # --- The shared Nessie catalog's backup and its alarm (sp-87nj2v) -------

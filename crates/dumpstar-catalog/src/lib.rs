@@ -15,11 +15,17 @@
 
 pub mod apply;
 mod catalog;
+pub mod check;
+pub mod crosswalk;
 mod error;
+pub mod fetch;
 pub mod job;
 pub mod landing;
+pub mod official;
 pub mod record;
 pub mod source;
+pub mod swu;
+pub mod tcgcsv;
 
 pub use catalog::Catalog;
 pub use error::{CatalogError, Result};

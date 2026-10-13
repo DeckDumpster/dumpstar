@@ -10,6 +10,7 @@ name = "dumpstar"
 path = "src/main.rs"
 
 [dependencies]
+dumpstar-catalog.workspace = true
 dumpstar-core.workspace = true
 dumpstar-db.workspace = true
 dumpstar-derive.workspace = true

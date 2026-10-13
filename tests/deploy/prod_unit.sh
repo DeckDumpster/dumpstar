@@ -28,6 +28,8 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 . "$REPO_DIR/tests/lib/ports.sh"
 # shellcheck source=tests/lib/wait.sh
 . "$REPO_DIR/tests/lib/wait.sh"
+# shellcheck source=deploy/diagnostics-lib.sh
+. "$REPO_DIR/deploy/diagnostics-lib.sh"
 
 INSTANCE="${1:-produnit-$(printf '%s' "$REPO_DIR" | sha1sum | cut -c1-6)}"
 if [ "$INSTANCE" = prod ]; then
@@ -84,16 +86,13 @@ EOF
 chmod 600 "$CONF_DIR/access.env"
 
 log "1. the unit starts and serves /health on loopback"
-systemctl --user start "$SERVICE" || {
-	journalctl --user -u "$SERVICE" -n 40 --no-pager >&2 || true
-	exit 1
-}
+systemctl --user start "$SERVICE" || { dump_unit_diagnostics "$SERVICE"; exit 1; }
 health() { curl -sf -m 3 -o /dev/null "http://127.0.0.1:${APP_PORT}/health"; }
 up=down
 wait_until 60 0.25 health && up=up || true
 check "the unit serves /health on 127.0.0.1:${APP_PORT}" up "$up"
 if [ "$up" != up ]; then
-	journalctl --user -u "$SERVICE" -n 40 --no-pager >&2 || true
+	dump_unit_diagnostics "$SERVICE"
 	printf '\n=== %d passed, %d failed ===\n' "$pass" "$((fail + 1))"
 	exit 1
 fi

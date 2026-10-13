@@ -1,0 +1,98 @@
+[Unit]
+Description=Dumpstar catalog landing run (%i)
+# pd-1uem item 5: LANDING AND DERIVING ARE TWO UNITS. This is the landing half —
+# it fetches from the upstreams and puts every response in the bucket.
+# dumpstar-derive@%i is the deriving one, and since pd-lunn (item 6) it is the
+# ONLY thing that builds shared.sqlite. This unit writes no catalog table.
+#
+# Which makes the two units a PAIR rather than a choice: a box running this one
+# without dumpstar-derive@%i enabled lands every night, stays green every night,
+# and serves a catalog frozen at the day of the upgrade. deploy/refresh.sh
+# refuses to start in that state — see its header.
+#
+# {{REPO_DIR}} is sed-substituted by deploy/units-lib.sh (single-clone
+# deployment).
+# Layer 2 (dumpstar-ivq.3): push the journal tail to Pushover if a refresh
+# run fails (this is a discrete oneshot, so OnFailure fires reliably here).
+OnFailure=dumpstar-alert@%n.service
+
+[Service]
+Type=oneshot
+# DeckDumpster split this into prices / sealed / edhrec timers; Dumpstar
+# collapses them to a single `dumpstar data refresh`.
+#
+# ── IT RUNS IN ITS OWN CONTAINER, NOT THE SERVER'S (pd-kncd) ────────────────
+# This was `podman exec systemd-dumpstar-%i dumpstar data refresh` until Aug 2026,
+# and that call drops the environment: an exec'd process gets the CONTAINER's
+# env plus explicit -e flags and nothing else. So a drop-in here setting
+# `Environment=DUMPSTAR_LAND_RAW=1` — the documented way to turn landing on —
+# reached this unit and never reached the refresh, producing a green nightly
+# timer that landed nothing.
+#
+# -e would have fixed only half of it. The app container mounts the data volume
+# and nothing else, `podman exec` cannot add a mount to a running container, and
+# mounting the lake's credentials on the app container would hand the always-on
+# web server ambient write access to the lake bucket. So the job runs in its own
+# container from the same image over the same volume — the pattern
+# deploy/derive.sh and deploy/value-snapshots.sh already use.
+#
+# ── LANDING IS NOT A FLAG ANY MORE (pd-lunn) ────────────────────────────────
+# There is no --land-raw and no DUMPSTAR_LAND_RAW. The flag was the optional half
+# of a command whose other half derived the catalog; with that half deleted, a
+# run that does not land does nothing at all. ~/.config/dumpstar/lake.env is
+# therefore REQUIRED, and the wrapper refuses without it, by name, before the
+# first fetch. A drop-in that still sets DUMPSTAR_LAND_RAW=1 is inert — harmless,
+# and worth removing. See deploy/LAKE.md §4.
+# ── EXIT STATUS, AND WHY 2 STILL PAGES (pd-nons) ────────────────────────────
+#   0  every upstream was fetched and its bytes are in raw/.
+#   2  PARTIAL: the pokemontcg.io tail failed after exhausting its retries, so
+#      tonight's partition carries a set list as old as the last one that
+#      carried a whole one — but the run CONTINUED, and TCGCSV (a day's prices,
+#      which cannot be fetched later) was landed.
+#   1  the run failed.
+#
+# There is deliberately NO SuccessExitStatus=2 here, unlike
+# dumpstar-value-snapshots@.service. That job writes N tenant databases and "some
+# of them" is a normal night; its wrapper names the skipped tenants and pushes
+# its own warning, so a status systemd calls success is still reported. A tail
+# that fails every night is a catalog whose set list has silently stopped
+# advancing, and OnFailure= above is the only thing on this box that would ever
+# say so.
+#
+# That argument held, and its THRESHOLD did not. Until 2026-08-16 exit 2 reached
+# systemd verbatim, so a single upstream 502 paged: pokemontcg.io returned one on
+# 2026-08-15 and the push arrived at 06:05 about someone else's API, with nothing
+# to do but read it. Ryan had stopped reading the channel by then, which is how a
+# real outage went unnoticed the same week.
+#
+# The signal is unchanged; deploy/refresh.sh now decides WHEN it fires. It keeps
+# a .refresh-last-tail-ok marker on the data volume, swallows a partial run while
+# a recent one succeeded, and exits 2 — paging exactly as before — once the set
+# list has genuinely stopped advancing. Still no SuccessExitStatus=2: when the
+# wrapper exits 2 now, it means the stall this unit was written to catch.
+#
+# What changed with pd-nons is not how loud a bad night is. It is that the
+# night is no longer LOST: the tail used to run first and abort everything, so
+# a single 5xx on /v2/sets meant no prices were imported at all.
+#
+#
+# DUMPSTAR_HTTP_RETRY_ATTEMPTS / DUMPSTAR_HTTP_RETRY_BASE_MS (see
+# crates/dumpstar-ingest/src/retry.rs) widen the retry budget without a rebuild, for a
+# stretch of bad upstream weather. Unset is 4 attempts at 500ms doubling.
+#
+# Set them with a drop-in Environment= — deploy/refresh.sh forwards them into the
+# container. (Before pd-kncd this unit was a
+# `podman exec`, which drops the caller's environment, so a drop-in reached the systemd
+# unit and never reached the refresh. That is exactly the bug pd-kncd fixed, and it is
+# why this paragraph no longer says "put it on the exec".)
+#
+# POKEMONTCG_API_KEY is set the same way, and is forwarded the same way. It
+# raises api.pokemontcg.io's ceiling from 1,000 requests a day to 20,000.
+# A landing run spends ONE request on that API — the /v2/sets page — so an
+# ordinary night needs no key at all, and this is here for the day something
+# asks that API for more than the set list (pd-2cpx). A key that reaches the
+# wrapper and not the container is indistinguishable from no key until a run
+# starts being throttled, which is why it is forwarded rather than left to be
+# discovered.
+ExecStart=/bin/sh -c 'exec bash {{REPO_DIR}}/deploy/refresh.sh %i'
+TimeoutStartSec=1800

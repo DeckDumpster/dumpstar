@@ -1,0 +1,11 @@
+# Scenario: The search help link opens the data-driven syntax reference
+#
+# Related:
+#   issues: [dumpstar-idf.10]
+#   pull_requests: []
+
+description: >
+  Next to the Collection search bar is a "?" help link. Clicking it takes
+  me to a Search syntax page that documents the query language —
+  operators, examples, and the full keyword and is:-flag tables rendered
+  from the server's keyword registry (e.g. an "Energy type" keyword).

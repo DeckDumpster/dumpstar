@@ -1,0 +1,12 @@
+start_page: /collection
+involves:
+  - "All cards toggle [data-testid=all-cards-toggle]"
+  - "grid view [data-testid=view-grid]"
+  - "dimmed unowned grid tiles (.cardtile.missing)"
+fixture_data:
+  query: "t:water"
+notes: >
+  Navigate to /collection, ensure grid view via [data-testid=view-grid],
+  check [data-testid=all-cards-toggle] to include unowned, then type
+  "t:water". The grid shows owned Water cards plus dimmed .cardtile.missing
+  tiles for the ones not yet owned.

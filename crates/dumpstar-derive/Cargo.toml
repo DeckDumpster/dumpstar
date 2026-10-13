@@ -1,0 +1,17 @@
+[package]
+name = "dumpstar-derive"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+dumpstar-db.workspace = true
+dumpstar-ingest.workspace = true
+dumpstar-lake.workspace = true
+rusqlite.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

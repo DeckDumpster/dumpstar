@@ -3,8 +3,8 @@
 //! Every client in this crate has a `base_url()` builder already, and every
 //! one of them is documented "test-tier only" — but a builder is only reachable
 //! from a Rust test that constructs the client itself. `dumpstar data refresh`
-//! constructs its own, three of them, one of them inside `japan::import_all`,
-//! so nothing outside this crate could point a whole refresh anywhere.
+//! constructs its own, so nothing outside this crate could point a whole
+//! refresh anywhere.
 //!
 //! That gap is why `tests/refresh/tenant_bytes.sh` could not exist. The claim
 //! it makes — a catalog refresh writes the shared catalog and NOT one byte of
@@ -25,17 +25,10 @@
 /// `TcgcsvClient`'s origin. Test-tier; see the module docs.
 pub const ENV_TCGCSV_BASE_URL: &str = "DUMPSTAR_TCGCSV_BASE_URL";
 
-/// `PokemonTcgClient`'s origin. Test-tier; see the module docs.
-pub const ENV_POKEMONTCG_BASE_URL: &str = "DUMPSTAR_POKEMONTCG_BASE_URL";
-
-/// `land_bulk`'s tarball origin (`https://codeload.github.com`). Test-tier;
-/// see the module docs.
-pub const ENV_POKEMON_TCG_DATA_BASE_URL: &str = "DUMPSTAR_POKEMON_TCG_DATA_BASE_URL";
-
 /// `default`, unless `env` names somewhere else to look.
 ///
 /// A set-but-empty variable is not an origin, and taking it as one would build
-/// every request against `/3/groups` with no host. It is treated as unset.
+/// every request against `/79/groups` with no host. It is treated as unset.
 pub fn base_url(env: &str, default: &str) -> String {
     match std::env::var(env) {
         Ok(v) if !v.trim().is_empty() => {

@@ -3,8 +3,8 @@
 //! `dumpstar-db` then matches against the card catalogue. Pure: no IO.
 
 pub mod collectr;
-pub mod manabox;
 pub mod dumpstar;
+pub mod manabox;
 pub mod tcgplayer;
 
 use serde::{Deserialize, Serialize};

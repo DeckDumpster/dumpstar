@@ -20,24 +20,26 @@ cd "$(dirname "$0")/../.."
 
 # problems <workflow-file> -> prints one line per broken rule
 problems() {
-    local wf="$1"
-    grep -q -E '^[[:space:]]*concurrency:' "$wf" && echo "has a concurrency: block"
-    grep -q 'DeckDumpster/ephemeral-ci/provision@v2' "$wf" || echo "does not use provision@v2"
-    grep -q 'DeckDumpster/ephemeral-ci/teardown@v2' "$wf" || echo "does not use teardown@v2"
-    grep -q -E "spill-after-seconds: '60'" "$wf" || echo "spill-after-seconds is not '60'"
-    grep -q -E '^ +spill: +\$\{\{ inputs.force_spill' "$wf" || echo "spill: is not driven by force_spill"
+    local wf="$1" body
+    has() { [ "$(grep -c -E "$1" "$wf")" -gt 0 ]; }
+    if has '^[[:space:]]*concurrency:'; then echo "has a concurrency: block"; fi
+    has 'DeckDumpster/ephemeral-ci/provision@v2' || echo "does not use provision@v2"
+    has 'DeckDumpster/ephemeral-ci/teardown@v2' || echo "does not use teardown@v2"
+    has "spill-after-seconds: '60'" || echo "spill-after-seconds is not '60'"
+    has '^ +spill: +\$\{\{ inputs.force_spill' || echo "spill: is not driven by force_spill"
     # the teardown job must be conditional on always()
-    awk '/^  teardown:/{f=1;next} f&&/^  [a-z]/{f=0} f' "$wf" | grep -q -E '^ +if: always\(\)' \
+    body="$(awk '/^  teardown:/{f=1;next} f&&/^  [a-z]/{f=0} f' "$wf")"
+    [ "$(grep -c -E '^ +if: always\(\)' <<<"$body")" -gt 0 ] \
         || echo "teardown does not run under if: always()"
-    grep -q -E '^  gate:' "$wf" || echo "no job named gate"
-    true
+    has '^  gate:' || echo "no job named gate"
+    return 0
 }
 
 fail=0
 expect() { # expect <description> <substring-of-problem> <file>
     local out
     out="$(problems "$3")"
-    if grep -q -F "$2" <<<"$out"; then
+    if [ "$(grep -c -F "$2" <<<"$out")" -gt 0 ]; then
         echo "    ok   $1"
     else
         echo "    FAIL $1 (checker said: ${out:-nothing})"

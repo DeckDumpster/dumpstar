@@ -544,7 +544,6 @@ fn an_incomplete_partition_is_refused_rather_than_half_derived() {
     );
 }
 
-
 /// A gap in `raw/` is FATAL, and it is fatal by default.
 ///
 /// A URL is removed from the landing zone, which is what raw coverage
@@ -623,7 +622,6 @@ fn a_gap_in_raw_is_fatal_with_the_upstream_sitting_right_there() {
     );
 }
 
-
 /// A derivation that goes wrong must fail the job, not ship a smaller catalog.
 ///
 /// The induced failure is a payload that no longer hashes to what its manifest
@@ -655,7 +653,6 @@ fn a_corrupted_payload_stops_the_derive_instead_of_deriving_from_it() {
     assert!(text(&out).contains("sha256"), "{}", text(&out));
 }
 
-
 /// A date nobody landed is a refusal that names the date — never a rebuild
 /// from whatever else the lake happens to hold.
 #[test]
@@ -670,7 +667,6 @@ fn a_date_that_was_never_landed_refuses_by_name() {
     assert!(said.contains("2001-01-01"), "{said}");
     assert!(said.contains("never falls back"), "{said}");
 }
-
 
 /// The fixture `tests/lake/derive.sh` reads, built by the real client through
 /// the real landing zone.
@@ -727,7 +723,6 @@ fn the_fixture_the_container_gate_reads() {
     }
 }
 
-
 /// There is no default `--ingest-date`. Deriving an older day is the same
 /// operation as deriving today's, and a job that could read the clock would
 /// have two behaviours where it should have one.
@@ -740,7 +735,6 @@ fn the_ingest_date_has_no_default() {
     assert!(!out.status.success());
     assert!(text(&out).contains("--ingest-date"), "{}", text(&out));
 }
-
 
 // ---------------------------------------------------------------------------
 
@@ -775,7 +769,6 @@ fn find(dir: &Path, needle: &str, suffix: &str) -> PathBuf {
         .next()
         .unwrap_or_else(|| panic!("no {suffix} under a prefix matching {needle} in {dir:?}"))
 }
-
 
 /// The nightly derive gives the catalog's WAL back before it exits (pd-t50h).
 ///
@@ -833,4 +826,3 @@ fn a_derive_leaves_no_wal_behind_on_the_catalog_it_built() {
 
     drop(served);
 }
-

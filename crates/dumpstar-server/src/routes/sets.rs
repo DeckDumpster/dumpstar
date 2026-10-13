@@ -21,10 +21,7 @@ pub fn routes() -> Router<AppState> {
 }
 
 async fn list(State(state): State<AppState>) -> Result<Json<Vec<SetSummary>>, AppError> {
-    let summaries = blocking(&state, |c| {
-        sets::list_sets(c)
-    })
-    .await?;
+    let summaries = blocking(&state, |c| sets::list_sets(c)).await?;
     Ok(Json(summaries))
 }
 
@@ -83,7 +80,8 @@ async fn binder_page(
         filter: p.filter.unwrap_or_else(|| "all".into()),
     };
     let page = blocking(&state, move |c| {
-        binder::get_binder_page(c, &code, &query)?.ok_or_else(|| DbError::NotFound(format!("set {code}")))
+        binder::get_binder_page(c, &code, &query)?
+            .ok_or_else(|| DbError::NotFound(format!("set {code}")))
     })
     .await?;
     Ok(Json(page))

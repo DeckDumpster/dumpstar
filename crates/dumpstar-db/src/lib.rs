@@ -53,7 +53,7 @@ pub use connection::{
 };
 pub use error::{DbError, Result};
 pub use paths::{
-    HANDLE_RULE, TENANTS_DIR, current_user, legacy_user_db_path, dumpstar_home, registry_db_path,
+    HANDLE_RULE, TENANTS_DIR, current_user, dumpstar_home, legacy_user_db_path, registry_db_path,
     shared_db_path, tenant_db_file, tenant_db_path, tenants_dir, validate_database_id,
     validate_tenant_name,
 };

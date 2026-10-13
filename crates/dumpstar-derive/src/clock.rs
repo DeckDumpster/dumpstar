@@ -1,11 +1,9 @@
 //! The derivation's clock — one instant, passed in, never read here.
 //!
 //! Before this existed, `dumpstar data refresh` called `Utc::now()` five times
-//! on its way down: once for the `ingest_date` partition, once for the
-//! pokemontcg.io tail's `fetched_at`, twice inside the TCGCSV import (a
-//! timestamp and an `observed_date`), and twice more for the Japanese pass.
-//! Five reads of one clock in one job, and every one of them stamped a value
-//! into a row.
+//! on its way down: once for the `ingest_date` partition and again inside the
+//! TCGCSV import (a timestamp and an `observed_date`). Several reads of one
+//! clock in one job, and every one of them stamped a value into a row.
 //!
 //! That is fine while the job is the only thing producing those rows, and
 //! impossible the moment a second job has to produce the *same* rows from the

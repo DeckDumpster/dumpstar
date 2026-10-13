@@ -91,14 +91,12 @@ pub fn is_single_card(product: &TcgProduct) -> bool {
         .any(|e| e.name.eq_ignore_ascii_case("Number"))
 }
 
-
 /// Normalize a collector number so the catalog and TCGCSV agree.
 ///
-/// pokemontcg.io stores bare numbers (`"6"`, `"H1"`, `"SWSH001"`) while
-/// TCGCSV's `extendedData` "Number" carries the printed form, which for
-/// modern sets is zero-padded and suffixed with the set total
-/// (`"006/165"`, `"H01/H32"`). Linking by the raw strings matches almost
-/// nothing. Normalization drops the `/total` suffix and collapses every
+/// A catalog stores bare numbers (`"6"`, `"H1"`) while TCGCSV's
+/// `extendedData` "Number" carries the printed form, which for modern sets is
+/// zero-padded and suffixed with the set total (`"006/165"`, `"H01/H32"`).
+/// Linking by the raw strings matches almost nothing. Normalization drops the `/total` suffix and collapses every
 /// run of digits to its integer value, so both sides reduce to the same
 /// token: `"006/165"` → `"6"`, `"H01/H32"` → `"h1"`, `"SWSH001"` →
 /// `"swsh1"`. Applied identically to both sides it is order-preserving and

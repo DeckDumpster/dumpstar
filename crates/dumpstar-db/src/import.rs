@@ -964,11 +964,9 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
             )
             .unwrap();
             // Now that the mep set exists, the seed writes its alias.
-            let n = crate::set_aliases::reconcile_from(
-                &mut c,
-                crate::set_aliases::tests::TEST_SEED,
-            )
-            .unwrap();
+            let n =
+                crate::set_aliases::reconcile_from(&mut c, crate::set_aliases::tests::TEST_SEED)
+                    .unwrap();
             assert!(n >= 1, "expected the mep alias to seed once its set exists");
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();

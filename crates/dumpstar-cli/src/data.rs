@@ -127,7 +127,9 @@ fn refresh(args: RefreshCmdArgs) -> anyhow::Result<()> {
         replay: None,
     })?;
 
-    println!("Refresh complete: landed, not derived. The catalog is built by dumpstar-lake-derive.");
+    println!(
+        "Refresh complete: landed, not derived. The catalog is built by dumpstar-lake-derive."
+    );
     Ok(())
 }
 
@@ -216,7 +218,11 @@ mod raw_coverage {
         }
 
         // 2. Everything asked for was stored, compared rather than read.
-        let strip = |u: &String| u.strip_prefix(&upstream.base_url()).unwrap_or(u).to_string();
+        let strip = |u: &String| {
+            u.strip_prefix(&upstream.base_url())
+                .unwrap_or(u)
+                .to_string()
+        };
         let mut served: Vec<String> = upstream.requests().iter().map(strip).collect();
         served.sort();
         let mut stored: Vec<String> = manifests

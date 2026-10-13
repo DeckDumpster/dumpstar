@@ -1,5 +1,14 @@
 # The raw landing zone
 
+> **Provenance.** This document was written for the Pokémon site this workspace was
+> copied from. The pokemontcg.io tail, the pokemon-tcg-data bulk corpus, the Japan
+> catalog, set symbols and the "PARTIAL" (exit 2) derive described below were removed
+> with the Pokémon modules (dumpstar design row S1); the raw landing zone, the offline
+> derive and the TCGCSV landing are what remain, now for Star Wars: Unlimited
+> (TCGCSV category 79). Read the sections on those removed parts as history until the
+> catalog seam (row S6) rewrites them.
+
+
 Every byte Dumpstar fetches from an upstream can be landed in S3,
 immutably, **before anything parses it**.
 

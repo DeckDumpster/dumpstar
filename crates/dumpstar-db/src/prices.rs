@@ -242,7 +242,8 @@ mod tests {
             .unwrap();
             crate::latest_prices::refresh_latest_prices(&c).unwrap();
             // The shipped seed only lands now that the printings exist.
-            crate::catalog_prices::reconcile_from(&mut c, crate::catalog_prices::tests::TEST_SEED).unwrap();
+            crate::catalog_prices::reconcile_from(&mut c, crate::catalog_prices::tests::TEST_SEED)
+                .unwrap();
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         (dir, conn)
@@ -380,7 +381,8 @@ mod tests {
             .unwrap();
             crate::latest_prices::refresh_latest_prices(&c).unwrap();
             // The seed still carries basep-10-normal at $61 …
-            crate::catalog_prices::reconcile_from(&mut c, crate::catalog_prices::tests::TEST_SEED).unwrap();
+            crate::catalog_prices::reconcile_from(&mut c, crate::catalog_prices::tests::TEST_SEED)
+                .unwrap();
             assert!(crate::catalog_prices::has_override(&c, "basep-10-normal").unwrap());
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();

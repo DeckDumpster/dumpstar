@@ -149,7 +149,10 @@ mod tests {
                 .collect::<Vec<_>>()
         );
         assert_eq!(
-            dumpstar_keys::state::find(&world, A).unwrap().unwrap().state,
+            dumpstar_keys::state::find(&world, A)
+                .unwrap()
+                .unwrap()
+                .state,
             KeyState::Tombstoned
         );
         assert!(done.verdict.into_result().is_ok());
@@ -212,7 +215,10 @@ mod tests {
         delete(&store, &config, &world, A, None, None).unwrap();
 
         assert_eq!(
-            dumpstar_keys::state::find(&world, B).unwrap().unwrap().state,
+            dumpstar_keys::state::find(&world, B)
+                .unwrap()
+                .unwrap()
+                .state,
             KeyState::Active
         );
         assert!(dumpstar_keys::tenant_key(&world, B).is_ok());

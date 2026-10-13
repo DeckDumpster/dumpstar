@@ -257,9 +257,7 @@ mod tests {
         sink.finalize(None).unwrap();
 
         let zone = RawZone::new(Box::new(DirStore::new(tmp.path())));
-        let runs = zone
-            .runs(Source::Tcgcsv, Dataset::Prices, DATE)
-            .unwrap();
+        let runs = zone.runs(Source::Tcgcsv, Dataset::Prices, DATE).unwrap();
         let replay = RawReplay::new(
             zone,
             &[Chosen {

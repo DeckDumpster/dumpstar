@@ -743,8 +743,9 @@ fn a_backfilled_collection_ships_as_ordinary_events() {
     )
     .unwrap();
 
-    let emitted = dumpstar_db::outbox::emit(&mut conn, &dumpstar_db::outbox::Scope::Collection, false)
-        .expect("the backfill runs");
+    let emitted =
+        dumpstar_db::outbox::emit(&mut conn, &dumpstar_db::outbox::Scope::Collection, false)
+            .expect("the backfill runs");
     assert_eq!(emitted.events, 3);
 
     let report = ship(&world, &[alice], 100);

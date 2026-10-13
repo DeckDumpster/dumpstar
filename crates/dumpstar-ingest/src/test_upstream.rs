@@ -28,8 +28,8 @@ pub struct Reply {
     /// HTTP status.
     pub status: u16,
     /// Response body. Bytes rather than text because not every upstream this
-    /// stands in for serves JSON — `images.pokemontcg.io` serves PNG, and a
-    /// set symbol that arrived as lossy UTF-8 would not decode.
+    /// stands in for serves JSON — an image host serves PNG, and an image that
+    /// arrived as lossy UTF-8 would not decode.
     pub body: Vec<u8>,
     /// The `Content-Type` to send it under.
     pub content_type: &'static str,
@@ -50,8 +50,7 @@ impl Reply {
         }
     }
 
-    /// A 200 carrying PNG bytes — a set symbol, as `images.pokemontcg.io`
-    /// would answer one.
+    /// A 200 carrying PNG bytes, as an image host would answer one.
     pub fn png(body: Vec<u8>) -> Self {
         Self {
             status: 200,

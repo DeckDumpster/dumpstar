@@ -57,11 +57,7 @@ impl Dataset {
     /// one whose bytes a rebuild would silently never look for, which is the
     /// coverage regression the whole landing zone is meant to make impossible.
     /// The test below is what keeps it exhaustive.
-    pub const ALL: &'static [Dataset] = &[
-        Dataset::Groups,
-        Dataset::Products,
-        Dataset::Prices,
-    ];
+    pub const ALL: &'static [Dataset] = &[Dataset::Groups, Dataset::Products, Dataset::Prices];
 
     /// The `dataset=` partition value. On-disk layout, as with [`Source`].
     pub fn as_str(self) -> &'static str {

@@ -1,11 +1,9 @@
 //! How hard a fetch tries before it gives up.
 //!
-//! On 2026-08-11 `api.pokemontcg.io` answered 500 or 502 to roughly 45% of
-//! requests for most of a day. Neither client retried anything, so a single
-//! 5xx on `/v2/sets?page=1` ended `dumpstar data refresh` in its first second —
-//! and because the pokemontcg.io tail ran *before* TCGCSV, no prices were
-//! imported at all. A day's prices cannot be re-fetched later, so each of
-//! those nights was lost outright (pd-nons).
+//! On 2026-08-11 an upstream answered 500 or 502 to roughly 45% of requests for
+//! most of a day. The clients retried nothing, so a single 5xx ended
+//! `dumpstar data refresh` in its first second. A day's prices cannot be
+//! re-fetched later, so each of those nights was lost outright.
 //!
 //! ## This is not fallback logic
 //!

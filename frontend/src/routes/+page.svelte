@@ -33,7 +33,7 @@
 -->
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import Pokeball from '$lib/components/Pokeball.svelte';
+	import DeathStar from '$lib/components/DeathStar.svelte';
 	import { api } from '$lib/api';
 	import { money, count } from '$lib/format';
 	import { Badge, Button, EmptyState, Panel, ProgressBar, SectionHeader } from '$lib/components/ui';
@@ -168,7 +168,7 @@
 <svelte:head><title>Dumpstar</title></svelte:head>
 
 <header class="hero">
-	<span class="logo"><Pokeball size={56} /></span>
+	<span class="logo"><DeathStar size={56} /></span>
 	<div>
 		<h1>Dumpstar</h1>
 		<p class="tagline">A Pokémon TCG collection tracker.</p>

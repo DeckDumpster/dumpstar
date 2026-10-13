@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { money, count } from '$lib/format';
 	import { api } from '$lib/api';
-	import Pokeball from '$lib/components/Pokeball.svelte';
+	import DeathStar from '$lib/components/DeathStar.svelte';
 	import SealedModal from '$lib/components/SealedModal.svelte';
 	import { Badge, Button, EmptyState, Field, Panel, Toolbar } from '$lib/components/ui';
 	import type { SealedEntry } from '$lib/types/SealedEntry';
@@ -239,7 +239,7 @@
 <Toolbar class="topbar" direction="column" align="stretch" gap="sm" wrap={false} sticky>
 	<Toolbar gap="sm" wrap={false}>
 		<a class="brand" href="/" aria-label="Home" title="Home">
-			<span class="brandmark"><Pokeball size={26} /></span>
+			<span class="brandmark"><DeathStar size={26} /></span>
 		</a>
 		<div class="searchwrap">
 			<input

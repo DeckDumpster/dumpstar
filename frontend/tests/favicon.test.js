@@ -2,7 +2,7 @@
  * The browser tab is the one piece of chrome no screenshot covers.
  *
  * `static/favicon.svg` shipped as the stock SvelteKit scaffold mark for the
- * life of the project — a Svelte logo in the tab of a Pokemon collection
+ * life of the project — a Svelte logo in the tab of a collection
  * tracker — and nothing failed, because no route renders it and the token
  * gates scan `src/` only. A favicon is a static asset fetched outside the
  * document: it cannot reference a custom property, so it is deliberately out
@@ -28,12 +28,12 @@ const favicon = readFileSync(faviconPath, 'utf8');
 
 test('the favicon is the Dumpstar mark, not the scaffold logo', () => {
 	// Both fingerprints of the scaffold asset, not the word "svelte" — the file
-	// legitimately names Pokeball.svelte in a comment.
+	// legitimately names DeathStar.svelte in a comment.
 	for (const scaffold of [/svelte-logo/i, /#ff3e00/i]) {
 		assert.ok(
 			!scaffold.test(favicon),
 			'static/favicon.svg is the stock SvelteKit logo again. The tab icon is the ' +
-				'Pokeball — same geometry as src/lib/components/Pokeball.svelte.'
+				'the second Death Star — same geometry as src/lib/components/DeathStar.svelte.'
 		);
 	}
 	assert.match(

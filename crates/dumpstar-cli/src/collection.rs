@@ -12,7 +12,7 @@
 
 use std::path::PathBuf;
 
-use dumpstar_db::tenants::{Collection, Storage};
+use dumpstar_db::tenants::Collection;
 
 /// The collection database for `$DUMPSTAR_USER`, warning on stderr if this data
 /// directory has not been migrated onto opaque ids yet.
@@ -37,19 +37,4 @@ pub fn resolve() -> anyhow::Result<Collection> {
         );
     }
     Ok(collection)
-}
-
-/// How a collection was reached, for `serve`'s startup line.
-///
-/// Under opaque ids the path alone no longer says whose collection it is, and
-/// "which database did it actually open" is the first question every incident
-/// in this area has started with — so the startup line answers it.
-pub fn describe(collection: &Collection) -> String {
-    match &collection.storage {
-        Storage::Registered(user) => format!(
-            "registered as {:?} -> database {}",
-            user.handle, user.database_id
-        ),
-        Storage::Unmigrated => "named by handle, NOT YET MIGRATED".to_string(),
-    }
 }

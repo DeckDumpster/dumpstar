@@ -322,11 +322,10 @@ check "setup.sh does not" "0" \
 check "setup.sh scaffolds the knob commented out" "1" \
 	"$(grep -c '^#DUMPSTAR_STORE_ROOT=' "${REPO_DIR}/deploy/setup.sh" || true)"
 # access.env scaffold lives in config-lib.sh (db-g6ku: extracted so deploy.sh
-# can scaffold it for existing instances). Dumpstar is multi-tenant from day one,
-# so the test pins that the scaffold carries the switch exactly once, not
-# whether it is commented (the source site's opt-in default).
-check "access.env scaffold carries DUMPSTAR_MULTITENANT once" "1" \
-	"$(grep -Ec '^#?DUMPSTAR_MULTITENANT=1$' "${REPO_DIR}/deploy/config-lib.sh" || true)"
+# can scaffold it for existing instances). There is no multi-tenant switch to
+# scaffold: Access is mandatory and the server refuses to start without it.
+check "access.env scaffold carries no multi-tenant switch" "0" \
+	"$(grep -c 'DUMPSTAR_MULTITENANT' "${REPO_DIR}/deploy/config-lib.sh" || true)"
 # systemd EnvironmentFile does not strip trailing # comments from value lines,
 # so value lines must carry no inline comments.
 check "access.env scaffold has no inline comments on value lines" "0" \

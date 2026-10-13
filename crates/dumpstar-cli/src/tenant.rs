@@ -1,0 +1,643 @@
+//! `dumpstar tenant` — the operator surface over the user registry.
+//!
+//! A user is two facts joined by a row: the `handle` they are named by, and
+//! the opaque `database_id` their collection lives under. These commands are
+//! the four things an operator does to that row —
+//!
+//! ```text
+//! dumpstar tenant create <handle>            # mint an id, write the database
+//! dumpstar tenant list                       # who is registered, and where
+//! dumpstar tenant rename <from> <to>         # one column; nothing on disk moves
+//! dumpstar tenant detach <handle> --yes      # release the handle, KEEP the data
+//! dumpstar tenant purge <database-id> --yes  # destroy a detached collection
+//! ```
+//!
+//! **`remove` is now an alias for `detach`, and no longer deletes anything.**
+//! It used to unlink the database. It now releases the handle and leaves the
+//! file and its replica in place; destroying them is the separate, explicit
+//! `purge`, addressed by `database_id` so it cannot be reached by mistyping a
+//! live person's name. See `deploy/TENANTS.md`.
+//!
+//! `list` is not garnish. Once databases are named by ULID a directory
+//! listing tells you only how many collections exist — this is the only thing
+//! that says whose they are.
+//!
+//! Two migrations, each with its rollback, because a box can be at either
+//! point — see `deploy/TENANTS.md` for both runbooks:
+//!
+//! ```text
+//! dumpstar tenant adopt [name]     # $DUMPSTAR_HOME/<name>.sqlite -> tenants/
+//! dumpstar tenant revert [name]    #   ...and back
+//! dumpstar tenant migrate          # tenants/<handle>.sqlite -> tenants/<id>.sqlite
+//! dumpstar tenant unmigrate        #   ...and back
+//! ```
+//!
+//! Neither is a gate. `dumpstar serve` serves a data directory that has not been
+//! migrated exactly as it finds it and says so on startup: production runs
+//! single-tenant, and a migration the app refuses to start without is how the
+//! previous epic took it down (`pd-uoph`).
+//!
+//! `list` is also the schema-drift report: every tenant carries its own
+//! `PRAGMA user_version` and they can legitimately differ, so the listing
+//! names each one's version and where it stands relative to this build
+//! (pd-enje).
+//!
+//! Paths come from `$DUMPSTAR_HOME`, so `podman exec <ctr> dumpstar tenant …`
+//! works against a running instance the same way `dumpstar db` does.
+
+use dumpstar_db::registry;
+use dumpstar_db::schema_version::{Database, SchemaState};
+use dumpstar_db::tenants::{self, TenantSchema};
+
+/// Arguments for `dumpstar tenant`.
+#[derive(clap::Args)]
+pub struct TenantArgs {
+    #[command(subcommand)]
+    command: TenantCommand,
+}
+
+#[derive(clap::Subcommand)]
+enum TenantCommand {
+    /// Register a user and provision their collection database.
+    Create(NameArgs),
+    /// List every registered user and the database they map to.
+    List,
+    /// Rename a user. Their database, replica and history are untouched.
+    Rename(RenameArgs),
+    /// Release a handle, keeping the collection and its replica.
+    #[command(alias = "remove")]
+    Detach(DetachArgs),
+    /// Destroy a detached user's collection database. Irreversible.
+    Purge(PurgeArgs),
+    /// Move a pre-`tenants/` collection database into the tenant layout.
+    Adopt(OptionalNameArgs),
+    /// Roll `adopt` back: move the database out of `tenants/` again.
+    Revert(OptionalNameArgs),
+    /// Put handle-named collection databases onto opaque database ids.
+    Migrate(MigrateArgs),
+    /// Roll `migrate` back: name every collection by its handle again.
+    Unmigrate,
+    /// Manage verified-identity bindings for a tenant.
+    Identity(IdentityArgs),
+}
+
+#[derive(clap::Args)]
+pub struct MigrateArgs {
+    /// Report what would move and change nothing.
+    #[arg(long)]
+    dry_run: bool,
+}
+
+#[derive(clap::Args)]
+pub struct NameArgs {
+    /// Handle: `a-z`, `0-9`, `-` and `_`, starting with a letter or digit.
+    /// It names the user; it does NOT name their file.
+    handle: String,
+}
+
+#[derive(clap::Args)]
+pub struct RenameArgs {
+    /// The handle as it is now.
+    from: String,
+    /// The handle to move it to. Must be free.
+    to: String,
+}
+
+#[derive(clap::Args)]
+pub struct DetachArgs {
+    /// User to release.
+    handle: String,
+
+    /// Confirm. Without it nothing is detached.
+    #[arg(long)]
+    yes: bool,
+}
+
+#[derive(clap::Args)]
+pub struct PurgeArgs {
+    /// The `database_id` to destroy — as printed by `dumpstar tenant list`.
+    /// Not a handle: a purge is not something to reach by typo.
+    database_id: String,
+
+    /// Confirm the deletion. Without it nothing is removed.
+    #[arg(long)]
+    yes: bool,
+}
+
+#[derive(clap::Args)]
+pub struct OptionalNameArgs {
+    /// Tenant to move. Defaults to `$DUMPSTAR_USER` (else `collection`) —
+    /// the single user a pre-tenants data directory has.
+    name: Option<String>,
+}
+
+/// Arguments for `dumpstar tenant identity`.
+#[derive(clap::Args)]
+pub struct IdentityArgs {
+    #[command(subcommand)]
+    command: IdentityCommand,
+}
+
+#[derive(clap::Subcommand)]
+enum IdentityCommand {
+    /// Bind a verified identity (email address) to a tenant.
+    Add(IdentityAddArgs),
+    /// List identity bindings. With no handle, lists all bindings (the roster).
+    List(IdentityListArgs),
+    /// Remove one identity binding from a tenant.
+    Remove(IdentityRemoveArgs),
+}
+
+#[derive(clap::Args)]
+struct IdentityAddArgs {
+    /// Handle of the tenant to bind.
+    handle: String,
+    /// Email address to bind (case-insensitive; stored lowercase).
+    #[arg(long)]
+    email: String,
+    /// Identity provider subject (optional; stored for audit).
+    #[arg(long)]
+    sub: Option<String>,
+    /// Identity provider issuer URL (optional; stored for audit).
+    #[arg(long)]
+    issuer: Option<String>,
+}
+
+#[derive(clap::Args)]
+struct IdentityListArgs {
+    /// Tenant handle to list bindings for. Omit to list all bindings (the roster).
+    handle: Option<String>,
+}
+
+#[derive(clap::Args)]
+struct IdentityRemoveArgs {
+    /// Handle of the tenant to remove the binding from.
+    handle: String,
+    /// Email address to remove.
+    #[arg(long)]
+    email: String,
+}
+
+/// Execute `dumpstar tenant`.
+pub fn run(args: TenantArgs) -> anyhow::Result<()> {
+    match args.command {
+        TenantCommand::Create(a) => {
+            let t = tenants::create(&a.handle)?;
+            println!(
+                "Created user {} -> database {} at {}",
+                t.user.handle,
+                t.user.database_id,
+                t.path.display()
+            );
+        }
+        TenantCommand::List => list()?,
+        TenantCommand::Rename(a) => {
+            let t = tenants::rename(&a.from, &a.to)?;
+            println!(
+                "Renamed {} -> {}; database {} unchanged at {}",
+                a.from,
+                t.user.handle,
+                t.user.database_id,
+                t.path.display()
+            );
+        }
+        TenantCommand::Detach(a) => {
+            if !a.yes {
+                anyhow::bail!("refusing to release the handle {} without --yes", a.handle);
+            }
+            let t = tenants::detach(&a.handle)?;
+            println!(
+                "Detached {}. The handle is free; the collection was KEPT.\n\
+                 \x20 database {} at {}\n\
+                 \x20 to destroy it: dumpstar tenant purge {} --yes",
+                a.handle,
+                t.user.database_id,
+                t.path.display(),
+                t.user.database_id
+            );
+        }
+        TenantCommand::Purge(a) => {
+            if !a.yes {
+                anyhow::bail!(
+                    "refusing to destroy the collection in database {} without --yes",
+                    a.database_id
+                );
+            }
+            let user = tenants::purge(&a.database_id)?;
+            println!(
+                "Purged database {} (last held by {}). \
+                 Its S3 replica outlives it until retention expires.",
+                user.database_id, user.handle
+            );
+        }
+        TenantCommand::Adopt(a) => {
+            let name = a.name.unwrap_or_else(dumpstar_db::current_user);
+            let path = tenants::adopt(&name)?;
+            println!("Adopted tenant {name} -> {}", path.display());
+        }
+        TenantCommand::Revert(a) => {
+            let name = a.name.unwrap_or_else(dumpstar_db::current_user);
+            let path = tenants::revert(&name)?;
+            println!("Reverted tenant {name} -> {}", path.display());
+        }
+        TenantCommand::Migrate(a) => migrate(a.dry_run)?,
+        TenantCommand::Unmigrate => unmigrate()?,
+        TenantCommand::Identity(a) => identity(a)?,
+    }
+    Ok(())
+}
+
+/// `dumpstar tenant identity` — manage verified-identity bindings.
+fn identity(args: IdentityArgs) -> anyhow::Result<()> {
+    match args.command {
+        IdentityCommand::Add(a) => {
+            let conn = registry::open()?;
+            let user = registry::lookup(&conn, &a.handle)?
+                .ok_or_else(|| anyhow::anyhow!("no active tenant with handle {:?}", a.handle))?;
+            let binding = registry::identity_add(
+                &conn,
+                &user.database_id,
+                &a.email,
+                a.sub.as_deref(),
+                a.issuer.as_deref(),
+            )?;
+            println!(
+                "Bound {} to tenant {} (database {})",
+                binding.email, a.handle, binding.database_id
+            );
+        }
+        IdentityCommand::List(a) => identity_list_cmd(a)?,
+        IdentityCommand::Remove(a) => {
+            let conn = registry::open()?;
+            let user = registry::lookup(&conn, &a.handle)?
+                .ok_or_else(|| anyhow::anyhow!("no active tenant with handle {:?}", a.handle))?;
+            let removed = registry::identity_remove(&conn, &user.database_id, &a.email)?;
+            println!(
+                "Removed {} from tenant {} (database {})",
+                removed.email, a.handle, removed.database_id
+            );
+        }
+    }
+    Ok(())
+}
+
+fn identity_list_cmd(args: IdentityListArgs) -> anyhow::Result<()> {
+    let conn = registry::open()?;
+
+    let bindings: Vec<(String, registry::IdentityBinding)> = match args.handle {
+        Some(ref handle) => {
+            let user = registry::lookup(&conn, handle)?
+                .ok_or_else(|| anyhow::anyhow!("no active tenant with handle {:?}", handle))?;
+            registry::identity_list(&conn, &user.database_id)?
+                .into_iter()
+                .map(|b| (handle.clone(), b))
+                .collect()
+        }
+        None => {
+            // Roster: join bindings with user handles.
+            let users = registry::list(&conn)?;
+            let mut out = Vec::new();
+            for user in &users {
+                for b in registry::identity_list(&conn, &user.database_id)? {
+                    out.push((user.handle.clone(), b));
+                }
+            }
+            out
+        }
+    };
+
+    if bindings.is_empty() {
+        println!("No identity bindings.");
+        return Ok(());
+    }
+
+    let handle_w = bindings
+        .iter()
+        .map(|(h, _)| h.len())
+        .max()
+        .unwrap_or(0)
+        .max(6);
+    let email_w = bindings
+        .iter()
+        .map(|(_, b)| b.email.len())
+        .max()
+        .unwrap_or(0)
+        .max(5);
+    println!(
+        "{:<handle_w$}  {:<email_w$}  DATABASE ID                 ADDED",
+        "HANDLE", "EMAIL"
+    );
+    for (handle, b) in &bindings {
+        println!(
+            "{:<handle_w$}  {:<email_w$}  {}  {}",
+            handle, b.email, b.database_id, b.created_at
+        );
+    }
+    Ok(())
+}
+
+/// `dumpstar tenant migrate` — every handle-named database onto an opaque id.
+///
+/// Prints the mapping it created, because that mapping is the only thing that
+/// says which of these ULID-named files is whose, and an operator watching a
+/// migration run should not have to go and ask afterwards.
+fn migrate(dry_run: bool) -> anyhow::Result<()> {
+    let candidates = tenants::migratable()?;
+    if candidates.is_empty() {
+        println!(
+            "Nothing to migrate: no handle-named databases under {}.",
+            dumpstar_db::tenants_dir()?.display()
+        );
+        return Ok(());
+    }
+    if dry_run {
+        println!(
+            "{} database(s) under {} would be registered and renamed:",
+            candidates.len(),
+            dumpstar_db::tenants_dir()?.display()
+        );
+        for handle in candidates {
+            println!("  {handle}.sqlite  ->  <new database id>.sqlite  (handle {handle})");
+        }
+        println!("\nNothing was changed. Re-run without --dry-run to do it.");
+        return Ok(());
+    }
+
+    let moved = tenants::migrate()?;
+    println!("Migrated {} database(s):", moved.len());
+    for m in &moved {
+        println!(
+            "  {handle}  ->  database {id}\n    {from}\n    {to}",
+            handle = m.handle,
+            id = m.database_id,
+            from = m.from.display(),
+            to = m.to.display()
+        );
+    }
+    println!("{}", RENAMED_FILES_NOTE);
+    Ok(())
+}
+
+/// `dumpstar tenant unmigrate` — the rollback.
+fn unmigrate() -> anyhow::Result<()> {
+    let (moved, detached) = tenants::unmigrate()?;
+    if moved.is_empty() {
+        println!("Nothing to roll back: no registered user has a database on disk.");
+    } else {
+        println!(
+            "Rolled {} database(s) back onto their handles:",
+            moved.len()
+        );
+        for m in &moved {
+            println!(
+                "  database {id}  ->  {handle}\n    {from}\n    {to}",
+                id = m.database_id,
+                handle = m.handle,
+                from = m.from.display(),
+                to = m.to.display()
+            );
+        }
+        println!("{}", RENAMED_FILES_NOTE);
+    }
+    if !detached.is_empty() {
+        println!(
+            "\n{} detached user(s) were LEFT AS THEY ARE — a released handle is not a \
+             filename to give a database back, and a build predating the registry has \
+             no concept of them:",
+            detached.len()
+        );
+        for u in detached {
+            println!("  database {} (last held by {})", u.database_id, u.handle);
+        }
+    }
+    Ok(())
+}
+
+/// Printed after anything that renames a collection database.
+///
+/// The replica prefix is derived from the filename (`deploy/litestream.yml`
+/// runs in directory mode), so a rename starts a new prefix and leaves the old
+/// one holding every object it had. Litestream's local state for the old name
+/// is removed as part of the move — carrying it across a prefix change is what
+/// left production replicating nothing while reporting healthy (`pd-1717`) —
+/// and the one thing an operator must then do is check that the new prefix is
+/// actually advancing rather than trusting that the unit is active.
+const RENAMED_FILES_NOTE: &str = "\nBACKUPS: these files were RENAMED, so each one now replicates to a NEW S3\n\
+     prefix and starts its recovery window at this moment. The old prefixes keep\n\
+     everything they had — restore from them by URL (deploy/TENANTS.md).\n\
+     Start the sidecar and CHECK IT IS ADVANCING, not merely active:\n\
+   \x20 journalctl --user -u dumpstar-litestream-<instance> | grep 'replica sync'\n\
+     txid.replica must be non-zero and converging on txid.db (pd-1717).";
+
+/// `dumpstar tenant list` — the registry as a table, plus anything on disk the
+/// registry cannot account for.
+///
+/// The schema version is a column rather than a separate command because
+/// drift is only visible in comparison: one database per user means they can
+/// legitimately differ, and "which of my N databases are behind" is a
+/// question about the whole list (pd-enje). A user this build would refuse to
+/// OPEN is listed like any other — that row is what an operator whose server
+/// will not start is here to find.
+fn list() -> anyhow::Result<()> {
+    let tenants = tenants::versions()?;
+    let unregistered = tenants::unregistered()?;
+
+    if tenants.is_empty() {
+        println!(
+            "No users registered in {}",
+            dumpstar_db::registry_db_path()?.display()
+        );
+    } else {
+        let known = Database::User.version();
+        // Measured, not guessed: a timestamp is as long as the registry
+        // wrote it, and a detached row carries its holder's real handle.
+        let widest = |header: &str, of: &dyn Fn(&TenantSchema) -> &str| {
+            tenants
+                .iter()
+                .map(|t| of(t).len())
+                .max()
+                .unwrap_or(0)
+                .max(header.len())
+        };
+        let handle = widest("HANDLE", &|t| &t.tenant.user.handle);
+        let id = widest("DATABASE ID", &|t| &t.tenant.user.database_id);
+        let created = widest("CREATED", &|t| &t.tenant.user.created_at);
+        let state = widest("STATE", &|t| t.tenant.user.state.as_str());
+        // Measured like the rest, and for the same reason: a retirement is a
+        // timestamp as long as the one in CREATED, so a guessed width here
+        // would push SCHEMA and STATUS out of line on exactly the rows an
+        // operator is reading the table to compare.
+        let retired = widest("RETIRED", &|t| {
+            t.tenant.user.retired_at.as_deref().unwrap_or("-")
+        });
+        println!(
+            "{:<handle$}  {:<id$}  {:<created$}  {:<state$}  {:<retired$}  SCHEMA  STATUS",
+            "HANDLE", "DATABASE ID", "CREATED", "STATE", "RETIRED"
+        );
+        for t in &tenants {
+            let status = match t.state() {
+                None => "DATABASE MISSING".to_string(),
+                Some(SchemaState::Current) => "current".to_string(),
+                Some(SchemaState::Behind) => {
+                    format!("behind this build's {known} — adopted on its next open")
+                }
+                Some(SchemaState::Ahead) => {
+                    format!("ahead of this build's {known} — this build refuses to open it")
+                }
+            };
+            println!(
+                "{:<handle$}  {:<id$}  {:<created$}  {:<state$}  {:<retired$}  {:>6}  {status}",
+                t.tenant.user.handle,
+                t.tenant.user.database_id,
+                t.tenant.user.created_at,
+                t.tenant.user.state.as_str(),
+                // Two rows can share a handle now — one live, any number
+                // retired — so when each was released is what tells them
+                // apart at a glance.
+                t.tenant.user.retired_at.as_deref().unwrap_or("-"),
+                t.version.map_or_else(|| "-".to_string(), |v| v.to_string()),
+            );
+        }
+    }
+
+    if !unregistered.is_empty() {
+        println!(
+            "\n{} database(s) under {} that no registered user claims:",
+            unregistered.len(),
+            dumpstar_db::tenants_dir()?.display()
+        );
+        for stem in unregistered {
+            println!("  {stem}.sqlite");
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    /// Just enough of the command tree to parse `tenant …` argv.
+    #[derive(Parser)]
+    struct Cli {
+        #[command(subcommand)]
+        command: Only,
+    }
+
+    #[derive(clap::Subcommand)]
+    enum Only {
+        Tenant(TenantArgs),
+    }
+
+    fn parse(argv: &[&str]) -> TenantCommand {
+        let mut full = vec!["dumpstar", "tenant"];
+        full.extend_from_slice(argv);
+        let Only::Tenant(args) = Cli::parse_from(full).command;
+        args.command
+    }
+
+    /// The compatibility promise, and the trap: an operator's muscle memory
+    /// and every script that says `tenant remove <name> --yes` still parses
+    /// — and now detaches instead of deleting.
+    #[test]
+    fn remove_is_an_alias_for_detach() {
+        let TenantCommand::Detach(a) = parse(&["remove", "alice", "--yes"]) else {
+            panic!("`tenant remove` must still parse, as a detach");
+        };
+        assert_eq!(a.handle, "alice");
+        assert!(a.yes);
+
+        let TenantCommand::Detach(b) = parse(&["detach", "alice", "--yes"]) else {
+            panic!("`tenant detach` must parse");
+        };
+        assert_eq!(b.handle, "alice");
+    }
+
+    #[test]
+    fn identity_subcommands_parse() {
+        let TenantCommand::Identity(ref i) =
+            parse(&["identity", "add", "alice", "--email", "alice@example.com"])
+        else {
+            panic!("`tenant identity add` must parse");
+        };
+        let IdentityCommand::Add(ref a) = i.command else {
+            panic!("add subcommand must parse");
+        };
+        assert_eq!(a.handle, "alice");
+        assert_eq!(a.email, "alice@example.com");
+        assert_eq!(a.sub, None);
+        assert_eq!(a.issuer, None);
+
+        // with optional flags
+        let TenantCommand::Identity(ref i2) = parse(&[
+            "identity",
+            "add",
+            "bob",
+            "--email",
+            "bob@example.com",
+            "--sub",
+            "sub-123",
+            "--issuer",
+            "https://issuer.example",
+        ]) else {
+            panic!("`tenant identity add` with sub/issuer must parse");
+        };
+        let IdentityCommand::Add(ref b) = i2.command else {
+            panic!()
+        };
+        assert_eq!(b.sub.as_deref(), Some("sub-123"));
+        assert_eq!(b.issuer.as_deref(), Some("https://issuer.example"));
+
+        let TenantCommand::Identity(ref i3) = parse(&["identity", "list"]) else {
+            panic!("`tenant identity list` must parse");
+        };
+        let IdentityCommand::List(ref l) = i3.command else {
+            panic!()
+        };
+        assert!(l.handle.is_none());
+
+        let TenantCommand::Identity(ref i4) = parse(&["identity", "list", "alice"]) else {
+            panic!("`tenant identity list alice` must parse");
+        };
+        let IdentityCommand::List(ref l2) = i4.command else {
+            panic!()
+        };
+        assert_eq!(l2.handle.as_deref(), Some("alice"));
+
+        let TenantCommand::Identity(ref i5) = parse(&[
+            "identity",
+            "remove",
+            "alice",
+            "--email",
+            "alice@example.com",
+        ]) else {
+            panic!("`tenant identity remove` must parse");
+        };
+        let IdentityCommand::Remove(ref r) = i5.command else {
+            panic!()
+        };
+        assert_eq!(r.handle, "alice");
+        assert_eq!(r.email, "alice@example.com");
+    }
+
+    /// Purge takes a `database_id`, not a handle. Naming a person is how a
+    /// destructive command gets reached by typo.
+    #[test]
+    fn purge_takes_a_database_id() {
+        let TenantCommand::Purge(a) = parse(&["purge", "01J0000000000000000000000Z", "--yes"])
+        else {
+            panic!("`tenant purge` must parse");
+        };
+        assert_eq!(a.database_id, "01J0000000000000000000000Z");
+        assert!(a.yes);
+    }
+
+    #[test]
+    fn rename_takes_two_handles() {
+        let TenantCommand::Rename(a) = parse(&["rename", "alice", "alicia"]) else {
+            panic!("`tenant rename` must parse");
+        };
+        assert_eq!((a.from.as_str(), a.to.as_str()), ("alice", "alicia"));
+    }
+}

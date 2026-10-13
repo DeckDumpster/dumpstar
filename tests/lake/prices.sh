@@ -1,0 +1,572 @@
+#!/usr/bin/env bash
+# Container-tier gate (pd-1ojt): catalog.prices — and, since pd-bbv7,
+# catalog.sealed_prices beside it — are built from raw/ ALONE.
+#
+# Run by deploy/ci.sh. Standalone:
+#   bash tests/lake/prices.sh          # ~3min, full run + teardown
+#   KEEP=1 bash tests/lake/prices.sh   # leave MinIO + Nessie + WORK up
+#
+# ── WHAT THIS EXISTS TO CATCH ───────────────────────────────────────────────
+# The landing zone's whole claim is that a table can be rebuilt from the bytes
+# we kept, without asking an upstream anything. A build job that quietly
+# reaches out for one missing piece would pass every row-count check and leave
+# `raw/` decorative — and we would not find out until the day an upstream is
+# down, which is the day the lake was bought for.
+#
+# So the network is not a convention here, it is removed:
+#
+#   * the podman network is `--internal`. §2 proves it by trying to reach the
+#     internet FROM THE JOB IMAGE and requiring the attempt to fail.
+#   * the only things on that network are MinIO (the lake) and Nessie (the
+#     catalog). No upstream stand-in is ever started — the raw bytes were
+#     landed on the host, before any of this came up.
+#
+# And the numbers are checked against a second implementation rather than
+# against themselves: `crates/dumpstar-ingest/tests/prices_fixture.rs` lands the
+# raw objects through the REAL client and landing zone, and imports the SAME
+# responses into a shared.sqlite through the REAL `import_prices`. §4 compares
+# them row for row. A disagreement is a finding about one parser or the other.
+#
+# ── THE SEALED HALF (pd-bbv7) ───────────────────────────────────────────────
+# The same run also writes `catalog.sealed_prices`, and the two things worth
+# proving about it are in §5 and §5b. §5 (the verifier) compares it to
+# `shared.sealed_prices` EXACTLY, both directions — it is built to be the same
+# thing, so unlike the sealed subset of catalog.prices there is no "the lake
+# may hold more" to allow for. §5b asserts what a comparison cannot: that it
+# holds the sealed products and not the single cards, and that both tables name
+# the same raw run. The second is unfalsifiable today, because one job writes
+# both from one read — which is why it is the assertion that catches the day
+# that stops being true and the two halves of a collection start coming
+# from two nights.
+#
+# Prod-safe: its own podman network, MinIO, Nessie, temp dir and image tag.
+# Touches no dumpstar-* unit, no dumpstar-*-data volume, no real S3 bucket and no
+# tenant database — the catalog zone never holds tenant data at all, which
+# tests/lake/tenant_isolation_test.sh asserts on the tree in the lint tier
+# (pd-cgi9): catalog.prices carries no tenant-identifying column, and the module
+# that builds it opens no database.
+set -euo pipefail
+
+NESSIE_IMAGE=${NESSIE_IMAGE:-ghcr.io/projectnessie/nessie:0.104.3}
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# The MinIO images, pinned and off Docker Hub, from the one definition.
+# shellcheck source=tests/lib/minio.sh
+. "${REPO_DIR}/tests/lib/minio.sh"
+MINIO_IMAGE=${MINIO_IMAGE:-$DUMPSTAR_MINIO_IMAGE}
+MC_IMAGE=${MC_IMAGE:-$DUMPSTAR_MC_IMAGE}
+
+# shellcheck source=tests/lib/diagnostics.sh
+. "${REPO_DIR}/tests/lib/diagnostics.sh"
+# shellcheck source=tests/lib/objects.sh
+. "${REPO_DIR}/tests/lib/objects.sh"
+diag_init
+
+die() {
+	diag "!! $*"
+	exit 1
+}
+
+# shellcheck source=deploy/store-lib.sh
+. "${REPO_DIR}/deploy/store-lib.sh"
+dumpstar_store_load_config
+dumpstar_store_activate
+
+# Unique per checkout: several polecats run deploy/ci.sh at once from their own
+# worktrees, and a fixed name means one run's opening teardown kills another's.
+SUFFIX="${PDPRICES_SUFFIX:-$(printf '%s' "$REPO_DIR" | sha1sum | cut -c1-6)}"
+NET=pdprices-net-${SUFFIX}
+MINIO_CTR=pdprices-minio-${SUFFIX}
+NESSIE_CTR=pdprices-nessie-${SUFFIX}
+JOB_IMAGE=dumpstar-lake:prices-${SUFFIX}
+BUCKET=pdprices-${SUFFIX}
+AKID=pdpricestestroot
+SECRET=pdpricestestsecret123
+
+# One bucket, two prefixes that never overlap: `raw/` is the landing zone the
+# job reads, `lake/` is the warehouse Iceberg writes.
+WAREHOUSE="s3://${BUCKET}/lake"
+
+# Nothing here publishes a host port. Health checks and jobs all run as
+# containers ON the network, which is the only way to reach an --internal one
+# anyway — and it means this gate cannot pick a port (pd-r0ri).
+WORK=${WORK:-$(mktemp -d "${TMPDIR:-/tmp}/pdprices.XXXXXX")}
+FIXTURE="$WORK/fixture"
+mkdir -p "$WORK/nessie" "$WORK/minio" "$FIXTURE"
+chmod 777 "$WORK/nessie" "$WORK/minio"
+
+# The three dates the fixture lands, and what each one is for. Kept in step
+# with crates/dumpstar-ingest/tests/prices_fixture.rs.
+DATE_INCOMPLETE=2026-08-08 # only a run that died partway
+DATE_OLD=2026-08-09        # one complete run
+DATE_NEW=2026-08-10        # a complete run, then a failed retry
+ROWS_PER_DAY=11
+
+cleanup() {
+	if [ -n "${KEEP:-}" ]; then
+		echo ""
+		echo "KEEP=1 — leaving everything up:"
+		echo "  network ${NET} (internal: reach it with podman run --network ${NET})"
+		echo "  work    ${WORK}"
+		echo "  tear down: podman rm -f ${MINIO_CTR} ${NESSIE_CTR}; podman network rm ${NET}"
+		return
+	fi
+	podman rm -f "$MINIO_CTR" "$NESSIE_CTR" >/dev/null 2>&1 || true
+	podman network rm "$NET" >/dev/null 2>&1 || true
+	podman rmi -f "$JOB_IMAGE" >/dev/null 2>&1 || true
+	# Nessie writes its version store as a SUBUID the invoking user cannot
+	# unlink; a plain rm -rf leaves the whole work dir behind, every run.
+	podman unshare rm -rf "$WORK" 2>/dev/null || rm -rf "$WORK" 2>/dev/null || true
+}
+trap cleanup EXIT
+
+mc() { podman run --rm --network "$NET" -e MC_HOST_m="http://${AKID}:${SECRET}@${MINIO_CTR}:9000" -v "$FIXTURE:/fixture:ro,Z" "$MC_IMAGE" "$@"; }
+
+# A lake job. The shared.sqlite the fixture built is mounted so §5 can compare
+# the two without copying a catalog into the image. Not `:ro` — the catalog is
+# a WAL database and SQLite cannot open one through a read-only mount at all;
+# the verifier's connection is `query_only` instead. It is a throwaway fixture
+# either way.
+run_job() {
+	podman run --rm --network "$NET" \
+		-v "$FIXTURE:/fixture:Z" \
+		-e DUMPSTAR_LAKE_NESSIE_URI="http://${NESSIE_CTR}:19120/iceberg/" \
+		-e DUMPSTAR_LAKE_S3_BUCKET="$BUCKET" \
+		-e DUMPSTAR_LAKE_S3_REGION=us-west-2 \
+		-e DUMPSTAR_LAKE_S3_ENDPOINT="http://${MINIO_CTR}:9000" \
+		-e DUMPSTAR_LAKE_S3_ACCESS_KEY_ID="$AKID" \
+		-e DUMPSTAR_LAKE_S3_SECRET_ACCESS_KEY="$SECRET" \
+		-e DUMPSTAR_LAKE_S3_PATH_STYLE=1 \
+		"$JOB_IMAGE" "$@"
+}
+
+# A stable fingerprint of one day of the table: row count and a digest over
+# the sorted rows. Two builds of the same day must produce the same string.
+day_digest() {
+	run_job python -c "
+import hashlib, sys
+from pyiceberg.expressions import EqualTo
+from dumpstar_lake.catalog import catalog
+rows = catalog().load_table('catalog.prices').scan(
+    row_filter=EqualTo('observed_date', '$1')).to_arrow().to_pylist()
+keyed = sorted(
+    (r['tcgplayer_product_id'], r['sub_type_name'], r['price_type'], r['price'])
+    for r in rows)
+print(len(keyed), hashlib.sha256(repr(keyed).encode()).hexdigest()[:16])
+" | tail -1
+}
+
+echo "==> §0  Land raw and build shared.sqlite from the SAME upstream bytes"
+# Produced by the real TcgcsvClient through the real RawLanding, on the host,
+# before anything below exists. Nothing in the gate's network ever serves a
+# TCGCSV response.
+DUMPSTAR_PRICES_FIXTURE_OUT="$FIXTURE" \
+	cargo test --manifest-path "${REPO_DIR}/Cargo.toml" -p dumpstar-ingest --test prices_fixture ||
+	die "the fixture generator failed — see crates/dumpstar-ingest/tests/prices_fixture.rs"
+[ -f "$FIXTURE/shared.sqlite" ] || die "the fixture produced no shared.sqlite"
+echo "    $(find "$FIXTURE/raw-zone" -name 'part-*.zst' | wc -l) part(s), $(find "$FIXTURE/raw-zone" -name '_manifest.json' | wc -l) manifest(s)"
+
+echo "==> §1  Build the lake job image"
+podman build -t "$JOB_IMAGE" -f "${REPO_DIR}/lake/Containerfile" "${REPO_DIR}/lake" >/dev/null
+echo "    ${JOB_IMAGE}"
+
+# The same, for the sealed table this run also writes.
+sealed_day_digest() {
+	run_job python -c "
+import hashlib, sys
+from pyiceberg.expressions import EqualTo
+from dumpstar_lake.catalog import catalog
+rows = catalog().load_table('catalog.sealed_prices').scan(
+    row_filter=EqualTo('observed_date', '$1')).to_arrow().to_pylist()
+keyed = sorted((r['tcgplayer_product_id'], r['price_type'], r['price']) for r in rows)
+print(len(keyed), hashlib.sha256(repr(keyed).encode()).hexdigest()[:16])
+" | tail -1
+}
+
+echo "==> §2  An INTERNAL network: there is no upstream to call"
+podman network create --internal "$NET" >/dev/null
+# The assertion the whole bead turns on, made mechanically rather than by
+# convention. If this ever starts succeeding, the network stopped being
+# internal and every "built from raw alone" claim below is unproven.
+EGRESS=$(podman run --rm --network "$NET" "$JOB_IMAGE" python -c "
+import socket
+try:
+    socket.create_connection(('1.1.1.1', 443), timeout=5)
+    print('REACHABLE')
+except OSError:
+    print('blocked')
+")
+[ "$EGRESS" = "blocked" ] ||
+	die "the job container can reach the internet (${EGRESS}) — 'built from raw alone' would prove nothing"
+echo "    ok   egress from the job image is blocked"
+
+echo "==> §3  The lake (MinIO) and the catalog (Nessie)"
+podman run -d --name "$MINIO_CTR" --network "$NET" \
+	-e MINIO_ROOT_USER="$AKID" -e MINIO_ROOT_PASSWORD="$SECRET" \
+	-v "$WORK/minio:/data:Z" \
+	"$MINIO_IMAGE" server /data >/dev/null
+for _ in $(seq 1 30); do
+	mc ls m >/dev/null 2>&1 && break
+	sleep 1
+done
+mc ls m >/dev/null 2>&1 || die "MinIO never became reachable on ${NET}"
+mc mb "m/${BUCKET}" >/dev/null
+
+# Upload the landing zone exactly as it was landed: same keys, same bytes.
+mc mirror --quiet /fixture/raw-zone "m/${BUCKET}" >/dev/null
+RAW_LISTING="$(object_store_ls "" mc ls --recursive "m/${BUCKET}")" ||
+	die "the bucket listing could not be trusted — see above"
+RAW_OBJECTS=$(grep -c ' raw/' <<<"$RAW_LISTING" || true)
+[ "$RAW_OBJECTS" -gt 0 ] || die "nothing landed under raw/ in ${BUCKET}"
+echo "    ${RAW_OBJECTS} raw object(s) in ${BUCKET}"
+
+podman run -d --name "$NESSIE_CTR" --network "$NET" \
+	--memory=1g --memory-swap=1g \
+	-v "$WORK/nessie:/nessie:Z" \
+	-e nessie.version.store.type=ROCKSDB \
+	-e nessie.version.store.persist.rocks.database-path=/nessie/rocksdb \
+	-e nessie.version.store.persist.cache-capacity-mb=64 \
+	-e nessie.catalog.default-warehouse=lake \
+	-e nessie.catalog.warehouses.lake.location="$WAREHOUSE" \
+	-e nessie.catalog.service.s3.default-options.region=us-west-2 \
+	-e nessie.catalog.service.s3.default-options.endpoint="http://${MINIO_CTR}:9000" \
+	-e nessie.catalog.service.s3.default-options.path-style-access=true \
+	-e nessie.catalog.service.s3.default-options.access-key=urn:nessie-secret:quarkus:nessie.catalog.secrets.access-key \
+	-e nessie.catalog.secrets.access-key.name="$AKID" \
+	-e nessie.catalog.secrets.access-key.secret="$SECRET" \
+	"$NESSIE_IMAGE" >/dev/null
+
+podman run --rm --network "$NET" "$JOB_IMAGE" python -c "
+import sys, time, urllib.request
+for _ in range(90):
+    try:
+        urllib.request.urlopen('http://${NESSIE_CTR}:19120/api/v2/config', timeout=3)
+        sys.exit(0)
+    except Exception:
+        time.sleep(1)
+sys.exit(1)
+" || {
+	podman logs "$NESSIE_CTR" 2>&1 | tail -40
+	die "Nessie never answered on ${NET}"
+}
+echo "    Nessie up, warehouse ${WAREHOUSE}"
+
+echo "==> §4  Build ${DATE_OLD} from raw/, with nowhere to fetch from"
+run_job dumpstar-lake-build-prices --ingest-date "$DATE_OLD" ||
+	die "the build failed for ${DATE_OLD}"
+OLD_STATE=$(day_digest "$DATE_OLD")
+[ "${OLD_STATE%% *}" = "$ROWS_PER_DAY" ] ||
+	die "${DATE_OLD}: expected ${ROWS_PER_DAY} rows, got ${OLD_STATE%% *}"
+OLD_SEALED_STATE=$(sealed_day_digest "$DATE_OLD")
+echo "    ok   ${OLD_STATE}, sealed ${OLD_SEALED_STATE}"
+
+echo "==> §5  It matches the shared.sqlite built from the same bytes"
+run_job dumpstar-lake-verify-prices --sqlite /fixture/shared.sqlite --observed-date "$DATE_OLD" ||
+	die "catalog.prices and shared.sqlite disagree for ${DATE_OLD}"
+
+echo "==> §5b catalog.sealed_prices: the same night's bytes, and only sealed"
+# pd-bbv7. The second table the same run writes. §5 already compared it to
+# shared.sealed_prices row for row, both ways — what is left is the two claims
+# a comparison cannot make.
+#
+# One: it holds the SEALED products and no others. The fixture's group 2 is
+# sealed product (no `Number` in extendedData) and group 1 is single cards, and
+# the discriminator is read out of the landed products dataset — so a
+# classifier that had it backwards, or that classified nothing, shows up here
+# as the wrong product ids rather than as a smaller number somebody has to
+# recognise.
+SEALED_IDS=$(run_job python -c "
+from pyiceberg.expressions import EqualTo
+from dumpstar_lake.catalog import catalog
+rows = catalog().load_table('catalog.sealed_prices').scan(
+    row_filter=EqualTo('observed_date', '$DATE_OLD')).to_arrow().to_pylist()
+print(' '.join(str(i) for i in sorted({r['tcgplayer_product_id'] for r in rows})))
+" | tail -1)
+[ "$SEALED_IDS" = "201 202" ] ||
+	die "catalog.sealed_prices holds products '${SEALED_IDS}' — the sealed ones are 201 and 202, \
+and 101/102 are single cards that must never appear in it"
+echo "    ok   sealed products ${SEALED_IDS}, and no single card"
+
+# Two: the two tables came from the SAME run. Built by one job from one read,
+# so this cannot currently differ — which is exactly why it is worth asserting
+# rather than assuming. The day somebody splits the job in two, a sealed feed
+# quietly one night behind the card feed values every collection's two halves
+# at two different catalogs, and nothing else here would notice.
+RUNS=$(run_job python -c "
+from dumpstar_lake.catalog import catalog
+cat = catalog()
+for name in ('catalog.prices', 'catalog.sealed_prices'):
+    print(cat.load_table(name).current_snapshot().summary['dumpstar.raw-runs'])
+" | tail -2)
+CARD_RUNS=$(printf '%s\n' "$RUNS" | head -1)
+SEALED_RUNS=$(printf '%s\n' "$RUNS" | tail -1)
+[ -n "$CARD_RUNS" ] && [ "$CARD_RUNS" = "$SEALED_RUNS" ] ||
+	die "the two price tables name different raw runs: '${CARD_RUNS}' vs '${SEALED_RUNS}'"
+echo "    ok   both tables built from run(s) ${CARD_RUNS}"
+
+# Three: the classifier itself, over BOTH TCGplayer categories. The fixture is
+# category 3 only, and the Japanese rule (`japan.rs::is_card` — a card carries
+# `CardType`, because ~40% of vintage Japanese products carry no `Number` at
+# all) would therefore never be exercised by the data above. Applying the
+# English rule to category 85 files 450 groups of Japanese SINGLES as sealed
+# product, which is a wrong number nothing else here would notice. So the pure
+# functions are driven directly, in the shipped job image, in both directions.
+#
+# CAPTURED, not piped into `grep -q`. Under `pipefail` a `grep -q` that exits on
+# its first match SIGPIPEs the job behind it, so the pipeline reports 141 exactly
+# when the classifier PASSED — a false red that only appears once the job talks
+# enough to fill a pipe buffer. stderr is deliberately left on the console, so a
+# traceback is still read where it happens.
+CLASSIFIER_OUT="$(run_job python -c "
+from dumpstar_lake.prices import CATEGORY_POKEMON_JAPAN, category_of, is_sealed
+
+def card(**kw): return {'extendedData': [{'name': k, 'value': v} for k, v in kw.items()]}
+
+# Category 3: a Number makes it a card; nothing makes it sealed.
+assert not is_sealed(card(Number='4/102'), 3), 'an English single was called sealed'
+assert is_sealed({'extendedData': []}, 3), 'an English sealed product was called a card'
+assert is_sealed({}, 3), 'a product with no extendedData at all must be sealed'
+# Case-insensitively, the way both Rust importers compare the field name.
+assert not is_sealed(card(number='4/102'), 3), 'the field name is matched case-sensitively'
+
+# Category 85: CardType makes it a card, and a Japanese vintage card with NO
+# number must NOT be filed as sealed product.
+jp = CATEGORY_POKEMON_JAPAN
+assert not is_sealed(card(CardType='Pokemon'), jp), 'a Japanese single was called sealed'
+assert is_sealed(card(Number='001/102'), jp), 'a Japanese product without CardType is sealed'
+assert is_sealed({'extendedData': []}, jp), 'a Japanese sealed product was called a card'
+
+# And the category is READ, not assumed: the same product classifies both ways.
+vintage = card(CardType='Trainer')
+assert is_sealed(vintage, 3) and not is_sealed(vintage, jp),     'the rule does not vary by category — one of the two importers is being ignored'
+
+# The category comes off the part URL the manifest recorded.
+assert category_of('https://tcgcsv.com/tcgplayer/85/1234/products', 'k') == 85
+assert category_of('http://127.0.0.1:8080/3/1/products', 'k') == 3
+for bad in ('https://tcgcsv.com/tcgplayer/3/1/prices', 'https://x/products', 'https://x/a/b/products'):
+    try:
+        category_of(bad, 'k')
+    except Exception:
+        continue
+    raise AssertionError(f'{bad!r} was accepted as a products URL')
+print('CLASSIFIER OK')
+")" || true
+grep -q 'CLASSIFIER OK' <<<"$CLASSIFIER_OUT" ||
+	die "the sealed classifier does not follow the two Rust importers — see dumpstar_lake.prices.is_sealed"
+echo "    ok   the classifier matches is_single_card (cat 3) and japan::is_card (cat 85)"
+
+echo "==> §6  Re-running the build is idempotent"
+# Same input, same table STATE. The Nessie commit is new either way — a build
+# that ran is a fact worth recording — but the rows may not double or drift.
+run_job dumpstar-lake-build-prices --ingest-date "$DATE_OLD" >/dev/null ||
+	die "the second build failed"
+AGAIN=$(day_digest "$DATE_OLD")
+[ "$AGAIN" = "$OLD_STATE" ] ||
+	die "rebuilding ${DATE_OLD} changed it: ${OLD_STATE} -> ${AGAIN}"
+SEALED_AGAIN=$(sealed_day_digest "$DATE_OLD")
+[ "$SEALED_AGAIN" = "$OLD_SEALED_STATE" ] ||
+	die "rebuilding ${DATE_OLD} changed catalog.sealed_prices: ${OLD_SEALED_STATE} -> ${SEALED_AGAIN}"
+echo "    ok   ${AGAIN} unchanged, sealed ${SEALED_AGAIN} unchanged"
+
+echo "==> §7  A newer date lands beside it, and takes the COMPLETE run"
+# ${DATE_NEW} holds two runs: one complete, and a later retry that died with
+# different prices in it. Reading the newest run would be wrong; reading both
+# would be wronger.
+run_job dumpstar-lake-build-prices --ingest-date "$DATE_NEW" ||
+	die "the build failed for ${DATE_NEW}"
+NEW_STATE=$(day_digest "$DATE_NEW")
+[ "${NEW_STATE%% *}" = "$ROWS_PER_DAY" ] ||
+	die "${DATE_NEW}: expected ${ROWS_PER_DAY} rows, got ${NEW_STATE%% *}"
+MARKET=$(run_job python -c "
+from pyiceberg.expressions import And, EqualTo
+from dumpstar_lake.catalog import catalog
+rows = catalog().load_table('catalog.prices').scan(row_filter=And(
+    EqualTo('observed_date', '$DATE_NEW'), EqualTo('tcgplayer_product_id', 101),
+    EqualTo('price_type', 'market'), EqualTo('sub_type_name', 'Normal'),
+)).to_arrow().to_pylist()
+print(rows[0]['price'])
+" | tail -1)
+# 27.5 is the complete run's price; 34.5 is the failed retry's.
+[ "$MARKET" = "27.5" ] ||
+	die "${DATE_NEW} took the wrong run: product 101 market is ${MARKET}, expected 27.5"
+NEW_SEALED_STATE=$(sealed_day_digest "$DATE_NEW")
+[ "$NEW_SEALED_STATE" != "$OLD_SEALED_STATE" ] ||
+	die "the two days' sealed prices are identical — the fixture would prove nothing"
+echo "    ok   ${NEW_STATE}, from the complete run (101 market ${MARKET}); sealed ${NEW_SEALED_STATE}"
+
+echo "==> §8  Rebuilding the OLDER date reproduces that day, not today"
+run_job dumpstar-lake-build-prices --ingest-date "$DATE_OLD" >/dev/null ||
+	die "the older-date rebuild failed"
+[ "$(day_digest "$DATE_OLD")" = "$OLD_STATE" ] ||
+	die "rebuilding ${DATE_OLD} after ${DATE_NEW} did not reproduce it"
+[ "$(day_digest "$DATE_NEW")" = "$NEW_STATE" ] ||
+	die "rebuilding ${DATE_OLD} disturbed ${DATE_NEW} — the partition filter is wrong"
+# The sealed table is partitioned the same way and rebuilt by the same call, so
+# it has the same claim to make. A filter right on one table and wrong on the
+# other is a night's sealed prices doubled or lost with the cards intact.
+[ "$(sealed_day_digest "$DATE_OLD")" = "$OLD_SEALED_STATE" ] ||
+	die "rebuilding ${DATE_OLD} did not reproduce its sealed prices"
+[ "$(sealed_day_digest "$DATE_NEW")" = "$NEW_SEALED_STATE" ] ||
+	die "rebuilding ${DATE_OLD} disturbed ${DATE_NEW}'s sealed prices"
+echo "    ok   both days intact in both tables, each from its own ingest_date"
+
+echo "==> §9  A date with no complete run refuses, and says why"
+REFUSE_RC=0
+REFUSE_OUT=$(run_job dumpstar-lake-build-prices --ingest-date "$DATE_INCOMPLETE" 2>&1) || REFUSE_RC=$?
+[ "$REFUSE_RC" -ne 0 ] ||
+	die "a date whose only run died was built as if it were whole"
+case "$REFUSE_OUT" in
+*"no complete run"*) echo "    ok   refused, naming the runs it found" ;;
+*) die "it refused for the wrong reason: ${REFUSE_OUT}" ;;
+esac
+
+# Opting in builds it and the table has to SAY it is not a whole day.
+run_job dumpstar-lake-build-prices --ingest-date "$DATE_INCOMPLETE" --allow-incomplete >/dev/null ||
+	die "--allow-incomplete did not build"
+COMPLETE_PROP=$(run_job python -c "
+from dumpstar_lake.catalog import catalog
+t = catalog().load_table('catalog.prices')
+print(t.current_snapshot().summary['dumpstar.raw-complete'])
+" | tail -1)
+[ "$COMPLETE_PROP" = "false" ] ||
+	die "the partial day's snapshot claims dumpstar.raw-complete=${COMPLETE_PROP}"
+echo "    ok   --allow-incomplete builds it and records dumpstar.raw-complete=false"
+
+echo "==> §10 The freshness check judges the newest partition, not completeness"
+# pd-up36. A lake whose price build has quietly stopped keeps producing correct
+# arithmetic over stale prices, advancing nightly, with nothing saying the
+# numbers stopped moving. That is detected by the AGE of the newest partition
+# and by nothing else — in particular NOT by whether a day was complete, which
+# is conservative across datasets and would page on a normal flaky night
+# (pd-me6h). §9 just built an INCOMPLETE day into this table; the verdict below
+# has to be about ${DATE_NEW} regardless.
+AGE_RC=0
+AGE_OUT=$(run_job dumpstar-lake-prices-age --as-of "$DATE_NEW" --max-age-days 2 2>&1) || AGE_RC=$?
+[ "$AGE_RC" -eq 0 ] ||
+	die "the day the table was just built for read as stale (rc ${AGE_RC}): ${AGE_OUT}"
+case "$AGE_OUT" in
+*"observed_date=${DATE_NEW}"*) ;;
+*) die "the check did not judge the newest partition: ${AGE_OUT}" ;;
+esac
+case "$AGE_OUT" in
+*"incomplete"* | *"complete"*) die "the age verdict mentions completeness: ${AGE_OUT}" ;;
+esac
+echo "    ok   fresh at ${DATE_NEW}, and the incomplete day in the table changed nothing"
+
+# The boundary, from both sides. Derived from the fixture's own dates so this
+# stays true as the calendar moves past them.
+AT_LIMIT=$(date -u -d "${DATE_NEW} +2 days" +%F)
+PAST_LIMIT=$(date -u -d "${DATE_NEW} +3 days" +%F)
+run_job dumpstar-lake-prices-age --as-of "$AT_LIMIT" --max-age-days 2 >/dev/null 2>&1 ||
+	die "exactly 2 days behind read as stale at a 2-day limit"
+
+STALE_RC=0
+STALE_OUT=$(run_job dumpstar-lake-prices-age --as-of "$PAST_LIMIT" --max-age-days 2 2>&1) || STALE_RC=$?
+[ "$STALE_RC" -eq 3 ] ||
+	die "3 days behind a 2-day limit exited ${STALE_RC}, expected 3 (stale)"
+case "$STALE_OUT" in
+*STALE*) echo "    ok   2 days behind is fresh, 3 days behind is STALE and says so" ;;
+*) die "it went stale without saying so: ${STALE_OUT}" ;;
+esac
+
+echo "==> §11 A table nothing has ever built is stale, not an error"
+# The most extreme form of "prices are not arriving". It must not read as a
+# crash: a lakehouse armed and producing nothing is exactly what should page.
+NOTABLE_RC=0
+NOTABLE_OUT=$(run_job dumpstar-lake-prices-age --table catalog.nosuchprices \
+	--as-of "$DATE_NEW" 2>&1) || NOTABLE_RC=$?
+[ "$NOTABLE_RC" -eq 3 ] ||
+	die "a table that does not exist exited ${NOTABLE_RC}, expected 3 (stale)"
+case "$NOTABLE_OUT" in
+*"there is no catalog.nosuchprices"*) echo "    ok   refused as STALE, naming the table" ;;
+*) die "it did not say which table was missing: ${NOTABLE_OUT}" ;;
+esac
+
+echo "==> §12 The SHIPPED wrapper, end to end, against this lake"
+# deploy/prices.sh is what dumpstar-prices@<instance>.service runs. Everything
+# above tests the jobs; this tests the thing a timer actually invokes — build a
+# day, then judge the table, then decide which of 0/2/1 the night was.
+cat > "$WORK/lake.env" <<EOF
+DUMPSTAR_LAKE_NESSIE_URI=http://${NESSIE_CTR}:19120/iceberg/
+DUMPSTAR_LAKE_S3_BUCKET=${BUCKET}
+DUMPSTAR_LAKE_S3_REGION=us-west-2
+DUMPSTAR_LAKE_S3_ENDPOINT=http://${MINIO_CTR}:9000
+DUMPSTAR_LAKE_S3_ACCESS_KEY_ID=${AKID}
+DUMPSTAR_LAKE_S3_SECRET_ACCESS_KEY=${SECRET}
+DUMPSTAR_LAKE_S3_PATH_STYLE=1
+EOF
+
+# A window wide enough that the fixture's fixed dates stay "recent" forever;
+# §10 already pinned where the boundary is.
+FOREVER=36500
+wrapper() { # wrapper <max-age-days> [args...] — prints output, returns its status
+	local max_age="$1"
+	shift
+	# The credentials are blanked, not merely left unconfigured. (c) below
+	# provokes a real alarm on purpose, and a gate that pages an operator when
+	# it works as designed is pd-n0lf: nine real pushes overnight from drills
+	# tearing themselves down, after which nobody trusts the pager. alert.sh
+	# reads an empty token as unconfigured and refuses, which is what the
+	# wrapper's "reached nobody" path expects.
+	DUMPSTAR_LAKE_ENV="$WORK/lake.env" \
+		DUMPSTAR_ALERTS_ENV="$WORK/no-such-alerts.env" \
+		PUSHOVER_TOKEN= PUSHOVER_USER= \
+		DUMPSTAR_LAKE_NETWORK="$NET" \
+		DUMPSTAR_LAKE_JOB_IMAGE="$JOB_IMAGE" \
+		DUMPSTAR_LAKE_PRICES_MAX_AGE_DAYS="$max_age" \
+		bash "${REPO_DIR}/deploy/prices.sh" "pdprices-${SUFFIX}" "$@" 2>&1
+}
+
+# (a) The decision this bead had to make, made against a real refusal: §9 proved
+# the bare job REFUSES ${DATE_INCOMPLETE}. The nightly wrapper passes
+# --allow-incomplete, so the same day builds — and an incomplete-but-recent day
+# raises nothing at all.
+W_RC=0
+W_OUT=$(wrapper "$FOREVER" --ingest-date "$DATE_INCOMPLETE") || W_RC=$?
+[ "$W_RC" -eq 0 ] ||
+	die "the wrapper failed on the day the bare job refuses (rc ${W_RC}):
+${W_OUT}"
+case "$W_OUT" in
+*"prices: OK"*) ;;
+*) die "the wrapper did not report a clean night: ${W_OUT}" ;;
+esac
+case "$W_OUT" in
+*STALE* | *MISSED*) die "an incomplete-but-recent day raised an alarm: ${W_OUT}" ;;
+esac
+echo "    ok   an incomplete day builds and does not alarm"
+
+# (b) A night whose raw never landed. Today has no partition in this fixture, so
+# the build genuinely fails — over a table that is still recent. Not an outage:
+# tomorrow's build fills the day in, and the unit's SuccessExitStatus=2 keeps it
+# out of `failed`.
+W_RC=0
+W_OUT=$(wrapper "$FOREVER") || W_RC=$?
+[ "$W_RC" -eq 2 ] ||
+	die "a missed day over a fresh table exited ${W_RC}, expected 2:
+${W_OUT}"
+case "$W_OUT" in
+*"prices: MISSED"*) echo "    ok   a missed day over a fresh table is a warning, exit 2" ;;
+*) die "it exited 2 without saying what was missed: ${W_OUT}" ;;
+esac
+
+# (c) The alarm the bead exists for, and it fires on a night the BUILD SUCCEEDED
+# — which is the whole point of judging the table rather than the job's report
+# of itself.
+W_RC=0
+W_OUT=$(wrapper 0 --ingest-date "$DATE_NEW") || W_RC=$?
+[ "$W_RC" -eq 1 ] ||
+	die "a stale table exited ${W_RC}, expected 1:
+${W_OUT}"
+case "$W_OUT" in
+*"prices: built"*) ;;
+*) die "the build did not run before the freshness check: ${W_OUT}" ;;
+esac
+case "$W_OUT" in
+*"prices: STALE"*) echo "    ok   a stale table pages even after a clean build, exit 1" ;;
+*) die "it failed for the wrong reason: ${W_OUT}" ;;
+esac
+
+echo ""
+echo "==> tests/lake/prices.sh PASSED"

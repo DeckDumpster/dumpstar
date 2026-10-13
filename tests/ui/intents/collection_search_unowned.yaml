@@ -1,0 +1,11 @@
+# Scenario: "All cards" surfaces unowned printings as dimmed tiles
+#
+# Related:
+#   issues: [dumpstar-idf.10]
+#   pull_requests: []
+
+description: >
+  With the "All cards" toggle on, a query like "t:water" returns both the
+  Water cards I own and the ones I'm missing. The unowned printings render
+  as dimmed "missing" tiles alongside the owned ones, so I can see the gaps
+  in my collection and click one to add it.

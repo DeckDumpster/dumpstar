@@ -1,0 +1,13 @@
+start_page: /collection
+involves:
+  - "search input [data-testid=search-input]"
+  - "autocomplete dropdown [data-testid=search-autocomplete]"
+  - "keyword suggestions for a bare token; is:-flag values after a colon"
+fixture_data:
+  bare_token: "t"
+  flag_prefix: "is:"
+notes: >
+  Navigate to /collection, focus [data-testid=search-input]. Type "t" — the
+  [data-testid=search-autocomplete] dropdown appears listing keyword
+  completions including the energy-type keyword ("Energy type" hint).
+  Replace it with "is:" — the dropdown lists flag values such as "is:holo".

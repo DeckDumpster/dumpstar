@@ -1,0 +1,40 @@
+[project]
+name = "dumpstar-lake"
+version = "0.1.0"
+description = "Dumpstar offline lakehouse jobs — PyIceberg against the Nessie catalog"
+requires-python = ">=3.11"
+
+# PyIceberg only. No Spark, no JVM in our jobs (design decision 2026-08-10):
+# Nessie is the single JVM service on this box and is treated as a black box.
+dependencies = [
+    "pyiceberg[pyarrow,s3fs]==0.11.1",
+    "requests>=2.31",
+]
+
+[project.scripts]
+# The round-trip proof (pd-fzeb). Not a pipeline — it writes to its own
+# `proof` namespace and never touches a catalog table.
+dumpstar-lake-roundtrip = "dumpstar_lake.roundtrip:main"
+# Build catalog.prices — and catalog.sealed_prices beside it (pd-bbv7), from
+# the same read of the same partition — for one date from raw/ (pd-1ojt).
+# Never calls upstream.
+dumpstar-lake-build-prices = "dumpstar_lake.prices:main"
+# Check both tables against the shared.sqlite built from the same bytes.
+dumpstar-lake-verify-prices = "dumpstar_lake.verify:main"
+# Is that table still moving? (pd-up36) The nightly alarm is on the AGE of the
+# newest partition, never on one day's completeness — see the module docstring.
+dumpstar-lake-prices-age = "dumpstar_lake.freshness:main"
+# The transform tier (pd-ruwh): per-tenant value snapshots from catalog.prices,
+# for EVERY registered tenant. Reads the lake, writes each tenant's own SQLite.
+dumpstar-lake-value-snapshots = "dumpstar_lake.value_snapshots:main"
+
+# Nessie's version store made durable (sp-87nj2v): ship an export off-box, the
+# age+verify alarm, the restore drill, and the re-register fallback.
+dumpstar-lake-nessie-backup = "dumpstar_lake.nessie_backup:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

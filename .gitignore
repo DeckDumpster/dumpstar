@@ -1,0 +1,46 @@
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+
+# Rust
+/target
+**/*.rs.bk
+
+# Frontend
+/frontend/node_modules
+/frontend/.svelte-kit
+/frontend/build
+/frontend/dist
+
+# Tests
+/tests/ui/node_modules
+/tests/ui/test-results
+/tests/ui/playwright-report
+
+# Databases (catalog + user DBs are reproducible / private)
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# ...except the committed UI test fixtures (shared catalog + user
+# collection, rebuilt deterministically via `dumpstar seed-fixture`).
+!tests/ui/fixtures/shared.sqlite
+!tests/ui/fixtures/collection.sqlite
+
+# Reference clones — kept locally, not part of the project
+/_deckdumpster-src
+/_pokedex-src
+
+# Python bytecode — the lake jobs and the shell harnesses' fixture servers
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+crates/dumpstar-db/tests/.ptcg_cache.sqlite
+/screenshots/
+
+# Beads is owned by Gas Town (rig database in the town dolt server);
+# backed up via `bd dolt push` to rgantt/dumpstar-beads.git, not tracked here.
+.beads/

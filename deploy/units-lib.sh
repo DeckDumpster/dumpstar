@@ -375,7 +375,7 @@ dumpstar_units_install() {
     fi
     # PORT=0 -> ":8080" lets Podman pick a free host port.
     # prod's origin port is fixed (sp-kaj3xv): the tunnel route points at it, so it
-    # must be the same on every box and every re-creation. 8090 is pokedumpster's.
+    # must be the same on every box and every re-creation. 8090 is the other site's.
     if [ "$port" = "0" ] && [ "$instance" = prod ]; then
         port="$DUMPSTAR_PROD_PORT"
     fi

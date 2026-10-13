@@ -81,6 +81,23 @@ echo 'Star Wars: Unlimited' >"$r/README.md"
 check "a tree without them passes" 0 "$(run_gate "$r")"
 
 echo "==> §3 the real tree"
-check "this repository passes" 0 "$(cd "$REPO_DIR" && bash "$GATE" >/dev/null 2>&1 && echo 0 || echo 1)"
+# The gate's own output is shown when it fails, so CI names the offending file
+# and the banned name (law-a-failure-carries-its-own-explanation).
+gate_tree() { # gate_tree <dir> -> prints exit status, leaves output in $scratch/out
+    local rc=0
+    (cd "$1" && bash "$GATE" >"$scratch/out" 2>&1) || rc=$?
+    echo "$rc"
+}
+rc="$(gate_tree "$REPO_DIR")"
+check "this repository passes" 0 "$rc"
+if [ "$rc" != 0 ]; then sed 's/^/        /' "$scratch/out"; fi
+
+echo "==> §3b a failing tree's output names the file and the name"
+r="$scratch/named"; mkrepo "$r"
+echo "export ${OLD_ENV}_HOME=/tmp" >"$r/offender.sh"
+git -C "$r" add -A
+check "a tree with one banned name fails" 1 "$(gate_tree "$r")"
+check "…the output names the file" 1 "$(grep -c 'offender.sh' "$scratch/out")"
+check "…and the banned name" 1 "$(grep -c "'${OLD_ENV}'" "$scratch/out")"
 
 [ "$fail" = 0 ] && echo "banned names: all assertions passed" || { echo "banned names: FAILED"; exit 1; }

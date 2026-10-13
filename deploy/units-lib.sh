@@ -39,8 +39,9 @@
 DUMPSTAR_UNITS_CHANGED=()
 
 # The loopback port prod publishes the server on. Recorded in deploy/README.md; the
-# Cloudflare tunnel route (a dashboard step) targets http://127.0.0.1:8091.
-DUMPSTAR_PROD_PORT=8091
+# Cloudflare tunnel route (a dashboard step) targets it. The number lives in
+# deploy/prod-origin-port, configuration rather than a literal in a script.
+DUMPSTAR_PROD_PORT="$(tr -d '[:space:]' <"$(dirname "${BASH_SOURCE[0]}")/prod-origin-port")"
 
 # The origin health URL an installed instance serves on, read from its Quadlet unit;
 # fails if there is no unit or it does not publish on loopback.

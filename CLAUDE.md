@@ -57,6 +57,13 @@ deletes, the leftover tenant header, the ratchet that reads every `.route(` in
 `PUBLIC_API_ROUTES`, a deliberate edit), and `Cache-Control: private, no-store`
 on every `/api` response. A new test belongs in that module so the tier selects it.
 
+## Before you submit
+
+Run the CI tiers your change touches, before `work submit`:
+`testenv --suites <lint|rust|isolation|deploy|frontend|container> spira/<bead> dumpstar`
+(declared in `.spira/testenv.toml`, mirroring `deploy/ci.sh`; with no `--suites` it runs `lint` and `rust`).
+Commit first: it tests the committed branch.
+
 ## Names
 
 Nothing here may carry the identity this workspace was copied from (its

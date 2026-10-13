@@ -16,10 +16,10 @@ OnFailure=dumpstar-alert@%n.service
 [Container]
 Image=localhost/dumpstar:{{INSTANCE}}
 Environment=DUMPSTAR_HOME=/data
-# Per-instance Cloudflare Access config and multi-tenant mode flag.
-# deploy/setup.sh scaffolds this file on every setup (including CI instances),
-# so it always exists. Values default to commented-out, meaning single-tenant.
-# Values: DUMPSTAR_MULTITENANT, DUMPSTAR_ACCESS_TEAM_DOMAIN, DUMPSTAR_ACCESS_AUD,
+# Per-instance Cloudflare Access config. deploy/setup.sh scaffolds this file on
+# every setup, so it always exists. All three values are mandatory: the server
+# refuses to start without them.
+# Values: DUMPSTAR_ACCESS_TEAM_DOMAIN, DUMPSTAR_ACCESS_AUD,
 # DUMPSTAR_ACCESS_JWKS_URL. See "Configuring Access for a deployment" in
 # deploy/TENANTS.md, and deploy/setup.sh for the scaffold command.
 EnvironmentFile=%h/.config/dumpstar/{{INSTANCE}}/access.env

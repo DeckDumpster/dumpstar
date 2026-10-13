@@ -9,6 +9,7 @@
 //! dumpstar tenant list                       # who is registered, and where
 //! dumpstar tenant rename <from> <to>         # one column; nothing on disk moves
 //! dumpstar tenant detach <handle> --yes      # release the handle, KEEP the data
+//! dumpstar tenant reattach <database-id>     # restore a detached user
 //! dumpstar tenant purge <database-id> --yes  # destroy a detached collection
 //! ```
 //!
@@ -67,6 +68,8 @@ enum TenantCommand {
     /// Release a handle, keeping the collection and its replica.
     #[command(alias = "remove")]
     Detach(DetachArgs),
+    /// Restore a detached user: handle, identities and collection.
+    Reattach(ReattachArgs),
     /// Destroy a detached user's collection database. Irreversible.
     Purge(PurgeArgs),
     /// Move a pre-`tenants/` collection database into the tenant layout.
@@ -111,6 +114,13 @@ pub struct DetachArgs {
     /// Confirm. Without it nothing is detached.
     #[arg(long)]
     yes: bool,
+}
+
+#[derive(clap::Args)]
+pub struct ReattachArgs {
+    /// The `database_id` to restore — as printed by `dumpstar tenant list`.
+    /// Not a handle: a detached handle may be someone else's by now.
+    database_id: String,
 }
 
 #[derive(clap::Args)]
@@ -209,11 +219,22 @@ pub fn run(args: TenantArgs) -> anyhow::Result<()> {
             println!(
                 "Detached {}. The handle is free; the collection was KEPT.\n\
                  \x20 database {} at {}\n\
+                 \x20 to restore it: dumpstar tenant reattach {}\n\
                  \x20 to destroy it: dumpstar tenant purge {} --yes",
                 a.handle,
                 t.user.database_id,
                 t.path.display(),
+                t.user.database_id,
                 t.user.database_id
+            );
+        }
+        TenantCommand::Reattach(a) => {
+            let t = tenants::reattach(&a.database_id)?;
+            println!(
+                "Reattached {}: database {} at {} is live again, with its identity bindings.",
+                t.user.handle,
+                t.user.database_id,
+                t.path.display()
             );
         }
         TenantCommand::Purge(a) => {
@@ -631,6 +652,14 @@ mod tests {
         };
         assert_eq!(a.database_id, "01J0000000000000000000000Z");
         assert!(a.yes);
+    }
+
+    #[test]
+    fn reattach_takes_a_database_id() {
+        let TenantCommand::Reattach(a) = parse(&["reattach", "01J0000000000000000000000Z"]) else {
+            panic!("`tenant reattach` must parse");
+        };
+        assert_eq!(a.database_id, "01J0000000000000000000000Z");
     }
 
     #[test]

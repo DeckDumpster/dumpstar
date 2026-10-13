@@ -296,6 +296,19 @@ pub fn detach(handle: &str) -> Result<Tenant> {
     Tenant::of(registry::detach(&conn, handle)?)
 }
 
+/// Restore a detached user: the inverse of [`detach`]. Their handle, identity
+/// bindings and collection database come back exactly as they were left,
+/// because [`detach`] kept all three.
+///
+/// Addressed by `database_id`, as [`purge`] is, because the detached row's
+/// handle may have been taken by someone else since. Fails with a conflict
+/// naming the way out if it has.
+pub fn reattach(database_id: &str) -> Result<Tenant> {
+    tenant_db_path_for_id(database_id)?;
+    let conn = registry::open()?;
+    Tenant::of(registry::reattach(&conn, database_id)?)
+}
+
 /// Destroy a detached user's collection: the database file, its WAL
 /// sidecars, its Litestream bookkeeping directory, and the registry row.
 /// Returns the row that was purged.
@@ -898,6 +911,44 @@ mod tests {
             assert!(err.contains("still active"), "unhelpful error: {err}");
             assert!(alice.path.exists());
             assert!(exists("alice").unwrap());
+        });
+    }
+
+    #[test]
+    fn purge_refuses_a_handle() {
+        with_home(|_| {
+            let alice = create("alice").unwrap();
+            detach("alice").unwrap();
+            assert!(purge("alice").is_err());
+            assert!(alice.path.exists(), "a handle reached a purge");
+            assert!(
+                registry::find(&registry::open().unwrap(), &alice.user.database_id)
+                    .unwrap()
+                    .is_some()
+            );
+        });
+    }
+
+    #[test]
+    fn reattach_makes_a_detached_tenant_live_again_with_its_data() {
+        with_home(|_| {
+            let alice = create("alice").unwrap();
+            detach("alice").unwrap();
+            let back = reattach(&alice.user.database_id).unwrap();
+            assert_eq!(back.user.state, UserState::Active);
+            assert_eq!(back.user.handle, "alice");
+            assert_eq!(back.path, alice.path);
+            assert!(back.present);
+            assert!(exists("alice").unwrap());
+        });
+    }
+
+    #[test]
+    fn reattach_refuses_a_handle_and_a_live_user() {
+        with_home(|_| {
+            let alice = create("alice").unwrap();
+            assert!(reattach("alice").is_err());
+            assert!(reattach(&alice.user.database_id).is_err());
         });
     }
 

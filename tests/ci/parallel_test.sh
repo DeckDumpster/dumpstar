@@ -1,0 +1,584 @@
+#!/usr/bin/env bash
+# Parallel CI gate runner (pd-2nl9, item 4 of pd-6onp).
+#
+# deploy/ci-parallel.sh runs seventeen container gates two at a time (the default;
+# every case below sets DUMPSTAR_CI_JOBS explicitly). Making a
+# test suite faster is only ever worth doing if it stays exactly as capable of
+# going red, so the properties this file asserts are the ones whose failure
+# would be invisible in a green run:
+#
+#   A FAILURE IS NEVER MASKED — §2. Sequentially, the first failing gate ended
+#   the run. In parallel a failing gate finishes beside passing ones, and the
+#   danger is that its status is lost in the shuffle: the run must go red, the
+#   summary must name it, and every other gate must still have run.
+#
+#   OUTPUT SURVIVES CONCURRENCY — §3. Three gates writing to one terminal
+#   shred each other's output, and a shredded log is a gate nobody can
+#   diagnose. Each gate's output has to come out whole and contiguous.
+#
+#   THE CAP IS REAL — §1. Not "we pass a number" but: six gates, three at a
+#   time, never a fourth, and the three genuinely overlap.
+#
+#   THE DISK FLOOR TRIPS, AND IT HOLDS BEFORE IT ABORTS — §4/§5. This is a 15G
+#   box that also runs prod, and the whole reason the floor moved inside the
+#   dispatch loop is that three concurrent gates can eat what one could not.
+#   §4 puts the REAL deploy/diskcheck.sh against a floor no disk can meet and
+#   asserts the run refuses and says which gates never started. §5 proves the
+#   other branch: below the floor with a gate still running, the runner WAITS
+#   for that gate to give its space back rather than aborting a suite over a
+#   moment of pressure.
+#
+#   ci.sh STILL RUNS EVERY GATE — §6. The refactor's own failure mode: a gate
+#   that got queued nowhere runs never, and nothing else would notice. Every
+#   gate script is located in a dumpstar_par_add line, inside a real tier's
+#   guard, and the queue is run exactly once.
+#
+# Hermetic: no podman, no network, no compilation. A couple of seconds, so it
+# runs in the lint tier beside the other harness self-tests.
+#
+#   bash tests/ci/parallel_test.sh
+set -uo pipefail # NOT -e: a failed assertion must be reported, not fatal
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+LIB="${REPO_DIR}/deploy/ci-parallel.sh"
+CI_SH="${REPO_DIR}/deploy/ci.sh"
+SELECT="${REPO_DIR}/deploy/ci-select.sh"
+
+pass=0
+fail=0
+check() { # check <label> <expected> <actual>
+	if [[ "$2" == "$3" ]]; then
+		echo "  PASS  $1"
+		pass=$((pass + 1))
+	else
+		echo "  FAIL  $1"
+		echo "          expected: $2"
+		echo "          actual:   $3"
+		fail=$((fail + 1))
+	fi
+}
+log() { printf '\n=== %s ===\n' "$*"; }
+
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/pd-partest.XXXXXX")"
+trap 'rm -rf "$WORK"' EXIT
+
+# A driver script, so every case runs the real library in its own shell with
+# `set -e` on — the way deploy/ci.sh sources it — rather than in this one.
+drive() { # drive <body> ; prints the run's output, sets DRIVE_RC
+	local body="$1"
+	cat >"${WORK}/drive.sh" <<EOF
+set -euo pipefail
+. "${LIB}"
+dumpstar_par_reset
+${body}
+rc=0
+dumpstar_par_run || rc=\$?
+echo "DRIVE_RC=\${rc}"
+echo "DRIVE_FAILED=\${DUMPSTAR_PAR_FAILED:-}"
+EOF
+	bash "${WORK}/drive.sh" 2>&1
+}
+rc_of() { printf '%s\n' "$1" | sed -n 's/^DRIVE_RC=//p'; }
+failed_of() { printf '%s\n' "$1" | sed -n 's/^DRIVE_FAILED=//p'; }
+
+# The real floor gate reads the host's alerts.env, which on a configured box
+# would override the threshold these tests set. Point it at an empty file.
+: >"${WORK}/alerts.env"
+export DUMPSTAR_ALERTS_ENV="${WORK}/alerts.env"
+
+# ---------------------------------------------------------------------------
+log "1. The cap is real: six gates, three at a time, and they overlap"
+
+# Every gate stamps the interval it was alive for, so the concurrency is read
+# off the gates themselves rather than off the runner's own bookkeeping. The
+# maximum overlap across those intervals is then the answer to both halves of
+# the question — never above the cap, and actually reaching it.
+#
+# Milliseconds, not nanoseconds: `sort -n` and awk carry ~19 significant
+# digits, which is exactly where a nanosecond epoch sits, and an overlap count
+# computed from silently-rounded keys would be a test that lies.
+#
+# AND THAT IS NOT WHAT `date +%s%3N` GIVES YOU EVERYWHERE. GNU coreutils
+# honours the `%3N` width modifier; uutils coreutils — the Rust
+# reimplementation Ubuntu now ships — IGNORES it and emits all nine nanosecond
+# digits. So this file asked for milliseconds, silently got a 19-digit
+# nanosecond epoch, and became exactly the test its own comment warned about:
+#
+#     s1.start  1789492777279655533
+#     s3.end      17894927785822126     <- rounded through a double
+#
+# A rounded `end` sorts to the front of the event stream, the running count
+# goes negative, and the maximum overlap reads 0 for a run in which three gates
+# demonstrably executed. On the old runner GNU date made `%3N` work and this
+# never fired; on the ephemeral VM's image it fires perhaps a third of the time
+# and reports a different wrong number each way (0, 2, 4).
+#
+# Integer division in the shell instead, which is exact on any date: bash
+# arithmetic is 64-bit and a nanosecond epoch is ~1.8e18, comfortably inside it.
+#
+# THE RUNNER ITSELF WAS NEVER AT FAULT. Probed separately with atomic mkdir
+# slots and no clock at all, peak concurrency is exactly 1 at cap 1 and exactly
+# 3 at cap 3 over 15 iterations each. Only the measurement was broken.
+now_ms() { echo $(( $(date +%s%N) / 1000000 )); }
+STAMPS="${WORK}/stamps"
+# A gate: stamp, wait until three gates have started, hold for a beat, stamp.
+# The hold is what makes the overlap measurable — without it a gate can be gone
+# before the next is dispatched, and six uncapped gates would look like three.
+# The barrier is what makes it deterministic rather than a race with `sleep`.
+cat >"${WORK}/gate.sh" <<EOF
+now_ms() { echo \$(( \$(date +%s%N) / 1000000 )); }
+L="\$1"
+now_ms > "${STAMPS}/\$L.start"
+n=0
+for _ in \$(seq 1 60); do
+	n=\$(find "${STAMPS}" -name "*.start" | wc -l)
+	[ "\$n" -ge 3 ] && break
+	sleep 0.05
+done
+[ "\$n" -ge 3 ] || { echo "barrier never reached (\$n started)"; exit 1; }
+sleep 0.4
+now_ms > "${STAMPS}/\$L.end"
+EOF
+
+# Max overlap across every recorded interval.
+overlap() {
+	local f l
+	for f in "$STAMPS"/*.start; do
+		l="$(basename "$f" .start)"
+		[ -f "${STAMPS}/${l}.end" ] || continue
+		echo "$(cat "$f") 1"
+		echo "$(cat "${STAMPS}/${l}.end") -1"
+		# -1 before +1 at the same millisecond: an interval that ENDS as
+		# another begins is not an overlap, and counting it as one would
+		# manufacture concurrency the runner never allowed.
+	done | sort -n -k1 -k2 | awk '{n+=$2; if (n>m) m=n} END {print m+0}'
+}
+
+rm -rf "$STAMPS"
+mkdir -p "$STAMPS"
+body=""
+for g in g1 g2 g3 g4 g5 g6; do
+	body+="dumpstar_par_add ${g} bash ${WORK}/gate.sh ${g}"$'\n'
+done
+out="$(DUMPSTAR_CI_JOBS=3 drive "$body")"
+check "six gates at cap 3 all pass" "0" "$(rc_of "$out")"
+check "all six gates ran" "6" "$(find "$STAMPS" -name '*.end' | wc -l)"
+check "three ran at once, and never a fourth" "3" "$(overlap)"
+
+# The cap is honoured downwards too — 1 is a serial run, which is the first
+# thing to reach for when a parallel run misbehaves. Plain gates here: at a cap
+# of 1 the barrier above could never be met, and a deadlock is not what is
+# being asserted.
+rm -rf "$STAMPS"
+mkdir -p "$STAMPS"
+body=""
+for g in s1 s2 s3; do
+	body+="dumpstar_par_add ${g} bash -c 'echo \$(( \$(date +%s%N) / 1000000 )) > ${STAMPS}/${g}.start; sleep 0.2; echo \$(( \$(date +%s%N) / 1000000 )) > ${STAMPS}/${g}.end'"$'\n'
+done
+out="$(DUMPSTAR_CI_JOBS=1 drive "$body")"
+check "at cap 1 every gate still runs" "0" "$(rc_of "$out")"
+check "at cap 1 nothing overlaps — it is a serial run" "1" "$(overlap)"
+
+# ---------------------------------------------------------------------------
+log "2. A failing gate is never masked by the ones beside it"
+
+RAN="${WORK}/ran"
+mkdir -p "$RAN"
+body=""
+for g in ok-one ok-two ok-three; do
+	body+="dumpstar_par_add ${g} bash -c 'touch ${RAN}/${g}; exit 0'"$'\n'
+done
+body+="dumpstar_par_add bad-one bash -c 'touch ${RAN}/bad-one; echo the-real-reason; exit 7'"$'\n'
+for g in ok-four ok-five; do
+	body+="dumpstar_par_add ${g} bash -c 'touch ${RAN}/${g}; exit 0'"$'\n'
+done
+out="$(DUMPSTAR_CI_JOBS=3 drive "$body")"
+
+check "one failure among five passes makes the run red" "1" "$(rc_of "$out")"
+check "the failure is named" "bad-one" "$(failed_of "$out")"
+check "the summary marks it FAIL" "1" \
+	"$(printf '%s\n' "$out" | grep -cE '^ +FAIL +bad-one')"
+check "and the log says FAILED with the name" "1" \
+	"$(printf '%s\n' "$out" | grep -c 'FAILED: bad-one')"
+# The other half: a failure must not cancel its neighbours either.
+check "every other gate still ran" "6" "$(find "$RAN" -type f | wc -l)"
+check "the passing gates are still marked ok" "5" \
+	"$(printf '%s\n' "$out" | grep -cE '^ +ok +ok-')"
+# The gate's own words survive, not just its status.
+check "the failing gate's output is printed" "1" \
+	"$(printf '%s\n' "$out" | grep -c 'the-real-reason')"
+check "its exit status is reported, not flattened to 1" "1" \
+	"$(printf '%s\n' "$out" | grep -c 'bad-one: FAIL (.*exit 7)')"
+
+# TWO failures: neither may hide the other. Sequentially only the first was
+# ever reported; that is the behaviour change worth pinning down.
+body="dumpstar_par_add bad-a bash -c 'exit 1'"$'\n'"dumpstar_par_add bad-b bash -c 'exit 1'"$'\n'
+body+="dumpstar_par_add fine bash -c 'exit 0'"$'\n'
+out="$(DUMPSTAR_CI_JOBS=3 drive "$body")"
+check "two failures are both reported" "bad-a bad-b" \
+	"$(failed_of "$out" | tr ' ' '\n' | sort | tr '\n' ' ' | sed 's/ $//')"
+
+# ---------------------------------------------------------------------------
+log "3. Output comes out whole and contiguous, never interleaved"
+
+# Each gate prints a numbered block with a per-gate marker, sleeping between
+# lines so that unbuffered concurrent writes WOULD interleave.
+body=""
+for g in a b c; do
+	body+="dumpstar_par_add gate-${g} bash -c 'for i in 1 2 3 4 5; do echo \"${g}-line-\$i\"; sleep 0.05; done'"$'\n'
+done
+out="$(DUMPSTAR_CI_JOBS=3 drive "$body")"
+check "all three gates pass" "0" "$(rc_of "$out")"
+for g in a b c; do
+	# Every line present...
+	check "gate-${g}: all five lines present" "5" \
+		"$(printf '%s\n' "$out" | grep -c "^${g}-line-")"
+	# ...and contiguous: the five lines occupy five consecutive positions.
+	span="$(printf '%s\n' "$out" | grep -n "^${g}-line-" | cut -d: -f1 |
+		awk 'NR==1{f=$1} {l=$1} END {print l-f+1}')"
+	check "gate-${g}: its lines are contiguous, nothing wedged between" "5" "$span"
+	# ...and in order.
+	check "gate-${g}: in order" "1" \
+		"$(printf '%s\n' "$out" | grep "^${g}-line-" | sort -c 2>/dev/null && echo 1 || echo 0)"
+done
+
+# ---------------------------------------------------------------------------
+log "4. The disk floor TRIPS — the real guard, against an impossible floor"
+
+# deploy/diskcheck.sh --floor, unmodified, with a threshold no filesystem can
+# meet. Nothing is mocked here: this is the guard that runs in CI, refusing.
+RAN2="${WORK}/ran2"
+mkdir -p "$RAN2"
+body=""
+for g in one two three; do
+	body+="dumpstar_par_add ${g} bash -c 'touch ${RAN2}/${g}'"$'\n'
+done
+out="$(DUMPSTAR_DISK_FLOOR_GB=999999999 DUMPSTAR_CI_JOBS=3 drive "$body")"
+check "below the floor with nothing running, the run is red" "1" "$(rc_of "$out")"
+check "and NOTHING was dispatched — the disk is not filled to find out" "0" \
+	"$(find "$RAN2" -type f | wc -l)"
+check "the refusal names the floor" "1" \
+	"$(printf '%s\n' "$out" | grep -c 'below the disk floor')"
+check "the refusal lists every gate that never started" "3" \
+	"$(printf '%s\n' "$out" | sed -n '/never started/,$p' | grep -cE '^ +(one|two|three)$')"
+# The floor is the one in deploy/diskcheck.sh, so its own diagnosis comes too.
+check "the guard's own message is shown, not swallowed" "1" \
+	"$(printf '%s\n' "$out" | grep -c 'floor 999999999G')"
+
+# ---------------------------------------------------------------------------
+log "4b. The floor measures the TEMP filesystem, not only \$HOME and the store"
+
+# pd-20ia. Every gate's work directory, the source trees the isolation guards
+# copy, and the per-gate output ci-parallel.sh buffers all land under TMPDIR —
+# 47 mktemp sites across deploy/ and tests/. Where /tmp is its own mount that is
+# a third disk, and neither of the two the floor used to name can see it: on the
+# deployment box the check reported `/ has 40G free — ok` with 818M left on
+# /tmp, which is below the free space that produced pd-fite's bus error.
+#
+# The claim is device coverage, not a contrived shortage: a filesystem cannot be
+# made short on cue without root, so the temp mount is required to APPEAR in the
+# guard's own accounting — green (measured and ok) and red (named in the
+# refusal). Both arms bite on a box where /tmp is a separate mount, which is the
+# box CI runs on and the one this bug was found on. Where /tmp shares a device
+# with $HOME they still pass, but they are unfalsifiable there rather than
+# strong — and that is not a hole, it is the fact: on a single-disk box the
+# third arm IS the first one. Said out loud rather than rounded off. What is
+# deterministic everywhere is the dedup below, and §7's wiring assertions.
+FLOOR="${REPO_DIR}/deploy/diskcheck.sh"
+TMP_MOUNT="$(df --output=target "${TMPDIR:-/tmp}" | tail -n1)"
+
+out="$(DUMPSTAR_DISK_FLOOR_GB=0 bash "$FLOOR" --floor "$HOME" "${TMPDIR:-/tmp}" 2>&1)"
+check "above the floor, the temp mount is measured and named" "1" \
+	"$(printf '%s\n' "$out" | grep -cF "diskcheck: ${TMP_MOUNT} has")"
+
+out="$(DUMPSTAR_DISK_FLOOR_GB=999999999 bash "$FLOOR" --floor "$HOME" "${TMPDIR:-/tmp}" 2>&1)"
+check "below it, the refusal names the temp mount" "1" \
+	"$(printf '%s\n' "$out" | grep -cF "free on ${TMP_MOUNT} (floor")"
+
+# The dedup is what keeps the third arm free. Three aliases of one directory are
+# one filesystem and must be reported once, or a single-disk box would read
+# three identical lines and learn nothing from any of them.
+out="$(DUMPSTAR_DISK_FLOOR_GB=0 bash "$FLOOR" --floor "$HOME" "$HOME/." "$HOME" 2>&1)"
+check "paths sharing a device are reported once, not once each" "1" \
+	"$(printf '%s\n' "$out" | grep -c '^diskcheck: ')"
+
+# ---------------------------------------------------------------------------
+log "4c. ...and the disk the COMPILE writes to, relocated or not"
+
+# pd-6jyd. pd-fite — the incident the whole floor exists to prevent — was a
+# cargo LINK dying with `ld terminated with signal 7 [Bus error]`, and a cargo
+# link writes into CARGO_TARGET_DIR. A relocated target dir is precisely the
+# configuration the first three arms cannot see, so it gets its own arm.
+#
+# CI no longer relocates it: each run gets its own VM, so there is no prod
+# volume on the box to keep the compile's writes off. The property still
+# matters — a developer relocating theirs, and a future template that bakes a
+# warm target dir somewhere other than $HOME, both land here.
+#
+# Two claims, and both are deterministic on any box:
+#
+#   1. A relocated target dir is measured on ITS OWN device, not on $HOME's.
+#      The relocation is real here rather than mocked: the fixture directory is
+#      made under TMPDIR, so where /tmp is its own mount this is the ci.yml
+#      shape exactly, and where it is not the arm still proves the path is
+#      measured rather than skipped.
+#   2. A target dir that does not exist YET is still measured, via the nearest
+#      existing ancestor. That is what makes the arm free on a box that has
+#      relocated nothing — the same argument the TMPDIR arm was added on — and
+#      it is not free if the check silently drops an absent path instead.
+TARGET_FIXTURE="${WORK}/relocated-cargo-target"
+mkdir -p "$TARGET_FIXTURE"
+TARGET_MOUNT="$(df --output=target "$TARGET_FIXTURE" | tail -n1)"
+
+out="$(DUMPSTAR_DISK_FLOOR_GB=0 bash "$FLOOR" --floor "$HOME" "$TARGET_FIXTURE" 2>&1)"
+check "a relocated cargo target dir is measured and named" "1" \
+	"$(printf '%s\n' "$out" | grep -cF "diskcheck: ${TARGET_MOUNT} has")"
+
+out="$(DUMPSTAR_DISK_FLOOR_GB=999999999 bash "$FLOOR" --floor "$HOME" "$TARGET_FIXTURE" 2>&1)"
+check "below the floor, the refusal names it" "1" \
+	"$(printf '%s\n' "$out" | grep -cF "free on ${TARGET_MOUNT} (floor")"
+
+# The unset case: "${CARGO_TARGET_DIR:-${REPO_DIR}/target}" on a checkout that
+# has never been built names a directory that is not there. It must still
+# measure the checkout's filesystem — a developer or a polecat running
+# deploy/ci.sh from a worktree compiles onto exactly that disk.
+ABSENT_TARGET="${WORK}/never-built-checkout/target"
+REPO_MOUNT="$(df --output=target "${WORK}" | tail -n1)"
+check "the fixture for the absent case really is absent" "no" \
+	"$([ -e "$ABSENT_TARGET" ] && echo yes || echo no)"
+out="$(DUMPSTAR_DISK_FLOOR_GB=0 bash "$FLOOR" --floor "$ABSENT_TARGET" 2>&1)"
+check "a target dir that does not exist yet is measured, not skipped" "1" \
+	"$(printf '%s\n' "$out" | grep -cF "diskcheck: ${REPO_MOUNT} has")"
+
+# ---------------------------------------------------------------------------
+log "5. Below the floor with a gate running, it HOLDS instead of aborting"
+
+# A real disk cannot be made to cross a threshold on cue, and the branch worth
+# proving is the one that waits. So the gate itself is stubbed — the SAME
+# interface deploy/diskcheck.sh presents — and it answers "no room" from its
+# second call until a running gate has finished and released.
+cat >"${WORK}/floor-stub.sh" <<EOF
+#!/usr/bin/env bash
+# Stands in for deploy/diskcheck.sh --floor. Says yes once (so the first gate
+# gets dispatched), then no until \$RELEASE exists — which the first gate
+# creates as it finishes, standing in for a teardown returning its space.
+N="\$(cat "${WORK}/floor.n" 2>/dev/null || echo 0)"
+N=\$((N + 1)); echo "\$N" > "${WORK}/floor.n"
+[ "\$N" -le 1 ] && exit 0
+[ -e "${WORK}/released" ] && exit 0
+: > "${WORK}/denied"
+echo "stub: below the floor" >&2
+exit 1
+EOF
+: >"${WORK}/floor.n"
+rm -f "${WORK}/released" "${WORK}/denied"
+RAN3="${WORK}/ran3"
+mkdir -p "$RAN3"
+
+body="dumpstar_par_add first bash -c 'touch ${RAN3}/first; for _ in \$(seq 600); do [ -e ${WORK}/denied ] && break; sleep 0.05; done; touch ${WORK}/released'"$'\n'
+body+="dumpstar_par_add second bash -c 'touch ${RAN3}/second'"$'\n'
+body+="dumpstar_par_add third bash -c 'touch ${RAN3}/third'"$'\n'
+out="$(DUMPSTAR_PAR_DISKCHECK="${WORK}/floor-stub.sh" DUMPSTAR_CI_JOBS=3 drive "$body")"
+
+check "the run finishes green — pressure is not a failure" "0" "$(rc_of "$out")"
+check "every gate ran, none abandoned" "3" "$(find "$RAN3" -type f | wc -l)"
+check "the hold is announced, naming the gate held" "1" \
+	"$(printf '%s\n' "$out" | grep -c '\[hold\]  second')"
+check "and counted in the summary" "1" \
+	"$(printf '%s\n' "$out" | grep -c 'held by the disk floor')"
+
+# ---------------------------------------------------------------------------
+log "5b. A background job the CALLER started is not mistaken for a gate"
+
+# Found live, not by reading: a verification harness kept a background job of
+# its own alongside the wave, and the moment that job exited the whole run died
+# with `_PAR_LABEL_OF[$pid]: unbound variable`, mid-wave, leaving two gates
+# running with nothing left to reap them.
+#
+# The cause is that `wait -n` waits on ANY child of the shell, not on the
+# children this runner started. deploy/ci.sh has no background job today, so
+# nothing in CI hits it — but "this library owns every child of your shell" is
+# an unwritten precondition nobody would think to check before adding a `&`,
+# and the way it fails is a crash in a cleanup path rather than a clear error.
+# So the wait is restricted to the gate pids, and this is what says so.
+RAN5B="${WORK}/ran5b"
+mkdir -p "$RAN5B"
+# The stray exits while the gates are still going, so it is reapable during the
+# wave — which is exactly when the old code picked it up and died.
+body="( sleep 0.05 ) &"$'\n'
+for g in b1 b2 b3; do
+	body+="dumpstar_par_add ${g} bash -c 'sleep 0.3; touch ${RAN5B}/${g}'"$'\n'
+done
+out="$(DUMPSTAR_CI_JOBS=3 drive "$body")"
+check "the caller's own background job does not disturb the wave" "0" "$(rc_of "$out")"
+check "every gate still ran" "3" "$(find "$RAN5B" -type f | wc -l)"
+check "and nothing was harvested that was not a gate" "0" \
+	"$(printf '%s\n' "$out" | grep -c 'unbound variable')"
+
+# ---------------------------------------------------------------------------
+log "6. Degenerate inputs and the cap's own bounds"
+
+out="$(drive "")"
+check "an empty queue is a no-op, not a failure" "0" "$(rc_of "$out")"
+check "and it says so" "1" "$(printf '%s\n' "$out" | grep -c 'no gates queued')"
+
+# A label becomes a filename and a column in the summary; anything else is a
+# caller bug, refused at the point of the mistake.
+bash -c ". '${LIB}'; dumpstar_par_reset; dumpstar_par_add 'Bad Label' true" >/dev/null 2>&1
+check "a label that is not [a-z0-9-] is refused" "2" "$?"
+bash -c ". '${LIB}'; dumpstar_par_reset; dumpstar_par_add ok-label" >/dev/null 2>&1
+check "a gate with no command is refused" "2" "$?"
+
+body="dumpstar_par_add solo bash -c 'exit 0'"$'\n'
+check "a non-numeric cap is refused" "1" "$(rc_of "$(DUMPSTAR_CI_JOBS=lots drive "$body")")"
+check "a cap of zero is refused" "1" "$(rc_of "$(DUMPSTAR_CI_JOBS=0 drive "$body")")"
+
+out="$(DUMPSTAR_CI_JOBS=99 drive "$body")"
+check "a cap above the ceiling still runs" "0" "$(rc_of "$out")"
+check "...but is clamped, out loud" "1" \
+	"$(printf '%s\n' "$out" | grep -c 'above the 4 this box is sized for')"
+
+# ---------------------------------------------------------------------------
+log "7. deploy/ci.sh queues every gate, under a real tier, and runs the queue once"
+
+# THE refactor's failure mode. A gate that stopped being invoked would leave no
+# trace in a green run, so each one is located by its own path.
+GATES="tests/litestream/run.sh tests/litestream/drill.sh tests/alarming/run.sh
+tests/litestream/recreate.sh tests/tenants/upgrade.sh tests/tenants/handles.sh
+tests/schema-version/run.sh tests/lake/run.sh tests/lake/prices.sh
+tests/lake/value_snapshots.sh tests/lake/derive.sh tests/lake/tenant_zone.sh
+tests/lake/shipper.sh tests/lake/phase3.sh tests/lake/deletion.sh
+tests/refresh/tenant_bytes.sh
+tests/keys/run.sh"
+
+for g in $GATES; do
+	check "${g} is queued exactly once" "1" \
+		"$(grep -c "dumpstar_par_add [a-z0-9-]* bash \"\$REPO_DIR/${g}\"" "$CI_SH")"
+	# And not ALSO run in place — queued and run would be the gate twice, which
+	# on these gates means two instances fighting over one set of names.
+	check "${g} is not also invoked directly" "0" \
+		"$(grep -cE "^ *bash \"\\\$REPO_DIR/${g}\"" "$CI_SH")"
+done
+
+# Every queued gate sits inside a tier guard, and the tier is a real one — a
+# gate queued outside every guard would run even for a docs-only PR, which is
+# the cost pd-s2mj removed.
+CANON="$(bash "$SELECT" --all-tiers | tr '\n' ' ')"
+QUEUED_TIERS="$(awk '
+	/^ *if tier -?q? ?[a-z]+;/ { t = $3; sub(/^-q$/, "", t); if (t == "") t = $4; sub(/;$/, "", t) }
+	/dumpstar_par_add / && !/^ *#/ { print (t == "" ? "NONE" : t) }
+' "$CI_SH" | sort -u)"
+for t in $QUEUED_TIERS; do
+	check "gates are queued under the real tier '${t}'" "yes" \
+		"$([[ " ${CANON} " == *" ${t} "* ]] && echo yes || echo no)"
+done
+check "every queued gate is inside a tier guard" "0" \
+	"$(printf '%s\n' "$QUEUED_TIERS" | grep -cx NONE)"
+
+# One queue, run once. Twice would run every gate twice; never, not at all.
+check "the queue is run exactly once" "1" \
+	"$(grep -cE '^ *dumpstar_par_run' "$CI_SH")"
+check "ci.sh sources the runner" "1" \
+	"$(grep -c '\. "\$SCRIPT_DIR/ci-parallel.sh"' "$CI_SH")"
+# One list of disks, named once and spent twice. The pre-build check and the
+# per-dispatch one drifting apart is the bug pd-20ia's array replaces, so the
+# assertion is that the second is a COPY of the first and not a second spelling
+# of it — a re-spelled list passes a "both mention $HOME" test and still drops
+# an arm from one of them.
+#
+# The literal is asserted whole rather than arm by arm: an arm-by-arm test goes
+# on passing when an arm is DROPPED, which is the only way this list is ever
+# wrong. It spans continuation lines, so the source is joined first — the guard
+# is about what the array says, not about where it wraps.
+CI_SH_JOINED="$(awk '
+	{ line = $0
+	  while (line ~ /\\$/ && (getline nxt) > 0) {
+		sub(/\\$/, "", line); sub(/^[[:space:]]+/, "", nxt); line = line nxt
+	  }
+	  print line }
+' "$CI_SH")"
+check "the disks are named once, in one array" "1" \
+	"$(printf '%s\n' "$CI_SH_JOINED" | grep -c 'DUMPSTAR_CI_DISK_PATHS=("\$HOME" "\${DUMPSTAR_STORE_ROOT:-\$HOME}" "\${TMPDIR:-/tmp}" "\${CARGO_TARGET_DIR:-\${REPO_DIR}/target}" "\${CARGO_HOME:-\$HOME/.cargo}")')"
+check "the pre-build floor check spends that array" "1" \
+	"$(grep -c 'diskcheck.sh" --floor "\${DUMPSTAR_CI_DISK_PATHS\[@\]}"' "$CI_SH")"
+check "the wave's per-dispatch check COPIES it, never re-spells it" "1" \
+	"$(grep -c 'DUMPSTAR_PAR_DISK_PATHS=("\${DUMPSTAR_CI_DISK_PATHS\[@\]}")' "$CI_SH")"
+check "...and those two assignments are the only disk lists in ci.sh" "2" \
+	"$(grep -cE '^ *DUMPSTAR_(CI|PAR)_DISK_PATHS=\(' "$CI_SH")"
+# A cancelled run must not leave gates behind holding containers.
+check "the EXIT trap takes the wave down with it" "1" \
+	"$(grep -c 'dumpstar_par_kill_all' "$CI_SH")"
+
+# What makes running these at the same time safe at all: not one of them uses a
+# fixed global name. Every one derives its containers, volumes and image tags
+# from this checkout's path — the property concurrent polecats already relied
+# on, and the one a new gate is most likely to forget.
+for g in $GATES; do
+	check "${g} names its resources per-checkout" "yes" \
+		"$(grep -qE 'sha1sum' "${REPO_DIR}/${g}" && echo yes || echo no)"
+done
+
+# ---------------------------------------------------------------------------
+log "8. A gate that HANGS is stopped, and the wave still reports"
+
+# WHY. A gate's output is buffered to its own log and printed only when it
+# finishes, and the dispatch loop blocks in `wait -n`. So a gate that stops
+# making progress is silent AND stops the wave — on 2026-09-15 one did exactly
+# that and took the GitHub job to its 90-minute cap, which cancelled the run and
+# reported nothing about any tier, including the sixteen gates that had already
+# passed. The bound is what turns that into one TIMEOUT line beside real
+# results, so this asserts both halves: the hung gate is stopped, and its
+# neighbours are still reported.
+# The hung gate LOOPS rather than sleeping once: a `sleep 600` would be a truer
+# one-liner but tests/lib/wait_test.sh §6 forbids a sleep past its ceiling
+# tree-wide, and rightly — it cannot tell a simulated hang from the fixed waits
+# that rule exists to remove. A loop that never ends is a better stand-in
+# anyway: the gate does not finish late, it does not finish.
+OUT="$(DUMPSTAR_CI_GATE_TIMEOUT=2 drive '
+dumpstar_par_add quick bash -c "echo quick-ran; exit 0"
+dumpstar_par_add hung  bash -c "echo hung-started; while :; do sleep 1; done"
+dumpstar_par_add after bash -c "echo after-ran; exit 0"
+')"
+check "the wave is red when a gate times out" "1" "$(rc_of "$OUT")"
+check "the hung gate is named as failed" "1" \
+	"$(printf '%s\n' "$(failed_of "$OUT")" | grep -c hung)"
+check "it is reported as TIME, not as an ordinary FAIL" "1" \
+	"$(printf '%s\n' "$OUT" | grep -cE '^ *TIME +hung')"
+check "and it says what that means" "1" \
+	"$(printf '%s\n' "$OUT" | grep -c 'was still running after 2s')"
+# The half that matters as much: a hang must not cost the other gates' results.
+check "a gate queued before it still reported" "1" \
+	"$(printf '%s\n' "$OUT" | grep -c 'quick-ran')"
+check "a gate queued after it still ran" "1" \
+	"$(printf '%s\n' "$OUT" | grep -c 'after-ran')"
+# And the wave actually ENDS, rather than the bound merely being printed.
+check "the run finished rather than hanging itself" "1" \
+	"$(printf '%s\n' "$OUT" | grep -c 'DRIVE_RC=')"
+
+# A gate inside the bound is untouched — the bound must not become the thing
+# that fails healthy runs.
+OUT="$(DUMPSTAR_CI_GATE_TIMEOUT=60 drive '
+dumpstar_par_add slowish bash -c "sleep 2; echo slowish-done; exit 0"
+')"
+check "a gate well inside the bound passes" "0" "$(rc_of "$OUT")"
+check "…and ran to completion" "1" \
+	"$(printf '%s\n' "$OUT" | grep -c 'slowish-done')"
+
+# The bound is validated like the cap beside it, and for the same reason: a
+# typo'd override must be a refusal, not an unbounded run.
+for bad in 0 abc 12x -5; do
+	OUT="$(DUMPSTAR_CI_GATE_TIMEOUT="$bad" drive 'dumpstar_par_add g true')"
+	check "DUMPSTAR_CI_GATE_TIMEOUT='${bad}' is refused" "1" "$(rc_of "$OUT")"
+done
+# EMPTY is not a typo, it is "unset" — ${VAR:-default} cannot tell them apart,
+# so the default applies. Asserted rather than left to be discovered, because
+# the `''` arm of the validating case is unreachable for exactly this reason and
+# reads as though it were live. DUMPSTAR_CI_JOBS beside it behaves identically;
+# this is the contract of both, not an accident of one.
+OUT="$(DUMPSTAR_CI_GATE_TIMEOUT="" drive 'dumpstar_par_add g true')"
+check "an EMPTY bound means unset, and the default applies" "0" "$(rc_of "$OUT")"
+
+# ---------------------------------------------------------------------------
+printf '\n=== %d passed, %d failed ===\n' "$pass" "$fail"
+[ "$fail" -eq 0 ]

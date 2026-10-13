@@ -50,6 +50,8 @@ systemctl --user disable --now "dumpstar-refresh@${INSTANCE}.timer" 2>/dev/null 
 systemctl --user disable --now "dumpstar-backup-check@${INSTANCE}.timer" 2>/dev/null || true
 systemctl --user disable --now "dumpstar-derive@${INSTANCE}.timer" 2>/dev/null || true
 systemctl --user disable --now "dumpstar-prices@${INSTANCE}.timer" 2>/dev/null || true
+systemctl --user disable --now "dumpstar-catalog-sync@${INSTANCE}.timer" 2>/dev/null || true
+systemctl --user disable --now "dumpstar-catalog-check@${INSTANCE}.timer" 2>/dev/null || true
 systemctl --user disable --now "dumpstar-nessie-backup@${INSTANCE}.timer" 2>/dev/null || true
 systemctl --user disable --now "dumpstar-nessie-backup-check@${INSTANCE}.timer" 2>/dev/null || true
 systemctl --user disable --now "dumpstar-value-snapshots@${INSTANCE}.timer" 2>/dev/null || true
@@ -74,6 +76,8 @@ for _u in "$SERVICE_NAME" \
           "dumpstar-backup-check@${INSTANCE}."{service,timer} \
           "dumpstar-derive@${INSTANCE}."{service,timer} \
           "dumpstar-prices@${INSTANCE}."{service,timer} \
+          "dumpstar-catalog-sync@${INSTANCE}."{service,timer} \
+          "dumpstar-catalog-check@${INSTANCE}."{service,timer} \
           "dumpstar-nessie-backup@${INSTANCE}."{service,timer} \
           "dumpstar-nessie-backup-check@${INSTANCE}."{service,timer} \
           "dumpstar-value-snapshots@${INSTANCE}."{service,timer} \

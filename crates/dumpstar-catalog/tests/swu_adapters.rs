@@ -60,7 +60,11 @@ impl Fetch for Recorded {
         }
         let parts: Vec<&str> = url.rsplit('/').take(2).collect();
         let gid: i64 = parts[1].parse().unwrap();
-        let map = if parts[0] == "products" { &self.products } else { &self.prices };
+        let map = if parts[0] == "products" {
+            &self.products
+        } else {
+            &self.prices
+        };
         Ok(map
             .get(&gid)
             .cloned()
@@ -107,7 +111,10 @@ fn env() -> Env {
 }
 
 fn state(e: &Env, key: &str) -> Option<String> {
-    Catalog::open_writer(&e.db).unwrap().sync_state(key).unwrap()
+    Catalog::open_writer(&e.db)
+        .unwrap()
+        .sync_state(key)
+        .unwrap()
 }
 
 fn day_of(now: DateTime<Utc>) -> String {
@@ -168,7 +175,10 @@ fn priced(conn: &Connection, printing: &str, day: &str) -> bool {
 
 fn all_ids(conn: &Connection) -> BTreeSet<String> {
     let mut s = conn.prepare("SELECT printing_id FROM printings").unwrap();
-    s.query_map([], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
+    s.query_map([], |r| r.get(0))
+        .unwrap()
+        .map(|r| r.unwrap())
+        .collect()
 }
 
 // ---- parsers on the recorded payloads -------------------------------------
@@ -179,11 +189,17 @@ fn the_single_card_fetch_parses_to_one_hyperspace_printing() {
     let p = &page.payload.printings[0];
     assert_eq!(p.printing_id, "6202608327");
     assert_eq!((p.set_code.as_str(), p.number.as_str()), ("SOR", "1"));
-    assert_eq!((p.variant.as_str(), p.finish.as_str()), ("Hyperspace", "Normal"));
+    assert_eq!(
+        (p.variant.as_str(), p.finish.as_str()),
+        ("Hyperspace", "Normal")
+    );
     assert_eq!(p.official_card_uid.as_deref(), Some("6202608327"));
     let c = &page.payload.cards[0];
     assert_eq!(c.card_id, "2579145458");
-    assert_eq!((c.name.as_str(), c.subtitle.as_deref()), ("Luke Skywalker", Some("Faithful Friend")));
+    assert_eq!(
+        (c.name.as_str(), c.subtitle.as_deref()),
+        ("Luke Skywalker", Some("Faithful Friend"))
+    );
     assert_eq!((c.cost, c.power, c.hp), (Some(6), Some(4), Some(7)));
     assert!(c.rules_text.as_deref().unwrap().contains("Shield token"));
     assert!(page.max_updated_at.is_some());
@@ -229,11 +245,21 @@ fn a_full_sor_load_has_every_official_printing_and_keeps_ids_across_a_second_loa
     let mut first: Value = serde_json::from_slice(&pages[0]).unwrap();
     first["data"][0]["attributes"]["rarity"]["data"]["attributes"]["name"] = json!("Mythic");
     pages[0] = serde_json::to_vec_pretty(&first).unwrap();
-    let again = Recorded { official_pages: pages, ..sor() };
+    let again = Recorded {
+        official_pages: pages,
+        ..sor()
+    };
     let r = sync_official(&e, &again, at(14, 4));
-    assert!(r.iter().any(|j| j.applied.printings == 1), "only the edited printing is written");
+    assert!(
+        r.iter().any(|j| j.applied.printings == 1),
+        "only the edited printing is written"
+    );
     let conn = Catalog::open_readonly(&e.db).unwrap();
-    assert_eq!(all_ids(conn.conn()), before, "every printing keeps its printing_id");
+    assert_eq!(
+        all_ids(conn.conn()),
+        before,
+        "every printing keeps its printing_id"
+    );
     assert_eq!(count(conn.conn(), "SELECT COUNT(*) FROM printings"), 991);
 }
 
@@ -242,7 +268,9 @@ fn a_full_sor_load_has_every_official_printing_and_keeps_ids_across_a_second_loa
 fn synthetic_pages(total: usize) -> Vec<Vec<u8>> {
     let sor: Vec<Value> = (1..=10)
         .flat_map(|i| {
-            let v: Value = serde_json::from_slice(&read(&format!("official-sor-pages/sor-page{i}.json.gz"))).unwrap();
+            let v: Value =
+                serde_json::from_slice(&read(&format!("official-sor-pages/sor-page{i}.json.gz")))
+                    .unwrap();
             v["data"].as_array().unwrap().clone()
         })
         .collect();
@@ -251,7 +279,18 @@ fn synthetic_pages(total: usize) -> Vec<Vec<u8>> {
         .map(|e| {
             let a = &e["attributes"];
             let mut o = json!({});
-            for k in ["title", "subtitle", "cardNumber", "serialCode", "hyperspace", "showcase", "cardId", "expansion", "variantTypes", "rarity"] {
+            for k in [
+                "title",
+                "subtitle",
+                "cardNumber",
+                "serialCode",
+                "hyperspace",
+                "showcase",
+                "cardId",
+                "expansion",
+                "variantTypes",
+                "rarity",
+            ] {
                 o[k] = a[k].clone();
             }
             o
@@ -309,7 +348,11 @@ fn a_full_crawl_is_10193_printings_and_every_one_keeps_its_id_on_a_second_load()
     );
     for j in &second {
         let a = &j.applied;
-        assert_eq!(a.sets + a.cards + a.printings + a.crosswalk + a.alarms, 0, "{a:?}");
+        assert_eq!(
+            a.sets + a.cards + a.printings + a.crosswalk + a.alarms,
+            0,
+            "{a:?}"
+        );
     }
     let c = Catalog::open_readonly(&e.db).unwrap();
     assert_eq!(all_ids(c.conn()), before);
@@ -368,7 +411,10 @@ fn at_least_99_percent_of_non_token_printings_get_a_price_row() {
     let (e, _) = loaded();
     let c = Catalog::open_readonly(&e.db).unwrap();
     let non_token = "p.number NOT GLOB '[Tt][0-9]*'";
-    let total = count(c.conn(), &format!("SELECT COUNT(*) FROM printings p WHERE {non_token}"));
+    let total = count(
+        c.conn(),
+        &format!("SELECT COUNT(*) FROM printings p WHERE {non_token}"),
+    );
     let with = count(
         c.conn(),
         &format!(
@@ -377,7 +423,10 @@ fn at_least_99_percent_of_non_token_printings_get_a_price_row() {
         ),
     );
     assert_eq!(total, 987);
-    assert!(with as f64 / total as f64 >= 0.99, "{with} of {total} printings priced");
+    assert!(
+        with as f64 / total as f64 >= 0.99,
+        "{with} of {total} printings priced"
+    );
     let cov = check::coverage(c.conn(), "2026-10-12").unwrap();
     assert!(cov.ratio() >= 0.99, "{cov:?}");
 }
@@ -409,7 +458,13 @@ fn official_identity_wins_and_tcgcsv_only_supplies_ids_and_prices() {
     // Weekly Play promos join through the hand-kept group table.
     let wp = uid_of(c.conn(), "SOR", "20", "Weekly Play", "Normal");
     assert!(priced(c.conn(), &wp, "2026-10-12"));
-    assert_eq!(count(c.conn(), "SELECT COUNT(*) FROM cards WHERE name = 'Luke Skywalker'"), 2);
+    assert_eq!(
+        count(
+            c.conn(),
+            "SELECT COUNT(*) FROM cards WHERE name = 'Luke Skywalker'"
+        ),
+        2
+    );
 }
 
 #[test]
@@ -417,12 +472,19 @@ fn token_backs_are_handled_not_counted_as_misses() {
     let (e, _) = loaded();
     let c = Catalog::open_readonly(&e.db).unwrap();
     // 'Capital City // Shield' (20 // T02) and the like price nothing and alarm nothing.
-    let alarmed: Vec<String> = ["official_without_tcgcsv", "tcgcsv_without_official", "unmatched_price"]
-        .iter()
-        .flat_map(|k| alarms(c.conn(), k))
-        .collect();
+    let alarmed: Vec<String> = [
+        "official_without_tcgcsv",
+        "tcgcsv_without_official",
+        "unmatched_price",
+    ]
+    .iter()
+    .flat_map(|k| alarms(c.conn(), k))
+    .collect();
     for pid in 542201..=542232 {
-        assert!(!alarmed.contains(&pid.to_string()), "token-back product {pid} alarmed");
+        assert!(
+            !alarmed.contains(&pid.to_string()),
+            "token-back product {pid} alarmed"
+        );
     }
     assert!(alarmed.iter().all(|k| !k.starts_with("542")), "{alarmed:?}");
     // The standalone token product prices the first token, and the second token
@@ -431,16 +493,33 @@ fn token_backs_are_handled_not_counted_as_misses() {
     assert!(priced(c.conn(), &exp, "2026-10-12"));
     let shield = uid_of(c.conn(), "SOR", "T02", "Standard", "Normal");
     assert!(!alarmed.contains(&shield));
-    assert!(alarms(c.conn(), "official_unlisted").iter().all(|k| *k != shield));
-    assert_eq!(count(c.conn(), &format!("SELECT COUNT(*) FROM prices WHERE printing_id='{shield}'")), 0);
+    assert!(
+        alarms(c.conn(), "official_unlisted")
+            .iter()
+            .all(|k| *k != shield)
+    );
+    assert_eq!(
+        count(
+            c.conn(),
+            &format!("SELECT COUNT(*) FROM prices WHERE printing_id='{shield}'")
+        ),
+        0
+    );
 }
 
 #[test]
 fn the_recorded_sor_load_raises_no_alarm_of_its_own() {
     let (e, _) = loaded();
     let c = Catalog::open_readonly(&e.db).unwrap();
-    assert!(check::stored(c.conn()).unwrap().is_empty(), "{:?}", check::stored(c.conn()).unwrap());
-    let info = count(c.conn(), "SELECT COUNT(*) FROM alarms WHERE severity='info'");
+    assert!(
+        check::stored(c.conn()).unwrap().is_empty(),
+        "{:?}",
+        check::stored(c.conn()).unwrap()
+    );
+    let info = count(
+        c.conn(),
+        "SELECT COUNT(*) FROM alarms WHERE severity='info'",
+    );
     assert!(info > 0, "unlisted promos are counted, not hidden");
 }
 
@@ -482,8 +561,17 @@ fn a_tcgcsv_product_with_no_official_printing_raises_an_alarm_and_is_never_merge
     sync_official(&e, &http, at(13, 4));
     sync_tcgcsv(&e, &http, at(13, 4));
     let c = Catalog::open_readonly(&e.db).unwrap();
-    assert_eq!(alarms(c.conn(), "tcgcsv_without_official"), vec!["999001".to_string()]);
-    assert_eq!(count(c.conn(), "SELECT COUNT(*) FROM printing_source_id WHERE source_id='999001'"), 0);
+    assert_eq!(
+        alarms(c.conn(), "tcgcsv_without_official"),
+        vec!["999001".to_string()]
+    );
+    assert_eq!(
+        count(
+            c.conn(),
+            "SELECT COUNT(*) FROM printing_source_id WHERE source_id='999001'"
+        ),
+        0
+    );
 }
 
 #[test]
@@ -500,7 +588,13 @@ fn a_number_that_points_at_another_card_is_not_merged() {
     let normal = uid_of(c.conn(), "SOR", "77", "Standard", "Normal");
     assert!(alarms(c.conn(), "official_without_tcgcsv").contains(&normal));
     assert!(alarms(c.conn(), "tcgcsv_without_official").contains(&"540198".to_string()));
-    assert_eq!(count(c.conn(), "SELECT COUNT(*) FROM printing_source_id WHERE source='tcgcsv' AND source_id='540198'"), 0);
+    assert_eq!(
+        count(
+            c.conn(),
+            "SELECT COUNT(*) FROM printing_source_id WHERE source='tcgcsv' AND source_id='540198'"
+        ),
+        0
+    );
 }
 
 #[test]
@@ -516,7 +610,10 @@ fn a_group_that_maps_to_no_official_set_raises_an_alarm() {
     sync_official(&e, &http, at(13, 4));
     sync_tcgcsv(&e, &http, at(13, 4));
     let c = Catalog::open_readonly(&e.db).unwrap();
-    assert_eq!(alarms(c.conn(), "unmapped_group"), vec!["24812".to_string()]);
+    assert_eq!(
+        alarms(c.conn(), "unmapped_group"),
+        vec!["24812".to_string()]
+    );
 }
 
 #[test]
@@ -573,19 +670,37 @@ fn a_skipped_price_day_raises_an_alarm_within_the_next_check_window() {
         .map(|a| a.key)
         .collect();
     assert_eq!(missing, vec!["2026-10-12".to_string()]);
-    assert!(check::run(c.conn(), at(13, 23)).unwrap().iter().any(|a| a.kind == "missing_price_day"));
+    assert!(
+        check::run(c.conn(), at(13, 23))
+            .unwrap()
+            .iter()
+            .any(|a| a.kind == "missing_price_day")
+    );
 
     // The window: a day is due once the sync has had its hour, not before.
     let c2 = env();
     sync_official(&c2, &http, at(10, 4));
     priced_on(&c2, &http, "2026-10-11T20:05:44+0000", at(11, 21));
     let r = Catalog::open_readonly(&c2.db).unwrap();
-    assert!(check::missing_price_days(r.conn(), at(12, 21)).unwrap().is_empty());
-    assert_eq!(check::missing_price_days(r.conn(), at(12, 22)).unwrap().len(), 1);
+    assert!(
+        check::missing_price_days(r.conn(), at(12, 21))
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        check::missing_price_days(r.conn(), at(12, 22))
+            .unwrap()
+            .len(),
+        1
+    );
     // A day that did arrive, checked an hour after its sync, is quiet.
     priced_on(&c2, &http, "2026-10-12T20:05:44+0000", at(12, 21));
     let r = Catalog::open_readonly(&c2.db).unwrap();
-    assert!(check::missing_price_days(r.conn(), at(12, 23)).unwrap().is_empty());
+    assert!(
+        check::missing_price_days(r.conn(), at(12, 23))
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]
@@ -598,5 +713,10 @@ fn a_thin_price_day_raises_a_coverage_alarm() {
     http.prices.insert(23451, br#"{"results":[]}"#.to_vec());
     priced_on(&e, &http, "2026-10-13T20:05:44+0000", at(13, 21));
     let c = Catalog::open_readonly(&e.db).unwrap();
-    assert!(check::run(c.conn(), at(13, 23)).unwrap().iter().any(|a| a.kind == "low_price_coverage"));
+    assert!(
+        check::run(c.conn(), at(13, 23))
+            .unwrap()
+            .iter()
+            .any(|a| a.kind == "low_price_coverage")
+    );
 }

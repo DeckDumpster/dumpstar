@@ -61,7 +61,10 @@ pub fn missing_price_days(conn: &Connection, now: DateTime<Utc>) -> Result<Vec<A
             out.push(AlarmRecord::alarm(
                 "missing_price_day",
                 d.to_string(),
-                format!("no tcgcsv price row for {d}; the latest is {}", days.iter().next_back().unwrap()),
+                format!(
+                    "no tcgcsv price row for {d}; the latest is {}",
+                    days.iter().next_back().unwrap()
+                ),
             ));
         }
         d += Duration::days(1);
@@ -77,7 +80,11 @@ pub struct Coverage {
 
 impl Coverage {
     pub fn ratio(&self) -> f64 {
-        if self.eligible == 0 { 1.0 } else { self.priced as f64 / self.eligible as f64 }
+        if self.eligible == 0 {
+            1.0
+        } else {
+            self.priced as f64 / self.eligible as f64
+        }
     }
 }
 

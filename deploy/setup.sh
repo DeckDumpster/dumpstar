@@ -86,9 +86,9 @@ fi
 dumpstar_store_adopt_instance "$INSTANCE"
 dumpstar_store_activate
 
-if ! grep -q "Linger=yes" <<<"$(loginctl show-user "$USER" -p Linger 2>/dev/null)"; then
+if ! grep -q "Linger=yes" <<<"$(loginctl show-user "${USER:-$(id -un)}" -p Linger 2>/dev/null)"; then
     echo "WARNING: linger not enabled — services stop when you log out."
-    echo "  Fix: loginctl enable-linger $USER"
+    echo "  Fix: loginctl enable-linger ${USER:-$(id -un)}"
 fi
 
 # --- Build the image --------------------------------------------------------

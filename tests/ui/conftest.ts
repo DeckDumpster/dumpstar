@@ -39,6 +39,11 @@ const log = {
 export const INSTANCE_NAME = process.env.UI_TEST_INSTANCE ?? "integration-test";
 export const EXPLICIT_BASE_URL = process.env.UI_TEST_BASE_URL ?? null;
 
+//   UI_TEST_ACCESS_TOKEN — a ready Cloudflare Access JWT to present, or
+//   UI_TEST_JWKS_DIR     — the test JWKS directory to sign one from (default:
+//                          the one `deploy/setup.sh <instance> --test` writes)
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+
 // Snapshot/restore is delegated to the in-image `dumpstar db` subcommand, which
 // resolves the collection + shared DB paths from $DUMPSTAR_HOME/$DUMPSTAR_USER (set
 // to /data + collection in the container) and writes sibling `.bak` files.
@@ -239,4 +244,38 @@ export async function makeScreenshotDir(): Promise<string> {
   const dir = path.join(__dirname, "..", "..", "screenshots", "ui", stamp);
   await fs.mkdir(dir, { recursive: true });
   return dir;
+}
+
+/**
+ * The Access JWT the browser presents. The server verifies one on every /api
+ * request and has no bypass, so the instance runs with Access pointed at a test
+ * JWKS (`deploy/setup.sh <instance> --test`) and the tests carry a token signed
+ * by its key. Null when neither a token nor a JWKS directory is available —
+ * an instance started without Access needs none.
+ */
+export async function accessToken(): Promise<string | null> {
+  if (process.env.UI_TEST_ACCESS_TOKEN) {
+    return process.env.UI_TEST_ACCESS_TOKEN;
+  }
+  const dir =
+    process.env.UI_TEST_JWKS_DIR ??
+    path.join(
+      process.env.HOME ?? "",
+      ".config",
+      "dumpstar",
+      INSTANCE_NAME,
+      "test-jwks",
+    );
+  try {
+    await fs.access(path.join(dir, "jwks.json"));
+  } catch {
+    return null;
+  }
+  const { stdout } = await execFileAsync("python3", [
+    path.join(REPO_ROOT, "tests", "lib", "test_jwks.py"),
+    "issue",
+    dir,
+    "ui-test@example.com",
+  ]);
+  return stdout.trim();
 }

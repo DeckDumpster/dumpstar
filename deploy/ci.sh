@@ -920,6 +920,27 @@ if tier rust; then
     ( cd "$REPO_DIR" && cargo clippy --all-targets --profile test -- -D warnings )
 fi
 
+# --- 2a. Cross-tenant isolation gate (sp-c3fq3p) ------------------------------
+# Its own tier so a red names the property that broke, and so a caller can ask
+# for exactly it (DUMPSTAR_CI_TIERS=isolation): tenant B's valid JWT cannot read
+# or delete tenant A's rows, a leftover tenant header grants nothing, a route
+# registered without the access layer fails the ratchet, and every /api response
+# is `private, no-store`. In-process against the real router and a throwaway
+# data dir: no production instance, no network. The tests live in
+# `tests::isolation` in crates/dumpstar-server/src/lib.rs; the tier is
+# selected by that module path, so a test added there is in the gate.
+if tier isolation; then
+    step "Cross-tenant isolation gate (cargo test -p dumpstar-server tests::isolation)"
+    # A filter that matches nothing passes. Refuse that: renaming the module
+    # must break this step, not empty it.
+    _iso_n="$(cd "$REPO_DIR" && cargo test -p dumpstar-server --lib -- tests::isolation:: --list 2>/dev/null | grep -c ': test$' || true)"
+    if [ "${_iso_n:-0}" -lt 8 ]; then
+        echo "ERROR: the isolation gate selects ${_iso_n:-0} tests (expected at least 8); tests::isolation was renamed or emptied." >&2
+        exit 1
+    fi
+    ( cd "$REPO_DIR" && cargo test -p dumpstar-server --lib -- tests::isolation:: )
+fi
+
 # --- 2b. Deploy-script gates ------------------------------------------------
 # The low-disk guard, the store-root resolution and the unit-file install are
 # shell, so they get a shell test — including one that shows the guard actually

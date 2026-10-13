@@ -1444,6 +1444,133 @@ mod tests {
             }
         }
 
+        /// Tenant A's copy, named by id through every collection route that
+        /// takes one (and the ones that do not): tenant B changes nothing and
+        /// reads nothing, and A's copy is intact afterwards.
+        #[tokio::test]
+        async fn tenant_b_cannot_reach_tenant_a_copies_through_any_collection_route() {
+            let (_d, router, _dir, fx) = multi_tenant_app(&["alice", "bob"]).await;
+            let a = fx.valid_token("alice@example.com");
+            let b = fx.valid_token("bob@example.com");
+            let send = |method: &'static str, uri: &'static str, tok: &str, body: Option<&str>| {
+                let router = router.clone();
+                let req = request(method, uri, Some(tok), body);
+                async move {
+                    let resp = router.oneshot(req).await.unwrap();
+                    (resp.status(), body_string(resp).await)
+                }
+            };
+            let (s, out) = send("POST", "/api/collection", &a, Some(ADD_CARD)).await;
+            assert_eq!(s, StatusCode::CREATED, "{out}");
+
+            for (method, uri, body) in [
+                ("GET", "/api/collection/1", None),
+                ("PUT", "/api/collection/1", Some(r#"{"notes":"pwned"}"#)),
+                (
+                    "PUT",
+                    "/api/collection/1/status",
+                    Some(r#"{"status":"sold"}"#),
+                ),
+                ("PUT", "/api/collection/1/move", Some(r#"{"binder_id":1}"#)),
+                (
+                    "PUT",
+                    "/api/collection/1/printing",
+                    Some(r#"{"printing_id":"sv3pt5-1-normal"}"#),
+                ),
+                (
+                    "DELETE",
+                    "/api/collection/by-printing/sv3pt5-1-normal",
+                    None,
+                ),
+                ("DELETE", "/api/collection/1", None),
+            ] {
+                let (s, out) = send(method, uri, &b, body).await;
+                assert_eq!(
+                    s,
+                    StatusCode::NOT_FOUND,
+                    "bob reached alice's copy with {method} {uri}: {out}"
+                );
+            }
+
+            let (s, out) = send("POST", "/api/collection/bulk-delete", &b, Some("[1]")).await;
+            assert_eq!(s, StatusCode::OK, "{out}");
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(&out).unwrap()["deleted"],
+                0,
+                "bob's bulk delete removed alice's copy: {out}"
+            );
+
+            for uri in [
+                "/api/collection/search?include_unowned=1&limit=all",
+                "/api/collection/value-history",
+                "/api/export/json",
+            ] {
+                let (s, out) = send("GET", uri, &b, None).await;
+                assert_eq!(s, StatusCode::OK, "{uri}: {out}");
+                if uri.contains("search") {
+                    assert!(
+                        !out.contains("\"owned\":true"),
+                        "bob's search shows alice's copy as owned: {out}"
+                    );
+                } else {
+                    assert!(
+                        !out.contains("sv3pt5-1-normal"),
+                        "bob reads alice's copy through {uri}: {out}"
+                    );
+                }
+            }
+
+            let (s, out) = send("GET", "/api/collection/1", &a, None).await;
+            assert_eq!(s, StatusCode::OK, "alice lost her copy: {out}");
+            assert!(out.contains("sv3pt5-1-normal"), "{out}");
+            assert!(!out.contains("pwned") && !out.contains("sold"), "{out}");
+        }
+
+        /// A 100,000-copy collection lists in one gzip response that decodes to
+        /// every row, and the same route for another tenant stays empty.
+        #[tokio::test]
+        async fn a_hundred_thousand_copies_list_gzipped_and_stay_private() {
+            const N: usize = 100_000;
+            let (_d, router, tenants_dir, fx) = multi_tenant_app(&["alice", "bob"]).await;
+            let a = fx.valid_token("alice@example.com");
+            let b = fx.valid_token("bob@example.com");
+            let database_id = {
+                let reg = dumpstar_db::open_registry(&_d.path().join("registry.sqlite")).unwrap();
+                dumpstar_db::registry::lookup(&reg, "alice")
+                    .unwrap()
+                    .unwrap()
+                    .database_id
+            };
+            {
+                let conn = dumpstar_db::open_user(
+                    &dumpstar_db::tenant_db_file(&tenants_dir, &database_id).unwrap(),
+                )
+                .unwrap();
+                conn.execute_batch(&format!(
+                    "INSERT INTO collection (printing_id, acquired_at, source)
+                     WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < {N})
+                     SELECT 'sv3pt5-1-normal', '2026-01-01', 'manual_id' FROM n;"
+                ))
+                .unwrap();
+            }
+
+            let (encoding, compressed) =
+                get_encoding(&router, "/api/collection", Some("gzip"), Some(&a)).await;
+            assert_eq!(encoding, "gzip");
+            let plain = gunzip(&compressed);
+            assert!(
+                compressed.len() * 5 < plain.len(),
+                "gzip barely helped: {} -> {}",
+                plain.len(),
+                compressed.len()
+            );
+            let rows: Vec<serde_json::Value> = serde_json::from_slice(&plain).unwrap();
+            assert_eq!(rows.len(), N);
+
+            let (_, bobs) = get_encoding(&router, "/api/collection", Some("gzip"), Some(&b)).await;
+            assert_eq!(String::from_utf8(bobs).unwrap().trim(), "[]");
+        }
+
         /// Routes that are deliberately reachable without a credential. Adding
         /// to this list is the deliberate edit the ratchet below demands.
         const PUBLIC_API_ROUTES: &[&str] = &["/backup-status"];

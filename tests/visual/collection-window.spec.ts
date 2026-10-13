@@ -32,7 +32,7 @@ import { test, expect, type Page, type Locator } from '@playwright/test';
 import { stabilize } from './stabilize';
 
 /** Far more than any browser will render, and not a round number. */
-const TOTAL = 56_635;
+const TOTAL = 100_000;
 
 /** What the whole result is worth, per the endpoint. Deliberately NOT
     `rows x market_price` for any number of rows the stub serves: the point of
@@ -207,7 +207,7 @@ test('the client asks for the whole result, not a page of it', async ({ page }) 
 	// stub proves — the page is holding 4,000 rows worth $6,000 and printing
 	// $84,952.50, a figure it could not have added up itself.
 	const line = page.locator('[data-testid="collection-count"]');
-	await expect(line).toContainText('56,635 cards');
+	await expect(line).toContainText('100,000 cards');
 	await expect(line).toContainText('$84,952.50');
 });
 
@@ -252,7 +252,7 @@ test('the far end of the result is reached by scrolling, not by clicking', async
 	// pd-lbei inverted: under Prev/Next, page 150 of 223 cost 149 clicks. The
 	// result is one run now, so the last row it holds is a scroll away and no
 	// clicks away. (`serveHugeResult` caps the payload for test speed, so the
-	// far end here is row 3,999 of a result the client is told is 56,635 —
+	// far end here is row 3,999 of a result the client is told is 100,000 —
 	// what is under test is that the end is reachable at all.)
 	await openCollection(page, 'grid');
 	await scrollTo(page, await documentHeight(page));

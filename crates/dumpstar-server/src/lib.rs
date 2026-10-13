@@ -1444,6 +1444,95 @@ mod tests {
             }
         }
 
+        /// Moving a copy between binders is visible in both binders' views at
+        /// once, and a move into a binder that exists only in another tenant's
+        /// database is rejected with the copy left where it was.
+        #[tokio::test]
+        async fn moving_a_copy_between_binders_updates_both_views_and_stops_at_the_tenant() {
+            let (_d, router, _dir, fx) = multi_tenant_app(&["alice", "bob"]).await;
+            let a = fx.valid_token("alice@example.com");
+            let b = fx.valid_token("bob@example.com");
+            let send = |method: &'static str, uri: &'static str, tok: &str, body: Option<&str>| {
+                let router = router.clone();
+                let req = request(method, uri, Some(tok), body);
+                async move {
+                    let resp = router.oneshot(req).await.unwrap();
+                    (resp.status(), body_string(resp).await)
+                }
+            };
+            let json = |s: &str| serde_json::from_str::<serde_json::Value>(s).unwrap();
+
+            for body in [
+                r#"{"name":"one","pocket_size":9}"#,
+                r#"{"name":"two","pocket_size":12}"#,
+            ] {
+                let (s, out) = send("POST", "/api/binders", &a, Some(body)).await;
+                assert_eq!(s, StatusCode::CREATED, "{out}");
+            }
+            let (s, out) = send("POST", "/api/collection", &a, Some(ADD_CARD)).await;
+            assert_eq!(s, StatusCode::CREATED, "{out}");
+
+            let in_binder = |out: String| json(&out)["cards"].as_array().unwrap().len();
+            let count_of = |out: String, name: &str| {
+                json(&out)
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|x| x["name"] == name)
+                    .unwrap()["card_count"]
+                    .as_i64()
+                    .unwrap()
+            };
+
+            let (s, out) = send(
+                "PUT",
+                "/api/collection/1/move",
+                &a,
+                Some(r#"{"binder_id":1}"#),
+            )
+            .await;
+            assert_eq!(s, StatusCode::OK, "{out}");
+            let (_, one) = send("GET", "/api/binders/1", &a, None).await;
+            assert_eq!(in_binder(one), 1);
+
+            let (s, out) = send(
+                "PUT",
+                "/api/collection/1/move",
+                &a,
+                Some(r#"{"binder_id":2}"#),
+            )
+            .await;
+            assert_eq!(s, StatusCode::OK, "{out}");
+            let (_, one) = send("GET", "/api/binders/1", &a, None).await;
+            let (_, two) = send("GET", "/api/binders/2", &a, None).await;
+            assert_eq!(in_binder(one), 0, "old binder still lists the copy");
+            assert_eq!(in_binder(two), 1, "new binder does not list the copy");
+            let (_, list) = send("GET", "/api/binders", &a, None).await;
+            assert_eq!(count_of(list.clone(), "one"), 0);
+            assert_eq!(count_of(list, "two"), 1);
+
+            // Bob owns a copy and no binders: alice's binder ids mean nothing to him.
+            let (s, out) = send("POST", "/api/collection", &b, Some(ADD_CARD)).await;
+            assert_eq!(s, StatusCode::CREATED, "{out}");
+            let (s, out) = send(
+                "PUT",
+                "/api/collection/1/move",
+                &b,
+                Some(r#"{"binder_id":2}"#),
+            )
+            .await;
+            assert_eq!(
+                s,
+                StatusCode::NOT_FOUND,
+                "cross-tenant move accepted: {out}"
+            );
+            let (s, out) = send("GET", "/api/collection/1", &b, None).await;
+            assert_eq!(s, StatusCode::OK, "{out}");
+            assert!(json(&out)["binder_id"].is_null(), "bob's copy moved: {out}");
+            let (_, two) = send("GET", "/api/binders/2", &a, None).await;
+            assert_eq!(in_binder(two), 1, "bob's move reached alice's binder");
+        }
+
         /// Tenant A's copy, named by id through every collection route that
         /// takes one (and the ones that do not): tenant B changes nothing and
         /// reads nothing, and A's copy is intact afterwards.

@@ -47,6 +47,15 @@ production instance: `bash deploy/setup.sh <name> --test` with any name except
 `$DUMPSTAR_HOME` overrides the data dir (default `~/.dumpstar/`).
 `$DUMPSTAR_USER` overrides the active tenant (default `collection`).
 
+## Isolation gate
+
+`DUMPSTAR_CI_TIERS=isolation` (tier `isolation` in `deploy/ci.sh`) runs
+`tests::isolation` in `crates/dumpstar-server/src/lib.rs`: cross-tenant reads and
+deletes, the leftover tenant header, the ratchet that reads every `.route(` in
+`src/routes/` and demands a 401 without a token (public routes are listed in
+`PUBLIC_API_ROUTES`, a deliberate edit), and `Cache-Control: private, no-store`
+on every `/api` response. A new test belongs in that module so the tier selects it.
+
 ## Names
 
 Nothing here may carry the identity this workspace was copied from (its

@@ -1184,6 +1184,7 @@ name = "dumpstar-catalog"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "dumpstar-core",
  "flate2",
  "hex",
  "reqwest",

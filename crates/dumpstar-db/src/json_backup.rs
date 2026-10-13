@@ -449,6 +449,8 @@ mod tests {
              VALUES (1, 'Charizard ex', NULL, 'standard', 'Ryan', 'built', 'black', 'box',
                      'goes brrr', '2026-07-01T00:00:00+00:00', '2026-07-01T00:00:00+00:00');
 
+             INSERT INTO deck_cards (deck_id, card_id, zone, qty) VALUES (1, 'C1', 'main', 3);
+
              INSERT INTO orders (id, order_number, source, seller_name, order_date, subtotal,
                                  shipping, tax, total, shipping_status, estimated_delivery,
                                  notes, created_at)

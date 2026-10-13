@@ -6,12 +6,17 @@
 //! because every upsert is guarded by "only when a column differs" and prices
 //! are insert-if-absent. The report counts rows actually written.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use rusqlite::{Transaction, params};
 
 use crate::Catalog;
 use crate::error::{CatalogError, Result};
 use crate::landing::Provenance;
-use crate::record::{CatalogPayload, FORMAT};
+use crate::crosswalk::{self, OfficialPrinting};
+use crate::record::{AlarmRecord, CatalogPayload, FORMAT};
+use crate::swu::{self, CrawlMarker};
+use crate::tcgcsv::{self, GroupInfo, GroupKind};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ApplyReport {
@@ -29,6 +34,17 @@ pub struct ApplyReport {
     pub formats: usize,
     pub format_rules: usize,
     pub legality: usize,
+    pub groups: usize,
+    pub products: usize,
+    /// Alarm rows written or removed.
+    pub alarms: usize,
+    /// Official token backs and tcgcsv `X // Shield` products: handled, counted.
+    pub token_backs: usize,
+    /// Price rows for sealed products; they belong to the sealed-product series.
+    pub sealed_prices: usize,
+    /// Price rows for products a shared promo group lists for other sets.
+    pub ignored_prices: usize,
+    pub sync_state: usize,
 }
 
 impl ApplyReport {
@@ -43,6 +59,10 @@ impl ApplyReport {
                 + self.formats
                 + self.format_rules
                 + self.legality
+                + self.groups
+                + self.products
+                + self.alarms
+                + self.sync_state
                 == 0)
     }
 }
@@ -58,23 +78,104 @@ fn differs(cols: &[&str]) -> String {
 
 pub fn apply(catalog: &mut Catalog, bytes: &[u8], prov: &Provenance) -> Result<ApplyReport> {
     let tx = catalog.conn.transaction()?;
+    let key = prov.applied_key();
     let seen = tx
         .prepare("SELECT 1 FROM applied_payloads WHERE payload_hash = ?1")?
-        .exists([&prov.sha256])?;
+        .exists([&key])?;
     if seen {
         return Ok(ApplyReport {
             already_applied: true,
             ..Default::default()
         });
     }
-    let payload: CatalogPayload = serde_json::from_slice(bytes)?;
-    if payload.format != FORMAT {
-        return Err(CatalogError::Format(payload.format));
-    }
-    let report = apply_payload(&tx, &payload)?;
+    let report = match prov.source.as_str() {
+        swu::SRC_OFFICIAL => {
+            let mut page = crate::official::parse_page(bytes)?;
+            let mut known = BTreeMap::new();
+            for c in page.payload.cards.iter().filter(|c| c.card_id.starts_with(crate::official::PLACEHOLDER)) {
+                let hit: Option<String> = tx
+                    .query_row(
+                        "SELECT card_id FROM cards WHERE card_id NOT LIKE 'n:%' AND name = ?1 AND subtitle IS ?2 LIMIT 1",
+                        params![c.name, c.subtitle],
+                        |row| row.get(0),
+                    )
+                    .ok();
+                if let Some(h) = hit {
+                    known.insert(crate::official::card_name_key(c), h);
+                }
+            }
+            crate::official::remap_cards(&mut page.payload, &known);
+            let mut r = apply_payload(&tx, &page.payload)?;
+            for p in &page.payload.printings {
+                r.alarms += tx.execute(
+                    "DELETE FROM alarms WHERE kind = 'official_bad_record' AND key = ?1",
+                    [&p.printing_id],
+                )?;
+            }
+            rejoin(&tx, &mut r)?;
+            r
+        }
+        swu::SRC_OFFICIAL_CRAWL => {
+            let m: CrawlMarker = serde_json::from_slice(bytes)?;
+            let mut r = ApplyReport::default();
+            if let Some(s) = &m.updated_since {
+                r.sync_state += advance(&tx, swu::KEY_OFFICIAL_SINCE, s)?;
+            }
+            r.sync_state += advance(&tx, swu::KEY_OFFICIAL_CRAWLED_ON, &m.crawled_on)?;
+            r
+        }
+        swu::SRC_GROUPS => {
+            let mut r = ApplyReport::default();
+            for g in tcgcsv::parse_groups(bytes)? {
+                r.groups += tx.execute(
+                    "INSERT INTO tcgcsv_groups (group_id, name, abbreviation) VALUES (?1,?2,?3)
+                     ON CONFLICT(group_id) DO UPDATE SET name=excluded.name, abbreviation=excluded.abbreviation
+                     WHERE name IS NOT excluded.name OR abbreviation IS NOT excluded.abbreviation",
+                    params![g.group_id, g.name, g.abbreviation],
+                )?;
+            }
+            rejoin(&tx, &mut r)?;
+            r
+        }
+        swu::SRC_PRODUCTS => {
+            let mut r = ApplyReport::default();
+            for p in tcgcsv::parse_products(bytes)? {
+                r.products += tx.execute(
+                    "INSERT INTO tcgcsv_products (product_id, group_id, name, number) VALUES (?1,?2,?3,?4)
+                     ON CONFLICT(product_id) DO UPDATE SET group_id=excluded.group_id, name=excluded.name, number=excluded.number
+                     WHERE group_id IS NOT excluded.group_id OR name IS NOT excluded.name OR number IS NOT excluded.number",
+                    params![p.product_id, p.group_id, p.name, p.number],
+                )?;
+            }
+            rejoin(&tx, &mut r)?;
+            r
+        }
+        swu::SRC_PRICES => {
+            let day = prov.as_of.as_deref().ok_or_else(|| {
+                CatalogError::Source("a tcgcsv price payload carries no day".into())
+            })?;
+            let mut payload = CatalogPayload::empty();
+            payload.prices = tcgcsv::parse_prices(bytes, day)?;
+            apply_payload(&tx, &payload)?
+        }
+        swu::SRC_LAST_UPDATED => {
+            let stamp = String::from_utf8_lossy(bytes).trim().to_string();
+            ApplyReport {
+                sync_state: advance(&tx, swu::KEY_TCGCSV_LAST_UPDATED, &stamp)?,
+                ..Default::default()
+            }
+        }
+        _ => {
+            let payload: CatalogPayload = serde_json::from_slice(bytes)?;
+            if payload.format != FORMAT {
+                return Err(CatalogError::Format(payload.format));
+            }
+            apply_payload(&tx, &payload)?
+        }
+    };
     tx.execute(
         "INSERT OR IGNORE INTO applied_payloads (payload_hash, source, url) VALUES (?1, ?2, ?3)",
-        params![prov.sha256, prov.source, prov.url],
+        params![key, prov.source, prov.url],
     )?;
     tx.commit()?;
     Ok(report)
@@ -231,7 +332,49 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
             )
             .ok();
         let Some(printing) = printing else {
-            r.unmatched_prices += 1;
+            // A product already alarmed (no official printing, ambiguous, an
+            // unlisted promo) is reported once, as the product.
+            let alarmed: bool = tx.query_row(
+                "SELECT EXISTS (SELECT 1 FROM alarms WHERE key = ?1 AND kind IN
+                   ('tcgcsv_without_official', 'ambiguous_tcgcsv', 'tcgcsv_unlisted_promo'))",
+                [pr.tcgcsv_product_id.to_string()],
+                |row| row.get(0),
+            )?;
+            if alarmed {
+                r.unmatched_prices += 1;
+                continue;
+            }
+            let product: Option<(Option<String>, i64, String)> = tx
+                .query_row(
+                    "SELECT number, group_id, name FROM tcgcsv_products WHERE product_id = ?1",
+                    [pr.tcgcsv_product_id],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                )
+                .ok();
+            match product {
+                Some((None, ..)) => r.sealed_prices += 1,
+                Some((Some(n), ..)) if crosswalk::is_token_back_number(&n) => r.token_backs += 1,
+                Some((_, g, name))
+                    if tcgcsv::group_info(g).is_some_and(|i| tcgcsv::is_ignored(&i, &name)) =>
+                {
+                    r.ignored_prices += 1
+                }
+                _ => {
+                    r.unmatched_prices += 1;
+                    r.alarms += put_alarms(
+                        tx,
+                        &[AlarmRecord::alarm(
+                            "unmatched_price",
+                            format!("{}:{}", pr.tcgcsv_product_id, pr.tcgcsv_sub_type_name),
+                            format!(
+                                "tcgcsv product {} ({}) priced on {} but joined to no printing",
+                                pr.tcgcsv_product_id, pr.tcgcsv_sub_type_name, pr.observed_on
+                            ),
+                        )],
+                        &[],
+                    )?;
+                }
+            }
             continue;
         };
         r.prices += tx.execute(
@@ -240,5 +383,151 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
             params![printing, pr.observed_on, pr.low, pr.mid, pr.high, pr.market, pr.direct_low],
         )?;
     }
+    r.alarms += put_alarms(tx, &p.alarms, &[])?;
     Ok(r)
+}
+
+/// Move a sync key forward; never backwards.
+fn advance(tx: &Transaction, key: &str, value: &str) -> Result<usize> {
+    Ok(tx.execute(
+        "INSERT INTO sync_state (key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value WHERE excluded.value > value",
+        params![key, value],
+    )?)
+}
+
+/// Upsert `alarms`; then delete every stored alarm of a kind in `replace` that
+/// is not among them. Returns rows written or removed.
+fn put_alarms(tx: &Transaction, alarms: &[AlarmRecord], replace: &[&str]) -> Result<usize> {
+    let mut n = 0;
+    for a in alarms {
+        n += tx.execute(
+            "INSERT INTO alarms (kind, key, severity, detail) VALUES (?1,?2,?3,?4)
+             ON CONFLICT(kind, key) DO UPDATE SET severity=excluded.severity, detail=excluded.detail
+             WHERE severity IS NOT excluded.severity OR detail IS NOT excluded.detail",
+            params![a.kind, a.key, a.severity, a.detail],
+        )?;
+    }
+    let keep: BTreeSet<(&str, &str)> = alarms.iter().map(|a| (a.kind.as_str(), a.key.as_str())).collect();
+    for kind in replace {
+        let existing: Vec<String> = tx
+            .prepare("SELECT key FROM alarms WHERE kind = ?1")?
+            .query_map([kind], |row| row.get(0))?
+            .collect::<std::result::Result<_, _>>()?;
+        for key in existing {
+            if !keep.contains(&(*kind, key.as_str())) {
+                n += tx.execute("DELETE FROM alarms WHERE kind = ?1 AND key = ?2", params![kind, key])?;
+            }
+        }
+    }
+    Ok(n)
+}
+
+const JOIN_KINDS: &[&str] = &[
+    "official_without_tcgcsv",
+    "official_unlisted",
+    "tcgcsv_without_official",
+    "ambiguous_tcgcsv",
+    "unmapped_group",
+    "tcgcsv_unlisted_promo",
+];
+
+/// Re-run the official <-> tcgcsv join over everything stored, so that a change
+/// on either side re-joins the other. A catalog with no tcgcsv products stored
+/// (the fake, or before the first price sync) is left exactly as it is.
+fn rejoin(tx: &Transaction, r: &mut ApplyReport) -> Result<()> {
+    let products: Vec<tcgcsv::ProductRecord> = tx
+        .prepare("SELECT product_id, group_id, name, number FROM tcgcsv_products ORDER BY product_id")?
+        .query_map([], |row| {
+            Ok(tcgcsv::ProductRecord {
+                product_id: row.get(0)?,
+                group_id: row.get(1)?,
+                name: row.get(2)?,
+                number: row.get(3)?,
+            })
+        })?
+        .collect::<std::result::Result<_, _>>()?;
+    if products.is_empty() {
+        return Ok(());
+    }
+    let set_codes: BTreeSet<String> = tx
+        .prepare("SELECT set_code FROM sets")?
+        .query_map([], |row| row.get(0))?
+        .collect::<std::result::Result<_, _>>()?;
+    let mut group_names: BTreeMap<i64, String> = BTreeMap::new();
+    let mut groups: BTreeMap<i64, GroupInfo> = BTreeMap::new();
+    let rows: Vec<(i64, String, Option<String>)> = tx
+        .prepare("SELECT group_id, name, abbreviation FROM tcgcsv_groups")?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+        .collect::<std::result::Result<_, _>>()?;
+    for (id, name, abbr) in rows {
+        group_names.insert(id, name);
+        if let Some(a) = abbr
+            && set_codes.contains(&a)
+        {
+            groups.insert(
+                id,
+                GroupInfo {
+                    set_code: a,
+                    kind: GroupKind::Main,
+                    variants: vec![],
+                },
+            );
+        }
+    }
+    for row in tcgcsv::group_table() {
+        groups.insert(row.group_id, row.info);
+    }
+    let printings: Vec<OfficialPrinting> = tx
+        .prepare(
+            "SELECT p.printing_id, p.set_code, p.number, p.variant, p.finish, c.name, c.subtitle
+             FROM printings p JOIN cards c ON c.card_id = p.card_id ORDER BY p.printing_id",
+        )?
+        .query_map([], |row| {
+            Ok(OfficialPrinting {
+                printing_id: row.get(0)?,
+                set_code: row.get(1)?,
+                number: row.get(2)?,
+                variant: row.get(3)?,
+                finish: row.get(4)?,
+                name: row.get(5)?,
+                subtitle: row.get(6)?,
+            })
+        })?
+        .collect::<std::result::Result<_, _>>()?;
+    let joined = crosswalk::join(&printings, &products, &groups, &group_names);
+    r.token_backs = joined.token_backs;
+
+    let want: BTreeSet<(String, String, String)> = joined
+        .links
+        .iter()
+        .map(|l| (l.product_id.to_string(), l.sub_type_name.clone(), l.printing_id.clone()))
+        .collect();
+    let have: Vec<(String, String, String)> = tx
+        .prepare("SELECT source_id, sub_type_name, printing_id FROM printing_source_id WHERE source = 'tcgcsv'")?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+        .collect::<std::result::Result<_, _>>()?;
+    for row in have.iter().filter(|h| !want.contains(*h)) {
+        r.crosswalk += tx.execute(
+            "DELETE FROM printing_source_id WHERE source='tcgcsv' AND source_id=?1 AND sub_type_name=?2 AND printing_id=?3",
+            params![row.0, row.1, row.2],
+        )?;
+    }
+    for l in &joined.links {
+        r.crosswalk += tx.execute(
+            "INSERT INTO printing_source_id (source, source_id, sub_type_name, printing_id)
+             VALUES ('tcgcsv', ?1, ?2, ?3)
+             ON CONFLICT(source, source_id, sub_type_name) DO UPDATE SET printing_id=excluded.printing_id
+             WHERE printing_id IS NOT excluded.printing_id",
+            params![l.product_id.to_string(), l.sub_type_name, l.printing_id],
+        )?;
+    }
+    r.alarms += put_alarms(tx, &joined.alarms, JOIN_KINDS)?;
+    r.alarms += tx.execute(
+        "DELETE FROM alarms WHERE kind = 'unmatched_price' AND EXISTS (
+           SELECT 1 FROM printing_source_id s WHERE s.source = 'tcgcsv'
+             AND s.source_id || ':' || s.sub_type_name = alarms.key)",
+        [],
+    )?;
+    Ok(())
 }

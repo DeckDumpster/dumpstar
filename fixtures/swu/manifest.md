@@ -27,3 +27,12 @@ Verbatim captures for the dumpstar (Star Wars: Unlimited) data-source feasibilit
 | off-robots.txt | https://admin.starwarsunlimited.com/robots.txt | no restrictions (all commented out) |
 | *.headers | - | response headers of the sibling file |
 Not stored (size): full official catalog (10193 entries, about 570 MB uncompressed, about 38 MB gzip est.), all other tcgcsv groups' products/prices.
+
+Added 2026-10-13 by sp-urhv3o (dumpstar 7), retrieved with User-Agent `dumpstar-sync/0.1 (+https://star.dumpster.cards)`:
+
+| File | source_url | Shows |
+|---|---|---|
+| sor-wpp-products.json | https://tcgcsv.com/tcgplayer/79/23451/products | Spark of Rebellion: Weekly Play Promos, 20 products, Number `NN/20`; joins official serial `0160NNN` (Weekly Play) and `0135NNN` (Weekly Play Foil) |
+| sor-wpp-prices.json | https://tcgcsv.com/tcgplayer/79/23451/prices | the same group's price rows |
+| last-updated.txt | https://tcgcsv.com/last-updated.txt | `2026-10-12T20:05:44+0000`, no trailing newline |
+| promo-23452/23453/23454/23455-products.json.gz, -prices.json.gz | https://tcgcsv.com/tcgplayer/79/{23452 PRE, 23453 JDG, 23454 EEP, 23455 OPP}/products and /prices | the promo groups the SOR event/prize printings are listed in: Prerelease Promo (PRE), Prerelease Judge and SS Judge (JDG), SS Participation/Top 8/Top 4/Finalist/Champion (OPP), and the Hyperspace Luke/Vader 1/2, 2/2 (EEP). Other sets' promos share these groups. |

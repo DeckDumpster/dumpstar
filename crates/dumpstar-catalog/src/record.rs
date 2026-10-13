@@ -20,6 +20,50 @@ pub struct CatalogPayload {
     pub formats: Vec<FormatRecord>,
     #[serde(default)]
     pub legality: Vec<LegalityRecord>,
+    #[serde(default)]
+    pub alarms: Vec<AlarmRecord>,
+}
+
+impl CatalogPayload {
+    pub fn empty() -> Self {
+        Self {
+            format: FORMAT.into(),
+            sets: vec![],
+            cards: vec![],
+            printings: vec![],
+            prices: vec![],
+            formats: vec![],
+            legality: vec![],
+            alarms: vec![],
+        }
+    }
+}
+
+/// A condition the operator must hear about. `severity` is 'alarm' (fails the
+/// check) or 'info' (counted, never silent, but not paged).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub struct AlarmRecord {
+    pub kind: String,
+    pub key: String,
+    pub severity: String,
+    pub detail: String,
+}
+
+impl AlarmRecord {
+    pub fn alarm(kind: &str, key: impl Into<String>, detail: impl Into<String>) -> Self {
+        Self::new(kind, key, "alarm", detail)
+    }
+    pub fn info(kind: &str, key: impl Into<String>, detail: impl Into<String>) -> Self {
+        Self::new(kind, key, "info", detail)
+    }
+    fn new(kind: &str, key: impl Into<String>, sev: &str, detail: impl Into<String>) -> Self {
+        Self {
+            kind: kind.into(),
+            key: key.into(),
+            severity: sev.into(),
+            detail: detail.into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

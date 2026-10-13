@@ -1,0 +1,22 @@
+# tcgcsv group (set) -> official set code and how its Number column reads.
+# Hand-kept and small. A group that is not listed here is matched by its
+# abbreviation against the official set codes; a group matched by neither
+# raises an `unmapped_group` alarm rather than being skipped.
+#
+# groupId	set	kind	variants
+#   main         Number is the set's collector number; the (Hyperspace) and
+#                (Showcase) name suffix picks the variant
+#   weekly_play  Number is "N/total" within the promo group; official serials
+#                SS60NNN (Weekly Play) and SS35NNN (Weekly Play Foil); its
+#                (Hyperspace) products are the Hyperspace printings SS02NNN
+#   hyperspace_only  a group shared by many sets: only (Hyperspace) products
+#                are read, by number
+#   promo        prize and event printings, matched on name; the parenthetical
+#                (Top 8, Finalist, ...) names the finish. `set` is * (any), the
+#                last column lists the official variants the group carries.
+23405	SOR	main
+23451	SOR	weekly_play
+23454	SOR	hyperspace_only
+23452	*	promo	Prerelease Promo
+23453	*	promo	Prerelease Judge|SS Judge
+23455	*	promo	SS Participation|SS Top 8|SS Top 4|SS Finalist|SS Champion

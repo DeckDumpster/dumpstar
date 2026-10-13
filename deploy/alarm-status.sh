@@ -153,11 +153,13 @@ HB_TIMER="${P}-heartbeat@${INSTANCE}.timer"
 [ "$(systemctl --user is-active "$HB_TIMER" 2>/dev/null)" = active ]
 gate $? "heartbeat timer running" "systemctl --user enable --now ${HB_TIMER}"
 
-if configured "${DUMPSTAR_HEARTBEAT_URL:-}"; then
+if [ -n "${DUMPSTAR_HEARTBEAT_URL:-}" ]; then
     ok "probing ${DUMPSTAR_HEARTBEAT_URL}"
+elif (. "$(dirname "$0")/units-lib.sh" && dumpstar_origin_url "$INSTANCE" >/dev/null); then
+    ok "probing the origin read from the instance's unit"
 else
-    bad "no URL to probe — the heartbeat cannot tell whether the site serves" \
-        "\$EDITOR ${CONF_DIR}/alerts.env   # set DUMPSTAR_HEARTBEAT_URL"
+    bad "no origin to probe — the instance's unit does not publish on loopback" \
+        "bash deploy/setup.sh ${INSTANCE}   # reinstall the units"
 fi
 
 if configured "${DUMPSTAR_UPTIME_PING_URL:-}"; then

@@ -318,9 +318,9 @@ rm -f "$CONF"
 check "ci.sh reads host store config" "1" \
 	"$(grep -c '^dumpstar_store_load_config$' "${REPO_DIR}/deploy/ci.sh" || true)"
 check "setup.sh does not" "0" \
-	"$(grep -c 'dumpstar_store_load_config' "${REPO_DIR}/deploy/setup.sh" || true)"
+	"$(grep -c 'dumpstar_store_load_config' "${REPO_DIR}/deploy/config-lib.sh" || true)"
 check "setup.sh scaffolds the knob commented out" "1" \
-	"$(grep -c '^#DUMPSTAR_STORE_ROOT=' "${REPO_DIR}/deploy/setup.sh" || true)"
+	"$(grep -c '^#DUMPSTAR_STORE_ROOT=' "${REPO_DIR}/deploy/config-lib.sh" || true)"
 # access.env scaffold lives in config-lib.sh (db-g6ku: extracted so deploy.sh
 # can scaffold it for existing instances). There is no multi-tenant switch to
 # scaffold: Access is mandatory and the server refuses to start without it.
@@ -562,6 +562,12 @@ printf '[Unit]\nDescription=stale\n\n[Container]\nImage=localhost/dumpstar:prod\
 printf '[Unit]\nDescription=stale sidecar\n' \
 	> "${QUADLET}/dumpstar-litestream-prod.container"
 
+# An instance that has been running has filled in its Access config; a deploy
+# refuses to restart one that has not (§20), so this one has.
+mkdir -p "${FAKE_HOME}/.config/dumpstar/prod"
+printf 'DUMPSTAR_ACCESS_TEAM_DOMAIN=https://t.example\nDUMPSTAR_ACCESS_AUD=aud\nDUMPSTAR_ACCESS_JWKS_URL=https://t.example/certs\n' \
+	> "${FAKE_HOME}/.config/dumpstar/prod/access.env"
+
 SYSCTL_LOG="${WORK}/systemctl.log"
 PODMAN_LOG="${WORK}/deploy-podman.log"
 : > "$SYSCTL_LOG"
@@ -657,7 +663,7 @@ check "and leaves no temp files behind" "0" \
 # required file added to dumpstar.container is covered the day it lands without
 # anyone extending this test.
 #
-# Seen RED: comment out dumpstar_scaffold_access_env in deploy.sh — the
+# Seen RED: comment out dumpstar_scaffold_config in deploy.sh — the
 # "recreated" and "mode 600" checks for access.env fail.
 
 # Build the set of required config files from the app container template.
@@ -677,12 +683,19 @@ done < <(grep -ho 'EnvironmentFile=[^ ]*' "${REPO_DIR}/deploy/dumpstar.container
 	| sed 's/EnvironmentFile=//; s/^-//' | sort -u)
 
 : > "$SYSCTL_LOG"
+UPGRADE_RC=0
 UPGRADE_OUT="$(
 	PATH="${WORK}/deploybin:${ORIG_PATH}" \
 		HOME="$FAKE_HOME" \
 		DUMPSTAR_TEST_SYSTEMCTL_LOG="$SYSCTL_LOG" \
 		bash "${REPO_DIR}/deploy/deploy.sh" prod 2>&1
-)"
+)" || UPGRADE_RC=$?
+
+# The scaffold is unfilled, so the server would refuse to start: the deploy must
+# stop BEFORE it restarts anything (sp-kaj3xv), with the old container serving.
+check "upgrade: an unfilled required config stops the deploy" "1" "$UPGRADE_RC"
+check "upgrade: and it did not restart the instance" "0" \
+	"$(grep -c '^SYSTEMCTL: --user restart' "$SYSCTL_LOG" || true)"
 
 # Every file that was deleted must be back with the correct permissions, and
 # the deploy must have reported writing it.
@@ -694,8 +707,12 @@ while IFS= read -r f; do
 	check "upgrade: ${fname} is mode 600" "600" \
 		"$(stat -c '%a' "$f" 2>/dev/null || echo absent)"
 	check "upgrade: deploy reported writing ${fname}" "1" \
-		"$(printf '%s' "$UPGRADE_OUT" | grep -c "${fname}" || true)"
+		"$(printf '%s' "$UPGRADE_OUT" | grep -c "Wrote .*${fname}" || true)"
 done <<< "$UPGRADE_MISSING"
+
+# The operator fills the scaffold in; the sections below deploy a configured instance.
+printf 'DUMPSTAR_ACCESS_TEAM_DOMAIN=https://t.example\nDUMPSTAR_ACCESS_AUD=aud\nDUMPSTAR_ACCESS_JWKS_URL=https://t.example/certs\n' \
+	> "${FAKE_HOME}/.config/dumpstar/prod/access.env"
 
 # --- The OTHER image this checkout ships (pd-rn4c) --------------------------
 #
@@ -3604,14 +3621,154 @@ check "scaffolded file has mode 600" "600" \
 	"$(stat -c '%a' "$ACCESS19" 2>/dev/null || echo missing)"
 check "scaffolded file carries no multi-tenant switch" "0" \
 	"$(grep -c 'DUMPSTAR_MULTITENANT' "$ACCESS19" || true)"
+check "scaffolded file names all three Access keys" "3" \
+	"$(grep -c '^#DUMPSTAR_ACCESS_\(TEAM_DOMAIN\|AUD\|JWKS_URL\)=CHANGE_ME$' "$ACCESS19" || true)"
 
 # Second run must not overwrite an existing file (idempotence).
-printf '# custom\nDUMPSTAR_ACCESS_CUSTOM=1\n' > "$ACCESS19"
+printf '# custom\nDUMPSTAR_ACCESS_TEAM_DOMAIN=https://t.example\nDUMPSTAR_ACCESS_AUD=aud\nDUMPSTAR_ACCESS_JWKS_URL=https://t.example/certs\n' > "$ACCESS19"
 PATH="${WORK}/bin19:${ORIG_PATH}" \
 	HOME="$FAKE19" \
 	bash "${REPO_DIR}/deploy/deploy.sh" prod > /dev/null 2>&1 || true
 check "a second deploy does not overwrite access.env" "1" \
-	"$(grep -c '^DUMPSTAR_ACCESS_CUSTOM=1$' "$ACCESS19" || true)"
+	"$(grep -c '^# custom$' "$ACCESS19" || true)"
+
+reset_store
+
+# ---------------------------------------------------------------------------
+log "§20 — production deploy: a new required key cannot take the instance down (sp-kaj3xv)"
+# ---------------------------------------------------------------------------
+#
+# The upgrade test. A release that makes a config key mandatory is simulated the
+# way it really arrives: a NEW checkout whose config-lib.sh lists one more required
+# key, deployed over an instance whose env file predates it. The server refuses to
+# start without a required key, so restarting into that file is an outage. The
+# deploy must stop first, with nothing rebuilt, rewritten or restarted.
+#
+# Seen RED: delete the dumpstar_config_converge call from the deploy script and the
+# first checks fail (it restarts the instance into the missing key).
+
+HOME20="${WORK}/home20"
+CONF20="${HOME20}/.config/dumpstar/prod"
+Q20="${HOME20}/.config/containers/systemd"
+mkdir -p "$CONF20" "$Q20" "${WORK}/bin20"
+cp "${WORK}/deploybin/podman" "${WORK}/bin20/podman"
+cat > "${WORK}/bin20/systemctl" <<'EOF'
+#!/usr/bin/env bash
+for a in "$@"; do [ "$a" = is-active ] && exit 3; done
+echo "SYSTEMCTL: $*" >> "$DUMPSTAR_TEST_SYSTEMCTL_LOG"
+exit 0
+EOF
+chmod +x "${WORK}/bin20/systemctl"
+printf 'DUMPSTAR_ACCESS_TEAM_DOMAIN=https://t.example\nDUMPSTAR_ACCESS_AUD=aud\nDUMPSTAR_ACCESS_JWKS_URL=https://t.example/certs\n' > "${CONF20}/access.env"
+printf '[Unit]\nDescription=running\n\n[Container]\nImage=localhost/dumpstar:prod\nPublishPort=127.0.0.1:8091:8080\n' > "${Q20}/dumpstar-prod.container"
+cp "${Q20}/dumpstar-prod.container" "${WORK}/unit20.before"
+
+# The "new release": a copy of this checkout's deploy/ with one more required key.
+new_release() { # new_release <dir> <entry>
+	rm -rf "$1"
+	mkdir -p "$1"
+	cp -r "${REPO_DIR}/deploy" "$1/deploy"
+	printf '\nDUMPSTAR_REQUIRED_CONFIG+=("%s")\n' "$2" >> "$1/deploy/config-lib.sh"
+}
+run20() { # run20 <release-dir>; sets RC20 and OUT20
+	: > "$SYSCTL_LOG"
+	: > "$PODMAN_LOG"
+	RC20=0
+	OUT20="$(PATH="${WORK}/bin20:${ORIG_PATH}" HOME="$HOME20" \
+		DUMPSTAR_TEST_SYSTEMCTL_LOG="$SYSCTL_LOG" DUMPSTAR_TEST_DEPLOY_PODMAN_LOG="$PODMAN_LOG" \
+		bash "$1/deploy/deploy.sh" prod 2>&1)" || RC20=$?
+}
+
+new_release "${WORK}/rel20a" "access.env|DUMPSTAR_NEW_REQUIRED_KEY|"
+run20 "${WORK}/rel20a"
+check "a new required key with no default stops the deploy" "1" "$RC20"
+check "…before anything is restarted" "0" "$(grep -c '^SYSTEMCTL: --user \(restart\|daemon-reload\)' "$SYSCTL_LOG" || true)"
+check "…before the image is rebuilt" "0" "$(grep -c '^PODMAN: build' "$PODMAN_LOG" || true)"
+check "…and the running unit is untouched" "same" \
+	"$(cmp -s "${Q20}/dumpstar-prod.container" "${WORK}/unit20.before" && echo same || echo differs)"
+check "…naming the missing key" "1" "$(printf '%s' "$OUT20" | grep -c 'MISSING required config: DUMPSTAR_NEW_REQUIRED_KEY' || true)"
+
+new_release "${WORK}/rel20b" "access.env|DUMPSTAR_NEW_DEFAULTED_KEY|on"
+run20 "${WORK}/rel20b"
+check "a new required key WITH a default deploys" "0" "$RC20"
+check "…and is backfilled into the env file" "1" "$(grep -c '^DUMPSTAR_NEW_DEFAULTED_KEY=on$' "${CONF20}/access.env" || true)"
+check "…and the instance is restarted" "1" "$(grep -c '^SYSTEMCTL: --user restart dumpstar-prod$' "$SYSCTL_LOG" || true)"
+
+printf 'DUMPSTAR_NEW_REQUIRED_KEY=1\n' >> "${CONF20}/access.env"
+run20 "${WORK}/rel20a"
+check "once the operator supplies the key the same release deploys" "0" "$RC20"
+
+printf 'DUMPSTAR_NOTE=1 # a comment\n' >> "${CONF20}/access.env"
+run20 "${WORK}/rel20a"
+check "an inline # comment on a value line stops the deploy" "1" "$RC20"
+check "…and says so" "1" "$(printf '%s' "$OUT20" | grep -c 'Inline # comment' || true)"
+
+# --- The shipped templates -------------------------------------------------
+check "no Quadlet unit uses EnvironmentFile=- (Quadlet does not support it)" "0" \
+	"$(grep -h '^EnvironmentFile=-' "${REPO_DIR}"/deploy/*.container | wc -l)"
+check "the app unit reads its Access config from a file that always exists" "1" \
+	"$(grep -c '^EnvironmentFile=%h/\.config/dumpstar/{{INSTANCE}}/access\.env$' "${REPO_DIR}/deploy/dumpstar.container")"
+check "the app unit publishes loopback only" "1" \
+	"$(grep -c '^PublishPort=127\.0\.0\.1:{{PORT}}:8080$' "${REPO_DIR}/deploy/dumpstar.container")"
+check "the app unit bounds restarts and alerts on failure" "3" \
+	"$(grep -c '^\(StartLimitIntervalSec=\|StartLimitBurst=\|OnFailure=dumpstar-alert@%n\.service\)' "${REPO_DIR}/deploy/dumpstar.container")"
+
+# Every file setup scaffolds: no inline # on a value line.
+SCAF20="${WORK}/scaf20"
+mkdir -p "$SCAF20"
+(
+	HOME="$SCAF20"
+	. "${REPO_DIR}/deploy/config-lib.sh"
+	dumpstar_scaffold_config scaf >/dev/null
+)
+check "scaffolded env files carry no inline # on a value line" "0" \
+	"$(find "$SCAF20" -name '*.env' -exec grep -nE '^[A-Za-z_][A-Za-z0-9_]*=.*[[:space:]]#' {} + | wc -l)"
+check "scaffolded Access file is mode 600" "600" "$(stat -c '%a' "${SCAF20}/.config/dumpstar/scaf/access.env")"
+
+# --- prod's port is fixed and recorded -------------------------------------
+PORT20="${WORK}/port20"
+mkdir -p "$PORT20"
+(
+	HOME="$PORT20"
+	. "${REPO_DIR}/deploy/store-lib.sh"
+	. "${REPO_DIR}/deploy/units-lib.sh"
+	dumpstar_units_install prod >/dev/null
+	dumpstar_units_install other >/dev/null
+)
+check "a fresh prod publishes the recorded port on loopback" "1" \
+	"$(grep -c '^PublishPort=127\.0\.0\.1:8091:8080$' "${PORT20}/.config/containers/systemd/dumpstar-prod.container" || true)"
+check "the recorded port is in the README" "yes" \
+	"$(grep -q '127\.0\.0\.1:8091' "${REPO_DIR}/deploy/README.md" && echo yes || echo no)"
+check "another instance is not pinned to prod's port" "0" \
+	"$(grep -c ':8091:' "${PORT20}/.config/containers/systemd/dumpstar-other.container" || true)"
+
+# --- The serving check probes the origin, never the public hostname ---------
+mkdir -p "${WORK}/bin20c"
+cat > "${WORK}/bin20c/curl" <<'EOF'
+#!/usr/bin/env bash
+echo "$*" >> "$DUMPSTAR_TEST_CURL_LOG"
+printf 200
+EOF
+chmod +x "${WORK}/bin20c/curl"
+CURL_LOG="${WORK}/curl20.log"
+: > "$CURL_LOG"
+HB_RC=0
+PATH="${WORK}/bin20c:${ORIG_PATH}" HOME="$HOME20" DUMPSTAR_TEST_CURL_LOG="$CURL_LOG" \
+	bash "${REPO_DIR}/deploy/heartbeat.sh" prod >/dev/null 2>&1 || HB_RC=$?
+check "the serving check passes against a serving origin" "0" "$HB_RC"
+check "…and probed the origin read from the unit" "1" "$(grep -c 'http://127\.0\.0\.1:8091/health' "$CURL_LOG" || true)"
+: > "$CURL_LOG"
+HB_RC=0
+PATH="${WORK}/bin20c:${ORIG_PATH}" HOME="$HOME20" DUMPSTAR_TEST_CURL_LOG="$CURL_LOG" \
+	DUMPSTAR_HEARTBEAT_URL=https://star.dumpster.cards/health \
+	bash "${REPO_DIR}/deploy/heartbeat.sh" prod >/dev/null 2>&1 || HB_RC=$?
+check "the serving check refuses the public hostname" "1" "$HB_RC"
+check "…without sending a request to it" "0" "$(grep -c 'star\.dumpster\.cards' "$CURL_LOG" || true)"
+rm -f "${Q20}/dumpstar-prod.container"
+HB_RC=0
+PATH="${WORK}/bin20c:${ORIG_PATH}" HOME="$HOME20" DUMPSTAR_TEST_CURL_LOG="$CURL_LOG" \
+	bash "${REPO_DIR}/deploy/heartbeat.sh" prod >/dev/null 2>&1 || HB_RC=$?
+check "no installed unit means the check fails rather than passes" "1" "$HB_RC"
 
 reset_store
 

@@ -1,0 +1,61 @@
+name: Deploy
+
+# Deploys the commit that just landed on main to the production instance on the
+# deployment box. Merging is not deploying on its own (the landing queue ends at
+# main); this is what makes the two the same event for dumpstar.
+#
+# Runs ON THE BOX, on a runner labelled `dumpstar-prod`, against ~/dumpstar: the
+# production checkout, which is NOT the runner's workspace. The workspace is
+# never built or deployed from. main only receives commits that already passed the
+# gate, so this does not re-run the suite.
+#
+# The deploy script refuses (before building or restarting) if the instance's
+# config lacks a key the new release requires, so a bad release fails this job with
+# the previous container still serving. The last step asks the origin, on loopback,
+# whether the site serves.
+#
+# Needs a self-hosted runner registered with the `dumpstar-prod` label. Until one
+# exists the job waits; nothing else is affected.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Deploys must not overlap, and unlike CI the evicted pending run is harmless: a
+# deploy always ships the newest main, so only the latest request matters.
+concurrency:
+  group: dumpstar-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, dumpstar-prod]
+    timeout-minutes: 45
+    env:
+      PROD_CHECKOUT: $HOME/dumpstar
+      DEPLOY_SHA: ${{ github.sha }}
+    steps:
+      - name: Move the production checkout to the landed commit
+        run: |
+          set -euo pipefail
+          checkout="$(eval echo "$PROD_CHECKOUT")"
+          git -C "$checkout" fetch origin main
+          git -C "$checkout" merge --ff-only "$DEPLOY_SHA"
+      - name: Deploy prod
+        run: |
+          set -euo pipefail
+          checkout="$(eval echo "$PROD_CHECKOUT")"
+          bash "$checkout/deploy/deploy.sh" prod
+      - name: The origin serves
+        run: |
+          set -euo pipefail
+          checkout="$(eval echo "$PROD_CHECKOUT")"
+          for _ in $(seq 1 30); do
+            if bash "$checkout/deploy/heartbeat.sh" prod; then exit 0; fi
+            sleep 2
+          done
+          echo "the origin did not serve after the deploy" >&2
+          exit 1

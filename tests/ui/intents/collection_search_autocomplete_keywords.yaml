@@ -1,0 +1,12 @@
+# Scenario: The search bar autocompletes keywords and is: flags
+#
+# Related:
+#   issues: [dumpstar-cx1]
+#   pull_requests: []
+
+description: >
+  As I type in the Collection search bar, a dropdown suggests completions
+  from the query vocabulary. Typing a bare token like "t" lists matching
+  keywords (e.g. the energy-type keyword) with their descriptions; typing
+  "is:" lists the boolean flags I can use (is:holo, is:graded, …). The
+  suggestions come from the server's keyword registry, not a hardcoded list.

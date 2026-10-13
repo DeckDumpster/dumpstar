@@ -1,0 +1,34 @@
+# Card Data Access Policy
+
+## Rule: the local database is the single source of truth
+
+All card, set, printing, and price data at runtime MUST come from the local
+SQLite catalog (`shared.sqlite`). The upstream APIs are accessed only during
+explicit cache-population commands:
+
+- `dumpstar setup` — full rebuild of the shared catalog
+- `dumpstar data refresh` — the nightly LANDING run: it fetches the upstreams and
+  writes every response into `raw/`. Since pd-lunn it builds no catalog itself
+- `dumpstar-lake-derive shared` — the nightly BUILD, replaying one `raw/`
+  partition. Offline; the only thing that writes `shared.sqlite` incrementally
+
+Every other code path — the HTTP API, the binder-browse endpoint, collection
+queries, CSV-import resolution, exports — reads exclusively from the local DB
+via the `dumpstar-db` repository layer.
+
+## Why
+
+A single data source (the bulk cache) guarantees consistent IDs throughout
+the system and eliminates runtime network dependencies. The server runs with
+no network access required and no upstream rate-limit exposure.
+
+## How to add a feature that needs card data
+
+1. Assume `shared.sqlite` is populated (the user has run `dumpstar setup`).
+2. Query through `dumpstar-db` repositories — never call `dumpstar-ingest`'s HTTP
+   clients at request time.
+3. If the data isn't cached, return an error telling the user to run
+   `dumpstar setup`. Do NOT fall back to the live API. (`dumpstar data refresh`
+   alone will not fill it any more — it lands, and the nightly derive builds.)
+4. If you need data not in the current schema, extend the ingest pipeline and
+   add a migration — not a runtime fetch.

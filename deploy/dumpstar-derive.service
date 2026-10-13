@@ -1,0 +1,89 @@
+[Unit]
+Description=Dumpstar offline catalog derive (%i)
+# pd-1uem, item 5 of the lake-as-source epic: LANDING AND DERIVING ARE TWO UNITS.
+#
+# dumpstar-refresh@%i is the landing unit — it fetches from the upstreams and,
+# puts every response in the bucket. This unit is the deriving
+# one: it rebuilds shared.sqlite from ONE raw/ partition, replaying those bytes
+# instead of fetching anything.
+#
+# Splitting them is what lets a derive run against yesterday's raw on a night the
+# fetch failed, and eventually what lets the two halves run on different machines
+# — the boundary the whole epic turns on is which side of that split code is on,
+# not which language it is written in.
+#
+# {{REPO_DIR}} is sed-substituted by deploy/units-lib.sh (single-clone
+# deployment). Installed for every instance; on a box that runs
+# dumpstar-refresh@%i it must be ENABLED — see the timer.
+#
+# ── SINCE pd-lunn THIS IS THE ONLY THING THAT BUILDS THE CATALOG ────────────
+# `dumpstar data refresh` used to derive inline as well, which is why this timer
+# shipped disabled: arming it only did the same work a second time from the
+# bytes the first run had just landed. Item 6 of the epic deleted that half. The
+# refresh now lands and nothing else, and shared.sqlite has one builder — this
+# one. A box landing without this unit enabled serves a catalog that silently
+# stops advancing, so deploy/refresh.sh refuses to run in that state.
+#
+# ── ORDERING: after the landing, never beside it ────────────────────────────
+# This unit reads the partition that one wrote, so the ordering is declared
+# rather than assumed:
+#
+#   After=dumpstar-refresh@%i.service   — a systemd ordering dependency, enforced
+#   whenever both units have a job in the queue. If the landing is still running
+#   (its own TimeoutStartSec is 1800s, so it may be) when this timer fires, this
+#   unit's start job WAITS instead of racing it.
+#
+# Deliberately NOT `Wants=dumpstar-refresh@%i.service`: the refresh is a oneshot
+# without RemainAfterExit, so a Wants= would find it inactive and re-run the
+# whole catalog fetch a second time every night. Exactly the trap
+# dumpstar-value-snapshots@.service documents.
+After=dumpstar-refresh@%i.service
+# raw/ is in S3.
+After=network-online.target
+Wants=network-online.target
+# The same guard the transform tier carries: a box with no lake configuration at
+# all skips rather than failing. It is only half a guard, deliberately —
+# deploy/setup.sh scaffolds lake.env commented out, so on any box that has been
+# set up the file exists and this condition passes. The other half is in the
+# wrapper, which refuses by name when the instance has no image; a condition
+# cannot ask podman anything.
+ConditionPathExists=%h/.config/dumpstar/lake.env
+# Layer 2 (dumpstar-ivq.3): push the journal tail to Pushover on failure.
+# Exit 2 is not one — see SuccessExitStatus below.
+OnFailure=dumpstar-alert@%n.service
+
+[Service]
+Type=oneshot
+# ── 0 / 2 / 1 ARE THREE DIFFERENT ANSWERS (pd-llbq) ─────────────────────────
+#   0  the catalog was derived from the partition it was asked for.
+#   2  it was derived from a PARTIAL partition: the pokemontcg.io tail did not
+#      complete that night, so the catalog's set list is as old as the last run
+#      that finished one. TCGCSV — the half a night cannot lose, because a
+#      day's prices cannot be re-fetched later — is whole, and tomorrow's tail
+#      supersedes tonight's set list. A SUCCESS here; the wrapper says PARTIAL
+#      in the journal and pushes a warning so it is not silent either.
+#   1  there is no catalog for that partition: absent, SHORT IN TCGCSV,
+#      clockless, missing a URL the derivation asked for, or the derivation
+#      itself failed. A failure, and OnFailure= above pages for it.
+#
+# This unit carried no SuccessExitStatus= until pd-llbq, and the argument for
+# that was sound as far as it went: unlike dumpstar-value-snapshots@.service, this
+# job writes ONE catalog, and a catalog that is quietly smaller reads as cards
+# that do not exist. What it missed is that `dumpstar data refresh` — the OTHER
+# unit fed by the same upstreams — already answers a night api.pokemontcg.io is
+# down with exit 2 and a stale set list (pd-nons). Two units taking opposite
+# policies on one upstream's weather is not a decision anybody made.
+#
+# The narrowness is what keeps the original argument intact: exit 2 is reachable
+# ONLY when the incomplete prefix is the pokemontcg.io tail's. A short TCGCSV
+# prefix is still exit 1 and still pages, because "200 groups of an unknown 450"
+# is precisely the quietly-smaller catalog this comment was written about. The
+# exemption is per dataset in crates/dumpstar-lakehouse/src/partition.rs, where
+# the compiler makes adding another one a decision somebody has to write down.
+SuccessExitStatus=2
+ExecStart=/bin/sh -c 'exec bash {{REPO_DIR}}/deploy/derive.sh %i'
+# The bound the timer below is derived from. Variant expansion walks ~50k cards
+# with a transaction each; measured in minutes on a real catalog, and the
+# ceiling is here so a lake that never answers fails the unit rather than
+# hanging the timer until the next one.
+TimeoutStartSec=1800

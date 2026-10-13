@@ -1,0 +1,32 @@
+[package]
+name = "dumpstar-ingest"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+dumpstar-core.workspace = true
+dumpstar-db.workspace = true
+dumpstar-lake.workspace = true
+rusqlite.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+flate2.workspace = true
+tar.workspace = true
+tempfile.workspace = true
+image.workspace = true
+
+[features]
+# The in-process fake upstream (`test_upstream`). Test tier only: it is a
+# dependency of `dumpstar-cli`'s raw-coverage gate, which drives a whole
+# acquisition phase and so cannot construct the clients itself. Off by
+# default, so nothing ships in the binary.
+test-support = []
+
+[dev-dependencies]
+dumpstar-ingest = { path = ".", features = ["test-support"] }
+zstd.workspace = true

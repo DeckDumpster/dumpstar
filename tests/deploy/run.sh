@@ -3602,16 +3602,16 @@ check "deploy scaffolds access.env for existing instance" "present" \
 	"$([ -f "$ACCESS19" ] && echo present || echo absent)"
 check "scaffolded file has mode 600" "600" \
 	"$(stat -c '%a' "$ACCESS19" 2>/dev/null || echo missing)"
-check "scaffolded file carries DUMPSTAR_MULTITENANT once" "1" \
-	"$(grep -Ec '^#?DUMPSTAR_MULTITENANT=1$' "$ACCESS19" || true)"
+check "scaffolded file carries no multi-tenant switch" "0" \
+	"$(grep -c 'DUMPSTAR_MULTITENANT' "$ACCESS19" || true)"
 
 # Second run must not overwrite an existing file (idempotence).
-printf '# custom\nDUMPSTAR_MULTITENANT=1\n' > "$ACCESS19"
+printf '# custom\nDUMPSTAR_ACCESS_CUSTOM=1\n' > "$ACCESS19"
 PATH="${WORK}/bin19:${ORIG_PATH}" \
 	HOME="$FAKE19" \
 	bash "${REPO_DIR}/deploy/deploy.sh" prod > /dev/null 2>&1 || true
 check "a second deploy does not overwrite access.env" "1" \
-	"$(grep -c '^DUMPSTAR_MULTITENANT=1$' "$ACCESS19" || true)"
+	"$(grep -c '^DUMPSTAR_ACCESS_CUSTOM=1$' "$ACCESS19" || true)"
 
 reset_store
 

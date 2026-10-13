@@ -38,6 +38,22 @@
 # changed. Empty means the installed units already matched this checkout.
 DUMPSTAR_UNITS_CHANGED=()
 
+# The loopback port prod publishes the server on. Recorded in deploy/README.md; the
+# Cloudflare tunnel route (a dashboard step) targets http://127.0.0.1:8091.
+DUMPSTAR_PROD_PORT=8091
+
+# The origin health URL an installed instance serves on, read from its Quadlet unit;
+# fails if there is no unit or it does not publish on loopback.
+#
+# Usage: dumpstar_origin_url <instance>
+dumpstar_origin_url() {
+    local f="${HOME}/.config/containers/systemd/dumpstar-${1}.container" port
+    [ -f "$f" ] || return 1
+    port="$(sed -n 's|^PublishPort=127\.0\.0\.1:\([0-9]\{1,\}\):8080$|\1|p' "$f" | head -1)"
+    [ -n "$port" ] || return 1
+    printf 'http://127.0.0.1:%s/health\n' "$port"
+}
+
 # The alerting predicate + the OnFailure gate live in alert-gate.sh so the alert
 # unit and the renderer cannot disagree about which instances may page (pd-n0lf).
 # shellcheck source=deploy/alert-gate.sh
@@ -358,6 +374,11 @@ dumpstar_units_install() {
         fi
     fi
     # PORT=0 -> ":8080" lets Podman pick a free host port.
+    # prod's origin port is fixed (sp-kaj3xv): the tunnel route points at it, so it
+    # must be the same on every box and every re-creation. 8090 is the other site's.
+    if [ "$port" = "0" ] && [ "$instance" = prod ]; then
+        port="$DUMPSTAR_PROD_PORT"
+    fi
     if [ "$port" = "0" ]; then
         port_mapping=":8080"
     else

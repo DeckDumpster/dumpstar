@@ -595,6 +595,22 @@ is what lets `tests/deploy/run.sh` §17 state both halves against a fake one —
 the real one has this box's own live sessions in it. There is deliberately no
 way to hand the script a liveness set or to switch the check off.
 
+## Production (`prod` on `star.dumpster.cards`)
+
+- **Origin port: `127.0.0.1:8091`** (`DUMPSTAR_PROD_PORT` in `units-lib.sh`; 8090 is
+  the other site's). The Quadlet publishes loopback only, so the only path in is the
+  Cloudflare tunnel. The tunnel route and the Access application are dashboard
+  steps (bead sp-qmkwly), not scripts.
+- **Config**: `setup.sh` and `deploy.sh` both scaffold through `config-lib.sh`.
+  `EnvironmentFile=` has no leading `-` (Quadlet rejects it, so the file must
+  exist) and value lines carry no inline `#` comment. The keys the server requires
+  are listed in `DUMPSTAR_REQUIRED_CONFIG`; a deploy checks them before it builds
+  or restarts and stops with the old container still serving if one is missing.
+- **Deploy**: `.github/workflows/deploy.yml` runs on push to `main`, on the
+  `dumpstar-prod` runner, and runs `deploy/deploy.sh prod` in `~/dumpstar`.
+- **Serving check**: `dumpstar-heartbeat@prod.timer` (`heartbeat.sh`) every 5
+  minutes against the origin; healthchecks.io is pinged only on a 200.
+
 ## Seed volume (one-time, speeds up future instances)
 
 Build a reusable `dumpstar-seed-data` volume so `setup.sh --init` clones it in
@@ -969,7 +985,7 @@ Litestream sidecar showing systemd `active` while silently *not* replicating.
 **Liveness is not freshness** — the monitor verifies that data actually lands in
 S3, not just that the service is up. Defense in depth (dumpstar-ivq):
 
-- **Layer 0 — uptime heartbeat.** `heartbeat.sh` curls the live listener every
+- **Layer 0 — uptime heartbeat.** `heartbeat.sh` curls the instance's **origin** (`http://127.0.0.1:<port>/health`, read from its Quadlet unit; a non-loopback target is refused) every
   5 minutes (`dumpstar-heartbeat@<inst>.timer`) and pings a **separate**
   healthchecks.io check (`DUMPSTAR_UPTIME_PING_URL`) only on HTTP 200. Numbered
   below Layer 1 because it is the question the other layers assume the answer
@@ -1199,7 +1215,7 @@ $EDITOR ~/.config/dumpstar/alerts.env          # PUSHOVER_TOKEN, PUSHOVER_USER
 # 2026-08-16. alarm-status.sh fails if these two URLs match.
 #   Layer 0: period 5m,  grace 15m   — is the site serving?
 #   Layer 1: period 6h,  grace 3h    — is the data reaching S3?
-$EDITOR ~/.config/dumpstar/<inst>/alerts.env   # DUMPSTAR_UPTIME_PING_URL + DUMPSTAR_HEARTBEAT_URL
+$EDITOR ~/.config/dumpstar/<inst>/alerts.env   # DUMPSTAR_UPTIME_PING_URL (the probe target is the origin, read from the unit)
                                              # DUMPSTAR_BACKUP_PING_URL
 
 # Then enable the timers:

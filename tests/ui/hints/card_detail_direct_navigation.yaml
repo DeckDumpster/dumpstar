@@ -8,10 +8,10 @@ involves:
   - 'global header with the Dumpstar nav links'
 fixture_data:
   card_name: "Luke Skywalker"
-  subtitle: "SOR · #005 · Legendary"
+  subtitle: "SOR · #005 · Special"
 notes: >
   Navigate directly to /card/SOR/005. The page fetches card detail,
   binders, and decks in parallel. Verify "Luke Skywalker" appears as the h1
-  heading. Verify the subtitle line shows "SOR · #005 · Legendary".
+  heading. Verify the subtitle line shows "SOR · #005 · Special".
   Verify the Printings section is present. The global header shows the
   Dumpstar brand with the standard nav links.

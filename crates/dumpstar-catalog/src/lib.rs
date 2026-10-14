@@ -19,6 +19,7 @@ pub mod check;
 pub mod crosswalk;
 mod error;
 pub mod fetch;
+pub mod formats;
 pub mod job;
 pub mod landing;
 pub mod official;

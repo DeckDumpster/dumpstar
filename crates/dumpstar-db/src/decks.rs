@@ -1,6 +1,9 @@
 //! Repository for the `decks` table — physical decks built from the
 //! collection. Decks carry a 3-state lifecycle: idea → ready → built.
 
+use std::collections::HashMap;
+
+use dumpstar_core::deck::{DeckEntry, OwnedLine, Zone};
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::error::Result;
@@ -143,6 +146,76 @@ pub fn update(conn: &Connection, id: i64, edit: &DeckEdit) -> Result<bool> {
     Ok(n > 0)
 }
 
+/// Set the quantity of a game card in a deck zone; `qty == 0` removes the line.
+pub fn set_card(
+    conn: &Connection,
+    deck_id: i64,
+    card_id: &str,
+    zone: Zone,
+    qty: u32,
+) -> Result<()> {
+    let zone = zone_str(zone);
+    if qty == 0 {
+        conn.execute(
+            "DELETE FROM deck_cards WHERE deck_id=?1 AND card_id=?2 AND zone=?3",
+            params![deck_id, card_id, zone],
+        )?;
+    } else {
+        conn.execute(
+            "INSERT INTO deck_cards (deck_id, card_id, zone, qty) VALUES (?1,?2,?3,?4)
+             ON CONFLICT(deck_id, card_id, zone) DO UPDATE SET qty = excluded.qty",
+            params![deck_id, card_id, zone, qty],
+        )?;
+    }
+    Ok(())
+}
+
+fn zone_str(z: Zone) -> &'static str {
+    match z {
+        Zone::Main => "main",
+        Zone::Sideboard => "sideboard",
+    }
+}
+
+/// A deck's lines, as the checker takes them.
+pub fn entries(conn: &Connection, deck_id: i64) -> Result<Vec<DeckEntry>> {
+    let mut stmt = conn.prepare(
+        "SELECT card_id, zone, qty FROM deck_cards WHERE deck_id = ?1 ORDER BY zone, card_id",
+    )?;
+    let rows = stmt.query_map([deck_id], |r| {
+        let zone: String = r.get(1)?;
+        Ok(DeckEntry {
+            card_id: r.get(0)?,
+            zone: if zone == "sideboard" {
+                Zone::Sideboard
+            } else {
+                Zone::Main
+            },
+            qty: r.get(2)?,
+        })
+    })?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// Owned and missing copies for each line of a deck. Counts every owned copy
+/// of the game card across all its printings, and reserves none of them.
+pub fn owned_missing(conn: &Connection, deck_id: i64) -> Result<Vec<OwnedLine>> {
+    let lines = entries(conn, deck_id)?;
+    let mut stmt = conn.prepare(
+        "SELECT count(*) FROM collection c
+           JOIN shared.printings p ON p.printing_id = c.printing_id
+          WHERE p.card_id = ?1 AND c.status = 'owned'",
+    )?;
+    let mut owned = HashMap::new();
+    for l in &lines {
+        if !owned.contains_key(&l.card_id) {
+            let n: u32 = stmt.query_row([&l.card_id], |r| r.get(0))?;
+            owned.insert(l.card_id.clone(), n);
+        }
+    }
+    Ok(dumpstar_core::deck::owned_missing(&lines, &owned))
+}
+
 /// Delete a deck. Its cards are un-assigned (collection.deck_id is
 /// `ON DELETE SET NULL`), never deleted.
 pub fn delete(conn: &Connection, id: i64) -> Result<bool> {
@@ -212,5 +285,74 @@ mod tests {
             err.is_err(),
             "the state CHECK constraint should reject this"
         );
+    }
+
+    #[test]
+    fn owned_missing_counts_the_card_across_printings_and_reserves_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let shared = dir.path().join("shared.sqlite");
+        {
+            let c = open_shared(&shared).unwrap();
+            c.execute(
+                "INSERT INTO sets (set_code, name, series) VALUES ('swu','SWU','SWU')",
+                [],
+            )
+            .unwrap();
+            c.execute(
+                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
+                 VALUES ('C1', 'swu', '1', 1, 'Card One')",
+                [],
+            )
+            .unwrap();
+            for p in ["C1-std", "C1-hyper"] {
+                c.execute(
+                    "INSERT INTO printings (printing_id, card_id, variant) VALUES (?1, 'C1', ?1)",
+                    [p],
+                )
+                .unwrap();
+            }
+        }
+        let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
+        for p in ["C1-std", "C1-hyper"] {
+            conn.execute(
+                "INSERT INTO collection (printing_id, acquired_at, source) VALUES (?1,'2026-10-13','manual_id')",
+                [p],
+            )
+            .unwrap();
+        }
+        let a = create(
+            &conn,
+            &NewDeck {
+                name: "A".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let b = create(
+            &conn,
+            &NewDeck {
+                name: "B".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        for d in [a, b] {
+            set_card(&conn, d, "C1", Zone::Main, 3).unwrap();
+        }
+        set_card(&conn, a, "C2", Zone::Main, 1).unwrap();
+        for d in [a, b] {
+            let l = owned_missing(&conn, d).unwrap();
+            let c1 = l.iter().find(|l| l.card_id == "C1").unwrap();
+            // Two printings count as two copies of one card; deck B still sees both.
+            assert_eq!((c1.needed, c1.owned, c1.missing), (3, 2, 1));
+        }
+        let c2 = owned_missing(&conn, a)
+            .unwrap()
+            .into_iter()
+            .find(|l| l.card_id == "C2")
+            .unwrap();
+        assert_eq!((c2.owned, c2.missing), (0, 1));
+        set_card(&conn, a, "C2", Zone::Main, 0).unwrap();
+        assert_eq!(entries(&conn, a).unwrap().len(), 1);
     }
 }

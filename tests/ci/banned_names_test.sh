@@ -85,6 +85,11 @@ echo "<p>Sealed: ${ETB}</p>" >"$r/frontend/src/lib/components/Sealed.svelte"
 check "a Pokémon sealed kind in the frontend fails the gate" 1 "$(run_gate "$r")"
 check "…and the gate names the file" 1 "$(grep -c 'Sealed.svelte' "$scratch/out")"
 
+r="$scratch/etbs"; mkrepo "$r"
+mkdir -p "$r/frontend/src/routes"
+echo "{ desc: 'Sealed product (boxes, packs, ${ETB}s).' }" >"$r/frontend/src/routes/+page.svelte"
+check "the plural of a Pokémon sealed kind fails the gate" 1 "$(run_gate "$r")"
+
 r="$scratch/tagline"; mkrepo "$r"
 mkdir -p "$r/frontend/src/routes"
 echo "<p class=\"tagline\">A ${TAG}.</p>" >"$r/frontend/src/routes/+page.svelte"

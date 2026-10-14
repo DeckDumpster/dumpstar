@@ -151,7 +151,7 @@ dumpstar() { podman run --rm -v "${DATA}:/data:Z" --entrypoint dumpstar "$IMAGE"
 # tests/alarming/run.sh uses for its sink).
 refresh() {
 	podman run --rm -v "${DATA}:/data:Z" -v "${LAKE}:/lake:Z" \
-		-e DUMPSTAR_TCGCSV_BASE_URL="http://host.containers.internal:${UPSTREAM_PORT}/tcgplayer" \
+		-e DUMPSTAR_TCGCSV_BASE_URL="http://host.containers.internal:${UPSTREAM_PORT}" \
 		-e DUMPSTAR_POKEMONTCG_BASE_URL="http://host.containers.internal:${UPSTREAM_PORT}/v2" \
 		-e DUMPSTAR_POKEMON_TCG_DATA_BASE_URL="http://host.containers.internal:${UPSTREAM_PORT}" \
 		-e DUMPSTAR_LAKE_DIR=/lake \
@@ -406,7 +406,7 @@ mkdir -p "$RAW"
 PARTS_BEFORE_DOWN=$(landed_parts "$RAW")
 DOWN_RC=0
 podman run --rm -v "${DATA}:/data:Z" -v "${RAW}:/raw:Z" \
-	-e DUMPSTAR_TCGCSV_BASE_URL="http://host.containers.internal:${UPSTREAM_PORT}/tcgplayer" \
+	-e DUMPSTAR_TCGCSV_BASE_URL="http://host.containers.internal:${UPSTREAM_PORT}" \
 	-e DUMPSTAR_POKEMONTCG_BASE_URL="http://host.containers.internal:${UPSTREAM_PORT}/v2-down" \
 	-e DUMPSTAR_POKEMON_TCG_DATA_BASE_URL="http://host.containers.internal:${UPSTREAM_PORT}" \
 	-e DUMPSTAR_HTTP_RETRY_ATTEMPTS=3 \

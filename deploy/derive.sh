@@ -33,26 +33,10 @@
 #
 # ── EXIT STATUS IS THE JOB'S, UNCHANGED ─────────────────────────────────────
 #   0  the catalog was derived from that partition
-#   2  it was derived from a PARTIAL partition: the pokemontcg.io tail did not
-#      complete that night, so the catalog's set list is as old as the last run
-#      that finished one. The half a night cannot lose — TCGCSV's prices — is
-#      whole. A warning, not a page.
 #   1  there is no catalog for that partition — it is absent, short in TCGCSV,
 #      clockless, missing a URL the derivation asked for, or the derivation
 #      itself failed
 #
-# Exit 2 is here for one reason (pd-llbq): `dumpstar data refresh` already answers
-# a night api.pokemontcg.io is down with exit 2 and a stale set list (pd-nons),
-# and this unit was answering the same night with a refusal and a page. Nobody
-# decided that; it is what fell out of two beads landing beside each other. A
-# pager that fires on most nights of an upstream's bad week is a pager that gets
-# ignored (pd-me6h), and once this job is the only builder of shared.sqlite
-# refusing the night would throw away its PRICES too — the exact loss pd-nons
-# exists to prevent, one side of the split later.
-#
-# It is still narrow. Every other short prefix is exit 1: the exemption is per
-# dataset in crates/dumpstar-lakehouse/src/partition.rs::requirement, where the
-# compiler makes adding another one a decision somebody has to write down.
 set -euo pipefail
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
@@ -108,9 +92,7 @@ fi
 # --- The job's command line -------------------------------------------------
 
 ARGS=("$@")
-# The night this run is about, extracted rather than reconstructed — the PARTIAL
-# message below names it, and naming the wrong one on a hand-run rebuild of an
-# older date is exactly the kind of small lie an operator acts on.
+# The night this run is about, taken from the caller's arguments when given.
 DATE=""
 for ((i = 0; i < ${#ARGS[@]}; i++)); do
     case "${ARGS[i]}" in
@@ -175,20 +157,6 @@ case "$RC" in
     # there is no longer a "correct catalog, unreproducible lineage" outcome to
     # warn about — that shape exits 1 and pages like any other failure.
     echo "derive: OK — the catalog was rebuilt from raw/ (${INSTANCE})"
-    ;;
-2)
-    # A partial night. The catalog WAS rebuilt and is serving; what is stale is
-    # its set list. Not a page (SuccessExitStatus=2 on the unit), and not silent
-    # either — the same shape the value-snapshot wrapper uses for its own exit
-    # 2. Nothing is greped out of the job's output to say this: the exit status
-    # IS the message, and the detail is in the journal under this unit.
-    echo "derive: PARTIAL — ${DATE} did not complete for ${INSTANCE}; the catalog was rebuilt from what it holds" >&2
-    echo "  The pokemontcg.io tail did not complete that night. TCGCSV — the half a night" >&2
-    echo "  cannot lose — is whole; the set list is as old as the last run that finished one," >&2
-    echo "  and tomorrow's tail supersedes it. raw_derivation records which datasets were short." >&2
-    "${SCRIPT_DIR}/alert.sh" "Dumpstar catalog derive PARTIAL (${INSTANCE})" \
-        "The pokemontcg.io tail did not complete for ${DATE}. The catalog was rebuilt from the rest of the partition; its set list is stale until the next whole night. See journalctl --user -u dumpstar-derive@${INSTANCE}.service" ||
-        echo "derive: the PARTIAL warning reached nobody (no Pushover channel configured) — the catalog itself is unaffected" >&2
     ;;
 *)
     echo "derive: FAILED — the catalog was NOT rebuilt (${INSTANCE})" >&2

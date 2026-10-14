@@ -18,8 +18,7 @@ OnFailure=dumpstar-alert@%n.service
 
 [Service]
 Type=oneshot
-# DeckDumpster split this into prices / sealed / edhrec timers; Dumpstar
-# collapses them to a single `dumpstar data refresh`.
+# One `dumpstar data refresh` lands every upstream.
 #
 # ── IT RUNS IN ITS OWN CONTAINER, NOT THE SERVER'S (pd-kncd) ────────────────
 # This was `podman exec systemd-dumpstar-%i dumpstar data refresh` until Aug 2026,
@@ -43,38 +42,9 @@ Type=oneshot
 # therefore REQUIRED, and the wrapper refuses without it, by name, before the
 # first fetch. A drop-in that still sets DUMPSTAR_LAND_RAW=1 is inert — harmless,
 # and worth removing. See deploy/LAKE.md §4.
-# ── EXIT STATUS, AND WHY 2 STILL PAGES (pd-nons) ────────────────────────────
+# ── EXIT STATUS ─────────────────────────────────────────────────────────────
 #   0  every upstream was fetched and its bytes are in raw/.
-#   2  PARTIAL: the pokemontcg.io tail failed after exhausting its retries, so
-#      tonight's partition carries a set list as old as the last one that
-#      carried a whole one — but the run CONTINUED, and TCGCSV (a day's prices,
-#      which cannot be fetched later) was landed.
-#   1  the run failed.
-#
-# There is deliberately NO SuccessExitStatus=2 here, unlike
-# dumpstar-value-snapshots@.service. That job writes N tenant databases and "some
-# of them" is a normal night; its wrapper names the skipped tenants and pushes
-# its own warning, so a status systemd calls success is still reported. A tail
-# that fails every night is a catalog whose set list has silently stopped
-# advancing, and OnFailure= above is the only thing on this box that would ever
-# say so.
-#
-# That argument held, and its THRESHOLD did not. Until 2026-08-16 exit 2 reached
-# systemd verbatim, so a single upstream 502 paged: pokemontcg.io returned one on
-# 2026-08-15 and the push arrived at 06:05 about someone else's API, with nothing
-# to do but read it. Ryan had stopped reading the channel by then, which is how a
-# real outage went unnoticed the same week.
-#
-# The signal is unchanged; deploy/refresh.sh now decides WHEN it fires. It keeps
-# a .refresh-last-tail-ok marker on the data volume, swallows a partial run while
-# a recent one succeeded, and exits 2 — paging exactly as before — once the set
-# list has genuinely stopped advancing. Still no SuccessExitStatus=2: when the
-# wrapper exits 2 now, it means the stall this unit was written to catch.
-#
-# What changed with pd-nons is not how loud a bad night is. It is that the
-# night is no longer LOST: the tail used to run first and abort everything, so
-# a single 5xx on /v2/sets meant no prices were imported at all.
-#
+#   1  the run failed. OnFailure= above pages for it.
 #
 # DUMPSTAR_HTTP_RETRY_ATTEMPTS / DUMPSTAR_HTTP_RETRY_BASE_MS (see
 # crates/dumpstar-ingest/src/retry.rs) widen the retry budget without a rebuild, for a

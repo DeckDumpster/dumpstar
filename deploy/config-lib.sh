@@ -122,7 +122,7 @@ if [ ! -f "$LAKE_ENV" ]; then
 # `dumpstar data refresh` writes every upstream response it fetches to this
 # bucket, immutably, before parsing it:
 #
-#   raw/source=<tcgcsv|pokemontcgio|pokemon-tcg-data>/dataset=<...>/
+#   raw/source=tcgcsv/dataset=<...>/
 #       ingest_date=YYYY-MM-DD/run=<ULID>/part-NNNN.<ext>.zst  +  _manifest.json
 #
 # This MUST be a DIFFERENT bucket from LITESTREAM_S3_BUCKET. The backup bucket

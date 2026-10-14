@@ -49,38 +49,17 @@ Wants=network-online.target
 # cannot ask podman anything.
 ConditionPathExists=%h/.config/dumpstar/lake.env
 # Layer 2 (dumpstar-ivq.3): push the journal tail to Pushover on failure.
-# Exit 2 is not one — see SuccessExitStatus below.
 OnFailure=dumpstar-alert@%n.service
 
 [Service]
 Type=oneshot
-# ── 0 / 2 / 1 ARE THREE DIFFERENT ANSWERS (pd-llbq) ─────────────────────────
+# ── EXIT STATUS ─────────────────────────────────────────────────────────────
 #   0  the catalog was derived from the partition it was asked for.
-#   2  it was derived from a PARTIAL partition: the pokemontcg.io tail did not
-#      complete that night, so the catalog's set list is as old as the last run
-#      that finished one. TCGCSV — the half a night cannot lose, because a
-#      day's prices cannot be re-fetched later — is whole, and tomorrow's tail
-#      supersedes tonight's set list. A SUCCESS here; the wrapper says PARTIAL
-#      in the journal and pushes a warning so it is not silent either.
-#   1  there is no catalog for that partition: absent, SHORT IN TCGCSV,
+#   1  there is no catalog for that partition: absent, short in TCGCSV,
 #      clockless, missing a URL the derivation asked for, or the derivation
-#      itself failed. A failure, and OnFailure= above pages for it.
-#
-# This unit carried no SuccessExitStatus= until pd-llbq, and the argument for
-# that was sound as far as it went: unlike dumpstar-value-snapshots@.service, this
-# job writes ONE catalog, and a catalog that is quietly smaller reads as cards
-# that do not exist. What it missed is that `dumpstar data refresh` — the OTHER
-# unit fed by the same upstreams — already answers a night api.pokemontcg.io is
-# down with exit 2 and a stale set list (pd-nons). Two units taking opposite
-# policies on one upstream's weather is not a decision anybody made.
-#
-# The narrowness is what keeps the original argument intact: exit 2 is reachable
-# ONLY when the incomplete prefix is the pokemontcg.io tail's. A short TCGCSV
-# prefix is still exit 1 and still pages, because "200 groups of an unknown 450"
-# is precisely the quietly-smaller catalog this comment was written about. The
-# exemption is per dataset in crates/dumpstar-lakehouse/src/partition.rs, where
-# the compiler makes adding another one a decision somebody has to write down.
-SuccessExitStatus=2
+#      itself failed. A failure, and OnFailure= above pages for it. There is no
+#      partial success: a catalog that is quietly smaller reads as cards that do
+#      not exist.
 ExecStart=/bin/sh -c 'exec bash {{REPO_DIR}}/deploy/derive.sh %i'
 # The bound the timer below is derived from. Variant expansion walks ~50k cards
 # with a transaction each; measured in minutes on a real catalog, and the

@@ -69,7 +69,7 @@ Type=oneshot
 #
 # Note where the alarm is NOT: on one day's completeness. The build passes
 # --allow-incomplete and records `dumpstar.raw-complete=false`, because `complete`
-# is conservative across datasets — a pokemontcg.io tail that died marks the
+# is conservative across datasets — another dataset that fell short marks the
 # prices manifest incomplete even though every price fetch succeeded, which is
 # the normal shape of a flaky night. Age is the property that actually matters
 # and it does not cry wolf.

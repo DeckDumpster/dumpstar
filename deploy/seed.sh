@@ -7,7 +7,6 @@
 #       bash deploy/seed.sh <instance> [extra dumpstar setup args...]
 #   Examples:
 #       bash deploy/seed.sh prod                  # full catalog build
-#       bash deploy/seed.sh prod --skip-tail      # skip the API tail fetch
 #
 #   Seed-volume mode (--volume) — build a reusable `dumpstar-seed-data` volume
 #   once, so future `setup.sh --init` clones it in seconds instead of

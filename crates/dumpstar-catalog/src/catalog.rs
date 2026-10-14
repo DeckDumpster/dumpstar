@@ -74,11 +74,26 @@ const LEGACY_COLUMNS: &[(&str, &str)] = &[
     ("printings", "tcgplayer_product_id"),
 ];
 
-/// Whether `conn` holds a catalog from the legacy card model.
+/// Columns the current schema added to a table an earlier SWU schema already
+/// had. `CREATE TABLE IF NOT EXISTS` skips a table that exists, so a file
+/// whose table lacks one keeps the old shape (and the old constraints) forever
+/// unless it is rebuilt. `printings.variant_code` came with the natural key
+/// that tells apart two official printings sharing a display variant
+/// (sp-5zcm06).
+const REQUIRED_COLUMNS: &[(&str, &str)] = &[("printings", "variant_code")];
+
+/// Whether `conn` holds a catalog from the legacy card model, or from an
+/// earlier SWU schema whose shape the current one cannot be applied over.
 pub fn is_legacy(conn: &Connection) -> Result<bool> {
     let mut stmt = conn.prepare("SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2")?;
     for (table, column) in LEGACY_COLUMNS {
         if stmt.exists([table, column])? {
+            return Ok(true);
+        }
+    }
+    let mut table_exists = conn.prepare("SELECT 1 FROM pragma_table_info(?1)")?;
+    for (table, column) in REQUIRED_COLUMNS {
+        if table_exists.exists([table])? && !stmt.exists([table, column])? {
             return Ok(true);
         }
     }

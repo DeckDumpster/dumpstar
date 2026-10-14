@@ -31,17 +31,22 @@ CREATE INDEX IF NOT EXISTS idx_cards_name ON cards(name);
 
 -- One row per official printing, finish included: the Standard Foil of a
 -- card is its own printing, as is its Hyperspace and Hyperspace Foil.
+-- A printing is what the official API calls one (a cardUid). Two official
+-- printings can share set, number, display variant and finish and differ only
+-- in the serial code's variant digits (SEC lists `06361125` and `06371125`,
+-- both 'Standard'), so `variant_code` is part of the natural key (sp-5zcm06).
 CREATE TABLE IF NOT EXISTS printings (
     printing_id      TEXT PRIMARY KEY,
     card_id          TEXT NOT NULL REFERENCES cards(card_id),
     set_code         TEXT NOT NULL REFERENCES sets(set_code),
     number           TEXT NOT NULL,             -- collector number as printed
     variant          TEXT NOT NULL,             -- 'Standard'|'Hyperspace'|'Showcase'|'Promo'|...
+    variant_code     TEXT NOT NULL DEFAULT '',  -- serialCode[2..4], '36'; '' when the source has none
     finish           TEXT NOT NULL CHECK (finish IN ('Normal', 'Foil')),
     rarity           TEXT,
     artist           TEXT,
     image_url        TEXT,
-    UNIQUE (set_code, number, variant, finish)
+    UNIQUE (set_code, number, variant, variant_code, finish)
 );
 CREATE INDEX IF NOT EXISTS idx_printings_card ON printings(card_id);
 CREATE INDEX IF NOT EXISTS idx_printings_set  ON printings(set_code);

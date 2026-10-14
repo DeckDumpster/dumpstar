@@ -104,6 +104,20 @@ dumpstar_origin_url() {
 # THE UNIT IS THE RECORD. A marker can disagree with what systemd will execute;
 # an ExecStart cannot.
 
+# dumpstar_systemd_user_dir — where the host-wide units live. The invoking
+# user's real directory unless DUMPSTAR_SYSTEMD_USER_DIR names another: a test or
+# build installs into a scratch directory, never the box's own (sp-9e2sn9 — two
+# installs from aeons on the Spira host left 23, then 27, unit files in the
+# operator's real ~/.config/systemd/user).
+dumpstar_systemd_user_dir() {
+    printf '%s\n' "${DUMPSTAR_SYSTEMD_USER_DIR:-${HOME}/.config/systemd/user}"
+}
+
+# dumpstar_units_real_dir — is the directory the real one for this user?
+dumpstar_units_real_dir() {
+    [ "$(dumpstar_systemd_user_dir)" = "${HOME}/.config/systemd/user" ]
+}
+
 # Every unit file that is one-per-box. tests/deploy/run.sh §16 asserts this list
 # covers the directory in BOTH directions — an install writing a shared unit
 # that is not declared here would be unguarded, and a name declared here that
@@ -130,7 +144,8 @@ DUMPSTAR_HOST_WIDE_UNIT_FILES=(
 # Empty output means no host-wide unit is installed (or none names a script,
 # which is true of every .timer).
 dumpstar_units_host_owners() {
-    local dir="${HOME}/.config/systemd/user" u
+    local dir u
+    dir="$(dumpstar_systemd_user_dir)"
     for u in "${DUMPSTAR_HOST_WIDE_UNIT_FILES[@]}"; do
         [ -f "${dir}/${u}" ] || continue
         grep -oh "/[^ '\"]*/deploy/[A-Za-z0-9_.-]*\.sh" "${dir}/${u}" 2>/dev/null
@@ -139,6 +154,7 @@ dumpstar_units_host_owners() {
 
 # The checkout dumpstar_units_host_entitled refused in favour of. Empty otherwise.
 DUMPSTAR_UNITS_HOST_OWNER=""
+DUMPSTAR_UNITS_HOST_SKIP_REASON=""
 
 # dumpstar_units_host_entitled <instance> — may this install rewrite the units
 # there is one of per box? See the header for the four ways to be entitled.
@@ -146,11 +162,22 @@ dumpstar_units_host_entitled() {
     local instance="$1" repo_dir owner
     repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
     DUMPSTAR_UNITS_HOST_OWNER=""
+    DUMPSTAR_UNITS_HOST_SKIP_REASON=""
 
     case "${DUMPSTAR_INSTALL_HOST_UNITS:-}" in
         1) return 0 ;;
         0) return 1 ;;
     esac
+
+    # A test install (setup.sh --test sets DUMPSTAR_UNITS_TEST=1) never writes the
+    # box's real unit directory unless it is entitled by being a real deployment
+    # or forced above. Point DUMPSTAR_SYSTEMD_USER_DIR at a scratch directory and
+    # it installs there as usual (sp-9e2sn9).
+    if [ "${DUMPSTAR_UNITS_TEST:-}" = 1 ] && dumpstar_units_real_dir \
+        && ! dumpstar_units_alerting "$instance"; then
+        DUMPSTAR_UNITS_HOST_SKIP_REASON="a test install does not write the real unit directory (set DUMPSTAR_SYSTEMD_USER_DIR to a scratch directory)"
+        return 1
+    fi
 
     dumpstar_units_alerting "$instance" && return 0
 
@@ -357,7 +384,7 @@ dumpstar_units_install() {
     local repo_dir quadlet_dir systemd_user_dir service_name
     repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
     quadlet_dir="${HOME}/.config/containers/systemd"
-    systemd_user_dir="${HOME}/.config/systemd/user"
+    systemd_user_dir="$(dumpstar_systemd_user_dir)"
     service_name="dumpstar-${instance}"
 
     DUMPSTAR_UNITS_CHANGED=()
@@ -404,7 +431,7 @@ dumpstar_units_install() {
         echo "      including prod, and this checkout is not the one that deploys it."
         echo "      Force with DUMPSTAR_INSTALL_HOST_UNITS=1 (pd-onyd)."
     else
-        echo "    Host-wide units NOT rewritten — DUMPSTAR_INSTALL_HOST_UNITS=0."
+        echo "    Host-wide units NOT rewritten — ${DUMPSTAR_UNITS_HOST_SKIP_REASON:-DUMPSTAR_INSTALL_HOST_UNITS=0}."
     fi
 
     # --- The Litestream backup sidecar (dumpstar-8ch.3) -----------------

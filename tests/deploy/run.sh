@@ -3773,5 +3773,38 @@ check "no installed unit means the check fails rather than passes" "1" "$HB_RC"
 reset_store
 
 # ---------------------------------------------------------------------------
+log "21. A test install writes nothing under the real systemd user dir (sp-9e2sn9)"
+# ---------------------------------------------------------------------------
+#
+# Twice an aeon's setup.sh --test on the Spira host left dumpstar unit files in
+# the operator's own ~/.config/systemd/user ("nobody owns them yet" entitled it).
+# A test install is now refused the real directory, and any install can be
+# pointed at a scratch one.
+
+reset_store
+REALHOME="${WORK}/realhome21"
+rm -rf "$REALHOME"; mkdir -p "$REALHOME"
+SCRATCH21="${WORK}/scratchunits21"
+rm -rf "$SCRATCH21"
+
+env HOME="$REALHOME" DUMPSTAR_UNITS_TEST=1 bash -c '
+	. "$1/deploy/store-lib.sh"; . "$1/deploy/units-lib.sh"
+	dumpstar_units_install ci-t21 0
+' _ "$REPO_DIR" >/dev/null 2>&1
+check "a test install writes no unit under the real XDG systemd/user" "0" \
+	"$(find "$REALHOME/.config/systemd/user" -type f 2>/dev/null | wc -l | tr -d ' ')"
+
+env HOME="$REALHOME" DUMPSTAR_UNITS_TEST=1 DUMPSTAR_SYSTEMD_USER_DIR="$SCRATCH21" bash -c '
+	. "$1/deploy/store-lib.sh"; . "$1/deploy/units-lib.sh"
+	dumpstar_units_install ci-t21 0
+' _ "$REPO_DIR" >/dev/null 2>&1
+check "pointed at a scratch dir, the install lands there" "yes" \
+	"$([ -f "${SCRATCH21}/dumpstar-refresh@.service" ] && echo yes || echo no)"
+check "…and still not under the real dir" "0" \
+	"$(find "$REALHOME/.config/systemd/user" -type f 2>/dev/null | wc -l | tr -d ' ')"
+
+reset_store
+
+# ---------------------------------------------------------------------------
 printf '\n=== %d passed, %d failed ===\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

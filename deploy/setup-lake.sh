@@ -172,7 +172,7 @@ if [ -n "$ARM_SHIPPER" ]; then
     IMAGE="${DUMPSTAR_SHIP_IMAGE:-localhost/dumpstar:${INSTANCE}}"
     DATA="${DUMPSTAR_SHIP_DATA:-dumpstar-${INSTANCE}-data}"
     TIMER="dumpstar-ship@${INSTANCE}.timer"
-    UNIT_FILE="${HOME}/.config/systemd/user/dumpstar-ship@.timer"
+    UNIT_FILE="${DUMPSTAR_SYSTEMD_USER_DIR:-${HOME}/.config/systemd/user}/dumpstar-ship@.timer"
 
     echo "==> Arming ${TIMER}: the preconditions first"
 

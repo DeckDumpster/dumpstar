@@ -616,6 +616,54 @@ pub fn value_history(conn: &Connection, dimension: &str) -> Result<Vec<ValueSeri
     Ok(series)
 }
 
+/// One tenant a fleet run is asked to value: the handle for the report, the
+/// file for the work.
+#[derive(Debug, Clone)]
+pub struct FleetTarget {
+    pub handle: String,
+    pub path: std::path::PathBuf,
+}
+
+/// What a fleet run did, per tenant.
+#[derive(Debug, Default)]
+pub struct FleetReport {
+    /// `(handle, snapshot rows written)` for every tenant that was valued.
+    pub valued: Vec<(String, usize)>,
+    /// `(handle, why)` for every tenant that was skipped.
+    pub skipped: Vec<(String, String)>,
+}
+
+/// Write `date`'s value rows into every target's own collection, valuing each
+/// from the shared catalog at `shared`.
+///
+/// One tenant's file being absent, locked, mid-restore or not a database
+/// skips **that tenant** and is named in the report: abandoning the rest
+/// would leave the fleet half-snapshotted with nothing saying which half, and
+/// stopping silently is how a chart grows a gap nobody sees. Each tenant is
+/// opened and written on its own connection, so no tenant's rows are ever
+/// computed from, or written through, another's.
+pub fn snapshot_fleet(
+    shared: &std::path::Path,
+    targets: &[FleetTarget],
+    date: &str,
+) -> FleetReport {
+    let mut report = FleetReport::default();
+    for t in targets {
+        let outcome = if !t.path.exists() {
+            Err(format!("{} is not on this box", t.path.display()))
+        } else {
+            crate::connect_user(&t.path, shared)
+                .and_then(|mut conn| snapshot_today(&mut conn, date))
+                .map_err(|e| e.to_string())
+        };
+        match outcome {
+            Ok(rows) => report.valued.push((t.handle.clone(), rows)),
+            Err(why) => report.skipped.push((t.handle.clone(), why)),
+        }
+    }
+    report
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1245,5 +1293,73 @@ mod tests {
         );
         assert_eq!(series[0].label.as_deref(), Some("Pricey Set"));
         assert_eq!(series[1].bucket.as_deref(), Some("SOR"));
+    }
+
+    fn target(handle: &str, path: std::path::PathBuf) -> FleetTarget {
+        FleetTarget {
+            handle: handle.into(),
+            path,
+        }
+    }
+
+    /// Acceptance, half one: two tenants each get their own value series, from
+    /// their own copies, and neither's rows carry the other's holdings.
+    #[test]
+    fn two_tenants_each_get_a_value_series() {
+        let (dir, mut alice, shared) = fixture();
+        set_price(&shared, "SOR-1-normal", 10.0, "2026-01-02");
+        add_copy(&mut alice, "SOR-1-normal", "Near Mint", 1.0);
+        drop(alice);
+        let bob_path = dir.path().join("bob.sqlite");
+        {
+            let mut bob = connect_user(&bob_path, &shared).unwrap();
+            add_copy(&mut bob, "SOR-1-normal", "Lightly Played", 1.0);
+            add_copy(&mut bob, "SOR-1-normal", "Lightly Played", 1.0);
+        }
+
+        let targets = [
+            target("alice", dir.path().join("collection.sqlite")),
+            target("bob", bob_path.clone()),
+        ];
+        let report = snapshot_fleet(&shared, &targets, "2026-01-03");
+        assert!(report.skipped.is_empty(), "{:?}", report.skipped);
+        assert_eq!(report.valued.len(), 2);
+
+        let a = connect_user(&targets[0].path, &shared).unwrap();
+        let b = connect_user(&bob_path, &shared).unwrap();
+        let av = value_history(&a, "all").unwrap();
+        let bv = value_history(&b, "all").unwrap();
+        assert_eq!(av[0].points.last().unwrap().market_value, 10.0);
+        assert_eq!(av[0].points.last().unwrap().card_count, 1);
+        // 2 copies at the Lightly Played multiplier 0.85.
+        assert_eq!(bv[0].points.last().unwrap().market_value, 17.0);
+        assert_eq!(bv[0].points.last().unwrap().card_count, 2);
+    }
+
+    /// Acceptance, half two: a tenant whose file cannot be read is skipped and
+    /// named, and the others are still valued.
+    #[test]
+    fn an_unreadable_tenant_is_skipped_and_reported() {
+        let (dir, mut alice, shared) = fixture();
+        set_price(&shared, "SOR-1-normal", 10.0, "2026-01-02");
+        add_copy(&mut alice, "SOR-1-normal", "Near Mint", 1.0);
+        drop(alice);
+        let bad = dir.path().join("bad.sqlite");
+        std::fs::write(&bad, b"this is not a sqlite database, not even close.....").unwrap();
+        let gone = dir.path().join("gone.sqlite");
+
+        let report = snapshot_fleet(
+            &shared,
+            &[
+                target("bad", bad),
+                target("alice", dir.path().join("collection.sqlite")),
+                target("gone", gone),
+            ],
+            "2026-01-03",
+        );
+        assert_eq!(report.valued.len(), 1);
+        assert_eq!(report.valued[0].0, "alice");
+        let skipped: Vec<&str> = report.skipped.iter().map(|(h, _)| h.as_str()).collect();
+        assert_eq!(skipped, ["bad", "gone"]);
     }
 }

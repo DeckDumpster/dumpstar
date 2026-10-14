@@ -57,14 +57,14 @@
 //! | **0** | the catalog is the derivation of that partition |
 //! | **1** | there is no catalog for that partition — absent, short, clockless, a URL `raw/` has no record of, or the derivation itself failed |
 
-mod diff;
-mod partition;
 mod replay;
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
+use dumpster_kit_lake::LakeEnv;
+use dumpster_kit_lakehouse::{diff, partition};
 
 /// The offline half of the catalog: derive `shared.sqlite` from `raw/`.
 #[derive(Parser)]
@@ -142,7 +142,7 @@ fn shared(args: SharedArgs) -> anyhow::Result<()> {
     // The lake, opened for READING. `open_reader` hands back a handle with no
     // `put` on it at all: `raw/` is immutable, and the job that derives from
     // the evidence must not be able to rewrite it.
-    let zone = dumpstar_lake::open_reader()?;
+    let zone = dumpster_kit_lake::open_reader(&LakeEnv::new(dumpstar_db::app::app()))?;
     println!(
         "Deriving ingest_date={} from {}",
         args.ingest_date,
@@ -159,7 +159,9 @@ fn shared(args: SharedArgs) -> anyhow::Result<()> {
         clock.observed_date()
     );
 
-    let replay = Arc::new(replay::RawReplay::new(zone, &plan.chosen)?);
+    let replay = Arc::new(replay::Replay(
+        dumpster_kit_lakehouse::replay::RawReplay::new(zone, &plan.chosen)?,
+    ));
     println!("  {} URL(s) replayable from this partition", replay.urls());
 
     println!("Opening shared catalog at {}", db_path.display());
@@ -181,7 +183,18 @@ fn shared(args: SharedArgs) -> anyhow::Result<()> {
     // Provenance: `raw_derivation.complete` carries each dataset's own answer.
     // Not written when the run failed outright, because there is then no
     // catalog for it to describe.
-    let rows = partition::provenance(&plan.chosen, &args.ingest_date, &clock);
+    let rows: Vec<_> = partition::provenance(&plan.chosen, &args.ingest_date, &clock)
+        .into_iter()
+        .map(|p| dumpstar_db::raw_derivation::RawDerivation {
+            ingest_date: p.ingest_date,
+            source: p.source,
+            dataset: p.dataset,
+            run_id: p.run_id,
+            parts: p.parts,
+            complete: p.complete,
+            observed_at: p.observed_at,
+        })
+        .collect();
     let derived_at = chrono::Utc::now().to_rfc3339();
     dumpstar_db::raw_derivation::record(&mut conn, &args.ingest_date, &derived_at, &rows)?;
     println!(

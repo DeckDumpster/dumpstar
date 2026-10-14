@@ -52,7 +52,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use dumpstar_derive::DeriveClock;
-use dumpstar_lake::{DirStore, RawLanding};
+use dumpster_kit_lake::{DirStore, RawLanding};
 use support::{FakeUpstream, Reply};
 
 /// The first day's partition, and the clock the run that landed it read.
@@ -574,7 +574,7 @@ fn a_gap_in_raw_is_fatal_with_the_upstream_sitting_right_there() {
     // the "we stopped landing this endpoint" shape.
     let manifest = find_manifest(&h.raw(), "dataset=prices");
     let text_before = std::fs::read_to_string(&manifest).expect("read manifest");
-    let mut parsed: dumpstar_lake::Manifest =
+    let mut parsed: dumpster_kit_lake::Manifest =
         serde_json::from_str(&text_before).expect("parse manifest");
     let dropped = parsed
         .parts
@@ -594,7 +594,7 @@ fn a_gap_in_raw_is_fatal_with_the_upstream_sitting_right_there() {
     let said = text(&out);
     assert!(said.contains("raw/ has no record of"), "{said}");
     assert!(said.contains(&dropped_url), "it must name the URL:\n{said}");
-    assert!(said.contains("dumpstar data refresh"), "{said}");
+    assert!(said.contains("data refresh"), "{said}");
 
     // Not "the network happened to be down". The fixture upstream is on
     // loopback and answering — the run before this one fetched every one of

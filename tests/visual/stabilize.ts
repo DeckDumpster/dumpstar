@@ -9,7 +9,7 @@
  *   clock      — the layout header renders a backup age in hours/days
  *   backup     — ...and only renders that banner at all when the host's
  *                Litestream marker is stale, which is host state, not UI state
- *   card art   — the fixture points at images.pokemontcg.io; the test box may
+ *   card art   — the fixture points at a remote image CDN; the test box may
  *                be offline, and a CDN is not the thing under test
  *   motion     — CSS transitions/animations, and the caret
  *   scrollbars — width differs with the overlay-scrollbar setting

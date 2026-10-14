@@ -5,10 +5,10 @@ involves:
   - "Look up submit button"
   - "resolved-card section heading (the card name links to /card/{set}/{number})"
 fixture_data:
-  first_card: { set_code: "base1", collector_number: "7", card_name: "Hitmonchan" }
-  second_card: { set_code: "base1", collector_number: "4", card_name: "Charizard" }
+  first_card: { set_code: "SOR", collector_number: "193", card_name: "Millennium Falcon - Piece of Junk" }
+  second_card: { set_code: "SOR", collector_number: "5", card_name: "Luke Skywalker - Faithful Friend" }
 notes: >
-  Navigate to /ingest/manual. Enter "base1" / "7", click "Look up", wait for
-  the resolved card "Hitmonchan". Clear the inputs and enter "base1" / "4",
+  Navigate to /ingest/manual. Enter "SOR" / "193", click "Look up", wait for
+  the resolved card "Millennium Falcon - Piece of Junk". Clear the inputs and enter "SOR" / "5",
   click "Look up" again. Verify the resolved-card section now shows
-  "Charizard" instead of "Hitmonchan".
+  "Luke Skywalker - Faithful Friend" instead of "Millennium Falcon - Piece of Junk".

@@ -3,9 +3,9 @@
 # Related: browse_pagination_next_prev, browse_slot_renders_image_number_pips, browse_url_state_persists
 
 description: >
-  From the "Browse sets" page I click the tile for the "151" set. The binder
-  browse page loads at /browse/sv3pt5: I see the set name "151" as the page
-  heading, a "Set stats →" link, the two completion progress bars (a "Base"
-  bar and a "Master" bar), the controls bar with the Secret/Subset/Promos
-  checkboxes and the Layout selector, a "Page 1 of N" indicator, and a grid
+  From the "Browse sets" page I click the tile for the "Spark of Rebellion" set. The
+  binder browse page loads at /browse/SOR: I see the set name "Spark of
+  Rebellion" as the page heading, a "Set stats →" link, the two completion progress bars (a "Base"
+  bar and a "Master" bar), the controls bar with the sort buttons, the
+  Binder/Card view toggle and the cards-per-row stepper, a "Page 1 of N" indicator, and a grid
   of card slots for the first page of the set.

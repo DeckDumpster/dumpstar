@@ -1,7 +1,7 @@
 start_page: /collection
 involves:
   - "collection page switched to table view via data-testid=view-table"
-  - "table td.fac cells (Class/Type/Rarity/Set) navigate to a facet search"
+  - "table td.fac cells (Rarity/Set) navigate to a facet search"
   - "the Set cell has a constant title 'Find all cards in this set'"
   - "table td.namecol cell opens the card modal ([role=dialog])"
 fixture_data:

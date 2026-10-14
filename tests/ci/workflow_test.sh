@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # tests/ci/workflow_test.sh — the shape of .github/workflows/ci.yml (design row S1).
 #
-# What it holds, each a thing that went wrong somewhere else once:
+# What it holds, each a thing that has gone wrong once:
 #
 #   * NO `concurrency:` BLOCK, anywhere in the file. GitHub keeps one PENDING run
 #     per group and evicts the rest, so several PRs pushed together do not queue
-#     — they are cancelled before the VM spill can act (deckdumpster sp-r4zvel).
+#     — they are cancelled before the VM spill can act.
 #   * the VM comes from DeckDumpster/ephemeral-ci/provision@v2 with
 #     `spill-after-seconds: '60'`, and goes away through teardown@v2 under
 #     `if: always()` — a cancelled or failed run otherwise leaves the VM running.

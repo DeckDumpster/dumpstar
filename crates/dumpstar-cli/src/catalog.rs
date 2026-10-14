@@ -76,7 +76,7 @@ fn run_source(
         );
     }
     // Format rules are data from the retrieved rules documents, not a payload.
-    let mut catalog = dumpstar_catalog::Catalog::open_writer(&shared)?;
+    let mut catalog = dumpstar_catalog::Catalog::open_writer(shared)?;
     println!("formats seeded: {} rows changed", catalog.seed_formats()?);
     Ok(())
 }

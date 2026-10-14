@@ -3,10 +3,10 @@
 	import { api } from '$lib/api';
 	import { facetHref } from '$lib/facets';
 	import { breadcrumbs } from '$lib/breadcrumbs.svelte';
-	import { variantLabel, variantSortCmp, variantProvenance } from '$lib/variants.svelte';
+	import { variantSortCmp } from '$lib/variants.svelte';
 	import { CONDITIONS } from '$lib/conditions';
 	import { conditionMultiplier } from '$lib/conditions.svelte';
-	import { money as price } from '$lib/format';
+	import { money as price, printingLabel, jsonList } from '$lib/format';
 	import type { CardDetail } from '$lib/types/CardDetail';
 	import type { Binder } from '$lib/types/Binder';
 	import type { Deck } from '$lib/types/Deck';
@@ -44,7 +44,7 @@
 	let priceSeries = $state<PriceSeries[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
-	// Per-control in-flight keys (e.g. "123:condition", "add:base1-4-holo").
+	// Per-control in-flight keys (e.g. "123:condition", "add:sor-5-foil").
 	// Only the control being saved is disabled, so edits to different copies
 	// or fields run concurrently instead of serializing behind one another's
 	// save + reload (dumpstar-gxug).
@@ -81,9 +81,9 @@
 
 	// Upgrade the breadcrumb labels once card data resolves — the route
 	// page seeded a synchronous placeholder using URL params, this swaps
-	// the bare set_code for "Base" and "#4" for "Luke Skywalker #5". $effect.pre
+	// the bare set_code for the set's name and "#4" for "Luke Skywalker #4". $effect.pre
 	// runs before the DOM updates so the upgrade lands in the same frame
-	// as the data; no visible "Base1 → Base" / "#5 → Luke Skywalker #5" flash.
+	// as the data; no visible placeholder-to-label flash.
 	// No unmount cleanup needed — the breadcrumbs store is path-keyed
 	// and auto-discards overrides when the URL changes.
 	$effect.pre(() => {
@@ -216,25 +216,6 @@
 		if (value !== '__none__') void bulkCopies((id) => api.moveCopy(id, assignBody(value)));
 	};
 
-	function parseStrArr(raw: string | null): string[] {
-		if (!raw) return [];
-		try {
-			const v: unknown = JSON.parse(raw);
-			return Array.isArray(v) ? v.map(String) : [];
-		} catch {
-			return [];
-		}
-	}
-	function parseObjArr<T = Record<string, unknown>>(raw: string | null): T[] {
-		if (!raw) return [];
-		try {
-			const v: unknown = JSON.parse(raw);
-			return Array.isArray(v) ? (v as T[]) : [];
-		} catch {
-			return [];
-		}
-	}
-
 	/** Per-copy estimated value: the copy's printing market price scaled
 	 *  by the copy's condition multiplier. Null when we don't have a
 	 *  market price for the printing (e.g. user_printings entries that
@@ -251,16 +232,18 @@
 	// user owns no priced variant, fall back to showing all so the chart isn't
 	// empty.
 	let showAllPrices = $state(false);
-	// The single source of truth for which variants are "real" to the user:
-	// non-deprecated, or deprecated but owned. The add-list, the per-copy
-	// Variant dropdown, and the price chart all key off this so a deprecated
-	// phantom (e.g. sv10/231's team_rocket_rh, which shares a
-	// tcgplayer_product_id with its holo) never appears anywhere it can't be
-	// acted on (dumpstar-3b4, dumpstar-9em). A copy's own printing
-	// always has owned_count > 0, so it's never filtered out from under the
-	// select.
+	// Every printing of the card, ordered by variant then finish (Normal
+	// before Foil). The add-list, the per-copy Variant dropdown and the price
+	// chart all key off this.
 	const visiblePrintings = $derived(
-		(detail?.printings ?? []).filter((p) => !p.deprecated || p.owned_count > 0)
+		(detail?.printings ?? [])
+			.slice()
+			.sort(
+				(a, b) =>
+					variantSortCmp(a.variant, b.variant) ||
+					Number(a.finish === 'Foil') - Number(b.finish === 'Foil') ||
+					a.set_code.localeCompare(b.set_code)
+			)
 	);
 	const visiblePrintingIds = $derived(new Set(visiblePrintings.map((p) => p.printing_id)));
 	const ownedPrintingIds = $derived(
@@ -272,43 +255,10 @@
 	// Show the toggle only when there's something hidden to reveal.
 	const hasHiddenSeries = $derived(ownedSeries.length > 0 && allSeries.length > ownedSeries.length);
 
-	// Aspect and arena icons, served from /static/energy. "Free" (a
-	// zero-energy attack cost rendered on the card art as a clear circle)
-	// falls back to colorless; any other unknown type does too rather than
-	// 404 → broken-image.
-	const KNOWN_ENERGY = new Set([
-		'grass',
-		'fire',
-		'water',
-		'lightning',
-		'psychic',
-		'fighting',
-		'darkness',
-		'metal',
-		'fairy',
-		'dragon',
-		'colorless'
-	]);
-	function energyIcon(type: string): string {
-		const t = type.toLowerCase();
-		return `/energy/${KNOWN_ENERGY.has(t) ? t : 'colorless'}.png`;
+	/** A printing as one line: `SOR #5 · Hyperspace Foil`. */
+	function printingTitle(p: { set_code: string; number: string; variant: string; finish: string }) {
+		return `${p.set_code.toUpperCase()} #${p.number} · ${printingLabel(p.variant, p.finish)}`;
 	}
-
-	// Rarity-glyph SVG slug; mirrors the collection page's rarityIconSrc.
-	// "Special Illustration Rare" → /rarity/special-illustration-rare.svg.
-	function rarityIconSrc(rarity: string | null): string | null {
-		if (!rarity) return null;
-		return `/rarity/${rarity.toLowerCase().replace(/[ ._]/g, '-')}.svg`;
-	}
-
-	type AttackData = {
-		name?: string;
-		cost?: string[];
-		damage?: string;
-		text?: string;
-	};
-	type AbilityData = { name?: string; type?: string; text?: string };
-	type WrData = { type?: string; value?: string };
 </script>
 
 <svelte:head>
@@ -324,183 +274,67 @@
 
 	<div class="detail">
 		<div class="art">
-			{#if card.image_large}
-				<img src={card.image_large} alt={card.name} />
+			{#if card.image_url}
+				<img src={card.image_url} alt={card.name} />
 			{:else}
 				<div class="noart">No image</div>
 			{/if}
 		</div>
 		<div class="info">
 			<h1>{card.name}</h1>
+			{#if card.subtitle}<p class="subtitle">{card.subtitle}</p>{/if}
 			<p class="sub">
-				{#if card.set_symbol_url}
-					<a
-						class="facet binderlink"
-						href="/browse/{card.set_code}"
-						title="Open {card.set_name} binder"
-					>
-						<img class="setsym" src={card.set_symbol_url} alt={card.set_code} />
-					</a>
-				{/if}
 				<a
 					class="facet"
 					href={facetHref('set', card.set_code)}
 					title="Find all cards in {card.set_name}"
 				>
-					<span>{(card.set_ptcgo_code ?? card.set_code).toUpperCase()}</span>
+					<span>{card.set_code.toUpperCase()}</span>
 				</a>
 				· #{card.number}{#if card.rarity}
 					·
 					<a class="facet" href={facetHref('rarity', card.rarity)} title="Find all {card.rarity} cards">
-						{#if rarityIconSrc(card.rarity)}
-							<img class="raritysym" src={rarityIconSrc(card.rarity)} alt="" />
-						{/if}
 						{card.rarity}
 					</a>{/if}
+				· <a class="facet binderlink" href="/browse/{card.set_code}" title="Open {card.set_name} binder">{card.set_name}</a>
 			</p>
 			<dl>
-				{#if card.supertype}<dt>Type</dt><dd>
-						<a class="facet" href={facetHref('supertype', card.supertype)}>{card.supertype}</a>{#if parseStrArr(card.subtypes).length}
-							·
-							{#each parseStrArr(card.subtypes) as st (st)}
-								<a class="facet" href={facetHref('subtype', st)}>{st}</a>
-							{/each}
-						{/if}
+				{#if card.card_type}<dt>Type</dt><dd>
+						<a class="facet" href={facetHref('type', card.card_type)}>{card.card_type}</a>
 					</dd>{/if}
+				{#if card.cost != null}<dt>Cost</dt><dd>{card.cost}</dd>{/if}
+				{#if card.power != null}<dt>Power</dt><dd>{card.power}</dd>{/if}
 				{#if card.hp != null}<dt>HP</dt><dd>{card.hp}</dd>{/if}
-				{#if parseStrArr(card.types).length}
-					<dt>Element</dt>
-					<dd class="enr">
-						{#each parseStrArr(card.types) as t (t)}
-							<a class="facet" href={facetHref('type', t)} title="Find all {t} cards">
-								<img class="energy" src={energyIcon(t)} alt={t} title={t} />
-							</a>
+				{#if jsonList(card.aspects).length}
+					<dt>Aspects</dt>
+					<dd>
+						{#each jsonList(card.aspects) as a (a)}
+							<a class="facet chip" href={facetHref('aspect', a)} title="Find all {a} cards">{a}</a>
 						{/each}
 					</dd>
 				{/if}
-				{#if card.regulation_mark}<dt>Regulation</dt><dd>{card.regulation_mark}</dd>{/if}
+				{#if jsonList(card.traits).length}
+					<dt>Traits</dt>
+					<dd>
+						{#each jsonList(card.traits) as t (t)}
+							<a class="facet chip" href={facetHref('trait', t)} title="Find all {t} cards">{t}</a>
+						{/each}
+					</dd>
+				{/if}
+				{#if jsonList(card.arenas).length}
+					<dt>Arena</dt>
+					<dd>
+						{#each jsonList(card.arenas) as a (a)}
+							<a class="facet chip" href={facetHref('arena', a)} title="Find all {a} cards">{a}</a>
+						{/each}
+					</dd>
+				{/if}
 				{#if card.artist}<dt>Artist</dt><dd>
 						<a class="facet" href={facetHref('artist', card.artist)} title="Find all cards by {card.artist}">{card.artist}</a>
 					</dd>{/if}
-
-				{#if card.evolves_from}
-					<dt>Evolves from</dt>
-					<dd>
-						<a class="facet evolink" href={facetHref('name', card.evolves_from)}>
-							{card.evolves_from}
-						</a>
-					</dd>
-				{/if}
-				{#if parseStrArr(card.evolves_to).length}
-					<dt>Evolves into</dt>
-					<dd>
-						{#each parseStrArr(card.evolves_to) as name, i (name)}
-							{#if i > 0},
-							{/if}
-							<a class="facet evolink" href={facetHref('name', name)}>{name}</a>
-						{/each}
-					</dd>
-				{/if}
 			</dl>
 
-			{#if parseObjArr<AbilityData>(card.abilities).length > 0}
-				<section class="cardSection">
-					<SectionHeader title="Abilities" size="md" tone="accent" />
-					{#each parseObjArr<AbilityData>(card.abilities) as ab, i (i)}
-						<div class="abilityBlock">
-							<div class="abilityHead">
-								{#if ab.type}<Badge tone="warning" shape="tag" size="sm">{ab.type}</Badge>{/if}
-								{#if ab.name}
-									<a class="facet abilityName" href={facetHref('ability', ab.name)} title="Find all cards with the “{ab.name}” ability">{ab.name}</a>
-								{/if}
-							</div>
-							{#if ab.text}<p class="cardText">{ab.text}</p>{/if}
-						</div>
-					{/each}
-				</section>
-			{/if}
-
-			{#if parseObjArr<AttackData>(card.attacks).length > 0}
-				<section class="cardSection">
-					<SectionHeader title="Attacks" size="md" tone="accent" />
-					{#each parseObjArr<AttackData>(card.attacks) as att, i (i)}
-						<div class="attackBlock">
-							<div class="attackHead">
-								<span class="attackCost">
-									{#each att.cost ?? [] as c, i (i)}
-										<img class="energy" src={energyIcon(c)} alt={c} title={c} />
-									{/each}
-								</span>
-								{#if att.name}
-									<a class="facet attackName" href={facetHref('attack', att.name)} title="Find all cards with the “{att.name}” attack">{att.name}</a>
-								{:else}
-									<span class="attackName"></span>
-								{/if}
-								{#if att.damage}<span class="attackDamage">{att.damage}</span>{/if}
-							</div>
-							{#if att.text}<p class="cardText">{att.text}</p>{/if}
-						</div>
-					{/each}
-				</section>
-			{/if}
-
-			<!-- Always render the W/R/R block so the layout stays consistent
-			     across cards — Resistance and Retreat cells appear even when
-			     empty (rendered as '—') rather than dropping out entirely. -->
-			<section class="cardSection combat">
-				<div class="combatCell">
-					<h3>Weakness</h3>
-					{#if parseObjArr<WrData>(card.weaknesses).length > 0}
-						{#each parseObjArr<WrData>(card.weaknesses) as w (w.type)}
-							{#if w.type}
-								<a class="facet wr" href={facetHref('weakness', w.type)} title="Find all cards weak to {w.type}">
-									<img class="energy" src={energyIcon(w.type)} alt={w.type} title={w.type} />
-									{w.value ?? ''}
-								</a>
-							{:else}
-								<span class="wr">{w.value ?? ''}</span>
-							{/if}
-						{/each}
-					{:else}
-						<span class="wr-empty">—</span>
-					{/if}
-				</div>
-				<div class="combatCell">
-					<h3>Resistance</h3>
-					{#if parseObjArr<WrData>(card.resistances).length > 0}
-						{#each parseObjArr<WrData>(card.resistances) as r (r.type)}
-							{#if r.type}
-								<a class="facet wr" href={facetHref('resistance', r.type)} title="Find all cards resistant to {r.type}">
-									<img class="energy" src={energyIcon(r.type)} alt={r.type} title={r.type} />
-									{r.value ?? ''}
-								</a>
-							{:else}
-								<span class="wr">{r.value ?? ''}</span>
-							{/if}
-						{/each}
-					{:else}
-						<span class="wr-empty">—</span>
-					{/if}
-				</div>
-				<div class="combatCell">
-					<h3>Retreat</h3>
-					{#if parseStrArr(card.retreat_cost).length > 0}
-						<a
-							class="facet retreat"
-							href={facetHref('retreat', String(parseStrArr(card.retreat_cost).length))}
-							title="Find all cards with a retreat cost of {parseStrArr(card.retreat_cost).length}"
-						>
-							{#each parseStrArr(card.retreat_cost) as c, i (i)}
-								<img class="energy" src={energyIcon(c)} alt={c} title={c} />
-							{/each}
-						</a>
-					{:else}
-						<span class="wr-empty">—</span>
-					{/if}
-				</div>
-			</section>
-
-			{#if card.flavor_text}<p class="flavor">{card.flavor_text}</p>{/if}
+			{#if card.rules_text}<p class="cardText">{card.rules_text}</p>{/if}
 		</div>
 	</div>
 
@@ -518,10 +352,8 @@
 			{/snippet}
 		</SectionHeader>
 		<ul class="printings">
-			{#each visiblePrintings
-				.slice()
-				.sort((a, b) => variantSortCmp(a.variant, b.variant)) as p (p.printing_id)}
-				<li class:dim={p.deprecated} class:user-added={p.is_user_added}>
+			{#each visiblePrintings as p (p.printing_id)}
+				<li class:user-added={p.is_user_added}>
 					<div class="vlabel">
 						<div class="vline">
 							{#if p.is_user_added}
@@ -531,14 +363,12 @@
 									aria-label="User-added variant"
 								></span>
 							{/if}
-							<a class="facet variant" href={facetHref('variant', p.variant)} title="Find all {variantLabel(p.variant)} printings">
-								{variantLabel(p.variant)}
+							<a class="facet variant" href={facetHref('variant', p.variant)} title="Find all {p.variant} printings">
+								{printingTitle(p)}
 							</a>
 						</div>
 						{#if p.is_user_added && p.description}
 							<span class="provenance">{p.description}</span>
-						{:else if variantProvenance(p.variant)}
-							<span class="provenance">{variantProvenance(p.variant)}</span>
 						{/if}
 					</div>
 					<span class="market">{price(p.market_price)}</span>
@@ -554,20 +384,19 @@
 						<span class="tcgp-spacer"></span>
 					{/if}
 					<!-- Only a printing this user invented can carry a manual price.
-					     A catalog printing the feed does not price is a catalog gap,
-					     patched once for every tenant in
-					     data/overrides/catalog_prices.json — the API refuses the write
-					     with a 400, so offering the button here would be an affordance
-					     that cannot succeed (pd-m4gw). -->
+					     The price of a catalog printing is the catalog's, the same for
+					     every tenant — the API refuses the write with a 400, so
+					     offering the button here would be an affordance that cannot
+					     succeed (pd-m4gw). -->
 					{#if p.is_user_added}
 						<button
 							class="manual-price"
 							onclick={() => (priceModalFor = {
 								printing_id: p.printing_id,
-								label: `${card.name} #${card.number} — ${variantLabel(p.variant)}`
+								label: `${card.name} — ${printingTitle(p)}`
 							})}
 							title="Record a manual price"
-							aria-label="Record a manual price for {variantLabel(p.variant)}"
+							aria-label="Record a manual price for {printingTitle(p)}"
 						>$</button>
 					{:else}
 						<span class="manual-price-spacer"></span>
@@ -577,14 +406,14 @@
 							class="step"
 							disabled={isSaving(`remove:${p.printing_id}`) || p.owned_count <= 0}
 							onclick={() => removeCopy(p.printing_id)}
-							aria-label="Remove one {variantLabel(p.variant)}"
+							aria-label="Remove one {printingTitle(p)}"
 						>−</button>
 						<span class="count" class:has={p.owned_count > 0}>{p.owned_count}</span>
 						<button
 							class="step"
-							disabled={isSaving(`add:${p.printing_id}`) || p.deprecated}
+							disabled={isSaving(`add:${p.printing_id}`)}
 							onclick={() => addCopy(p.printing_id)}
-							aria-label="Add one {variantLabel(p.variant)}"
+							aria-label="Add one {printingTitle(p)}"
 						>+</button>
 					</div>
 				</li>
@@ -598,7 +427,7 @@
 				{#if hasHiddenSeries}
 					<label class="showall">
 						<input type="checkbox" bind:checked={showAllPrices} />
-						Show all variants
+						Show all printings
 					</label>
 				{/if}
 			{/snippet}
@@ -706,10 +535,8 @@
 									disabled={isSaving(`${copy.id}:variant`)}
 									onchange={(e) => changeVariant(copy.id, e.currentTarget.value)}
 								>
-									{#each visiblePrintings
-										.slice()
-										.sort((a, b) => variantSortCmp(a.variant, b.variant)) as p (p.printing_id)}
-										<option value={p.printing_id}>{variantLabel(p.variant)}</option>
+									{#each visiblePrintings as p (p.printing_id)}
+										<option value={p.printing_id}>{printingTitle(p)}</option>
 									{/each}
 								</select>
 								{@render savedTick(`${copy.id}:variant`)}
@@ -758,7 +585,7 @@
 									type="text"
 									value={copy.notes ?? ''}
 									disabled={isSaving(`${copy.id}:notes`)}
-									placeholder="Notes — e.g. corner wear on the back, a crease near the border"
+									placeholder="Notes — e.g. creased corner, two visible bumps"
 									title="Condition notes for this copy"
 									onchange={(e) => changeNotes(copy.id, e.currentTarget.value)}
 								/>
@@ -848,13 +675,6 @@
 		flex: 1;
 		min-width: 260px;
 	}
-	/* Inside .info: abilities, attacks, weakness/resistance, flavor sit
-	   next to the card art on wide viewports (and wrap below it on narrow
-	   via the parent's flex-wrap). Tighter top margin than top-level
-	   sections so the right column doesn't gap out. */
-	.cardSection {
-		margin-top: 1.2rem;
-	}
 	h1 {
 		color: var(--color-text-accent);
 		margin: var(--space-0);
@@ -866,18 +686,6 @@
 		align-items: center;
 		gap: 0.35rem;
 		flex-wrap: wrap;
-	}
-	.sub .setsym {
-		width: 22px;
-		height: 22px;
-		object-fit: contain;
-		vertical-align: middle;
-	}
-	.sub .raritysym {
-		width: 16px;
-		height: 16px;
-		object-fit: contain;
-		vertical-align: middle;
 	}
 	dl {
 		display: grid;
@@ -892,16 +700,6 @@
 	dd {
 		margin: var(--space-0);
 	}
-	.enr {
-		display: inline-flex;
-		gap: var(--space-1);
-		align-items: center;
-	}
-	.energy {
-		width: 18px;
-		height: 18px;
-		vertical-align: middle;
-	}
 	/* Clickable facet — set glyph, rarity, type, artist, variant. Looks
 	   like body text by default; hover hints the link affordance. */
 	.facet {
@@ -911,70 +709,23 @@
 		border-radius: var(--radius-sm);
 		padding: 1px 3px;
 	}
+	.chip {
+		display: inline-block;
+		margin-right: var(--space-1);
+		border: 1px solid var(--color-border);
+	}
+	.subtitle {
+		margin: var(--space-0) var(--space-0) var(--space-1);
+		color: var(--color-text-subtle);
+	}
 	.facet:hover {
 		background: var(--color-surface-selected);
 		color: var(--color-text);
 	}
-	.facet:hover .energy,
-	.facet:hover .setsym,
-	.facet:hover .raritysym {
-		filter: brightness(1.2);
-	}
-	.evolink {
-		background: none;
-		border: none;
-		color: var(--color-link);
-		cursor: pointer;
-		font: inherit;
-		padding: var(--space-0);
-		text-decoration: underline dotted;
-	}
-	.evolink:hover {
-		color: var(--color-link-hover);
-	}
-	.flavor {
-		font-style: italic;
-		color: var(--color-text-subtle);
-		margin: var(--space-6) var(--space-0) var(--space-0);
-	}
-	section {
+		section {
 		margin-top: var(--space-8);
 	}
-	h3 {
-		color: var(--color-text-subtle);
-		font-size: 0.75rem;
-		text-transform: uppercase;
-		margin: 0 0 0.3rem;
-	}
 
-	/* Abilities + attacks: compact card-style blocks. */
-	.abilityBlock,
-	.attackBlock {
-		border-left: 3px solid var(--color-border);
-		padding: 0.4rem 0.7rem;
-		margin-bottom: 0.6rem;
-	}
-	.abilityHead,
-	.attackHead {
-		display: flex;
-		gap: var(--space-2);
-		align-items: center;
-		font-weight: var(--weight-semibold);
-	}
-	.abilityName,
-	.attackName {
-		color: var(--color-text);
-	}
-	.attackCost {
-		display: inline-flex;
-		gap: 2px;
-	}
-	.attackDamage {
-		margin-left: auto;
-		color: var(--color-text-accent);
-		font-weight: var(--weight-bold);
-		font-variant-numeric: tabular-nums;
-	}
 	.cardText {
 		margin: 0.25rem 0 0;
 		color: var(--color-text-muted);
@@ -982,27 +733,6 @@
 		line-height: 1.4;
 	}
 
-	/* Weakness / Resistance / Retreat: three small cells side by side. */
-	.combat {
-		display: flex;
-		gap: var(--space-6);
-		flex-wrap: wrap;
-	}
-	.combatCell {
-		min-width: 90px;
-	}
-	.wr,
-	.retreat {
-		display: inline-flex;
-		gap: 0.2rem;
-		align-items: center;
-		font-size: var(--text-lg);
-		color: var(--color-text-muted);
-	}
-	.wr-empty {
-		color: var(--color-text-disabled);
-		font-size: var(--text-lg);
-	}
 
 	/* Printings list — one row per variant with [- N +] stepper, mirroring
 	   the browse-page VariantModal so the same muscle memory works here. */
@@ -1041,9 +771,6 @@
 	.manual-price-spacer {
 		display: inline-block;
 		width: 28px;
-	}
-	.printings li.dim {
-		opacity: 0.5;
 	}
 	.printings .variant {
 		color: var(--color-text);
@@ -1241,14 +968,6 @@
 		.art img {
 			width: 320px;
 			max-width: 100%;
-		}
-		/* W/R/R combat row was 3 × 90px min + 2 × 1.5rem gap ≈ 318px
-		   which clipped on 320-340px viewports. */
-		.combat {
-			gap: 0.6rem;
-		}
-		.combatCell {
-			min-width: 0;
 		}
 		table {
 			max-width: 100%;

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
 	import { api } from '$lib/api';
+	import { printingLabel } from '$lib/format';
 	import MatchPicker from '$lib/components/MatchPicker.svelte';
 	import type { ResolutionReport } from '$lib/types/ResolutionReport';
 	import type { CommitResult } from '$lib/types/CommitResult';
@@ -381,7 +382,7 @@
 							</td>
 							<td>{row.set_code}</td>
 							<td>{row.number}</td>
-							<td>{row.variant}</td>
+							<td>{printingLabel(row.variant, row.finish)}</td>
 							<td>{row.condition}</td>
 						</tr>
 					{/each}
@@ -394,7 +395,7 @@
 			<p class="subhint">Match each to a catalog card, or import and park them to resolve later.</p>
 			<table>
 				<thead>
-					<tr><th>Match</th><th>Line</th><th>Set</th><th>#</th><th>Variant</th><th>Reason</th></tr>
+					<tr><th>Match</th><th>Line</th><th>Set</th><th>#</th><th>Finish</th><th>Reason</th></tr>
 				</thead>
 				<tbody>
 					{#each report.unmatched as row, i (i)}
@@ -411,7 +412,7 @@
 							<td>{row.source_line}</td>
 							<td>{row.set_hint}</td>
 							<td>{row.number}</td>
-							<td>{row.variant}</td>
+							<td>{row.finish}</td>
 							<td class="reason">{row.reason}</td>
 						</tr>
 						{#if matchOpen === matchKey('r', i)}
@@ -485,7 +486,7 @@
 								</td>
 								<td>{row.set_code}</td>
 								<td>{row.number}</td>
-								<td>{row.variant}</td>
+								<td>{printingLabel(row.variant, row.finish)}</td>
 								<td>{row.condition}</td>
 							</tr>
 						{/each}
@@ -496,7 +497,7 @@
 				<h3>Unmatched cards</h3>
 				<table>
 					<thead>
-						<tr><th>Match</th><th>Line</th><th>Set</th><th>#</th><th>Variant</th><th>Reason</th></tr>
+						<tr><th>Match</th><th>Line</th><th>Set</th><th>#</th><th>Finish</th><th>Reason</th></tr>
 					</thead>
 					<tbody>
 						{#each combined.singles.unmatched as row, i (i)}
@@ -513,7 +514,7 @@
 								<td>{row.source_line}</td>
 								<td>{row.set_hint}</td>
 								<td>{row.number}</td>
-								<td>{row.variant}</td>
+								<td>{row.finish}</td>
 								<td class="reason">{row.reason}</td>
 							</tr>
 							{#if matchOpen === matchKey('cs', i)}

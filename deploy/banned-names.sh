@@ -23,9 +23,13 @@
 #      terms are refused across the repository; the wider Pokémon vocabulary
 #      is refused in everything a user can read: frontend/src (bar the vendored
 #      kit and generated types), the server, the CLI help, the Collectr
-#      importer and the sealed/import/export modules. The Pokémon card model
-#      (search, cards, the seeded card fixture) still carries Pokémon test
-#      data until the catalog seam replaces it (CLAUDE.md, "Not here yet").
+#      importer and the sealed/import/export modules.
+#
+#   4. THE POKÉMON CARD MODEL (sp-r7w5xi) — dumpstar has one card model, the
+#      Star Wars: Unlimited one. The columns, tables and vocabulary of the model
+#      the fork came with must not come back into crates/ or frontend/. The one
+#      file allowed to name them is the catalog crate's detector, which has to
+#      recognise a shared.sqlite written by the old schema in order to empty it.
 #
 # The words below are assembled from pieces so this file does not contain what
 # it forbids. Fixtures that are verbatim captures of an upstream (fixtures/swu)
@@ -51,6 +55,11 @@ domain_product="Elite ""Trainer|\\b""ETB\\b|Booster ""Bundle|Obsidian ""Flames|J
 # Wider Pokémon vocabulary: refused in the user-visible paths below.
 domain_wide="Pok""[eé]mon|Pi""kachu|Chari""zard|Pok""[eé]dex|reverse[ -]holo|energy[ -]type"
 user_visible='^(frontend/src/(routes|lib/[^/]+\.(ts|svelte))|frontend/src/lib/components/|crates/dumpstar-server/|crates/dumpstar-cli/src/main\.rs$|crates/dumpstar-core/src/import/collectr\.rs$|crates/dumpstar-db/src/(sealed|sealed_import|import|unresolved|collectr_export|outbox)\.rs$)'
+
+# The removed card model's names, assembled from pieces for the same reason as
+# above. Whole words only (grep -w).
+pokemon_model="super""type|sub""types|attacks|abilities|weak""nesses|resist""ances|retreat_cost|regulation_mark|national_pokedex_numbers|pokedex|energy_type|ptcgo_code|ptcgo|number_sortable|image_small|image_large|flavor_text|printed_total|catalog_price_overrides|latest_prices|set_aliases|tcgplayer_groups|deprecated_at|badge_overlay|image_override"
+pokemon_model_exempt='^crates/dumpstar-catalog/src/catalog\.rs$'
 
 offences=0
 report() { echo "$1: $2"; offences=$((offences + 1)); }
@@ -91,6 +100,16 @@ if [ "${#files[@]}" -gt 0 ]; then
         while IFS=: read -r path line name; do
             [ -n "$path" ] && report "$path:$line" "Pokémon wording '$name' in a user-visible path"
         done < <(git grep -I -n -i -o -E "$domain_wide" -- "${visible[@]}" || true)
+    fi
+
+    mapfile -t model_files < <(printf '%s\n' "${files[@]}" \
+        | grep -E '^(crates|frontend)/' \
+        | grep -v '^frontend/src/lib/kit/' \
+        | grep -v -E "$pokemon_model_exempt" || true)
+    if [ "${#model_files[@]}" -gt 0 ]; then
+        while IFS=: read -r path line name; do
+            [ -n "$path" ] && report "$path:$line" "names '$name', part of the removed Pokémon card model"
+        done < <(git grep -I -n -o -i -w -E "$pokemon_model" -- "${model_files[@]}" || true)
     fi
 fi
 

@@ -672,7 +672,7 @@ CREATE TABLE IF NOT EXISTS import_unresolved (
     set_hint      TEXT,
     number        TEXT,                   -- singles only
     name          TEXT,                   -- display hint (card/product name)
-    variant       TEXT,                   -- singles only
+    variant       TEXT,                   -- singles only: the finish, Normal or Foil
     quantity      INTEGER,                -- sealed only (default 1)
     reason        TEXT NOT NULL,          -- resolver's unmatched reason
     status        TEXT NOT NULL DEFAULT 'open'

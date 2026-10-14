@@ -216,23 +216,7 @@ mod tests {
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series) VALUES ('sv3pt5', '151', 'SV')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('sv3pt5-1', 'sv3pt5', '1', 1, 'Bulbasaur')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES ('sv3pt5-1-normal', 'sv3pt5-1', 'normal')",
-                [],
-            )
-            .unwrap();
+            crate::testkit::simple(&c, "SOR", "1", "Luke Skywalker");
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         (dir, conn)
@@ -250,7 +234,7 @@ mod tests {
                 ..Default::default()
             },
             &[OrderLine {
-                printing_id: "sv3pt5-1-normal".into(),
+                printing_id: "SOR-1-normal".into(),
                 quantity: 2,
                 purchase_price: Some(1.25),
             }],
@@ -280,7 +264,7 @@ mod tests {
                 ..Default::default()
             },
             &[OrderLine {
-                printing_id: "sv3pt5-1-nope".into(),
+                printing_id: "SOR-1-nope".into(),
                 quantity: 1,
                 purchase_price: None,
             }],

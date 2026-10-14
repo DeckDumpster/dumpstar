@@ -98,9 +98,13 @@ impl Database {
     /// queries fail), and it would read the catalog's multipliers for a
     /// collection that now carries its own. Both bumps exist to stop that
     /// build instead of letting it serve.
+    ///
+    /// Shared is at 3: sp-r7w5xi replaced the Pokémon card model with the Star
+    /// Wars: Unlimited one. A build that knows only the old shape would read
+    /// the new file wrongly, so it is refused.
     pub fn version(self) -> i64 {
         match self {
-            Database::Shared => 2,
+            Database::Shared => 3,
             Database::User => 2,
             Database::Registry => 1,
         }

@@ -115,22 +115,14 @@
 			.catch(() => {});
 	});
 
-	/** Bundles are logical containers, not sets you can complete. */
-	const realSets = $derived(sets.filter((s) => s.kind !== 'bundle'));
-	const setsStarted = $derived(realSets.filter((s) => s.owned_cards > 0).length);
+	const setsStarted = $derived(sets.filter((s) => s.owned_cards > 0).length);
 
-	/**
-	 * Completion per set, measured on the base set where the catalog knows a
-	 * printed total (so secret rares don't make a finished set read 84%), and
-	 * on everything catalogued where it doesn't — the same rule /browse's
-	 * tiles use.
-	 */
+	/** Completion per set: distinct cards owned over distinct cards printed. */
 	const highlights = $derived.by(() => {
-		const rows = realSets
+		const rows = sets
 			.map((s) => {
-				const base = s.base_total_cards;
-				const total = base ?? s.total_cards;
-				const owned = base != null ? (s.base_owned_cards ?? 0) : s.owned_cards;
+				const total = s.total_cards;
+				const owned = s.owned_cards;
 				return { set: s, owned, total, pct: total > 0 ? owned / total : 0 };
 			})
 			.filter((r) => r.owned > 0);
@@ -147,7 +139,7 @@
 	 */
 	const ownedMeta = $derived(
 		(sealedLatest ? `${count(sealedLatest.card_count)} sealed · ` : '') +
-			`${count(setsStarted)} of ${count(realSets.length)} sets started`
+			`${count(setsStarted)} of ${count(sets.length)} sets started`
 	);
 	const valueMeta = $derived(
 		sealedLatest
@@ -250,8 +242,8 @@
 					{#each recent as card (card.id)}
 						<li>
 							<a href="/card/{card.set_code}/{card.number}">
-								{#if card.image_small}
-									<img src={card.image_small} alt="" loading="lazy" />
+								{#if card.image_url}
+									<img src={card.image_url} alt="" loading="lazy" />
 								{:else}
 									<span class="noart" aria-hidden="true"></span>
 								{/if}

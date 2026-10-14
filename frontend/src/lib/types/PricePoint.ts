@@ -5,6 +5,6 @@
  */
 export type PricePoint = { 
 /**
- * `YYYY-MM-DD` — the day TCGCSV was queried (see `import_prices`).
+ * `YYYY-MM-DD` — the day the price was observed.
  */
 date: string, price: number, };

@@ -86,9 +86,9 @@ struct Candidate {
 }
 
 /// Normalize a product name for tolerant matching across platforms: fold
-/// case, straighten curly apostrophes, drop accents,
-/// fold hyphens/dashes to spaces (catalog "Two-Player" vs Collectr
-/// "Two Player"), and collapse runs of whitespace. Mirrors the spirit
+/// case, straighten curly apostrophes, drop the accent on `é`,
+/// fold hyphens/dashes to spaces (catalog "Super-Premium" vs Collectr
+/// "Super Premium"), and collapse runs of whitespace. Mirrors the spirit
 /// of the shared column-value mappings in `dumpstar-core::import`.
 ///
 /// Shared with the singles resolver ([`crate::import`]) for its global
@@ -140,7 +140,7 @@ fn candidates_in_set(conn: &Connection, set_code: &str) -> Result<Vec<Candidate>
 }
 
 /// Load every sealed catalog product — across all sets, and including the
-/// many products with a NULL `set_code` (prerelease kits, displays). The candidate
+/// many products with a NULL `set_code` (UPCs, Tin Displays). The candidate
 /// pool for the global name fallback when set resolution fails or a product
 /// isn't found in its stated set (dumpstar-oq3i.3).
 fn all_candidates(conn: &Connection) -> Result<Vec<Candidate>> {
@@ -268,7 +268,7 @@ pub fn resolve_sealed(
 
         // Fallback: the stated set didn't resolve, or the product wasn't in
         // it. Search the whole sealed catalog, NULL-set-code products
-        // included (prerelease kits, displays, cross-set promos).
+        // included (UPCs, Tin Displays, cross-set promos).
         if all_cache.is_none() {
             all_cache = Some(all_candidates(conn)?);
         }
@@ -332,19 +332,14 @@ mod tests {
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, ptcgo_code, name, series) \
-                 VALUES ('sor', 'SOR', 'Spark of Rebellion', 'SOR')",
-                [],
-            )
-            .unwrap();
+            crate::testkit::set(&c, "JTL", "Jump to Lightspeed");
             c.execute(
                 "INSERT INTO sealed_products (product_id, set_code, name, category, fetched_at) \
                  VALUES \
-                   (6001, 'sor', 'Spark of Rebellion Two-Player Starter', 'two_player_starter', '2026-02-28'), \
-                   (6002, 'sor', 'Spark of Rebellion Prerelease Kit', 'prerelease_kit', '2026-02-28'), \
-                   (6003, 'sor', 'Spark of Rebellion Booster Pack', 'booster_pack', '2026-02-28'), \
-                   (6004, 'sor', 'Spark of Rebellion Booster Display', 'booster_display', '2026-02-28')",
+                   (6001, 'JTL', 'Jump to Lightspeed Carbonite Box', 'sealed', '2026-02-28'), \
+                   (6002, 'JTL', 'Jump to Lightspeed Booster Pack', 'sealed', '2026-02-28'), \
+                   (6003, 'JTL', 'Jump to Lightspeed Booster Display', 'sealed', '2026-02-28'), \
+                   (6004, 'JTL', 'Jump to Lightspeed Prerelease Box', 'sealed', '2026-02-28')",
                 [],
             )
             .unwrap();
@@ -372,8 +367,8 @@ mod tests {
     fn resolves_exact_name_and_keeps_quantity() {
         let (_d, conn) = db();
         let rows = vec![row(
-            "Spark of Rebellion Two-Player Starter",
-            "Spark of Rebellion",
+            "Jump to Lightspeed Carbonite Box",
+            "Jump to Lightspeed",
             3,
         )];
         let report = resolve_sealed(&conn, &rows).unwrap();
@@ -387,8 +382,8 @@ mod tests {
     fn commit_writes_one_row_with_quantity() {
         let (_d, conn) = db();
         let rows = vec![row(
-            "Spark of Rebellion Two-Player Starter",
-            "Spark of Rebellion",
+            "Jump to Lightspeed Carbonite Box",
+            "Jump to Lightspeed",
             3,
         )];
         let report = resolve_sealed(&conn, &rows).unwrap();
@@ -407,7 +402,7 @@ mod tests {
         let (_d, conn) = db();
         let rows = vec![
             row("Some Box", "No Such Set", 1),
-            row("Nonexistent Product", "Spark of Rebellion", 1),
+            row("Nonexistent Product", "Jump to Lightspeed", 1),
         ];
         let report = resolve_sealed(&conn, &rows).unwrap();
         assert!(report.matched.is_empty());
@@ -425,13 +420,13 @@ mod tests {
     }
 
     #[test]
-    fn products_sharing_a_name_prefix_do_not_collide() {
+    fn distinct_similar_names_do_not_collide() {
         let (_d, conn) = db();
-        // The booster pack's name is a prefix of the booster display's;
+        // The booster display and prerelease box both extend the set name;
         // an exact normalized match must pick the right one, not go ambiguous.
         let rows = vec![row(
-            "Spark of Rebellion Booster Display",
-            "Spark of Rebellion",
+            "Jump to Lightspeed Prerelease Box",
+            "Jump to Lightspeed",
             4,
         )];
         let report = resolve_sealed(&conn, &rows).unwrap();
@@ -439,24 +434,19 @@ mod tests {
         assert_eq!(report.matched[0].product_id, 6004);
     }
 
-    /// A catalog with NULL-set-code products (prerelease kits, displays), reachable
+    /// A catalog with NULL-set-code products (UPCs, Tin Displays), reachable
     /// only through the global name fallback (dumpstar-oq3i.3).
     fn null_set_db() -> (tempfile::TempDir, Connection) {
         let dir = tempfile::tempdir().unwrap();
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, ptcgo_code, name, series) \
-                 VALUES ('sor', 'SOR', 'Spark of Rebellion', 'SOR')",
-                [],
-            )
-            .unwrap();
+            crate::testkit::set(&c, "LOF", "Legends of the Force");
             c.execute(
                 "INSERT INTO sealed_products (product_id, set_code, name, category, fetched_at) VALUES \
-                   (654213, NULL, 'Twilight of the Republic Prerelease Kit', 'prerelease_kit', '2026-02-01'), \
-                   (656997, NULL, 'Collector’s Booster Display', 'booster_display', '2026-02-01'), \
-                   (622770, 'sor', 'Spark of Rebellion Two-Player Starter', 'two_player_starter', '2026-02-01')",
+                   (654213, NULL, 'Twin Suns Ultra Premium Collection', 'sealed', '2026-02-01'), \
+                   (656997, NULL, 'Jabba’s Palace Ultra-Premium Collection', 'sealed', '2026-02-01'), \
+                   (622770, 'LOF', 'Legends of the Force Super-Premium Collection', 'sealed', '2026-02-01')",
                 [],
             )
             .unwrap();
@@ -469,8 +459,8 @@ mod tests {
         ParsedSealedRow {
             source_line: 2,
             name: name.to_string(),
-            set_hint: "Miscellaneous Cards & Products".to_string(),
-            set_name: Some("Miscellaneous Cards & Products".to_string()),
+            set_hint: "Miscellaneous Products".to_string(),
+            set_name: Some("Miscellaneous Products".to_string()),
             category_hint: None,
             quantity: 1,
             condition: "Near Mint".to_string(),
@@ -482,14 +472,11 @@ mod tests {
 
     #[test]
     fn null_set_code_product_resolves_by_global_name() {
-        // Set 'Miscellaneous Cards & Products' doesn't resolve; the product
+        // Set 'Miscellaneous Products' doesn't resolve; the product
         // lives at NULL set_code and is only reachable via the global search.
         let (_d, conn) = null_set_db();
-        let report = resolve_sealed(
-            &conn,
-            &[misc_sealed("Twilight of the Republic Prerelease Kit")],
-        )
-        .unwrap();
+        let report =
+            resolve_sealed(&conn, &[misc_sealed("Twin Suns Ultra Premium Collection")]).unwrap();
         assert_eq!(report.matched.len(), 1, "{:?}", report.unmatched);
         assert_eq!(report.matched[0].product_id, 654213);
         assert_eq!(report.matched[0].set_code, None);
@@ -498,17 +485,22 @@ mod tests {
     #[test]
     fn global_fallback_folds_hyphens_and_apostrophes() {
         let (_d, conn) = null_set_db();
-        // Collectr "Two Player" (space) vs catalog "Two-Player" (hyphen).
+        // Collectr "Super Premium" (space) vs catalog "Super-Premium" (hyphen).
         let r1 = resolve_sealed(
             &conn,
-            &[misc_sealed("Spark of Rebellion Two Player Starter")],
+            &[misc_sealed("Legends of the Force Super Premium Collection")],
         )
         .unwrap();
         assert_eq!(r1.matched.len(), 1, "{:?}", r1.unmatched);
         assert_eq!(r1.matched[0].product_id, 622770);
 
-        // Straight apostrophe in the Collectr row vs U+2019 in the catalog.
-        let r2 = resolve_sealed(&conn, &[misc_sealed("Collector's Booster Display")]).unwrap();
+        // Straight apostrophe + spaced "Ultra Premium" vs catalog U+2019 +
+        // hyphenated "Ultra-Premium".
+        let r2 = resolve_sealed(
+            &conn,
+            &[misc_sealed("Jabba's Palace Ultra Premium Collection")],
+        )
+        .unwrap();
         assert_eq!(r2.matched.len(), 1, "{:?}", r2.unmatched);
         assert_eq!(r2.matched[0].product_id, 656997);
     }

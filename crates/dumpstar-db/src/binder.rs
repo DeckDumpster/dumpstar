@@ -1,4 +1,4 @@
-//! Binder-page assembly: a set rendered as ordered slots, one per card
+//! Binder-page assembly: a set rendered as ordered slots, one per collector
 //! number, with per-printing ownership and master-set progress (PLAN.md §6).
 
 use std::collections::HashMap;
@@ -6,28 +6,15 @@ use std::collections::HashMap;
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::error::Result;
+use crate::search_meta::RarityLookup;
 
-/// Catalog offsets baked into `number_sortable` (PLAN.md §3.4): subset
-/// namespaces (Galarian/Trainer Gallery) start at 1000, promos at 9000.
-const SUBSET_FLOOR: i64 = 1_000;
-const PROMO_FLOOR: i64 = 9_000;
-
-/// Header shown above a binder. Renders both real sets (kind="set") and
-/// logical-set containers like Trick or Trade bundles (kind="bundle").
-/// For bundles, `series` is the synthetic label ("Trick or Trade Bundle")
-/// and total/printed_total are `None` so the base-completion bar hides.
+/// Header shown above a binder.
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
 #[ts(export)]
 pub struct BinderSetInfo {
     pub set_code: String,
     pub name: String,
-    pub series: String,
-    #[ts(type = "number | null")]
-    pub total: Option<i64>,
-    #[ts(type = "number | null")]
-    pub printed_total: Option<i64>,
-    /// `"set"` for real sets, `"bundle"` for TTBB-style containers.
-    pub kind: String,
+    pub release_date: Option<String>,
 }
 
 /// One printing within a slot.
@@ -36,72 +23,28 @@ pub struct BinderSetInfo {
 pub struct SlotPrinting {
     pub printing_id: String,
     pub variant: String,
-    pub deprecated: bool,
+    /// `Normal` or `Foil`.
+    pub finish: String,
     #[ts(type = "number")]
     pub owned_count: i64,
     pub market_price: Option<f64>,
 }
 
-/// Pointer to the home set of a slot's underlying card, when that set
-/// differs from the container being rendered. Populated only for bundle
-/// slots (TTBB products are reprints of cards in other sets) — `None`
-/// for normal set slots.
-#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
-#[ts(export)]
-pub struct ExternalSet {
-    pub set_code: String,
-    pub name: String,
-}
-
-/// One binder slot — a single card number and all its printings.
+/// One binder slot — a single collector number and all its printings (the
+/// Normal and the Foil of it).
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
 #[ts(export)]
 pub struct BinderSlot {
     pub card_id: String,
     pub number: String,
     pub name: String,
+    pub subtitle: Option<String>,
     pub rarity: Option<String>,
-    pub image_large: Option<String>,
-    /// `base` | `secret` | `subset` | `promo`. Bundles use `base` for
-    /// every slot since they have no rarity-tier sections.
+    pub image_url: Option<String>,
+    /// `base` (Standard) | `hyperspace` | `showcase` | `promo` (anything
+    /// else: Promo, Weekly Play, …).
     pub section: String,
     pub printings: Vec<SlotPrinting>,
-    /// Home set of the slot's card when different from the container —
-    /// bundle slots use this to surface "lives in <set name>" and
-    /// to route the card-detail link. `None` for regular set slots.
-    pub external_set: Option<ExternalSet>,
-}
-
-/// The set of cards a user is missing, ready for a TCGplayer Mass Entry
-/// paste. Built by [`missing_for_export`]; the front-end filters by scope
-/// (base vs master) and per-card secret-rare confirmation before assembling
-/// the final paste text.
-#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
-#[ts(export)]
-pub struct MissingExport {
-    pub set_code: String,
-    pub set_name: String,
-    /// The set code used in the Mass Entry lines: TCGplayer's own
-    /// `group.abbreviation` when known, else the PTCGO code. `None` means the
-    /// set has no usable code, so every line is unmappable (the UI warns).
-    pub ptcgo_code: Option<String>,
-    pub cards: Vec<MissingCard>,
-}
-
-/// One card the user owns no copy of, with its ready-to-paste Mass Entry
-/// line (or `None` when the set lacks a `ptcgo_code` to anchor it).
-#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
-#[ts(export)]
-pub struct MissingCard {
-    pub card_id: String,
-    pub number: String,
-    pub name: String,
-    /// `base` | `secret` | `subset` | `promo`.
-    pub section: String,
-    /// `"1 <Name> - <###/###> [<CODE>]"` (or `"1 <Name> [<CODE>]"` when the
-    /// card has no TCGplayer collector number), or `None` when unmappable
-    /// (the set has no code).
-    pub mass_entry_line: Option<String>,
 }
 
 /// A single rendered binder page with master-set progress.
@@ -115,7 +58,7 @@ pub struct BinderPage {
     pub page: i64,
     #[ts(type = "number")]
     pub total_pages: i64,
-    /// Numbered-set card count, and how many of those the user owns.
+    /// Standard-variant slot count, and how many of those the user owns.
     #[ts(type = "number")]
     pub base_total: i64,
     #[ts(type = "number")]
@@ -133,8 +76,8 @@ pub struct BinderPage {
 pub struct BinderQuery {
     pub page: i64,
     pub layout: i64,
-    pub include_secret: bool,
-    pub include_subset: bool,
+    pub include_hyperspace: bool,
+    pub include_showcase: bool,
     pub include_promos: bool,
     /// `number` (asc) | `number_desc` | `name` (A→Z) | `name_desc` |
     /// `price` (high→low) | `price_asc` | `rarity` (rare→common) |
@@ -152,8 +95,8 @@ impl Default for BinderQuery {
         Self {
             page: 1,
             layout: 9,
-            include_secret: true,
-            include_subset: true,
+            include_hyperspace: true,
+            include_showcase: true,
             include_promos: true,
             sort: "number".to_string(),
             search: String::new(),
@@ -162,76 +105,12 @@ impl Default for BinderQuery {
     }
 }
 
-/// A catalog card row read while assembling a binder.
-struct CardRow {
-    card_id: String,
-    number: String,
-    number_sortable: i64,
-    name: String,
-    rarity: Option<String>,
-    image_large: Option<String>,
-}
-
-fn section_of(number_sortable: i64, printed_total: i64) -> &'static str {
-    if number_sortable <= printed_total {
-        "base"
-    } else if number_sortable < SUBSET_FLOOR {
-        "secret"
-    } else if number_sortable < PROMO_FLOOR {
-        "subset"
-    } else {
-        "promo"
-    }
-}
-
-/// Build a card's TCGplayer Mass Entry line.
-///
-/// The reliable format for a card with multiple printings in one set (same
-/// name, different numbers — e.g. a base copy plus its secret-rare reprint)
-/// reproduces TCGplayer's *own product name*, which embeds the padded
-/// collector fraction, and appends the set code in brackets:
-///
-/// ```text
-/// 1 Mega Zeraora ex - 027/084 [PBL]
-///   {name} - {collector_number} [{set_code}]
-/// ```
-///
-/// The number must be the padded `###/###` fraction *with the set total*
-/// (`027/084`, `101/084` for a secret rare) — that is what disambiguates
-/// the multiple printings. Our previous line put the set code before a
-/// trailing number (`... [PBL] 027/084`); that parses, but TCGplayer fails
-/// to resolve multi-printing cards from it, hence "could not be found".
-///
-/// When the card has no linked TCGplayer product (no collector number),
-/// drop the number entirely (`1 {name} [{code}]`) — valid for the
-/// single-printing case, which is the only one that lacks a number anyway.
-fn mass_entry_line(name: &str, code: &str, collector_number: Option<&str>) -> String {
-    match collector_number {
-        Some(num) => format!("1 {name} - {num} [{code}]"),
-        None => format!("1 {name} [{code}]"),
-    }
-}
-
-/// Rank a Pokémon rarity low (common) → high (chase). Unrecognised
-/// rarities sort just above the staple rares so they stay visible.
-fn rarity_rank(rarity: &Option<String>) -> i64 {
-    let Some(r) = rarity else { return 0 };
-    match r.to_ascii_lowercase().as_str() {
-        "common" => 1,
-        "uncommon" => 2,
-        "rare" => 3,
-        "promo" | "classic collection" => 4,
-        "rare holo" => 5,
-        "radiant rare" => 6,
-        "rare holo ex" | "rare holo gx" | "rare holo v" | "double rare" => 7,
-        "rare holo vmax" | "rare holo vstar" | "ultra rare" => 8,
-        "amazing rare" | "rare shiny" | "rare shiny gx" => 9,
-        "illustration rare" => 10,
-        "trainer gallery rare holo" => 11,
-        "rare secret" | "rare rainbow" => 12,
-        "special illustration rare" => 13,
-        "hyper rare" | "rare holo star" => 14,
-        _ => 6,
+fn section_of(variant: &str) -> &'static str {
+    match variant {
+        "Standard" => "base",
+        "Hyperspace" => "hyperspace",
+        "Showcase" => "showcase",
+        _ => "promo",
     }
 }
 
@@ -251,108 +130,85 @@ pub fn get_binder_page(
     q: &BinderQuery,
 ) -> Result<Option<BinderPage>> {
     let set: Option<BinderSetInfo> = conn
-        .prepare(
-            "SELECT set_code, name, series, total, printed_total FROM sets WHERE set_code = ?1",
-        )?
+        .prepare("SELECT set_code, name, release_date FROM sets WHERE set_code = ?1")?
         .query_row([set_code], |r| {
             Ok(BinderSetInfo {
                 set_code: r.get(0)?,
                 name: r.get(1)?,
-                series: r.get(2)?,
-                total: r.get(3)?,
-                printed_total: r.get(4)?,
-                kind: "set".to_string(),
+                release_date: r.get(2)?,
             })
         })
         .optional()?;
     let Some(set) = set else {
         return Ok(None);
     };
-    let printed_total = set.printed_total.unwrap_or(i64::MAX);
+    let tiers = RarityLookup::load(conn)?;
 
-    // Every card in the set, in binder order.
-    let cards: Vec<CardRow> = {
-        let mut stmt = conn.prepare(
-            "SELECT card_id, number, number_sortable, name, rarity, image_large \
-             FROM cards WHERE set_code = ?1 ORDER BY number_sortable",
-        )?;
-        let rows = stmt.query_map([set_code], |r| {
-            Ok(CardRow {
-                card_id: r.get(0)?,
-                number: r.get(1)?,
-                number_sortable: r.get(2)?,
-                name: r.get(3)?,
-                rarity: r.get(4)?,
-                image_large: r.get(5)?,
-            })
-        })?;
-        rows.collect::<rusqlite::Result<_>>()?
-    };
-
-    // Every printing in the set, with owned counts and market price.
-    let mut printings: HashMap<String, Vec<SlotPrinting>> = HashMap::new();
+    // Every printing in the set — catalog and the tenant's own — with its
+    // card, owned count and market price. Grouped into slots by collector
+    // number below; the catalog rows come first so a slot's identity is the
+    // catalog's.
+    let mut slots_by_number: HashMap<String, BinderSlot> = HashMap::new();
     {
         let mut stmt = conn.prepare(concat!(
-            "SELECT p.card_id, p.printing_id, p.variant, p.deprecated_at, \
+            "SELECT p.number, p.card_id, cd.name, cd.subtitle, p.rarity, p.image_url, \
+                    p.variant, p.printing_id, p.finish, \
                     (SELECT count(*) FROM collection c WHERE c.printing_id = p.printing_id), \
                     ",
             crate::market_price_expr!(),
             " \
-             FROM ( \
-                SELECT card_id, printing_id, variant, deprecated_at, \
-                       tcgplayer_product_id, sub_type_name FROM printings \
-                UNION ALL \
-                SELECT card_id, printing_id, variant, NULL AS deprecated_at, \
-                       NULL AS tcgplayer_product_id, NULL AS sub_type_name \
-                  FROM user_printings \
-             ) p \
+             FROM ",
+            crate::printing_rel!(),
+            " p \
              JOIN cards cd ON p.card_id = cd.card_id \
-             WHERE cd.set_code = ?1 ORDER BY cd.number_sortable, p.variant",
+             WHERE p.set_code = ?1 \
+             ORDER BY p.variant_description IS NOT NULL, p.variant, p.finish, p.printing_id",
         ))?;
         let rows = stmt.query_map([set_code], |r| {
-            let card_id: String = r.get(0)?;
             Ok((
-                card_id,
+                BinderSlot {
+                    number: r.get(0)?,
+                    card_id: r.get(1)?,
+                    name: r.get(2)?,
+                    subtitle: r.get(3)?,
+                    rarity: r.get(4)?,
+                    image_url: r.get(5)?,
+                    section: section_of(&r.get::<_, String>(6)?).to_string(),
+                    printings: Vec::new(),
+                },
                 SlotPrinting {
-                    printing_id: r.get(1)?,
-                    variant: r.get(2)?,
-                    deprecated: r.get::<_, Option<String>>(3)?.is_some(),
-                    owned_count: r.get(4)?,
-                    market_price: r.get(5)?,
+                    variant: r.get(6)?,
+                    printing_id: r.get(7)?,
+                    finish: r.get(8)?,
+                    owned_count: r.get(9)?,
+                    market_price: r.get(10)?,
                 },
             ))
         })?;
         for row in rows {
-            let (card_id, printing) = row?;
-            printings.entry(card_id).or_default().push(printing);
+            let (slot, printing) = row?;
+            slots_by_number
+                .entry(slot.number.clone())
+                .or_insert(slot)
+                .printings
+                .push(printing);
         }
     }
+    let mut all: Vec<BinderSlot> = slots_by_number.into_values().collect();
+    all.sort_by(|a, b| {
+        dumpstar_core::number_sort_key(&a.number)
+            .cmp(&dumpstar_core::number_sort_key(&b.number))
+            .then_with(|| a.number.cmp(&b.number))
+    });
 
     // Build every visible slot (all sections the include flags allow).
-    let mut visible: Vec<BinderSlot> = cards
+    let mut visible: Vec<BinderSlot> = all
         .into_iter()
-        .filter_map(|card| {
-            let section = section_of(card.number_sortable, printed_total);
-            let keep = match section {
-                "secret" => q.include_secret,
-                "subset" => q.include_subset,
-                "promo" => q.include_promos,
-                _ => true, // base
-            };
-            if !keep {
-                return None;
-            }
-            let slot_printings = printings.get(&card.card_id).cloned().unwrap_or_default();
-            Some(BinderSlot {
-                card_id: card.card_id,
-                number: card.number,
-                name: card.name,
-                rarity: card.rarity,
-                image_large: card.image_large,
-                section: section.to_string(),
-                printings: slot_printings,
-                external_set: None,
-            })
+        .filter(|slot| match slot.section.as_str() {
+            "hyperspace" => q.include_hyperspace,
+            "showcase" => q.include_showcase,
+            "promo" => q.include_promos,
+            _ => true, // base
         })
         .collect();
 
@@ -371,7 +227,8 @@ pub fn get_binder_page(
 
     // Sort. Progress above is computed pre-sort/filter, so the bars always
     // reflect the whole section-included set rather than the current view.
-    // `visible` arrives in collector-number order from the catalog query.
+    // `visible` arrives in collector-number order.
+    let rank = |s: &BinderSlot| s.rarity.as_deref().map_or(-1, |r| tiers.rank(r));
     match q.sort.as_str() {
         "number_desc" => visible.reverse(),
         "name" => visible.sort_by(|a, b| {
@@ -386,8 +243,8 @@ pub fn get_binder_page(
         }),
         "price" => visible.sort_by(|a, b| slot_price(b).total_cmp(&slot_price(a))),
         "price_asc" => visible.sort_by(|a, b| slot_price(a).total_cmp(&slot_price(b))),
-        "rarity" => visible.sort_by(|a, b| rarity_rank(&b.rarity).cmp(&rarity_rank(&a.rarity))),
-        "rarity_asc" => visible.sort_by(|a, b| rarity_rank(&a.rarity).cmp(&rarity_rank(&b.rarity))),
+        "rarity" => visible.sort_by_key(|s| std::cmp::Reverse(rank(s))),
+        "rarity_asc" => visible.sort_by_key(|s| rank(s)),
         _ => {} // "number" — already collector-number ascending.
     }
 
@@ -417,7 +274,6 @@ pub fn get_binder_page(
         .skip(start)
         .take(layout as usize)
         .collect();
-
     Ok(Some(BinderPage {
         set,
         layout,
@@ -431,145 +287,71 @@ pub fn get_binder_page(
     }))
 }
 
-/// Every card in `set_code` the user owns zero copies of, with a TCGplayer
-/// Mass Entry line per card. `None` if the set is unknown.
-///
-/// "Missing" mirrors the binder's `need` filter: a card counts as owned if
-/// any of its printings — catalog or the user-printings escape hatch — has a
-/// collection row. One line per card (the user picks holo/normal in
-/// TCGplayer's cart review), so variants are intentionally collapsed.
-pub fn missing_for_export(conn: &Connection, set_code: &str) -> Result<Option<MissingExport>> {
-    struct SetInfo {
-        name: String,
-        ptcgo_code: Option<String>,
-        printed_total: Option<i64>,
-        tcg_abbrev: Option<String>,
-    }
-    let set: Option<SetInfo> = conn
-        .prepare(
-            "SELECT s.name, s.ptcgo_code, s.printed_total, \
-                    (SELECT g.abbreviation FROM tcgplayer_groups g \
-                      WHERE g.set_code = s.set_code AND g.abbreviation IS NOT NULL \
-                      ORDER BY (g.role = 'primary') DESC LIMIT 1) \
-             FROM sets s WHERE s.set_code = ?1",
-        )?
-        .query_row([set_code], |r| {
-            Ok(SetInfo {
-                name: r.get(0)?,
-                ptcgo_code: r.get(1)?,
-                printed_total: r.get(2)?,
-                tcg_abbrev: r.get(3)?,
-            })
-        })
-        .optional()?;
-    let Some(SetInfo {
-        name: set_name,
-        ptcgo_code,
-        printed_total,
-        tcg_abbrev,
-    }) = set
-    else {
-        return Ok(None);
-    };
-    let printed_total = printed_total.unwrap_or(i64::MAX);
-    // Mass Entry is a TCGplayer feature, so the bracketed set code must be
-    // TCGplayer's own abbreviation (from the ingested tcgplayer_groups), not
-    // the Pokémon-TCGO code — they only sometimes coincide. Fall back to the
-    // PTCGO code when TCGplayer has no abbreviation.
-    let entry_set_code = tcg_abbrev.or(ptcgo_code);
-
-    let mut stmt = conn.prepare(
-        "SELECT cd.card_id, cd.number, cd.number_sortable, cd.name, \
-                (SELECT tp.collector_number FROM printings p \
-                   JOIN tcgcsv_products tp ON tp.product_id = p.tcgplayer_product_id \
-                  WHERE p.card_id = cd.card_id AND p.tcgplayer_product_id IS NOT NULL \
-                    AND tp.collector_number IS NOT NULL LIMIT 1) AS tcg_number \
-         FROM cards cd \
-         WHERE cd.set_code = ?1 \
-           AND NOT EXISTS ( \
-             SELECT 1 FROM ( \
-                SELECT printing_id FROM printings WHERE card_id = cd.card_id \
-                UNION ALL \
-                SELECT printing_id FROM user_printings WHERE card_id = cd.card_id \
-             ) p \
-             JOIN collection c ON c.printing_id = p.printing_id \
-           ) \
-         ORDER BY cd.number_sortable",
-    )?;
-    let cards = stmt
-        .query_map([set_code], |r| {
-            let card_id: String = r.get(0)?;
-            let number: String = r.get(1)?;
-            let number_sortable: i64 = r.get(2)?;
-            let name: String = r.get(3)?;
-            let tcg_number: Option<String> = r.get(4)?;
-            let section = section_of(number_sortable, printed_total).to_string();
-            // Reproduce TCGplayer's own product name ("Name - 027/084")
-            // followed by [SET]; the padded collector fraction is what lets
-            // Mass Entry resolve cards that have several printings in the set.
-            let line = entry_set_code
-                .as_ref()
-                .map(|code| mass_entry_line(&name, code, tcg_number.as_deref()));
-            Ok(MissingCard {
-                card_id,
-                number,
-                name,
-                section,
-                mass_entry_line: line,
-            })
-        })?
-        .collect::<rusqlite::Result<_>>()?;
-
-    // Expose the code actually used in the lines (TCGplayer abbrev, or the
-    // PTCGO fallback) so the UI's "no code → unmappable" warning stays honest.
-    Ok(Some(MissingExport {
-        set_code: set_code.to_string(),
-        set_name,
-        ptcgo_code: entry_set_code,
-        cards,
-    }))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::collection::{self, NewCopy};
+    use crate::testkit;
     use crate::{connect_user, open_shared};
 
+    /// Spark of Rebellion, as a binder sees it: base #1-#3, Hyperspace #264
+    /// (of card 1), Showcase #270 (of card 2) and a promo #P01. #1 has a
+    /// Foil too, so its slot holds two printings.
     fn binder_conn() -> (tempfile::TempDir, Connection) {
         let dir = tempfile::tempdir().unwrap();
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            // printed_total = 2 -> numbers 1,2 base; 3 secret; GG01 subset.
-            c.execute(
-                "INSERT INTO sets (set_code, name, series, total, printed_total) \
-                 VALUES ('sv3pt5', '151', 'Scarlet & Violet', 4, 2)",
-                [],
-            )
-            .unwrap();
-            let cards = [
-                ("sv3pt5-1", "1", 1_i64),
-                ("sv3pt5-2", "2", 2),
-                ("sv3pt5-3", "3", 3),
-                ("sv3pt5-GG01", "GG01", 1_001),
-            ];
-            for (id, num, ns) in cards {
-                c.execute(
-                    "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                     VALUES (?1, 'sv3pt5', ?2, ?3, 'Card')",
-                    rusqlite::params![id, num, ns],
-                )
-                .unwrap();
-                c.execute(
-                    "INSERT INTO printings (printing_id, card_id, variant) VALUES (?1, ?2, 'normal')",
-                    rusqlite::params![format!("{id}-normal"), id],
-                )
-                .unwrap();
-            }
+            testkit::set(&c, "SOR", "Spark of Rebellion");
+            testkit::simple(&c, "SOR", "1", "Luke Skywalker");
+            testkit::foil_of(&c, "SOR", "1");
+            testkit::simple(&c, "SOR", "2", "Millennium Falcon");
+            testkit::simple(&c, "SOR", "3", "Vanquish");
+            testkit::printing(
+                &c,
+                "SOR-1-hyper",
+                "SOR-1",
+                "SOR",
+                "264",
+                "Hyperspace",
+                "Normal",
+            );
+            testkit::printing(
+                &c,
+                "SOR-2-show",
+                "SOR-2",
+                "SOR",
+                "270",
+                "Showcase",
+                "Normal",
+            );
+            testkit::card(&c, "SOR-P01", "Darth Vader");
+            testkit::printing(
+                &c,
+                "SOR-P01-promo",
+                "SOR-P01",
+                "SOR",
+                "P01",
+                "Promo",
+                "Normal",
+            );
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         (dir, conn)
+    }
+
+    fn own(conn: &mut Connection, pids: &[&str]) {
+        for pid in pids {
+            collection::add(
+                conn,
+                &NewCopy {
+                    printing_id: (*pid).into(),
+                    source: "manual_id".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        }
     }
 
     // Regression for dumpstar-3s2: a card owned only
@@ -577,7 +359,7 @@ mod tests {
     // hatch) must still highlight as owned in the binder, count toward
     // base_owned, and surface the custom variant as its own slot printing. The
     // binder query was catalog-only (printings, no user_printings), so the slot
-    // stayed unowned. User-reported on card/base2/9.
+    // stayed unowned.
     #[test]
     fn slot_owns_card_via_custom_variant() {
         use crate::user_printings::{self, NewUserPrinting};
@@ -588,30 +370,26 @@ mod tests {
         let up = user_printings::insert(
             &conn,
             &NewUserPrinting {
-                card_id: "sv3pt5-2".into(),
+                card_id: "SOR-2".into(),
                 description: Some("inverted holo misprint".into()),
             },
         )
         .unwrap();
         assert_eq!(up.variant, "missing_variant");
-        collection::add(
-            &mut conn,
-            &NewCopy {
-                printing_id: up.printing_id.clone(),
-                source: "manual_id".into(),
-                ..Default::default()
-            },
-        )
-        .unwrap();
+        own(&mut conn, &[up.printing_id.as_str()]);
 
-        let p = get_binder_page(&conn, "sv3pt5", &BinderQuery::default())
+        let p = get_binder_page(&conn, "SOR", &BinderQuery::default())
             .unwrap()
             .unwrap();
         let slot = p
             .slots
             .iter()
-            .find(|s| s.card_id == "sv3pt5-2")
+            .find(|s| s.number == "2")
             .expect("card #2 slot present");
+        assert_eq!(
+            slot.section, "base",
+            "the slot keeps the catalog's identity"
+        );
         let custom = slot
             .printings
             .iter()
@@ -630,43 +408,129 @@ mod tests {
     #[test]
     fn assembles_sections_and_progress() {
         let (_d, mut conn) = binder_conn();
-        collection::add(
-            &mut conn,
-            &NewCopy {
-                printing_id: "sv3pt5-1-normal".into(),
-                source: "manual_id".into(),
-                ..Default::default()
-            },
-        )
-        .unwrap();
+        own(&mut conn, &["SOR-1-normal"]);
 
-        // All sections on.
-        let p = get_binder_page(&conn, "sv3pt5", &BinderQuery::default())
+        // All sections on: one slot per collector number.
+        let p = get_binder_page(&conn, "SOR", &BinderQuery::default())
             .unwrap()
             .unwrap();
-        assert_eq!(p.slots.len(), 4);
-        assert_eq!(p.base_total, 2);
+        assert_eq!(p.set.name, "Spark of Rebellion");
+        let numbers: Vec<&str> = p.slots.iter().map(|s| s.number.as_str()).collect();
+        assert_eq!(numbers, ["1", "2", "3", "264", "270", "P01"]);
+        let sections: Vec<&str> = p.slots.iter().map(|s| s.section.as_str()).collect();
+        assert_eq!(
+            sections,
+            ["base", "base", "base", "hyperspace", "showcase", "promo"]
+        );
+        assert_eq!(p.base_total, 3);
         assert_eq!(p.base_owned, 1);
-        assert_eq!(p.master_total, 4); // one printing per card
+        // Standard #1 holds a Normal and a Foil; every other slot one printing.
+        assert_eq!(p.slots[0].printings.len(), 2);
+        assert_eq!(p.master_total, 7);
         assert_eq!(p.master_owned, 1);
-        assert_eq!(p.slots[2].section, "secret");
-        assert_eq!(p.slots[3].section, "subset");
 
-        // Secret + subset off -> only the 2 base cards.
+        // Hyperspace + showcase + promos off -> only the 3 base slots.
         let base_only = get_binder_page(
             &conn,
-            "sv3pt5",
+            "SOR",
             &BinderQuery {
-                include_secret: false,
-                include_subset: false,
+                include_hyperspace: false,
+                include_showcase: false,
                 include_promos: false,
                 ..Default::default()
             },
         )
         .unwrap()
         .unwrap();
-        assert_eq!(base_only.slots.len(), 2);
+        assert_eq!(base_only.slots.len(), 3);
         assert!(base_only.slots.iter().all(|s| s.section == "base"));
+        assert_eq!(base_only.master_total, 4);
+
+        // Each include flag drops exactly its own section.
+        let no_hyper = get_binder_page(
+            &conn,
+            "SOR",
+            &BinderQuery {
+                include_hyperspace: false,
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(no_hyper.slots.len(), 5);
+        assert!(no_hyper.slots.iter().all(|s| s.section != "hyperspace"));
+        let no_promo = get_binder_page(
+            &conn,
+            "SOR",
+            &BinderQuery {
+                include_promos: false,
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .unwrap();
+        assert!(no_promo.slots.iter().all(|s| s.section != "promo"));
+        assert_eq!(no_promo.slots.len(), 5);
+    }
+
+    #[test]
+    fn slot_carries_card_identity_and_prices() {
+        let dir = tempfile::tempdir().unwrap();
+        let shared = dir.path().join("shared.sqlite");
+        {
+            let c = open_shared(&shared).unwrap();
+            testkit::card_full(
+                &c,
+                "SOR-5",
+                "Luke Skywalker",
+                Some("Jedi Knight"),
+                "Unit",
+                Some(4),
+                Some(4),
+                Some(5),
+                "[]",
+                "[]",
+                "[]",
+                None,
+            );
+            testkit::set(&c, "SOR", "Spark of Rebellion");
+            testkit::printing(
+                &c,
+                "SOR-5-normal",
+                "SOR-5",
+                "SOR",
+                "5",
+                "Standard",
+                "Normal",
+            );
+            testkit::foil_of(&c, "SOR", "5");
+            c.execute(
+                "UPDATE printings SET rarity = 'Legendary', image_url = 'https://img/l.png' \
+                  WHERE card_id = 'SOR-5'",
+                [],
+            )
+            .unwrap();
+            testkit::price(&c, "SOR-5-normal", "2026-05-18", 2.0);
+            testkit::price(&c, "SOR-5-foil", "2026-05-18", 9.0);
+        }
+        let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
+        let p = get_binder_page(&conn, "SOR", &BinderQuery::default())
+            .unwrap()
+            .unwrap();
+        let slot = &p.slots[0];
+        assert_eq!(slot.name, "Luke Skywalker");
+        assert_eq!(slot.subtitle.as_deref(), Some("Jedi Knight"));
+        assert_eq!(slot.rarity.as_deref(), Some("Legendary"));
+        assert_eq!(slot.image_url.as_deref(), Some("https://img/l.png"));
+        let price = |finish: &str| {
+            slot.printings
+                .iter()
+                .find(|pr| pr.finish == finish)
+                .unwrap()
+                .market_price
+        };
+        assert_eq!(price("Normal"), Some(2.0));
+        assert_eq!(price("Foil"), Some(9.0));
     }
 
     #[test]
@@ -674,38 +538,28 @@ mod tests {
         let (_d, conn) = binder_conn();
         let q = |page: i64| BinderQuery {
             page,
-            layout: 2,
+            layout: 4,
             ..Default::default()
         };
-        let p1 = get_binder_page(&conn, "sv3pt5", &q(1)).unwrap().unwrap();
+        let p1 = get_binder_page(&conn, "SOR", &q(1)).unwrap().unwrap();
         assert_eq!(p1.total_pages, 2);
-        assert_eq!(p1.slots.len(), 2);
+        assert_eq!(p1.slots.len(), 4);
         assert_eq!(p1.slots[0].number, "1");
 
-        let p2 = get_binder_page(&conn, "sv3pt5", &q(2)).unwrap().unwrap();
+        let p2 = get_binder_page(&conn, "SOR", &q(2)).unwrap().unwrap();
         assert_eq!(p2.slots.len(), 2);
-        assert_eq!(p2.slots[0].number, "3");
+        assert_eq!(p2.slots[0].number, "270");
 
         // Out-of-range page clamps.
-        let clamped = get_binder_page(&conn, "sv3pt5", &q(99)).unwrap().unwrap();
+        let clamped = get_binder_page(&conn, "SOR", &q(99)).unwrap().unwrap();
         assert_eq!(clamped.page, 2);
     }
 
     #[test]
     fn sorts_searches_and_filters() {
         let (_d, mut conn) = binder_conn();
-        // Own card #1 twice (a duplicate) and #2 once.
-        for pid in ["sv3pt5-1-normal", "sv3pt5-1-normal", "sv3pt5-2-normal"] {
-            collection::add(
-                &mut conn,
-                &NewCopy {
-                    printing_id: pid.into(),
-                    source: "manual_id".into(),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-        }
+        // Own #1 twice (a duplicate) and #2 once.
+        own(&mut conn, &["SOR-1-normal", "SOR-1-normal", "SOR-2-normal"]);
 
         let q = |sort: &str, filter: &str, search: &str| BinderQuery {
             sort: sort.into(),
@@ -714,253 +568,61 @@ mod tests {
             ..Default::default()
         };
 
-        // number_desc reverses collector order: promo/subset last → first.
-        let desc = get_binder_page(&conn, "sv3pt5", &q("number_desc", "all", ""))
+        // number_desc reverses collector order: the lettered promo is last
+        // ascending, so first descending.
+        let desc = get_binder_page(&conn, "SOR", &q("number_desc", "all", ""))
             .unwrap()
             .unwrap();
-        assert_eq!(desc.slots[0].number, "GG01");
-        assert_eq!(desc.slots[3].number, "1");
+        assert_eq!(desc.slots[0].number, "P01");
+        assert_eq!(desc.slots[5].number, "1");
 
-        // The reverse-direction siblings round-trip — name_desc, price_asc,
-        // rarity_asc just flip the comparator. Smoke-test that they parse
-        // and produce a page (full ordering is exercised by the desc
-        // variants above).
-        for s in [
-            "name",
-            "name_desc",
-            "price",
-            "price_asc",
-            "rarity",
-            "rarity_asc",
-        ] {
-            let page = get_binder_page(&conn, "sv3pt5", &q(s, "all", "")).unwrap();
+        // Name sorts both ways.
+        let by_name = get_binder_page(&conn, "SOR", &q("name", "all", ""))
+            .unwrap()
+            .unwrap();
+        assert_eq!(by_name.slots[0].name, "Darth Vader");
+        let by_name_desc = get_binder_page(&conn, "SOR", &q("name_desc", "all", ""))
+            .unwrap()
+            .unwrap();
+        assert_eq!(by_name_desc.slots[0].name, "Vanquish");
+
+        // The other sorts parse and produce a page.
+        for s in ["price", "price_asc", "rarity", "rarity_asc"] {
+            let page = get_binder_page(&conn, "SOR", &q(s, "all", "")).unwrap();
             assert!(page.is_some(), "sort '{s}' should produce a page");
         }
 
-        // "need" → cards with no owned printing (#3 and GG01).
-        let need = get_binder_page(&conn, "sv3pt5", &q("number", "need", ""))
+        // "need" -> slots with no owned printing (#3, #264, #270, #P01).
+        let need = get_binder_page(&conn, "SOR", &q("number", "need", ""))
             .unwrap()
             .unwrap();
-        assert_eq!(need.slots.len(), 2);
-        assert!(
-            need.slots
-                .iter()
-                .all(|s| s.number == "3" || s.number == "GG01")
-        );
+        let nums: Vec<&str> = need.slots.iter().map(|s| s.number.as_str()).collect();
+        assert_eq!(nums, ["3", "264", "270", "P01"]);
 
-        // "have" → #1 and #2; progress still reflects the whole set.
-        let have = get_binder_page(&conn, "sv3pt5", &q("number", "have", ""))
+        // "have" -> #1 and #2; progress still reflects the whole set.
+        let have = get_binder_page(&conn, "SOR", &q("number", "have", ""))
             .unwrap()
             .unwrap();
         assert_eq!(have.slots.len(), 2);
-        assert_eq!(have.base_total, 2, "progress is pre-filter");
+        assert_eq!(have.base_total, 3, "progress is pre-filter");
 
-        // "dupes" → only #1 (owned twice).
-        let dupes = get_binder_page(&conn, "sv3pt5", &q("number", "dupes", ""))
+        // "dupes" -> only #1 (owned twice).
+        let dupes = get_binder_page(&conn, "SOR", &q("number", "dupes", ""))
             .unwrap()
             .unwrap();
         assert_eq!(dupes.slots.len(), 1);
         assert_eq!(dupes.slots[0].number, "1");
 
-        // Search narrows by card name (every fixture card is named "Card").
-        let hit = get_binder_page(&conn, "sv3pt5", &q("number", "all", "car"))
+        // Search narrows by card name; a card's Hyperspace slot matches too.
+        let hit = get_binder_page(&conn, "SOR", &q("number", "all", "LUKE"))
             .unwrap()
             .unwrap();
-        assert_eq!(hit.slots.len(), 4);
-        let miss = get_binder_page(&conn, "sv3pt5", &q("number", "all", "zzz"))
+        let nums: Vec<&str> = hit.slots.iter().map(|s| s.number.as_str()).collect();
+        assert_eq!(nums, ["1", "264"]);
+        let miss = get_binder_page(&conn, "SOR", &q("number", "all", "zzz"))
             .unwrap()
             .unwrap();
         assert!(miss.slots.is_empty());
-    }
-
-    #[test]
-    fn missing_export_lines_and_sections() {
-        let dir = tempfile::tempdir().unwrap();
-        let shared = dir.path().join("shared.sqlite");
-        {
-            let c = open_shared(&shared).unwrap();
-            // 'tst' has a ptcgo_code (mappable); 'noab' has none (unmappable).
-            c.execute(
-                "INSERT INTO sets (set_code, name, series, ptcgo_code, printed_total) \
-                 VALUES ('tst', 'Test Set', 'S&V', 'TST', 2)",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series, printed_total) \
-                 VALUES ('noab', 'No Abbr', 'S&V', 1)",
-                [],
-            )
-            .unwrap();
-            // tst: base 1,2; secret 3; subset GG01.
-            let cards = [
-                ("tst", "tst-1", "1", 1_i64, "Bulbasaur"),
-                ("tst", "tst-2", "2", 2, "Ivysaur"),
-                ("tst", "tst-3", "3", 3, "Venusaur"),
-                ("tst", "tst-GG01", "GG01", 1_001, "Pikachu"),
-                ("noab", "noab-1", "1", 1, "Mew"),
-            ];
-            for (set, id, num, ns, name) in cards {
-                c.execute(
-                    "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                     VALUES (?1, ?2, ?3, ?4, ?5)",
-                    rusqlite::params![id, set, num, ns, name],
-                )
-                .unwrap();
-                c.execute(
-                    "INSERT INTO printings (printing_id, card_id, variant) VALUES (?1, ?2, 'normal')",
-                    rusqlite::params![format!("{id}-normal"), id],
-                )
-                .unwrap();
-            }
-        }
-        let mut conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-
-        // Own card #1 of tst — it must drop out of the missing list.
-        collection::add(
-            &mut conn,
-            &NewCopy {
-                printing_id: "tst-1-normal".into(),
-                source: "manual_id".into(),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-
-        let exp = missing_for_export(&conn, "tst").unwrap().unwrap();
-        assert_eq!(exp.ptcgo_code.as_deref(), Some("TST"));
-        let nums: Vec<&str> = exp.cards.iter().map(|c| c.number.as_str()).collect();
-        assert_eq!(nums, ["2", "3", "GG01"], "owned #1 excluded, rest ordered");
-        let venusaur = exp.cards.iter().find(|c| c.number == "3").unwrap();
-        assert_eq!(venusaur.section, "secret");
-        // No linked TCGplayer product → number-less fallback line.
-        assert_eq!(
-            venusaur.mass_entry_line.as_deref(),
-            Some("1 Venusaur [TST]")
-        );
-        assert_eq!(
-            exp.cards
-                .iter()
-                .find(|c| c.number == "GG01")
-                .unwrap()
-                .section,
-            "subset"
-        );
-
-        // No ptcgo_code → every line is None so the UI can warn.
-        let noab = missing_for_export(&conn, "noab").unwrap().unwrap();
-        assert!(noab.ptcgo_code.is_none());
-        assert_eq!(noab.cards.len(), 1);
-        assert!(noab.cards[0].mass_entry_line.is_none());
-    }
-
-    #[test]
-    fn mass_entry_line_shapes() {
-        // Product-name form (with collector fraction) then [SET].
-        assert_eq!(
-            mass_entry_line("Mega Zeraora ex", "PBL", Some("027/084")),
-            "1 Mega Zeraora ex - 027/084 [PBL]"
-        );
-        // No collector number → number-less form (single-printing case).
-        assert_eq!(mass_entry_line("Pineco", "SV01", None), "1 Pineco [SV01]");
-    }
-
-    #[test]
-    fn mass_entry_uses_tcgplayer_abbreviation_and_product_name_form() {
-        // TCGplayer needs its OWN set abbreviation ("MEG", not the PTCGO code)
-        // and its product-name form ("Vulpix - 138/132 [MEG]"), NOT the set
-        // code before a trailing number — the reported "could not be found".
-        let dir = tempfile::tempdir().unwrap();
-        let shared = dir.path().join("shared.sqlite");
-        {
-            let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series, ptcgo_code, printed_total) \
-                 VALUES ('me1', 'Mega Evolution', 'ME', 'MEG', 132)",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO tcgplayer_groups (group_id, set_code, name, abbreviation, fetched_at, role) \
-                 VALUES (24380, 'me1', 'ME01: Mega Evolution', 'MEG', '2026-01-01', 'primary')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('me1-138', 'me1', '138', 138, 'Vulpix')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO tcgcsv_products (product_id, group_id, name, collector_number, fetched_at) \
-                 VALUES (555, 24380, 'Vulpix - 138/132', '138/132', '2026-01-01')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO printings (printing_id, card_id, variant, tcgplayer_product_id) \
-                 VALUES ('me1-138-holo', 'me1-138', 'holo', 555)",
-                [],
-            )
-            .unwrap();
-        }
-        let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-        let exp = missing_for_export(&conn, "me1").unwrap().unwrap();
-        let vulpix = exp.cards.iter().find(|c| c.number == "138").unwrap();
-        assert_eq!(
-            vulpix.mass_entry_line.as_deref(),
-            Some("1 Vulpix - 138/132 [MEG]")
-        );
-    }
-
-    #[test]
-    fn mass_entry_secret_rare_uses_padded_fraction_and_name_form() {
-        // Regression for the PBL "could not be found" report: a secret rare
-        // must render in TCGplayer's product-name form with the padded
-        // fraction — "1 Fomantis - 085/084 [PBL]", NOT "[PBL] 085/084".
-        let dir = tempfile::tempdir().unwrap();
-        let shared = dir.path().join("shared.sqlite");
-        {
-            let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series, ptcgo_code, printed_total) \
-                 VALUES ('pbl', 'Pitch Black', 'ME', 'PBL', 84)",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO tcgplayer_groups (group_id, set_code, name, abbreviation, fetched_at, role) \
-                 VALUES (25000, 'pbl', 'PBL: Pitch Black', 'PBL', '2026-01-01', 'primary')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('pbl-85', 'pbl', '85', 85, 'Fomantis')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO tcgcsv_products (product_id, group_id, name, collector_number, fetched_at) \
-                 VALUES (777, 25000, 'Fomantis - 085/084', '085/084', '2026-01-01')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO printings (printing_id, card_id, variant, tcgplayer_product_id) \
-                 VALUES ('pbl-85-holo', 'pbl-85', 'holo', 777)",
-                [],
-            )
-            .unwrap();
-        }
-        let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-        let exp = missing_for_export(&conn, "pbl").unwrap().unwrap();
-        let fomantis = exp.cards.iter().find(|c| c.number == "85").unwrap();
-        assert_eq!(
-            fomantis.mass_entry_line.as_deref(),
-            Some("1 Fomantis - 085/084 [PBL]")
-        );
     }
 
     #[test]
@@ -971,6 +633,5 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
-        assert!(missing_for_export(&conn, "nope").unwrap().is_none());
     }
 }

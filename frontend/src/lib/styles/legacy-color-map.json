@@ -49,7 +49,7 @@
 		},
 		"#43344a": {
 			"tokens": ["--color-neutral-surface"],
-			"note": "The violet-tinted note callout in TcgExportModal; it was a one-off surface, not a role."
+			"note": "A violet-tinted callout surface from a removed modal; a one-off, not a role."
 		},
 
 		"#0f3460": {

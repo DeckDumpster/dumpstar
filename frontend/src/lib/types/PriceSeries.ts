@@ -3,10 +3,15 @@ import type { PricePoint } from "./PricePoint";
 
 /**
  * Full price history for one printing × price_type. The frontend renders
- * one chart line per series. v1 only emits `price_type = "market"`.
+ * one chart line per series.
  */
 export type PriceSeries = { printing_id: string, variant: string, 
 /**
- * TCGplayer sub_type — `Normal` / `Holofoil` / `Reverse Holofoil` / …
+ * `Normal` or `Foil`.
  */
-sub_type_name: string, price_type: string, points: Array<PricePoint>, };
+finish: string, 
+/**
+ * `market` (the feed) or `manual` (hand-entered, for a printing the
+ * tenant invented).
+ */
+price_type: string, points: Array<PricePoint>, };

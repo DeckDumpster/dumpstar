@@ -40,50 +40,41 @@ fn fixture() -> (
         let mut c = open_shared(&shared).unwrap();
         search_meta::reconcile(&mut c).unwrap();
         c.execute(
-            "INSERT INTO sets (set_code, ptcgo_code, name, series, set_sort_order, release_date)
-             VALUES ('base1','BS','Base Set','Base',1,'1999/01/09'),
-                    ('sv3pt5','MEW','151','Scarlet & Violet',35,'2023/09/22')",
+            "INSERT INTO sets (set_code, name, release_date, sort_order)
+             VALUES ('SOR','Spark of Rebellion','2024-03-08',1),
+                    ('SHD','Shadows of the Galaxy','2024-07-12',2)",
             [],
         )
         .unwrap();
         c.execute(
-            "INSERT INTO cards (card_id,set_code,number,number_sortable,name,supertype,subtypes,
-                hp,types,rarity,artist,flavor_text,attacks,abilities,weaknesses,resistances,
-                retreat_cost,regulation_mark,national_pokedex_numbers,legalities)
+            "INSERT INTO cards (card_id,name,subtitle,card_type,cost,power,hp,aspects,traits,
+                arenas,rules_text)
              VALUES
-             ('base1-4','base1','4',4,'Charizard','Pokémon','[\"Stage 2\"]',120,'[\"Fire\"]',
-               'Rare Holo','Mitsuhiro Arita','Spits fire that melts boulders.',
-               '[{\"name\":\"Fire Spin\",\"damage\":\"100\"}]',
-               '[{\"name\":\"Energy Burn\"}]',
-               '[{\"type\":\"Water\",\"value\":\"×2\"}]',
-               '[{\"type\":\"Fighting\",\"value\":\"-30\"}]',
-               '[\"Colorless\",\"Colorless\",\"Colorless\"]',NULL,'[6]','{\"unlimited\":\"Legal\"}'),
-             ('sv3pt5-25','sv3pt5','25',25,'Pikachu','Pokémon','[\"Basic\"]',60,'[\"Lightning\"]',
-               'Common','Naoki Saito','It loves ketchup.',
-               '[{\"name\":\"Thunder Jolt\",\"damage\":\"30\"}]',NULL,
-               '[{\"type\":\"Fighting\",\"value\":\"×2\"}]',NULL,
-               '[\"Colorless\"]','G','[25]','{\"standard\":\"Legal\"}'),
-             ('base1-2','base1','2',2,'Blastoise','Pokémon','[\"Stage 2\"]',100,'[\"Water\"]',
-               'Rare Holo','Ken Sugimori','A brutal Pokémon.',
-               '[{\"name\":\"Hydro Pump\",\"damage\":\"60\"}]',NULL,
-               '[{\"type\":\"Lightning\",\"value\":\"×2\"}]',NULL,
-               '[\"Colorless\",\"Colorless\",\"Colorless\"]',NULL,'[9]','{\"unlimited\":\"Legal\"}')",
+             ('luke','Luke Skywalker','Faithful Friend','Unit',3,3,5,
+               '[\"Vigilance\",\"Heroism\"]','[\"Force\",\"Rebel\",\"Jedi\"]','[\"Ground\"]',
+               'On Attack: Heal 2 damage from a base.'),
+             ('falcon','Millennium Falcon','Piece of Junk','Unit',2,3,3,
+               '[\"Cunning\",\"Heroism\"]','[\"Vehicle\",\"Transport\"]','[\"Space\"]',
+               'Piloting [2].'),
+             ('vanquish','Vanquish',NULL,'Event',5,NULL,NULL,
+               '[\"Vigilance\"]','[]','[]','Defeat a non-leader unit.')",
             [],
         )
         .unwrap();
         c.execute(
-            "INSERT INTO printings (printing_id,card_id,variant) VALUES
-             ('base1-4-holo','base1-4','holo'),
-             ('sv3pt5-25-normal','sv3pt5-25','normal'),
-             ('sv3pt5-25-reverse_holo','sv3pt5-25','reverse_holo'),
-             ('base1-2-holo','base1-2','holo')",
+            "INSERT INTO printings (printing_id,card_id,set_code,number,variant,finish,rarity,artist)
+             VALUES
+             ('luke-foil','luke','SOR','005','Standard','Foil','Legendary','Borja Pindado'),
+             ('falcon-std','falcon','SHD','252','Standard','Normal','Common','Ralph McQuarrie'),
+             ('falcon-hyper','falcon','SHD','512','Hyperspace','Normal','Common','Ralph McQuarrie'),
+             ('vanquish-std','vanquish','SOR','193','Standard','Normal','Uncommon',NULL)",
             [],
         )
         .unwrap();
     }
     let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
     conn.execute(
-        "INSERT INTO decks (id,name,created_at,updated_at) VALUES (1,'Mono Fire','2026-01-01','2026-01-01')",
+        "INSERT INTO decks (id,name,created_at,updated_at) VALUES (1,'Rebels','2026-01-01','2026-01-01')",
         [],
     )
     .unwrap();
@@ -97,11 +88,11 @@ fn fixture() -> (
            (printing_id,condition,language,purchase_price,sale_price,acquired_at,source,notes,
             tags,graded,grade_company,grade_value,status,binder_id,deck_id)
          VALUES
-         ('base1-4-holo','Near Mint','English',200.0,NULL,'2024-01-01','manual_id','clean copy',
+         ('luke-foil','Near Mint','English',200.0,NULL,'2024-01-01','manual_id','clean copy',
            '[\"favorite\"]',1,'PSA',10.0,'owned',1,NULL),
-         ('base1-4-holo','Lightly Played','English',150.0,NULL,'2024-02-01','manual_id',NULL,
+         ('luke-foil','Lightly Played','English',150.0,NULL,'2024-02-01','manual_id',NULL,
            NULL,0,NULL,NULL,'owned',NULL,NULL),
-         ('sv3pt5-25-normal','Near Mint','English',1.0,5.0,'2025-03-01','manual_id',NULL,
+         ('falcon-std','Near Mint','English',1.0,5.0,'2025-03-01','manual_id',NULL,
            NULL,0,NULL,NULL,'owned',NULL,1)",
         [],
     )

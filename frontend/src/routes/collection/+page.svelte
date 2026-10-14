@@ -4,18 +4,14 @@
 	import { goto } from '$app/navigation';
 	import { api, SearchQueryError } from '$lib/api';
 	import { facetHref } from '$lib/facets';
-	import { variantLabel, variantTag, variants } from '$lib/variants.svelte';
-	import { CONDITIONS } from '$lib/conditions';
+		import { CONDITIONS } from '$lib/conditions';
 	import { conditionMultiplier } from '$lib/conditions.svelte';
-	import { money, count } from '$lib/format';
+	import { money, count, printingLabel, jsonList } from '$lib/format';
 	import { stackOffsets, windowOf } from '$lib/virtual';
 
-	// Foil shimmer treatment for Foil / Hyperspace Foil /
-	// cosmos_holo variants — ranks 1..3 in the variants table. Stamps
-	// (rank 4) and normals (rank 0) are matte.
-	function isFoilVariant(code: string): boolean {
-		const rank = variants.map[code]?.rank ?? 0;
-		return rank >= 1 && rank <= 3;
+	// Foil shimmer treatment for Foil-finish printings.
+	function isFoil(finish: string): boolean {
+		return finish === 'Foil';
 	}
 	import CardModal from '$lib/components/CardModal.svelte';
 	import ValueHistoryModal from '$lib/components/ValueHistoryModal.svelte';
@@ -72,12 +68,10 @@
 
 	// One rendered row per owned copy. Deliberately NOT CollectionRow: the
 	// search payload carries only the fields the list draws (pd-lk8v), so
-	// claiming that shape here would promise `attacks`/`artist` the server
+	// claiming that shape here would promise `artist` the server
 	// no longer sends. Anchored to CollectionRow by Omit so a field added
 	// there still has to be answered for here.
-	type ListRow = Omit<CollectionRow, 'artist' | 'attacks' | 'variant_description'> & {
-		attack_costs: string | null;
-	};
+	type ListRow = Omit<CollectionRow, 'artist' | 'variant_description'>;
 
 	const rows = $derived<ListRow[]>(
 		searchRows.flatMap((sr) =>
@@ -96,26 +90,28 @@
 				binder_id: cp.binder_id,
 				deck_id: cp.deck_id,
 				variant: sr.variant,
+				finish: sr.finish,
 				card_id: sr.card_id,
 				set_code: sr.set_code,
 				set_name: sr.set_name,
-				set_ptcgo_code: sr.set_ptcgo_code,
-				set_symbol_url: sr.set_symbol_url,
 				number: sr.number,
 				name: sr.name,
+				subtitle: sr.subtitle,
 				rarity: sr.rarity,
-				supertype: sr.supertype,
-				subtypes: sr.subtypes,
-				types: sr.types,
-				attack_costs: sr.attack_costs,
+				card_type: sr.card_type,
+				cost: sr.cost,
+				power: sr.power,
+				hp: sr.hp,
+				aspects: sr.aspects,
+				arenas: sr.arenas,
 				market_price: sr.market_price,
-				image_small: sr.image_small
+				image_url: sr.image_url
 			}))
 		)
 	);
 
 	// Debounced search. Initial value comes from ?q= so clickable facets
-	// on the card-detail page (artist, set, rarity, …) can
+	// on the card-detail page (artist, set, aspect, rarity, …) can
 	// land here with the filter pre-applied.
 	const initialQuery =
 		typeof window !== 'undefined' ? (page.url.searchParams.get('q') ?? '') : '';
@@ -129,7 +125,7 @@
 	//     after the colon. Vocabulary comes from the data-driven registry
 	//     (api.searchKeywords); nothing here is hardcoded. (dumpstar-cx1) ---
 	type AcItem = { insert: string; label: string; hint: string };
-	const HAS_VALUES = ['ability', 'flavor', 'attack', 'weakness', 'resistance', 'retreat'];
+	const HAS_VALUES = ['text', 'subtitle', 'artist'];
 	let vocab = $state.raw<SearchVocabulary | null>(null);
 	let acFocused = $state(false);
 	let acDismissed = $state(false);
@@ -390,7 +386,19 @@
 	// by name, so this list and its arms have to agree — which is also why a
 	// stored `collection.sortKey` outside it falls back to `name` below rather
 	// than being sent.
-	const SORT_KEYS = ['name', 'type', 'etype', 'rarity', 'set', 'number', 'price', 'qty'];
+	const SORT_KEYS = [
+		'name',
+		'number',
+		'set',
+		'rarity',
+		'type',
+		'cost',
+		'power',
+		'hp',
+		'price',
+		'qty',
+		'added'
+	];
 	function readStoredSort(): { key: string; dir: 'asc' | 'desc' } {
 		if (typeof window === 'undefined') return { key: 'name', dir: 'asc' };
 		const k = localStorage.getItem('collection.sortKey');
@@ -480,21 +488,22 @@
 		card_id: string;
 		set_code: string;
 		set_name: string;
-		set_ptcgo_code: string | null;
-		set_symbol_url: string | null;
 		number: string;
 		name: string;
+		subtitle: string | null;
 		rarity: string | null;
-		supertype: string | null;
-		subtypes: string | null;
-		types: string | null;
-		/** JSON `[{name, cost}]` — the Cost column's pips and their tooltip.
-		    Attack text/damage live on the card modal's own fetch (pd-lk8v). */
-		attack_costs: string | null;
+		card_type: string | null;
+		/** Resource cost, power and hit points (null where the card has none). */
+		cost: number | null;
+		power: number | null;
+		hp: number | null;
+		/** JSON array string, e.g. `["Vigilance","Heroism"]`. */
+		aspects: string | null;
 		variant: string;
+		finish: string;
 		condition: string;
 		status: string;
-		image_small: string | null;
+		image_url: string | null;
 	};
 
 	function aggregate(input: ListRow[]): AggRow[] {
@@ -526,108 +535,34 @@
 					card_id: r.card_id,
 					set_code: r.set_code,
 					set_name: r.set_name,
-					set_ptcgo_code: r.set_ptcgo_code,
-					set_symbol_url: r.set_symbol_url,
 					number: r.number,
 					name: r.name,
+					subtitle: r.subtitle,
 					rarity: r.rarity,
-					supertype: r.supertype,
-					subtypes: r.subtypes,
-					types: r.types,
-					attack_costs: r.attack_costs,
+					card_type: r.card_type,
+					cost: r.cost,
+					power: r.power,
+					hp: r.hp,
+					aspects: r.aspects,
 					variant: r.variant,
+					finish: r.finish,
 					condition: r.condition,
 					status: r.status,
-					image_small: r.image_small
+					image_url: r.image_url
 				});
 			}
 		}
 		return [...map.values()];
 	}
 
-	function parseJsonStrArr(s: string | null): string[] {
-		if (!s) return [];
-		try {
-			const v: unknown = JSON.parse(s);
-			return Array.isArray(v) ? v.map(String) : [];
-		} catch {
-			return [];
-		}
+	/** "Vigilance · Heroism" — the aspects column's text. */
+	function aspectText(a: AggRow): string {
+		return jsonList(a.aspects).join(' · ');
 	}
-
-	// Attack list — one line of energy pips per attack in the Cost column.
-	// Reads `attack_costs`, the server's `[{name, cost}]` projection: name is
-	// the line's tooltip, cost is the pips, and nothing else was ever drawn
-	// here (pd-lk8v).
-	type Attack = { name: string; cost: string[] };
-	function parseAttacks(s: string | null): Attack[] {
-		if (!s) return [];
-		try {
-			const v: unknown = JSON.parse(s);
-			if (!Array.isArray(v)) return [];
-			return v.map((a) => {
-				const obj = a as { name?: unknown; cost?: unknown };
-				const cost = Array.isArray(obj.cost) ? obj.cost.map(String) : [];
-				return { name: String(obj.name ?? ''), cost };
-			});
-		} catch {
-			return [];
-		}
-	}
-
-	function typeMain(a: AggRow): string {
-		return a.supertype ?? '';
-	}
-	function typeSub(a: AggRow): string {
-		return parseJsonStrArr(a.subtypes).join(' ');
-	}
-
-	// Aspect icons live under /static/energy/<lowercase>.png — pulled
-	// from pkmn.gg (see static/energy/README.md). "Free" — a zero-energy
-	// attack cost the card art draws as a clear circle — maps to the
-	// colorless icon, and anything else unknown falls back to colorless
-	// rather than 404 → broken-image.
-	const KNOWN_ENERGY = new Set([
-		'grass',
-		'fire',
-		'water',
-		'lightning',
-		'psychic',
-		'fighting',
-		'darkness',
-		'metal',
-		'fairy',
-		'dragon',
-		'colorless'
-	]);
-	function energyIcon(type: string): string {
-		const t = type.toLowerCase();
-		return `/energy/${KNOWN_ENERGY.has(t) ? t : 'colorless'}.png`;
-	}
-
-	// Map a catalog rarity string ("Special Illustration Rare",
-	// "MEGA_ATTACK_RARE") to the kebab-slug filename under static/rarity/
-	// where the matching SVG lives. Same lowercase + dash rule as the
-	// fetcher in static/rarity/README.md, so a refresh from pkmn.gg is
-	// fire-and-forget.
-	function rarityIconSrc(rarity: string | null): string | null {
-		if (!rarity) return null;
-		const slug = rarity.toLowerCase().replace(/[ ._]/g, '-');
-		return `/rarity/${slug}.svg`;
-	}
-
-	// The classic ●/◆/★ glyphs are pure shapes filling their viewBox, so
-	// they read much larger than the detailed illustration/hyper/secret
-	// icons at the same render size. Scale just those three down to match.
-	function isBasicRarity(rarity: string | null): boolean {
-		return (
-			rarity === 'Common' ||
-			rarity === 'Uncommon' ||
-			rarity === 'Rare' ||
-			rarity === 'Illustration Rare' ||
-			rarity === 'ACE SPEC Rare' ||
-			rarity === 'Rare ACE'
-		);
+	/** "3/4" — power over hit points; either may be absent (Events, Bases). */
+	function powerHp(a: AggRow): string {
+		if (a.power == null && a.hp == null) return '';
+		return `${a.power ?? '–'}/${a.hp ?? '–'}`;
 	}
 
 	// Unowned printings become qty-0 AggRows so owned and unowned draw the same
@@ -645,19 +580,20 @@
 			card_id: sr.card_id,
 			set_code: sr.set_code,
 			set_name: sr.set_name,
-			set_ptcgo_code: sr.set_ptcgo_code,
-			set_symbol_url: sr.set_symbol_url,
 			number: sr.number,
 			name: sr.name,
+			subtitle: sr.subtitle,
 			rarity: sr.rarity,
-			supertype: sr.supertype,
-			subtypes: sr.subtypes,
-			types: sr.types,
-			attack_costs: sr.attack_costs,
+			card_type: sr.card_type,
+			cost: sr.cost,
+			power: sr.power,
+			hp: sr.hp,
+			aspects: sr.aspects,
 			variant: sr.variant,
+			finish: sr.finish,
 			condition: '',
 			status: 'unowned',
-			image_small: sr.image_small
+			image_url: sr.image_url
 		};
 	}
 
@@ -697,7 +633,7 @@
 	// you scroll through is organised. So the grid cuts itself into labelled
 	// sections along whatever the active sort already orders on, whenever
 	// that field is a category a person browses by — set, rarity, class,
-	// or a name's initial. The continuous fields (#, NM) group
+	// card type, or a name's initial. The continuous fields (#, NM) group
 	// into nothing useful, so they stay one flat run.
 	//
 	// Every label is read straight off the row's own fields. No new
@@ -714,9 +650,9 @@
 			case 'rarity':
 				return a.rarity ?? 'No rarity';
 			case 'type':
-				return a.supertype ?? 'Other';
-			case 'etype':
-				return parseJsonStrArr(a.types)[0] ?? 'No type';
+				return a.card_type ?? 'Other';
+			case 'cost':
+				return a.cost == null ? 'No cost' : `Cost ${a.cost}`;
 			default:
 				return null;
 		}
@@ -824,7 +760,7 @@
 	const tableWindow = $derived(windowOf(tableOffsets, 0, winTop, winBottom));
 	const tableVisible = $derived(displayRows.slice(tableWindow.start, tableWindow.end));
 	/** Columns a spacer row has to span. */
-	const tableCols = $derived(selectMode ? 11 : 10);
+	const tableCols = $derived(selectMode ? 12 : 11);
 
 	/** Read the geometry the window arithmetic needs out of the rendered DOM. */
 	function measure() {
@@ -1390,8 +1326,8 @@
 				</button>
 			{/snippet}
 			{@render sortBtn('name', 'Name')}
-			{@render sortBtn('type', 'Class')}
-			{@render sortBtn('etype', 'Type')}
+			{@render sortBtn('type', 'Type')}
+			{@render sortBtn('cost', 'Cost')}
 			{@render sortBtn('rarity', 'Rarity')}
 			{@render sortBtn('set', 'Set')}
 			{@render sortBtn('number', '#')}
@@ -1425,11 +1361,11 @@
 						{#if a.ids.length === 0}
 							<button
 								class="cardtile missing"
-								title="{a.name} · {(a.set_ptcgo_code ?? a.set_code).toUpperCase()} #{a.number} · click to add"
+								title="{a.name} · {a.set_code.toUpperCase()} #{a.number} · click to add"
 								onclick={() => (selectedCard = { set: a.set_code, number: a.number })}
 							>
-								{#if a.image_small}
-									<img src={a.image_small} alt={a.name} loading="lazy" />
+								{#if a.image_url}
+									<img src={a.image_url} alt={a.name} loading="lazy" />
 								{:else}
 									<div class="tilenoart">{a.name}</div>
 								{/if}
@@ -1438,12 +1374,12 @@
 							<button
 								class="cardtile"
 								class:picked={selectMode && groupChecked(a.ids)}
-								class:foil={isFoilVariant(a.variant)}
-								title="{a.name} · {variantLabel(a.variant)}{a.qty > 1 ? ` ×${a.qty}` : ''}"
+								class:foil={isFoil(a.finish)}
+								title="{a.name} · {printingLabel(a.variant, a.finish)}{a.qty > 1 ? ` ×${a.qty}` : ''}"
 								onclick={() => openGroup(a)}
 							>
-								{#if a.image_small}
-									<img src={a.image_small} alt={a.name} loading="lazy" />
+								{#if a.image_url}
+									<img src={a.image_url} alt={a.name} loading="lazy" />
 								{:else}
 									<div class="tilenoart">{a.name}</div>
 								{/if}
@@ -1486,6 +1422,7 @@
 				<col class="c-class" />
 				<col class="c-etype" />
 				<col class="c-cost" />
+				<col class="c-stats" />
 				<col class="c-rarity" />
 				<col class="c-set" />
 				<col class="c-number" />
@@ -1501,9 +1438,10 @@
 					{/if}
 					{@render sortable('qty', 'Qty', 'num qty')}
 					{@render sortable('name', 'Name', '')}
-					{@render sortable('type', 'Class', '')}
-					{@render sortable('etype', 'Type', 'center')}
-					<th>Cost</th>
+					{@render sortable('type', 'Type', '')}
+					<th>Aspects</th>
+					{@render sortable('cost', 'Cost', 'num')}
+					<th class="center" title="Power / HP">Pwr/HP</th>
 					{@render sortable('rarity', 'Rarity', 'center')}
 					{@render sortable('set', 'Set', 'center')}
 					{@render sortable('number', '#', 'num')}
@@ -1541,58 +1479,19 @@
 								     to one line, and a row that skipped it was 3px taller
 								     than its neighbours (pd-7z4o). -->
 								<div class="namecell">
-									{#if a.image_small}
-										<img class="cardthumb" src={a.image_small} alt="" loading="lazy" />
+									{#if a.image_url}
+										<img class="cardthumb" src={a.image_url} alt="" loading="lazy" />
 									{/if}
 									<span class="namebody"><span class="cardname">{a.name}</span></span>
 								</div>
 							</td>
-							<td class="fac" title="Find all {a.supertype ?? ''} cards" onclick={(e) => facetCell(e, 'supertype', a.supertype)}>{a.supertype ?? ''}</td>
-							<td class="center fac" title="Find cards of this type" onclick={(e) => facetCell(e, 'type', parseJsonStrArr(a.types)[0])}>
-								<span class="etypes">
-									{#each parseJsonStrArr(a.types) as t (t)}
-										<img class="energy" src={energyIcon(t)} alt={t} title={t} />
-									{/each}
-								</span>
-							</td>
-							<td>
-								{#each parseAttacks(a.attack_costs) as att, i (i)}
-									<span class="attackline" title={att.name}>
-										{#each att.cost as cc, j (j)}
-											<img class="energy" src={energyIcon(cc)} alt={cc} title={cc} />
-										{/each}
-									</span>
-								{/each}
-							</td>
-							<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}>
-								{#if a.rarity}
-									{@const src = rarityIconSrc(a.rarity)}
-									{#if src}
-										<img
-											class="rarityicon"
-											class:basic={isBasicRarity(a.rarity)}
-											{src}
-											alt={a.rarity}
-											title={a.rarity}
-											onerror={(e) =>
-												((e.currentTarget as HTMLImageElement).style.display = 'none')}
-										/>
-									{/if}
-								{/if}
-							</td>
+							<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}>{a.card_type ?? ''}</td>
+							<td class="fac" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', jsonList(a.aspects)[0])}>{aspectText(a)}</td>
+							<td class="num">{a.cost ?? ''}</td>
+							<td class="center">{powerHp(a)}</td>
+							<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}>{a.rarity ?? ''}</td>
 							<td class="center fac" title="Find all cards in this set" onclick={(e) => facetCell(e, 'set', a.set_code)}>
-								{#if a.set_symbol_url}
-									<img
-										class="setsym"
-										src={a.set_symbol_url}
-										alt="{(a.set_ptcgo_code ?? a.set_code).toUpperCase()}/{a.set_code}"
-										title="{(a.set_ptcgo_code ?? a.set_code).toUpperCase()}/{a.set_code}"
-									/>
-								{:else}
-									<span title={a.set_code}>
-										{(a.set_ptcgo_code ?? a.set_code).toUpperCase()}
-									</span>
-								{/if}
+								<span title={a.set_name}>{a.set_code.toUpperCase()}</span>
 							</td>
 							<td class="num">{a.number}</td>
 							<td class="num">
@@ -1624,15 +1523,15 @@
 						<td class="num qty">{a.qty}</td>
 						<td class="namecol" title="Open card" onclick={(e) => openCardCell(e, a)}>
 							<div class="namecell">
-								{#if a.image_small}
-									<span class="thumbwrap" class:foil={isFoilVariant(a.variant)}>
-										<img class="cardthumb" src={a.image_small} alt="" loading="lazy" />
+								{#if a.image_url}
+									<span class="thumbwrap" class:foil={isFoil(a.finish)}>
+										<img class="cardthumb" src={a.image_url} alt="" loading="lazy" />
 									</span>
 								{/if}
 								<span class="namebody"
-									><span class="cardname">{a.name}</span>{#if a.variant !== 'normal'}<span
+									><span class="cardname">{a.name}</span>{#if a.variant !== 'Standard' || a.finish === 'Foil'}<span
 											class="tag vtag"
-											title={variantLabel(a.variant)}>{variantTag(a.variant)}</span
+											title={printingLabel(a.variant, a.finish)}>{printingLabel(a.variant, a.finish)}</span
 										>{/if}{#if statusBadge(a.status)}<span
 											class="tag stag t-{a.status}"
 											title={a.status}>{statusBadge(a.status)}</span
@@ -1640,57 +1539,13 @@
 								>
 							</div>
 						</td>
-						<td class="fac" title="Find all {a.supertype ?? ''} cards" onclick={(e) => facetCell(e, 'supertype', a.supertype)}>
-							<span class="typecell">
-								<span class="typeMain">{typeMain(a)}</span>
-								{#if typeSub(a)}<span class="typeSub">{typeSub(a)}</span>{/if}
-							</span>
-						</td>
-						<td class="center fac" title="Find cards of this type" onclick={(e) => facetCell(e, 'type', parseJsonStrArr(a.types)[0])}>
-							<span class="etypes">
-								{#each parseJsonStrArr(a.types) as t (t)}
-									<img class="energy" src={energyIcon(t)} alt={t} title={t} />
-								{/each}
-							</span>
-						</td>
-						<td>
-							{#each parseAttacks(a.attack_costs) as att, i (i)}
-								<span class="attackline" title={att.name}>
-									{#each att.cost as c, j (j)}
-										<img class="energy" src={energyIcon(c)} alt={c} title={c} />
-									{/each}
-								</span>
-							{/each}
-						</td>
-						<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}>
-							{#if a.rarity}
-								{@const src = rarityIconSrc(a.rarity)}
-								{#if src}
-									<img
-										class="rarityicon"
-										class:basic={isBasicRarity(a.rarity)}
-										{src}
-										alt={a.rarity}
-										title={a.rarity}
-										onerror={(e) =>
-											((e.currentTarget as HTMLImageElement).style.display = 'none')}
-									/>
-								{/if}
-							{/if}
-						</td>
+						<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}>{a.card_type ?? ''}</td>
+						<td class="fac" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', jsonList(a.aspects)[0])}>{aspectText(a)}</td>
+						<td class="num">{a.cost ?? ''}</td>
+						<td class="center">{powerHp(a)}</td>
+						<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}>{a.rarity ?? ''}</td>
 						<td class="center fac" title="Find all cards in this set" onclick={(e) => facetCell(e, 'set', a.set_code)}>
-							{#if a.set_symbol_url}
-								<img
-									class="setsym"
-									src={a.set_symbol_url}
-									alt="{(a.set_ptcgo_code ?? a.set_code).toUpperCase()}/{a.set_code}"
-									title="{(a.set_ptcgo_code ?? a.set_code).toUpperCase()}/{a.set_code}"
-								/>
-							{:else}
-								<span title={a.set_code}>
-									{(a.set_ptcgo_code ?? a.set_code).toUpperCase()}
-								</span>
-							{/if}
+							<span title={a.set_name}>{a.set_code.toUpperCase()}</span>
 						</td>
 						<td class="num">{a.number}</td>
 						<td class="num">
@@ -2072,7 +1927,7 @@
 	/* The active pill is a wash and an edge, not a slab. Solid crimson next
 	   to card art read as the loudest element on a page whose whole job is
 	   to show the art; the accent still marks the pill, at a weight that
-	   loses to a Luke Skywalker. */
+	   loses to the art. */
 	.sortbtn.active {
 		background: var(--color-surface-selected);
 		border-color: var(--color-border-accent);
@@ -2147,8 +2002,8 @@
 	.cardtile.missing {
 		opacity: 0.82;
 	}
-	/* Foil treatment for Foil / Hyperspace Foil / cosmos
-	   variants. Two pseudo-elements stacked over the card image:
+	/* Foil treatment for Foil-finish
+	   printings. Two pseudo-elements stacked over the card image:
 	   ::before paints a rainbow tint via mix-blend-mode, ::after
 	   animates a diagonal sheen across the surface. Pointer-events
 	   none so clicks still hit the underlying button. The .cardtile
@@ -2295,15 +2150,14 @@
 		   before, at a width that moved. */
 		--col-sel: 2.25rem;
 		--col-qty: 2.5rem;
-		/* Wide enough for "Character" over a two-word subtype, which is nearly
-		   all of them. A third subtype ("Stage 2 · VSTAR · Ultra Beast") wants
-		   172px, is a few rows per thousand, and ellipsises instead: the
-		   alternative is a column permanently ~90px wider than its own content
-		   for the sake of those rows. */
-		--col-class: 8rem;
-		--col-etype: 3.5rem;
-		--col-cost: 6rem;
-		--col-rarity: 4.25rem;
+		/* Card type ("Leader", "Upgrade"), the aspects text ("Vigilance ·
+		   Heroism" is the longest common pair; a third aspect ellipsises),
+		   resource cost, and power/HP. */
+		--col-class: 5.5rem;
+		--col-etype: 9rem;
+		--col-cost: 3.5rem;
+		--col-stats: 4.5rem;
+		--col-rarity: 5.5rem;
 		--col-set: 4.25rem;
 		--col-number: 5.75rem;
 		--col-price: 6.75rem;
@@ -2328,7 +2182,7 @@
 		   changed with whichever rows were rendered. */
 		min-width: calc(
 			var(--col-sel-used) + var(--col-qty) + var(--col-name-min) + var(--col-class) +
-				var(--col-etype) + var(--col-cost) + var(--col-rarity) + var(--col-set) +
+				var(--col-etype) + var(--col-cost) + var(--col-stats) + var(--col-rarity) + var(--col-set) +
 				var(--col-number) + var(--col-price) * 2
 		);
 		/* The point of the exercise: widths come from the declarations above,
@@ -2364,6 +2218,9 @@
 	col.c-cost {
 		width: var(--col-cost);
 	}
+	col.c-stats {
+		width: var(--col-stats);
+	}
 	col.c-rarity {
 		width: var(--col-rarity);
 	}
@@ -2386,8 +2243,8 @@
 	   arithmetic over a single one (pd-7z4o) — a row 3px out of step is a
 	   scrollbar 3px × 56,635 rows out of step. The thumbnail is what sets the
 	   height, so `--row-content` is the thumbnail, and nothing in a cell may
-	   grow past it: a third attack cost is clipped to two, exactly as the type
-	   cell either side of it already ellipsises its second line. */
+	   grow past it: a long aspects list is clipped, exactly as the name
+	   cell next to it ellipsises. */
 	table.dd {
 		--row-content: 36px;
 	}
@@ -2535,49 +2392,6 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	/* Type cell: main type on top, subtypes on a smaller second line —
-	   matching DeckDumpster's .type-cell / .type-sub split. */
-	.typecell {
-		display: inline-flex;
-		flex-direction: column;
-		gap: 1px;
-		line-height: 1.2;
-		/* The cell is a declared width now (`--col-class`), so the column is
-		   the cap — a second number here could only disagree with it. */
-		max-width: 100%;
-	}
-	.typeMain {
-		color: var(--color-text-muted);
-		font-size: var(--text-md);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.typeSub {
-		color: var(--color-text-subtle);
-		font-size: var(--text-xs);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.attackline {
-		display: flex;
-		gap: 3px;
-		align-items: center;
-		line-height: 1;
-		margin: 1px 0;
-	}
-	.etypes {
-		display: inline-flex;
-		gap: 2px;
-		align-items: center;
-	}
-	.energy {
-		width: 16px;
-		height: 16px;
-		display: inline-block;
-		vertical-align: middle;
-	}
 
 	/* Inline tags (variant, non-owned status) — DD card-tag pattern.
 	   inline-block + vertical-align lets the pill keep its shape while
@@ -2630,31 +2444,7 @@
 		border-color: var(--color-danger-border);
 	}
 
-	/* Set cell: just the symbol; alt/title carries "PFL/me2". */
-	.setsym {
-		height: 22px;
-		width: auto;
-		max-width: 36px;
-		object-fit: contain;
-		vertical-align: middle;
-	}
 
-	/* Rarity icons live under static/rarity/, sourced from
-	   pkmn.gg (see static/rarity/README.md). Sized to sit comfortably in
-	   one table-row height. */
-	.rarityicon {
-		width: 22px;
-		height: 22px;
-		display: inline-block;
-		vertical-align: middle;
-	}
-	/* Common / Uncommon / Rare are simple filled shapes — at 22px they
-	   read much heavier than the detailed illustration/hyper/secret icons.
-	   Halve them so the column feels visually balanced. */
-	.rarityicon.basic {
-		width: 11px;
-		height: 11px;
-	}
 
 	/* On a phone the table is just a denser version of itself — no row
 	   reflow yet (it would clash with click-to-sort headers). */
@@ -2673,10 +2463,11 @@
 			   drops with it. */
 			--col-sel: 1.75rem;
 			--col-qty: 2rem;
-			--col-class: 5.5rem;
-			--col-etype: 2.75rem;
-			--col-cost: 4.75rem;
-			--col-rarity: 3.25rem;
+			--col-class: 4.5rem;
+			--col-etype: 6.5rem;
+			--col-cost: 2.75rem;
+			--col-stats: 3.5rem;
+			--col-rarity: 4.25rem;
 			--col-set: 3.25rem;
 			--col-number: 4.5rem;
 			--col-price: 5.5rem;
@@ -2685,9 +2476,6 @@
 		.cardthumb {
 			width: 70px;
 			height: 26px;
-		}
-		.typecell {
-			font-size: 0.75rem;
 		}
 		table.dd th,
 		table.dd td {

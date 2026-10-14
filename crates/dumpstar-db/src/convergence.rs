@@ -85,16 +85,12 @@ use crate::error::Result;
 pub(crate) fn inputs() -> Vec<(&'static str, &'static str)> {
     vec![
         (
+            "crates/dumpstar-catalog/src/schema.sql",
+            dumpstar_catalog::SCHEMA,
+        ),
+        (
             "crates/dumpstar-db/src/schema_shared.sql",
-            crate::connection::SCHEMA_SHARED,
-        ),
-        (
-            "data/set_aliases.json",
-            crate::set_aliases::SET_ALIASES_SEED,
-        ),
-        (
-            "data/overrides/catalog_prices.json",
-            crate::catalog_prices::CATALOG_PRICES_SEED,
+            crate::connection::SCHEMA_OVERLAY,
         ),
         (
             "data/search_keywords.json",
@@ -155,13 +151,6 @@ pub(crate) fn fingerprint() -> String {
             .as_bytes(),
     );
     h.update(b"\n");
-    // The ALTER TABLE statements a catalog older than a column grows on open.
-    // They live in connection.rs rather than in schema_shared.sql, so hashing
-    // the schema file alone would miss them.
-    for (table, column, ddl) in crate::connection::ADDED_COLUMNS {
-        h.update(format!("added_column={table}.{column}:{}\n", ddl.len()).as_bytes());
-        h.update(ddl.as_bytes());
-    }
     for (path, bytes) in inputs() {
         h.update(format!("input={path}:{}\n", bytes.len()).as_bytes());
         h.update(bytes.as_bytes());
@@ -279,7 +268,11 @@ mod tests {
             );
             assert!(!(in_hash && in_excl), "{path} is in BOTH convergence lists",);
         }
-        for path in hashed {
+        // The catalog crate's schema is embedded there, not here.
+        for path in hashed
+            .into_iter()
+            .filter(|p| !p.starts_with("crates/dumpstar-catalog/"))
+        {
             assert!(
                 found.contains(&path.to_string()),
                 "convergence::inputs names {path}, which no include_str! in dumpstar-db embeds — \

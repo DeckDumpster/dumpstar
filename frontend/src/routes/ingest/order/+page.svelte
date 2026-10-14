@@ -143,7 +143,7 @@
 <section class="paste">
 	<textarea
 		rows="3"
-		placeholder="Optionally paste order text (e.g. “2x Luke Skywalker - Hero of Yavin (Hyperspace) - $12.00”), then Parse to pre-fill lines."
+		placeholder="Optionally paste order text (e.g. “2x Luke Skywalker - $2.50”), then Parse to pre-fill lines."
 		bind:value={pasteText}
 	></textarea>
 	<button class="secondary" onclick={parse} disabled={!pasteText.trim()}>Parse</button>

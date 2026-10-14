@@ -1,9 +1,11 @@
-//! `dumpstar seed-fixture` — build the deterministic Pokémon test fixture for
-//! the intents UI-testing harness.
+//! `dumpstar seed-fixture` — build the deterministic Star Wars: Unlimited test
+//! fixture for the intents UI-testing harness.
 //!
 //! Produces two SQLite files in `--out` (default `tests/ui/fixtures`):
 //!
-//! * `shared.sqlite` — immutable catalog (sets, cards, printings, prices).
+//! * `shared.sqlite` — immutable catalog (sets, cards, printings, prices,
+//!   formats, sealed products): the one SWU model, `dumpstar_catalog::SCHEMA`
+//!   plus dumpstar-db's overlay, as `open_shared` creates it.
 //! * `collection.sqlite` — per-user mutable data (binders, decks, batches,
 //!   orders, sealed, wishlist, views, collection).
 //!
@@ -11,12 +13,15 @@
 //! init runs and the running server can open them unchanged. The intents
 //! harness snapshots/restores these before each test.
 //!
-//! The data is small, deterministic, and Pokémon-authentic; intent YAML/hint
-//! files reference it by the stable names documented in
-//! `tests/ui/fixtures/README.md`.
+//! The data is small and deterministic: three real sets (names and release
+//! dates), a couple of dozen cards across every card type, and printings in
+//! Standard, Hyperspace, Showcase and Promo variants. Card stats and rules
+//! text are paraphrases written for a fixture. The stable names are documented
+//! in `tests/ui/fixtures/README.md`.
 
 use std::path::PathBuf;
 
+use dumpstar_core::deck::Zone;
 use rusqlite::Connection;
 
 use dumpstar_db::{
@@ -26,6 +31,7 @@ use dumpstar_db::{
     decks::{self, NewDeck},
     orders::{self, NewOrder, OrderLine},
     sealed::{self, NewSealed},
+    user_printings::{self, NewUserPrinting},
     wishlist::{self, NewWish},
 };
 
@@ -45,9 +51,10 @@ pub struct FixtureArgs {
 /// produce the same bytes — see [`run`].
 ///
 /// The date is chosen, not arbitrary. It is the fixture's own `OBSERVED_AT`,
-/// the day its prices were quoted; it sits after the last order date the
-/// fixture invents (2024-01-14) and after the acquisition constant on the
-/// manually-entered copies (2024-01-10), so the collection reads as one that
+/// the day its prices were quoted; it sits after the newest set's release
+/// (Jump to Lightspeed, 2025-03-14), after the last order date the fixture
+/// invents (2025-06-14) and after the acquisition constant on the
+/// manually-entered copies (`ACQUIRED_AT`), so the collection reads as one that
 /// was assembled and then priced. It also sits well before the instant
 /// `tests/visual/stabilize.ts` freezes the browser at (2026-01-15), which the
 /// build timestamps it replaces did not — those were EIGHT MONTHS in the
@@ -59,7 +66,7 @@ pub struct FixtureArgs {
 /// the file and identical on the screen, and a baseline showing five batches
 /// all stamped `09:00` demonstrates nothing about the ordering those two
 /// routes exist to show.
-const SEEDED_AT: &str = "2024-01-15T09:00:00Z";
+const SEEDED_AT: &str = "2025-06-15T09:00:00Z";
 const SEEDING_STEP: chrono::TimeDelta = chrono::TimeDelta::minutes(1);
 
 /// Execute `dumpstar seed-fixture`.
@@ -110,9 +117,6 @@ fn seed(args: FixtureArgs) -> anyhow::Result<()> {
     // The keyword registry, rarity ranks and flag definitions fixture-backed
     // search tests need came in with the read-write open above
     // (connection.rs::converge).
-    // Materialize latest_prices from the seeded prices (vi37) so fixture-backed
-    // pages show market values without re-running a full catalog refresh.
-    dumpstar_db::latest_prices::refresh_latest_prices(&shared)?;
     let (sets, cards, printings, prices) = catalog_counts(&shared)?;
     println!("  {sets} sets, {cards} cards, {printings} printings, {prices} prices");
     drop(shared);
@@ -177,6 +181,1054 @@ fn date_the_outbox(conn: &Connection) -> anyhow::Result<usize> {
     Ok(n)
 }
 
+// ---------------------------------------------------------------------------
+// Catalog (shared.sqlite)
+// ---------------------------------------------------------------------------
+
+/// The fixture's "today": the day the newest prices were quoted. Fixed, so
+/// prices are byte-for-byte reproducible.
+const OBSERVED_AT: &str = "2025-06-15";
+/// The day before, and the day before that: the older quotes some printings
+/// carry, so a price has a movement and the value history has more than one
+/// day to reconstruct.
+const OBSERVED_PREV: &str = "2025-06-14";
+const OBSERVED_EARLIER: &str = "2025-06-13";
+/// When the fixture's sealed products were catalogued.
+const FETCHED_AT: &str = "2025-06-15T00:00:00Z";
+/// When the fixture's own copies were acquired.
+const ACQUIRED_AT: &str = "2025-06-10T12:00:00Z";
+
+/// A set: code, name, release date, sort order. The dates are the real ones.
+type SetRow = (&'static str, &'static str, &'static str, i64);
+
+const SETS: [SetRow; 3] = [
+    ("SOR", "Spark of Rebellion", "2024-03-08", 1),
+    ("SHD", "Shadows of the Galaxy", "2024-07-12", 2),
+    ("JTL", "Jump to Lightspeed", "2025-03-14", 3),
+];
+
+/// A game card: everything its rules text says, shared by all its printings.
+struct CardRow {
+    id: &'static str,
+    name: &'static str,
+    subtitle: Option<&'static str>,
+    card_type: &'static str,
+    cost: Option<i64>,
+    power: Option<i64>,
+    hp: Option<i64>,
+    aspects: &'static [&'static str],
+    traits: &'static [&'static str],
+    arenas: &'static [&'static str],
+    rules: &'static str,
+}
+
+/// Shorthand for the table below: `(id, name, subtitle, type)` then the
+/// numbers `(cost, power, hp)` then `(aspects, traits, arenas)` and the text.
+#[allow(clippy::too_many_arguments)]
+const fn card(
+    id: &'static str,
+    name: &'static str,
+    subtitle: Option<&'static str>,
+    card_type: &'static str,
+    stats: (Option<i64>, Option<i64>, Option<i64>),
+    aspects: &'static [&'static str],
+    traits: &'static [&'static str],
+    arenas: &'static [&'static str],
+    rules: &'static str,
+) -> CardRow {
+    CardRow {
+        id,
+        name,
+        subtitle,
+        card_type,
+        cost: stats.0,
+        power: stats.1,
+        hp: stats.2,
+        aspects,
+        traits,
+        arenas,
+        rules,
+    }
+}
+
+/// The fixture's cards. The names are real; the stats and rules text are
+/// close paraphrases written for a test fixture, not a card database.
+const CARDS: [CardRow; 26] = [
+    card(
+        "SOR_005",
+        "Luke Skywalker",
+        Some("Faithful Friend"),
+        "Leader",
+        (Some(6), Some(4), Some(7)),
+        &["Vigilance", "Heroism"],
+        &["Force", "Rebel"],
+        &["Ground"],
+        "On Attack: Give a Shield token to a unit.",
+    ),
+    card(
+        "SOR_010",
+        "Darth Vader",
+        Some("Dark Lord of the Sith"),
+        "Leader",
+        (Some(7), Some(5), Some(8)),
+        &["Aggression", "Villainy"],
+        &["Imperial", "Force", "Sith"],
+        &["Ground"],
+        "On Attack: You may deal 1 damage to a friendly unit. If you do, deal 2 damage to an enemy unit.",
+    ),
+    card(
+        "SOR_020",
+        "Echo Base",
+        None,
+        "Base",
+        (None, None, Some(30)),
+        &["Heroism"],
+        &["Rebel"],
+        &["Ground"],
+        "Epic Action: Play a Heroism unit from your hand. It costs 2 less.",
+    ),
+    card(
+        "SOR_024",
+        "Dagobah Swamp",
+        None,
+        "Base",
+        (None, None, Some(28)),
+        &["Vigilance"],
+        &[],
+        &["Ground"],
+        "Epic Action: Heal 2 damage from a unit.",
+    ),
+    card(
+        "SOR_193",
+        "Millennium Falcon",
+        Some("Piece of Junk"),
+        "Unit",
+        (Some(3), Some(3), Some(4)),
+        &["Cunning", "Heroism"],
+        &["Vehicle", "Transport", "Underworld"],
+        &["Space"],
+        "When Played: You may play a Rebel unit from your hand.",
+    ),
+    card(
+        "SOR_070",
+        "Battlefield Marine",
+        None,
+        "Unit",
+        (Some(2), Some(3), Some(3)),
+        &["Command", "Heroism"],
+        &["Rebel", "Trooper"],
+        &["Ground"],
+        "",
+    ),
+    card(
+        "SOR_085",
+        "Wampa",
+        None,
+        "Unit",
+        (Some(4), Some(4), Some(5)),
+        &["Aggression"],
+        &["Creature"],
+        &["Ground"],
+        "",
+    ),
+    card(
+        "SOR_100",
+        "Death Star Stormtrooper",
+        None,
+        "Unit",
+        (Some(1), Some(3), Some(1)),
+        &["Aggression", "Villainy"],
+        &["Imperial", "Trooper"],
+        &["Ground"],
+        "",
+    ),
+    card(
+        "SOR_120",
+        "Cartel Spacer",
+        None,
+        "Unit",
+        (Some(2), Some(2), Some(3)),
+        &["Cunning"],
+        &["Underworld", "Transport"],
+        &["Space"],
+        "When Played: If you control another Cunning unit, exhaust an enemy unit.",
+    ),
+    card(
+        "SOR_130",
+        "TIE/ln Fighter",
+        None,
+        "Unit",
+        (Some(1), Some(2), Some(1)),
+        &["Aggression", "Villainy"],
+        &["Imperial", "Vehicle", "Fighter"],
+        &["Space"],
+        "",
+    ),
+    card(
+        "SOR_140",
+        "Snowtrooper Lieutenant",
+        None,
+        "Unit",
+        (Some(3), Some(3), Some(3)),
+        &["Aggression", "Villainy"],
+        &["Imperial", "Trooper"],
+        &["Ground"],
+        "On Attack: You may attack with another Imperial unit.",
+    ),
+    card(
+        "SOR_150",
+        "Fleet Lieutenant",
+        None,
+        "Unit",
+        (Some(3), Some(3), Some(3)),
+        &["Aggression", "Heroism"],
+        &["Rebel", "Official"],
+        &["Ground"],
+        "When Played: You may attack with a Rebel unit.",
+    ),
+    card(
+        "SOR_160",
+        "Vigilant Honor Guards",
+        None,
+        "Unit",
+        (Some(4), Some(3), Some(6)),
+        &["Vigilance", "Villainy"],
+        &["Imperial", "Trooper"],
+        &["Ground"],
+        "This unit cannot be attacked while it is undamaged.",
+    ),
+    card(
+        "SOR_170",
+        "Vanquish",
+        None,
+        "Event",
+        (Some(5), None, None),
+        &["Command"],
+        &[],
+        &[],
+        "Defeat a non-leader unit.",
+    ),
+    card(
+        "SOR_171",
+        "Overwhelming Barrage",
+        None,
+        "Event",
+        (Some(4), None, None),
+        &["Aggression"],
+        &[],
+        &[],
+        "Give a friendly unit +2/+2 for this phase. Then distribute damage equal to its power among enemy units.",
+    ),
+    card(
+        "SOR_172",
+        "Power of the Dark Side",
+        None,
+        "Event",
+        (Some(6), None, None),
+        &["Aggression", "Villainy"],
+        &["Force"],
+        &[],
+        "An opponent chooses a unit they control. Defeat it.",
+    ),
+    card(
+        "SOR_173",
+        "Waylay",
+        None,
+        "Event",
+        (Some(3), None, None),
+        &["Cunning"],
+        &[],
+        &[],
+        "Return a non-leader unit to its owner's hand.",
+    ),
+    card(
+        "SOR_174",
+        "Repair",
+        None,
+        "Event",
+        (Some(1), None, None),
+        &["Vigilance"],
+        &[],
+        &[],
+        "Heal 3 damage from a unit or base.",
+    ),
+    card(
+        "SOR_180",
+        "Entrenched",
+        None,
+        "Upgrade",
+        (Some(2), Some(2), Some(2)),
+        &["Vigilance"],
+        &[],
+        &[],
+        "Attached unit cannot be defeated by enemy card effects.",
+    ),
+    card(
+        "SOR_181",
+        "Fallen Lightsaber",
+        None,
+        "Upgrade",
+        (Some(2), Some(3), Some(1)),
+        &["Aggression"],
+        &["Item", "Weapon", "Lightsaber"],
+        &[],
+        "Attached unit gains: On Attack: Deal 1 damage to each base.",
+    ),
+    card(
+        "SOR_182",
+        "Jedi Lightsaber",
+        None,
+        "Upgrade",
+        (Some(3), Some(3), Some(1)),
+        &["Command"],
+        &["Item", "Weapon", "Lightsaber"],
+        &[],
+        "Attach to a non-Vehicle unit. If attached unit is a Force unit, it gets +1/+1 more.",
+    ),
+    card(
+        "SHD_001",
+        "Cad Bane",
+        Some("Now It's Personal"),
+        "Leader",
+        (Some(5), Some(3), Some(6)),
+        &["Cunning", "Villainy"],
+        &["Underworld", "Bounty Hunter"],
+        &["Ground"],
+        "Action: Exhaust this leader. Deal 1 damage to a unit.",
+    ),
+    card(
+        "SHD_020",
+        "Level 1313",
+        None,
+        "Base",
+        (None, None, Some(28)),
+        &["Cunning"],
+        &["Underworld"],
+        &["Ground"],
+        "Epic Action: Give an Experience token to a unit.",
+    ),
+    card(
+        "SHD_100",
+        "Bossk",
+        Some("Deadly Stalker"),
+        "Unit",
+        (Some(4), Some(5), Some(5)),
+        &["Aggression", "Villainy"],
+        &["Trandoshan", "Bounty Hunter"],
+        &["Ground"],
+        "Bounty: Deal 2 damage to a base.",
+    ),
+    card(
+        "JTL_001",
+        "Wedge Antilles",
+        Some("Leader of Red Squadron"),
+        "Leader",
+        (Some(5), Some(3), Some(6)),
+        &["Heroism", "Command"],
+        &["Rebel", "Pilot"],
+        &["Space"],
+        "Action: Exhaust this leader. Attach a Pilot upgrade from your hand.",
+    ),
+    card(
+        "JTL_050",
+        "X-Wing",
+        None,
+        "Unit",
+        (Some(3), Some(3), Some(4)),
+        &["Vigilance", "Heroism"],
+        &["Rebel", "Vehicle", "Fighter"],
+        &["Space"],
+        "Piloting [2 Resources]",
+    ),
+];
+
+/// One printing of a card, with the fixture's market quotes for its two
+/// finishes. A `None` quote leaves that finish deliberately unpriced.
+struct PrintingRow {
+    card_id: &'static str,
+    set: &'static str,
+    number: &'static str,
+    variant: &'static str,
+    rarity: &'static str,
+    artist: &'static str,
+    normal: Option<f64>,
+    foil: Option<f64>,
+}
+
+const fn printing(
+    card_id: &'static str,
+    set: &'static str,
+    number: &'static str,
+    variant: &'static str,
+    rarity: &'static str,
+    artist: &'static str,
+    (normal, foil): (Option<f64>, Option<f64>),
+) -> PrintingRow {
+    PrintingRow {
+        card_id,
+        set,
+        number,
+        variant,
+        rarity,
+        artist,
+        normal,
+        foil,
+    }
+}
+
+/// Every printing gets a Normal and a Foil row in `printings`; the quotes
+/// decide which of them also get `prices`. Hyperspace and Showcase printings
+/// have their own collector numbers, as in the real sets.
+const PRINTINGS: [PrintingRow; 43] = [
+    printing(
+        "SOR_005",
+        "SOR",
+        "005",
+        "Standard",
+        "Special",
+        "Borja Pindado",
+        (Some(3.50), Some(14.00)),
+    ),
+    printing(
+        "SOR_005",
+        "SOR",
+        "262",
+        "Hyperspace",
+        "Special",
+        "Borja Pindado",
+        (Some(9.00), Some(30.00)),
+    ),
+    printing(
+        "SOR_005",
+        "SOR",
+        "520",
+        "Showcase",
+        "Special",
+        "Borja Pindado",
+        (Some(85.00), None),
+    ),
+    printing(
+        "SOR_010",
+        "SOR",
+        "010",
+        "Standard",
+        "Rare",
+        "Matt Ferguson",
+        (Some(2.75), Some(11.50)),
+    ),
+    printing(
+        "SOR_010",
+        "SOR",
+        "263",
+        "Hyperspace",
+        "Rare",
+        "Matt Ferguson",
+        (Some(7.80), Some(26.00)),
+    ),
+    printing(
+        "SOR_020",
+        "SOR",
+        "020",
+        "Standard",
+        "Common",
+        "Aaron Hwang",
+        (Some(0.12), Some(0.60)),
+    ),
+    printing(
+        "SOR_024",
+        "SOR",
+        "024",
+        "Standard",
+        "Common",
+        "Aaron Hwang",
+        (Some(0.10), Some(0.55)),
+    ),
+    printing(
+        "SOR_193",
+        "SOR",
+        "193",
+        "Standard",
+        "Legendary",
+        "Kuroimori",
+        (Some(6.40), Some(21.00)),
+    ),
+    printing(
+        "SOR_193",
+        "SOR",
+        "264",
+        "Hyperspace",
+        "Legendary",
+        "Kuroimori",
+        (Some(18.50), Some(55.00)),
+    ),
+    printing(
+        "SOR_193",
+        "SOR",
+        "521",
+        "Showcase",
+        "Legendary",
+        "Kuroimori",
+        (Some(140.00), None),
+    ),
+    printing(
+        "SOR_070",
+        "SOR",
+        "070",
+        "Standard",
+        "Common",
+        "Jake Murray",
+        (Some(0.08), Some(0.45)),
+    ),
+    printing(
+        "SOR_085",
+        "SOR",
+        "085",
+        "Standard",
+        "Common",
+        "Jake Murray",
+        (Some(0.10), Some(0.40)),
+    ),
+    printing(
+        "SOR_100",
+        "SOR",
+        "100",
+        "Standard",
+        "Common",
+        "Bruno Werneck",
+        (Some(0.07), None),
+    ),
+    printing(
+        "SOR_120",
+        "SOR",
+        "120",
+        "Standard",
+        "Common",
+        "Bruno Werneck",
+        (Some(0.09), Some(0.50)),
+    ),
+    printing(
+        "SOR_130",
+        "SOR",
+        "130",
+        "Standard",
+        "Uncommon",
+        "Brian Valenzuela",
+        (Some(0.20), Some(0.95)),
+    ),
+    printing(
+        "SOR_140",
+        "SOR",
+        "140",
+        "Standard",
+        "Uncommon",
+        "Brian Valenzuela",
+        (Some(0.18), Some(0.85)),
+    ),
+    printing(
+        "SOR_150",
+        "SOR",
+        "150",
+        "Standard",
+        "Uncommon",
+        "Matt Ferguson",
+        (Some(0.22), Some(1.10)),
+    ),
+    printing(
+        "SOR_150",
+        "SOR",
+        "266",
+        "Hyperspace",
+        "Uncommon",
+        "Matt Ferguson",
+        (Some(0.90), Some(3.60)),
+    ),
+    printing(
+        "SOR_160",
+        "SOR",
+        "160",
+        "Standard",
+        "Uncommon",
+        "Aaron Hwang",
+        (Some(0.15), Some(0.70)),
+    ),
+    printing(
+        "SOR_170",
+        "SOR",
+        "170",
+        "Standard",
+        "Rare",
+        "Kuroimori",
+        (Some(1.10), Some(4.80)),
+    ),
+    printing(
+        "SOR_170",
+        "SOR",
+        "267",
+        "Hyperspace",
+        "Rare",
+        "Kuroimori",
+        (Some(3.20), Some(12.00)),
+    ),
+    printing(
+        "SOR_171",
+        "SOR",
+        "171",
+        "Standard",
+        "Uncommon",
+        "Jake Murray",
+        (Some(0.25), Some(1.20)),
+    ),
+    printing(
+        "SOR_172",
+        "SOR",
+        "172",
+        "Standard",
+        "Rare",
+        "Bruno Werneck",
+        (Some(0.90), Some(3.90)),
+    ),
+    printing(
+        "SOR_172",
+        "SOR",
+        "268",
+        "Hyperspace",
+        "Rare",
+        "Bruno Werneck",
+        (None, None),
+    ),
+    printing(
+        "SOR_173",
+        "SOR",
+        "173",
+        "Standard",
+        "Uncommon",
+        "Aaron Hwang",
+        (Some(0.20), Some(0.90)),
+    ),
+    printing(
+        "SOR_174",
+        "SOR",
+        "174",
+        "Standard",
+        "Common",
+        "Jake Murray",
+        (Some(0.06), Some(0.35)),
+    ),
+    printing(
+        "SOR_180",
+        "SOR",
+        "180",
+        "Standard",
+        "Common",
+        "Brian Valenzuela",
+        (Some(0.12), Some(0.55)),
+    ),
+    printing(
+        "SOR_181",
+        "SOR",
+        "181",
+        "Standard",
+        "Uncommon",
+        "Kuroimori",
+        (Some(0.35), Some(1.40)),
+    ),
+    printing(
+        "SOR_182",
+        "SOR",
+        "182",
+        "Standard",
+        "Rare",
+        "Kuroimori",
+        (Some(1.30), Some(5.20)),
+    ),
+    printing(
+        "SOR_182",
+        "SOR",
+        "269",
+        "Hyperspace",
+        "Rare",
+        "Kuroimori",
+        (None, None),
+    ),
+    printing(
+        "SHD_001",
+        "SHD",
+        "001",
+        "Standard",
+        "Rare",
+        "Matt Ferguson",
+        (Some(2.40), Some(9.50)),
+    ),
+    printing(
+        "SHD_001",
+        "SHD",
+        "262",
+        "Hyperspace",
+        "Rare",
+        "Matt Ferguson",
+        (Some(6.10), Some(20.00)),
+    ),
+    printing(
+        "SHD_001",
+        "SHD",
+        "515",
+        "Showcase",
+        "Special",
+        "Matt Ferguson",
+        (Some(45.00), None),
+    ),
+    printing(
+        "SHD_020",
+        "SHD",
+        "020",
+        "Standard",
+        "Common",
+        "Aaron Hwang",
+        (Some(0.11), Some(0.60)),
+    ),
+    printing(
+        "SHD_100",
+        "SHD",
+        "100",
+        "Standard",
+        "Legendary",
+        "Bruno Werneck",
+        (Some(4.90), Some(16.00)),
+    ),
+    printing(
+        "JTL_001",
+        "JTL",
+        "001",
+        "Standard",
+        "Rare",
+        "Jake Murray",
+        (Some(1.60), Some(6.40)),
+    ),
+    printing(
+        "JTL_050",
+        "JTL",
+        "050",
+        "Standard",
+        "Uncommon",
+        "Brian Valenzuela",
+        (Some(0.30), Some(1.30)),
+    ),
+    printing(
+        "JTL_050",
+        "JTL",
+        "265",
+        "Hyperspace",
+        "Uncommon",
+        "Brian Valenzuela",
+        (Some(1.10), Some(4.20)),
+    ),
+    // Promos: their own variant, numbered outside the set's run.
+    printing(
+        "SOR_170",
+        "SOR",
+        "P01",
+        "Promo",
+        "Special",
+        "Kuroimori",
+        (Some(2.20), Some(7.00)),
+    ),
+    printing(
+        "SOR_193",
+        "SOR",
+        "P02",
+        "Promo",
+        "Special",
+        "Kuroimori",
+        (Some(11.00), None),
+    ),
+    printing(
+        "SOR_005",
+        "SOR",
+        "P03",
+        "Promo",
+        "Special",
+        "Borja Pindado",
+        (None, Some(40.00)),
+    ),
+    printing(
+        "SHD_100",
+        "SHD",
+        "P04",
+        "Promo",
+        "Special",
+        "Bruno Werneck",
+        (Some(3.30), Some(9.90)),
+    ),
+    printing(
+        "JTL_001",
+        "JTL",
+        "P05",
+        "Promo",
+        "Special",
+        "Jake Murray",
+        (None, None),
+    ),
+];
+
+/// The printing id of `number` in `set`, for a finish: `<official uid>:<Finish>`,
+/// where the uid is `<SET>-<number>`. Same shape as production's
+/// `<cardUid>:<Finish>`.
+fn printing_id(set: &str, number: &str, finish: &str) -> String {
+    format!("{set}-{number}:{finish}")
+}
+
+/// A sealed product: TCGplayer product id, set, name, subtype, release date.
+type SealedRow = (i64, &'static str, &'static str, &'static str, &'static str);
+
+const SEALED: [SealedRow; 4] = [
+    (
+        900001,
+        "SOR",
+        "Spark of Rebellion Booster Box",
+        "Booster Box",
+        "2024-03-08",
+    ),
+    (
+        900002,
+        "SHD",
+        "Shadows of the Galaxy Booster Box",
+        "Booster Box",
+        "2024-07-12",
+    ),
+    (
+        900003,
+        "SOR",
+        "Spark of Rebellion Two-Player Starter",
+        "Starter",
+        "2024-03-08",
+    ),
+    (
+        900004,
+        "JTL",
+        "Jump to Lightspeed Booster Pack",
+        "Booster Pack",
+        "2025-03-14",
+    ),
+];
+
+/// A sealed-price row: product id, observed on, low, mid, high, market,
+/// direct low.
+///
+/// `market` is `Option` because TCGCSV genuinely quotes many sealed products a
+/// mid and no market, and `sealed_market_price_expr_from!` exists to pick
+/// between the two off ONE observation. A fixture that filled `market` on
+/// every row would leave that `COALESCE` unexercised by anything a screenshot
+/// can see.
+type SealedPriceRow = (i64, &'static str, f64, f64, f64, Option<f64>, Option<f64>);
+
+/// The two products the collection actually HOLDS, quoted one way each, so
+/// the rendered sealed value goes through the whole rule rather than one arm
+/// of it (pd-bbv7, sp-ysb):
+///
+///   900002  a full quote, `market_price` set — the ordinary arm (and quoted
+///           on two days, so the newest stands)
+///   900004  `market_price` NULL, mid alone — the `COALESCE` fallback
+///
+/// 900001 and 900003 stay unquoted deliberately. Neither is held, so neither
+/// moves a number, and leaving them keeps the catalog carrying the shape
+/// TCGCSV really produces: a sealed product with no price row at all.
+///
+/// The two owned lots then value at 96.40 + 6 x 5.24 = 127.84 against the
+/// 116.93 they cost, so the sealed series reads as a small gain rather than as
+/// a round number nobody would notice was wrong.
+const SEALED_PRICES: [SealedPriceRow; 3] = [
+    (
+        900002,
+        OBSERVED_PREV,
+        86.00,
+        93.10,
+        115.00,
+        Some(94.80),
+        Some(90.00),
+    ),
+    (
+        900002,
+        OBSERVED_AT,
+        88.00,
+        94.75,
+        119.99,
+        Some(96.40),
+        Some(91.00),
+    ),
+    (900004, OBSERVED_AT, 4.10, 5.24, 8.99, None, None),
+];
+
+fn r2(x: f64) -> f64 {
+    (x * 100.0).round() / 100.0
+}
+
+fn seed_catalog(conn: &Connection) -> anyhow::Result<()> {
+    for (code, name, release, sort) in SETS {
+        conn.execute(
+            "INSERT INTO sets (set_code, name, release_date, sort_order) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![code, name, release, sort],
+        )?;
+    }
+
+    for c in &CARDS {
+        // None of these values contains a quote or a backslash, so a JSON array
+        // is the quoted names joined; no serializer needed.
+        let json = |v: &[&str]| -> String {
+            format!(
+                "[{}]",
+                v.iter()
+                    .map(|s| format!("\"{s}\""))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        };
+        conn.execute(
+            "INSERT INTO cards \
+               (card_id, name, subtitle, card_type, cost, power, hp, aspects, \
+                traits, arenas, rules_text) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            rusqlite::params![
+                c.id,
+                c.name,
+                c.subtitle,
+                c.card_type,
+                c.cost,
+                c.power,
+                c.hp,
+                json(c.aspects),
+                json(c.traits),
+                json(c.arenas),
+                c.rules,
+            ],
+        )?;
+        // The full-text row, exactly as the catalog apply job writes it.
+        conn.execute(
+            "INSERT INTO card_search (card_id, name, subtitle, rules_text, traits) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![c.id, c.name, c.subtitle, c.rules, c.traits.join(" ")],
+        )?;
+    }
+
+    // Printings, their prices and the crosswalk. A tcgcsv product id is
+    // allocated per row that has at least one quote, and shared by the
+    // printing's two finishes, as TCGplayer shares it.
+    for (i, p) in PRINTINGS.iter().enumerate() {
+        let uid = format!("{}-{}", p.set, p.number);
+        let product_id = 700_000 + i as i64;
+        for (finish, quote) in [("Normal", p.normal), ("Foil", p.foil)] {
+            let id = printing_id(p.set, p.number, finish);
+            conn.execute(
+                "INSERT INTO printings \
+                   (printing_id, card_id, set_code, number, variant, finish, \
+                    rarity, artist, image_url) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL)",
+                rusqlite::params![
+                    id, p.card_id, p.set, p.number, p.variant, finish, p.rarity, p.artist
+                ],
+            )?;
+            conn.execute(
+                "INSERT INTO printing_source_id (source, source_id, sub_type_name, printing_id) \
+                 VALUES ('official', ?1, ?2, ?3)",
+                rusqlite::params![uid, finish, id],
+            )?;
+            let Some(market) = quote else { continue };
+            conn.execute(
+                "INSERT INTO printing_source_id (source, source_id, sub_type_name, printing_id) \
+                 VALUES ('tcgcsv', ?1, ?2, ?3)",
+                rusqlite::params![product_id.to_string(), finish, id],
+            )?;
+            // Newest quote on every priced printing; every third one also has
+            // yesterday's, every seventh the day before that, so some prices
+            // have moved and some have not.
+            let mut days = vec![(OBSERVED_AT, 1.0)];
+            if i % 3 == 0 {
+                days.push((OBSERVED_PREV, 0.95));
+            }
+            if i % 7 == 0 {
+                days.push((OBSERVED_EARLIER, 0.9));
+            }
+            for (day, scale) in days {
+                let m = r2(market * scale);
+                let direct_low = (m >= 5.0).then(|| r2(m * 0.8));
+                conn.execute(
+                    "INSERT INTO prices \
+                       (printing_id, source, observed_on, low, mid, high, market, direct_low) \
+                     VALUES (?1, 'tcgcsv', ?2, ?3, ?4, ?5, ?6, ?7)",
+                    rusqlite::params![
+                        id,
+                        day,
+                        r2(m * 0.75),
+                        r2(m * 0.95),
+                        r2(m * 1.4),
+                        m,
+                        direct_low
+                    ],
+                )?;
+            }
+        }
+    }
+
+    // Formats come from the catalog crate's own data, so the fixture's rules
+    // are the real ones; a few legality rows are the fixture's invention, to
+    // give the legality checker something to say.
+    for f in dumpstar_catalog::formats::builtin_formats() {
+        conn.execute(
+            "INSERT INTO formats (format_id, name) VALUES (?1, ?2)",
+            rusqlite::params![f.format_id, f.name],
+        )?;
+        for (key, value) in &f.rules {
+            conn.execute(
+                "INSERT INTO format_rules (format_id, rule_key, rule_value) VALUES (?1, ?2, ?3)",
+                rusqlite::params![f.format_id, key, value],
+            )?;
+        }
+    }
+    for (format, card, status) in [
+        ("premier", "SOR_193", "banned"),
+        ("premier", "SOR_172", "restricted"),
+        ("twin_suns", "SOR_170", "not_legal"),
+    ] {
+        conn.execute(
+            "INSERT INTO card_legality (format_id, card_id, status) VALUES (?1, ?2, ?3)",
+            rusqlite::params![format, card, status],
+        )?;
+    }
+
+    for (pid, set, name, subtype, release) in SEALED {
+        conn.execute(
+            "INSERT INTO sealed_products \
+               (product_id, set_code, name, category, subtype, release_date, \
+                image_url, tcgplayer_url, fetched_at) \
+             VALUES (?1, ?2, ?3, 'sealed', ?4, ?5, ?6, ?7, ?8)",
+            rusqlite::params![
+                pid,
+                set,
+                name,
+                subtype,
+                release,
+                format!("https://product-images.tcgplayer.com/{pid}.jpg"),
+                format!("https://www.tcgplayer.com/product/{pid}"),
+                FETCHED_AT,
+            ],
+        )?;
+    }
+    for (pid, day, low, mid, high, market, direct_low) in SEALED_PRICES {
+        conn.execute(
+            "INSERT INTO sealed_prices \
+               (tcgplayer_product_id, low_price, mid_price, high_price, \
+                market_price, direct_low_price, observed_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            rusqlite::params![pid, low, mid, high, market, direct_low, day],
+        )?;
+    }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// User data (collection.sqlite)
+// ---------------------------------------------------------------------------
+
 fn catalog_counts(conn: &Connection) -> anyhow::Result<(i64, i64, i64, i64)> {
     Ok((
         conn.query_row("SELECT count(*) FROM sets", [], |r| r.get(0))?,
@@ -187,944 +1239,31 @@ fn catalog_counts(conn: &Connection) -> anyhow::Result<(i64, i64, i64, i64)> {
 }
 
 // ---------------------------------------------------------------------------
-// Catalog (shared.sqlite)
-// ---------------------------------------------------------------------------
-
-/// A fixed observation date so prices are byte-for-byte reproducible.
-const OBSERVED_AT: &str = "2024-01-15";
-/// A fixed ingest timestamp for the catalog freshness markers.
-const FETCHED_AT: &str = "2024-01-15T00:00:00Z";
-
-/// Compact card spec: number, name, supertype, rarity, artist, hp.
-struct CardSpec {
-    number: &'static str,
-    sortable: i64,
-    name: &'static str,
-    supertype: &'static str,
-    rarity: &'static str,
-    artist: &'static str,
-    hp: Option<i64>,
-}
-
-/// Variants to materialise for a card, with optional TCGplayer product link.
-struct PrintingSpec {
-    variant: &'static str,
-    sub_type: Option<&'static str>,
-    /// TCGplayer product id; `Some` means a `prices` row is written too.
-    product_id: Option<i64>,
-    market_price: f64,
-}
-
-/// A card paired with the printings to materialise for it.
-type CardEntry = (CardSpec, Vec<PrintingSpec>);
-
-/// A set row: set_code, ptcgo_code, name, series, series_sort, set_sort,
-/// total, printed_total, release_date.
-type SetRow = (
-    &'static str,
-    &'static str,
-    &'static str,
-    &'static str,
-    i64,
-    i64,
-    i64,
-    i64,
-    &'static str,
-);
-
-/// A sealed-product row: product_id, set_code, name, category, card_count,
-/// product_size, release_date.
-type SealedRow = (
-    i64,
-    &'static str,
-    &'static str,
-    &'static str,
-    Option<i64>,
-    Option<i64>,
-    &'static str,
-);
-
-/// A sealed-price row: product_id, low, mid, high, market, direct_low.
-///
-/// `market` is `Option` because TCGCSV genuinely quotes many sealed products a
-/// mid and no market, and `sealed_market_price_expr_from!` exists to pick
-/// between the two off ONE observation. A fixture that filled `market` on
-/// every row would leave that `COALESCE` unexercised by anything a screenshot
-/// can see.
-type SealedPriceRow = (i64, f64, f64, f64, Option<f64>, Option<f64>);
-
-fn seed_catalog(conn: &Connection) -> anyhow::Result<()> {
-    // --- Sets ----------------------------------------------------------
-    // (set_code, ptcgo_code, name, series, series_sort, set_sort,
-    //  total, printed_total, release_date)
-    let sets: [SetRow; 3] = [
-        (
-            "base1",
-            "BS",
-            "Base Set",
-            "Base",
-            1,
-            1,
-            102,
-            102,
-            "1999/01/09",
-        ),
-        (
-            "sv3pt5",
-            "MEW",
-            "151",
-            "Scarlet & Violet",
-            9,
-            35,
-            165,
-            207,
-            "2023/09/22",
-        ),
-        (
-            "sv8",
-            "SSP",
-            "Surging Sparks",
-            "Scarlet & Violet",
-            9,
-            42,
-            191,
-            252,
-            "2024/11/08",
-        ),
-    ];
-    for (code, ptcgo, name, series, ss, sst, total, printed, release) in sets {
-        conn.execute(
-            "INSERT INTO sets \
-               (set_code, ptcgo_code, name, series, series_sort_order, \
-                set_sort_order, total, printed_total, release_date, \
-                logo_url, symbol_url, ptcgio_fetched_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-            rusqlite::params![
-                code,
-                ptcgo,
-                name,
-                series,
-                ss,
-                sst,
-                total,
-                printed,
-                release,
-                format!("https://images.pokemontcg.io/{code}/logo.png"),
-                format!("https://images.pokemontcg.io/{code}/symbol.png"),
-                FETCHED_AT,
-            ],
-        )?;
-    }
-
-    // --- Cards + printings + prices ------------------------------------
-    // Product ids are allocated deterministically per linked printing.
-    seed_set_cards(conn, "base1", &base_set_cards())?;
-    seed_set_cards(conn, "sv3pt5", &set_151_cards())?;
-    seed_set_cards(conn, "sv8", &surging_sparks_cards())?;
-    enrich_card_facets(conn)?;
-
-    // --- Sealed products ----------------------------------------------
-    // (product_id, set_code, name, category, card_count, product_size,
-    //  release_date)
-    let sealed: [SealedRow; 4] = [
-        (
-            900001,
-            "base1",
-            "Spark of Rebellion Booster Display",
-            "booster_display",
-            Some(11),
-            Some(36),
-            "1999/01/09",
-        ),
-        (
-            900002,
-            "sv3pt5",
-            "Spark of Rebellion Two-Player Starter",
-            "two_player_starter",
-            Some(10),
-            Some(9),
-            "2023/09/22",
-        ),
-        (
-            900003,
-            "sv3pt5",
-            "Spark of Rebellion Prerelease Kit",
-            "prerelease_kit",
-            Some(10),
-            Some(6),
-            "2023/09/22",
-        ),
-        (
-            900004,
-            "sv8",
-            "Shadows of the Galaxy Booster Pack",
-            "booster_pack",
-            Some(10),
-            Some(1),
-            "2024/11/08",
-        ),
-    ];
-    for (pid, set, name, cat, cc, size, release) in sealed {
-        conn.execute(
-            "INSERT INTO sealed_products \
-               (product_id, set_code, name, category, card_count, \
-                product_size, release_date, image_url, tcgplayer_url, fetched_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-            rusqlite::params![
-                pid,
-                set,
-                name,
-                cat,
-                cc,
-                size,
-                release,
-                format!("https://product-images.tcgplayer.com/{pid}.jpg"),
-                format!("https://www.tcgplayer.com/product/{pid}"),
-                FETCHED_AT,
-            ],
-        )?;
-    }
-
-    // --- Sealed prices -------------------------------------------------
-    //
-    // The two products the collection actually HOLDS, quoted one way each, so
-    // the rendered sealed value goes through the whole rule rather than one
-    // arm of it (pd-bbv7, sp-ysb):
-    //
-    //   900002  a full quote, `market_price` set — the ordinary arm
-    //   900004  `market_price` NULL, mid alone — the `COALESCE` fallback
-    //
-    // Before this the fixture seeded four sealed PRODUCTS and zero prices, so
-    // every sealed lot fell to "catalogued and never quoted": `/sealed`
-    // rendered an em dash in Market and Value, `/` read `sealed $0.00`, and
-    // the `dimension='sealed'` series on the value chart had nothing on it.
-    // That arm is real and is held by
-    // `value_history::tests::an_unpriced_sealed_lot_is_skipped_and_still_counted`
-    // — but it was the only arm anything reaching a screenshot could take, so
-    // the join through `sealed_products` by `product_id` and both halves of
-    // `sealed_market_price_expr_from!` were covered nowhere in the UI tier.
-    //
-    // 900001 and 900003 stay unquoted deliberately. Neither is held, so
-    // neither moves a number, and leaving them keeps the catalog carrying the
-    // shape TCGCSV really produces: a sealed product with no price row at all.
-    //
-    // Fixed constants at `OBSERVED_AT`, like every other price here. The two
-    // owned lots then value at 59.42 + 6 x 5.24 = 90.86 against the 76.93 they
-    // cost, so the sealed series reads as a small gain rather than as a round
-    // number nobody would notice was wrong.
-    //
-    // (product_id, low, mid, high, market, direct_low)
-    let sealed_prices: [SealedPriceRow; 2] = [
-        (900002, 52.00, 58.75, 79.99, Some(59.42), Some(55.10)),
-        (900004, 4.10, 5.24, 8.99, None, None),
-    ];
-    for (pid, low, mid, high, market, direct_low) in sealed_prices {
-        conn.execute(
-            "INSERT INTO sealed_prices \
-               (tcgplayer_product_id, low_price, mid_price, high_price, \
-                market_price, direct_low_price, observed_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            rusqlite::params![pid, low, mid, high, market, direct_low, OBSERVED_AT],
-        )?;
-    }
-
-    Ok(())
-}
-
-/// Insert one set's cards, their printings, and a price row per linked
-/// printing. Product ids are deterministic: `set_base + card_index*10 +
-/// printing_index`.
-fn seed_set_cards(conn: &Connection, set_code: &str, cards: &[CardEntry]) -> anyhow::Result<()> {
-    for (ci, (card, printings)) in cards.iter().enumerate() {
-        let card_id = format!("{set_code}-{}", card.number);
-        conn.execute(
-            "INSERT INTO cards \
-               (card_id, set_code, number, number_sortable, name, supertype, \
-                rarity, artist, hp, image_small, image_large) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-            rusqlite::params![
-                card_id,
-                set_code,
-                card.number,
-                card.sortable,
-                card.name,
-                card.supertype,
-                card.rarity,
-                card.artist,
-                card.hp,
-                format!(
-                    "https://images.pokemontcg.io/{set_code}/{}.png",
-                    card.number
-                ),
-                format!(
-                    "https://images.pokemontcg.io/{set_code}/{}_hires.png",
-                    card.number
-                ),
-            ],
-        )?;
-
-        for (pi, p) in printings.iter().enumerate() {
-            let printing_id = format!("{card_id}-{}", p.variant);
-            // sub_type_name links a printing to its prices row (the market_price
-            // join in search.rs keys on it). Production ingest populates it; the
-            // fixture must too, or every price reads back null (dumpstar-qm9).
-            conn.execute(
-                "INSERT INTO printings \
-                   (printing_id, card_id, variant, language, tcgplayer_product_id, \
-                    sub_type_name) \
-                 VALUES (?1, ?2, ?3, 'en', ?4, ?5)",
-                rusqlite::params![printing_id, card_id, p.variant, p.product_id, p.sub_type],
-            )?;
-
-            if let (Some(pid), Some(sub)) = (p.product_id, p.sub_type) {
-                conn.execute(
-                    "INSERT INTO prices \
-                       (tcgplayer_product_id, sub_type_name, source, \
-                        price_type, price, observed_at) \
-                     VALUES (?1, ?2, 'tcgplayer', 'market', ?3, ?4)",
-                    rusqlite::params![pid, sub, p.market_price, OBSERVED_AT],
-                )?;
-            }
-            let _ = (ci, pi);
-        }
-    }
-    Ok(())
-}
-
-/// Backfill the Pokémon-specific facet columns the `card()` helper doesn't
-/// carry — energy `types` (the headline search facet), plus a little
-/// `subtypes`/`attacks` on flagship cards — keyed by name so the UI search
-/// tests (and `/collection` screenshots) can exercise `t:`, `sub:`, `dmg:`,
-/// `has:attack`, etc. against believable data.
-fn enrich_card_facets(conn: &Connection) -> anyhow::Result<()> {
-    // (name, energy type)
-    let types: &[(&str, &str)] = &[
-        ("Charizard", "Fire"),
-        ("Charizard ex", "Fire"),
-        ("Charmander", "Fire"),
-        ("Magmar", "Fire"),
-        ("Blastoise", "Water"),
-        ("Squirtle", "Water"),
-        ("Milotic ex", "Water"),
-        ("Venusaur", "Grass"),
-        ("Bulbasaur", "Grass"),
-        ("Exeggcute", "Grass"),
-        ("Alolan Exeggutor ex", "Grass"),
-        ("Pikachu", "Lightning"),
-        ("Pikachu ex", "Lightning"),
-        ("Raichu", "Lightning"),
-        ("Alakazam ex", "Psychic"),
-        ("Mew", "Psychic"),
-        ("Mew ex", "Psychic"),
-        ("Latias ex", "Psychic"),
-        ("Hitmonchan", "Fighting"),
-        ("Ditto", "Colorless"),
-        ("Snorlax", "Colorless"),
-    ];
-    for (name, ty) in types {
-        conn.execute(
-            "UPDATE cards SET types = ?1 WHERE name = ?2",
-            rusqlite::params![format!("[\"{ty}\"]"), name],
-        )?;
-    }
-
-    // Stage subtypes for the evolved Base Set holos, and Basic+ex for the ex
-    // cards — enough to demonstrate sub: queries.
-    for name in ["Charizard", "Blastoise", "Venusaur"] {
-        conn.execute(
-            "UPDATE cards SET subtypes = '[\"Stage 2\"]' WHERE name = ?1",
-            rusqlite::params![name],
-        )?;
-    }
-    conn.execute(
-        "UPDATE cards SET subtypes = '[\"Basic\",\"ex\"]' WHERE name LIKE '% ex'",
-        [],
-    )?;
-
-    // A couple of attacks so dmg:/has:attack/o: have something to match.
-    conn.execute(
-        "UPDATE cards SET attacks = '[{\"name\":\"Fire Spin\",\"damage\":\"100\",\
-            \"cost\":[\"Fire\",\"Fire\",\"Fire\",\"Fire\"],\"text\":\"Discard 2 Energy.\"}]' \
-         WHERE name = 'Charizard'",
-        [],
-    )?;
-    conn.execute(
-        "UPDATE cards SET attacks = '[{\"name\":\"Thunder Jolt\",\"damage\":\"30\",\
-            \"cost\":[\"Lightning\"],\"text\":\"Flip a coin.\"}]' \
-         WHERE name = 'Pikachu'",
-        [],
-    )?;
-
-    // National Pokédex numbers — drives the card-detail "Pokédex" row and the
-    // pokedex: facet. Mew + Mew ex share #151 so pokedex:151 returns two cards.
-    let dex: &[(&str, &str)] = &[
-        ("Bulbasaur", "[1]"),
-        ("Venusaur", "[3]"),
-        ("Charmander", "[4]"),
-        ("Charizard", "[6]"),
-        ("Charizard ex", "[6]"),
-        ("Squirtle", "[7]"),
-        ("Blastoise", "[9]"),
-        ("Pikachu", "[25]"),
-        ("Pikachu ex", "[25]"),
-        ("Raichu", "[26]"),
-        ("Alakazam ex", "[65]"),
-        ("Exeggcute", "[102]"),
-        ("Alolan Exeggutor ex", "[103]"),
-        ("Hitmonchan", "[107]"),
-        ("Magmar", "[126]"),
-        ("Ditto", "[132]"),
-        ("Snorlax", "[143]"),
-        ("Mew", "[151]"),
-        ("Mew ex", "[151]"),
-        ("Milotic ex", "[350]"),
-        ("Latias ex", "[380]"),
-    ];
-    for (name, nums) in dex {
-        conn.execute(
-            "UPDATE cards SET national_pokedex_numbers = ?1 WHERE name = ?2",
-            rusqlite::params![nums, name],
-        )?;
-    }
-
-    // Type weaknesses — drives the weakness: facet (cards sharing a weakness).
-    // All four Fire Pokémon take Water weakness, so weakness:Water returns them.
-    let weak: &[(&str, &str)] = &[
-        ("Charizard", "Water"),
-        ("Charizard ex", "Water"),
-        ("Charmander", "Water"),
-        ("Magmar", "Water"),
-        ("Blastoise", "Lightning"),
-        ("Squirtle", "Lightning"),
-        ("Milotic ex", "Lightning"),
-        ("Venusaur", "Fire"),
-        ("Bulbasaur", "Fire"),
-        ("Exeggcute", "Fire"),
-        ("Alolan Exeggutor ex", "Fire"),
-        ("Pikachu", "Fighting"),
-        ("Pikachu ex", "Fighting"),
-        ("Raichu", "Fighting"),
-        ("Snorlax", "Fighting"),
-        ("Ditto", "Fighting"),
-        ("Alakazam ex", "Psychic"),
-        ("Mew", "Psychic"),
-        ("Mew ex", "Psychic"),
-        ("Latias ex", "Psychic"),
-    ];
-    for (name, ty) in weak {
-        conn.execute(
-            "UPDATE cards SET weaknesses = ?1 WHERE name = ?2",
-            rusqlite::params![format!("[{{\"type\":\"{ty}\",\"value\":\"×2\"}}]"), name],
-        )?;
-    }
-
-    // Retreat costs (N colourless) — drives the retreat: facet (same cost
-    // count). Charizard + Blastoise both retreat for 3, so retreat:3 pairs them.
-    let retreat: &[(&str, usize)] = &[
-        ("Charizard", 3),
-        ("Blastoise", 3),
-        ("Snorlax", 4),
-        ("Charizard ex", 2),
-        ("Venusaur", 2),
-        ("Pikachu", 1),
-        ("Pikachu ex", 1),
-        ("Raichu", 1),
-        ("Charmander", 1),
-        ("Squirtle", 1),
-        ("Bulbasaur", 1),
-        ("Mew", 1),
-        ("Mew ex", 1),
-        ("Ditto", 1),
-    ];
-    for (name, n) in retreat {
-        let arr = format!("[{}]", vec!["\"Colorless\""; *n].join(","));
-        conn.execute(
-            "UPDATE cards SET retreat_cost = ?1 WHERE name = ?2",
-            rusqlite::params![arr, name],
-        )?;
-    }
-
-    // Abilities — drives the ability: facet. Classic Base Set powers.
-    conn.execute(
-        "UPDATE cards SET abilities = '[{\"name\":\"Rain Dance\",\"type\":\"Pokémon Power\",\
-            \"text\":\"As often as you like during your turn, you may attach 1 Water Energy \
-            card to 1 of your Water Pokémon.\"}]' WHERE name = 'Blastoise'",
-        [],
-    )?;
-    conn.execute(
-        "UPDATE cards SET abilities = '[{\"name\":\"Energy Trans\",\"type\":\"Pokémon Power\",\
-            \"text\":\"Move 1 Grass Energy card from 1 of your Pokémon to another.\"}]' \
-         WHERE name = 'Venusaur'",
-        [],
-    )?;
-
-    // Evolution chains — extracted from raw_json by the card-detail query, so
-    // set just the evolves keys. Pikachu ⇄ Raichu is fully present in the
-    // fixture, exercising the name: search both links resolve to.
-    conn.execute(
-        "UPDATE cards SET raw_json = '{\"evolvesTo\":[\"Raichu\"]}' WHERE name = 'Pikachu'",
-        [],
-    )?;
-    conn.execute(
-        "UPDATE cards SET raw_json = '{\"evolvesFrom\":\"Pikachu\"}' WHERE name = 'Raichu'",
-        [],
-    )?;
-    Ok(())
-}
-
-/// `normal` + `reverse_holo` for a common/uncommon. Two product ids.
-fn np_reverse(base: i64, normal: f64, reverse: f64) -> Vec<PrintingSpec> {
-    vec![
-        PrintingSpec {
-            variant: "normal",
-            sub_type: Some("Normal"),
-            product_id: Some(base),
-            market_price: normal,
-        },
-        PrintingSpec {
-            variant: "reverse_holo",
-            sub_type: Some("Reverse Holofoil"),
-            product_id: Some(base + 1),
-            market_price: reverse,
-        },
-    ]
-}
-
-/// A single `holo` printing — for rares with no non-foil version.
-fn holo_only(base: i64, price: f64) -> Vec<PrintingSpec> {
-    vec![PrintingSpec {
-        variant: "holo",
-        sub_type: Some("Holofoil"),
-        product_id: Some(base),
-        market_price: price,
-    }]
-}
-
-/// `holo` + `reverse_holo` — the common shape for a Base Set holo rare.
-fn holo_reverse(base: i64, holo: f64, reverse: f64) -> Vec<PrintingSpec> {
-    vec![
-        PrintingSpec {
-            variant: "holo",
-            sub_type: Some("Holofoil"),
-            product_id: Some(base),
-            market_price: holo,
-        },
-        PrintingSpec {
-            variant: "reverse_holo",
-            sub_type: Some("Reverse Holofoil"),
-            product_id: Some(base + 1),
-            market_price: reverse,
-        },
-    ]
-}
-
-fn card(
-    number: &'static str,
-    sortable: i64,
-    name: &'static str,
-    supertype: &'static str,
-    rarity: &'static str,
-    artist: &'static str,
-    hp: Option<i64>,
-) -> CardSpec {
-    CardSpec {
-        number,
-        sortable,
-        name,
-        supertype,
-        rarity,
-        artist,
-        hp,
-    }
-}
-
-/// Base Set — 9 classic cards spanning Common → Rare Holo.
-fn base_set_cards() -> Vec<CardEntry> {
-    vec![
-        (
-            card(
-                "4",
-                4,
-                "Charizard",
-                "Pokémon",
-                "Rare Holo",
-                "Mitsuhiro Arita",
-                Some(120),
-            ),
-            holo_only(100040, 320.00),
-        ),
-        (
-            card(
-                "2",
-                2,
-                "Blastoise",
-                "Pokémon",
-                "Rare Holo",
-                "Ken Sugimori",
-                Some(100),
-            ),
-            holo_only(100020, 140.00),
-        ),
-        (
-            card(
-                "15",
-                15,
-                "Venusaur",
-                "Pokémon",
-                "Rare Holo",
-                "Mitsuhiro Arita",
-                Some(100),
-            ),
-            holo_only(100150, 110.00),
-        ),
-        (
-            card(
-                "58",
-                58,
-                "Pikachu",
-                "Pokémon",
-                "Common",
-                "Mitsuhiro Arita",
-                Some(40),
-            ),
-            np_reverse(100580, 6.50, 12.00),
-        ),
-        (
-            card(
-                "24",
-                24,
-                "Raichu",
-                "Pokémon",
-                "Rare",
-                "Ken Sugimori",
-                Some(80),
-            ),
-            holo_only(100240, 18.00),
-        ),
-        (
-            card(
-                "46",
-                46,
-                "Bulbasaur",
-                "Pokémon",
-                "Common",
-                "Mitsuhiro Arita",
-                Some(40),
-            ),
-            np_reverse(100460, 3.50, 7.00),
-        ),
-        (
-            card(
-                "7",
-                7,
-                "Hitmonchan",
-                "Pokémon",
-                "Rare Holo",
-                "Ken Sugimori",
-                Some(70),
-            ),
-            holo_only(100070, 22.00),
-        ),
-        (
-            card(
-                "88",
-                88,
-                "Energy Removal",
-                "Trainer",
-                "Common",
-                "Keiji Kinebuchi",
-                None,
-            ),
-            np_reverse(100880, 0.75, 2.00),
-        ),
-        (
-            card(
-                "98",
-                98,
-                "Fire Energy",
-                "Energy",
-                "Common",
-                "Keiji Kinebuchi",
-                None,
-            ),
-            np_reverse(100980, 0.25, 1.00),
-        ),
-    ]
-}
-
-/// 151 (sv3pt5) — 13 cards, including a secret rare numbered above the
-/// printed total of 165.
-fn set_151_cards() -> Vec<CardEntry> {
-    vec![
-        (
-            card(
-                "1",
-                1,
-                "Bulbasaur",
-                "Pokémon",
-                "Common",
-                "Narumi Sato",
-                Some(70),
-            ),
-            np_reverse(200010, 0.50, 1.25),
-        ),
-        (
-            card(
-                "4",
-                4,
-                "Charmander",
-                "Pokémon",
-                "Common",
-                "Tefoll",
-                Some(60),
-            ),
-            np_reverse(200040, 1.00, 2.50),
-        ),
-        (
-            card(
-                "6",
-                6,
-                "Charizard ex",
-                "Pokémon",
-                "Double Rare",
-                "5ban Graphics",
-                Some(330),
-            ),
-            holo_only(200060, 24.00),
-        ),
-        (
-            card("7", 7, "Squirtle", "Pokémon", "Common", "Sekio", Some(60)),
-            np_reverse(200070, 0.50, 1.25),
-        ),
-        (
-            card(
-                "25",
-                25,
-                "Pikachu",
-                "Pokémon",
-                "Common",
-                "Saboteri",
-                Some(60),
-            ),
-            np_reverse(200250, 1.50, 4.00),
-        ),
-        (
-            card(
-                "65",
-                65,
-                "Alakazam ex",
-                "Pokémon",
-                "Double Rare",
-                "5ban Graphics",
-                Some(310),
-            ),
-            holo_only(200650, 9.00),
-        ),
-        (
-            card(
-                "131",
-                131,
-                "Mew",
-                "Pokémon",
-                "Rare",
-                "Sanosuke Sakuma",
-                Some(70),
-            ),
-            holo_reverse(201310, 3.00, 5.00),
-        ),
-        (
-            card(
-                "105",
-                105,
-                "Ditto",
-                "Pokémon",
-                "Uncommon",
-                "Ryuta Fuse",
-                Some(60),
-            ),
-            np_reverse(201050, 0.40, 1.10),
-        ),
-        (
-            card(
-                "151",
-                151,
-                "Snorlax",
-                "Pokémon",
-                "Uncommon",
-                "Kagemaru Himeno",
-                Some(140),
-            ),
-            np_reverse(201510, 0.60, 1.50),
-        ),
-        (
-            card(
-                "166",
-                166,
-                "Bulbasaur",
-                "Pokémon",
-                "Illustration Rare",
-                "Saboteri",
-                Some(70),
-            ),
-            holo_only(201660, 8.50),
-        ),
-        (
-            card(
-                "199",
-                199,
-                "Charizard ex",
-                "Pokémon",
-                "Special Illustration Rare",
-                "Akira Egawa",
-                Some(330),
-            ),
-            holo_only(201990, 280.00),
-        ),
-        (
-            card(
-                "201",
-                201,
-                "Mew ex",
-                "Pokémon",
-                "Hyper Rare",
-                "aky CG Works",
-                Some(260),
-            ),
-            holo_only(202010, 95.00),
-        ),
-        (
-            card(
-                "165",
-                165,
-                "Professor's Research",
-                "Trainer",
-                "Illustration Rare",
-                "Yuu Nishida",
-                None,
-            ),
-            holo_only(201650, 14.00),
-        ),
-    ]
-}
-
-/// Surging Sparks (sv8) — 9 cards, modern rarities + a secret rare above the
-/// printed total of 191.
-fn surging_sparks_cards() -> Vec<CardEntry> {
-    vec![
-        (
-            card(
-                "3",
-                3,
-                "Exeggcute",
-                "Pokémon",
-                "Common",
-                "Shibuzoh.",
-                Some(50),
-            ),
-            np_reverse(300030, 0.20, 0.90),
-        ),
-        (
-            card(
-                "32",
-                32,
-                "Magmar",
-                "Pokémon",
-                "Common",
-                "Naoki Saito",
-                Some(80),
-            ),
-            np_reverse(300320, 0.25, 1.00),
-        ),
-        (
-            card(
-                "57",
-                57,
-                "Pikachu ex",
-                "Pokémon",
-                "Double Rare",
-                "PLANETA Igarashi",
-                Some(200),
-            ),
-            holo_only(300570, 12.00),
-        ),
-        (
-            card(
-                "89",
-                89,
-                "Milotic ex",
-                "Pokémon",
-                "Double Rare",
-                "5ban Graphics",
-                Some(310),
-            ),
-            holo_only(300890, 6.50),
-        ),
-        (
-            card(
-                "120",
-                120,
-                "Boss's Orders",
-                "Trainer",
-                "Uncommon",
-                "Yusuke Ishikawa",
-                None,
-            ),
-            np_reverse(301200, 0.75, 2.25),
-        ),
-        (
-            card(
-                "160",
-                160,
-                "Latias ex",
-                "Pokémon",
-                "Illustration Rare",
-                "Teradon",
-                Some(220),
-            ),
-            holo_only(301600, 18.00),
-        ),
-        (
-            card(
-                "191",
-                191,
-                "Alolan Exeggutor ex",
-                "Pokémon",
-                "Illustration Rare",
-                "PLANETA Mochizuki",
-                Some(280),
-            ),
-            holo_only(301910, 11.00),
-        ),
-        (
-            card(
-                "238",
-                238,
-                "Pikachu ex",
-                "Pokémon",
-                "Special Illustration Rare",
-                "PLANETA Mochizuki",
-                Some(200),
-            ),
-            holo_only(302380, 130.00),
-        ),
-        (
-            card(
-                "252",
-                252,
-                "Iono",
-                "Trainer",
-                "Special Illustration Rare",
-                "Saji",
-                None,
-            ),
-            holo_only(302520, 40.00),
-        ),
-    ]
-}
-
-// ---------------------------------------------------------------------------
 // User data (collection.sqlite)
 // ---------------------------------------------------------------------------
+
+/// The main deck of "Luke Vigilance Midrange": 18 distinct cards, 50 in all,
+/// within the three-copy cap — a legal Premier deck with its leader and base.
+const LUKE_MAIN: [(&str, u32); 18] = [
+    ("SOR_070", 3),
+    ("SOR_085", 3),
+    ("SOR_100", 3),
+    ("SOR_120", 3),
+    ("SOR_130", 3),
+    ("SOR_140", 3),
+    ("SOR_150", 3),
+    ("SOR_160", 3),
+    ("SOR_170", 3),
+    ("SOR_171", 3),
+    ("SOR_173", 3),
+    ("SOR_174", 3),
+    ("SOR_180", 3),
+    ("SOR_181", 3),
+    ("SOR_182", 3),
+    ("SHD_100", 3),
+    ("JTL_050", 1),
+    ("SOR_172", 1),
+];
 
 fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
     // --- Binders -------------------------------------------------------
@@ -1142,8 +1281,8 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
     let masters = binders::create(
         conn,
         &NewBinder {
-            name: "Master Set: 151".into(),
-            description: Some("Working toward a complete 151 master set.".into()),
+            name: "Master Set: Spark of Rebellion".into(),
+            description: Some("Working toward a complete Spark of Rebellion set.".into()),
             color: "blue".into_some(),
             binder_type: "set".into_some(),
             pocket_size: Some(12),
@@ -1153,8 +1292,8 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
     let vault = binders::create(
         conn,
         &NewBinder {
-            name: "Vintage Vault".into(),
-            description: Some("High-value vintage holos.".into()),
+            name: "Hyperspace Vault".into(),
+            description: Some("High-value Hyperspace and Showcase printings.".into()),
             color: "gold".into_some(),
             binder_type: "showcase".into_some(),
             pocket_size: Some(9),
@@ -1163,12 +1302,14 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
     )?;
 
     // --- Decks (idea / ready / built) ----------------------------------
-    let charizard_deck = decks::create(
+    // Each deck's lines are game cards (`card_id`), never printings; the
+    // built deck is a legal Premier shape: one Leader, one Base, 50 main.
+    let luke_deck = decks::create(
         conn,
         &NewDeck {
-            name: "Charizard ex Control".into(),
-            description: Some("Fire-type control built around Charizard ex.".into()),
-            format: "standard".into_some(),
+            name: "Luke Vigilance Midrange".into(),
+            description: Some("Vigilance and Heroism midrange around Luke.".into()),
+            format: "premier".into_some(),
             owner: "Ryan".into_some(),
             state: "built".into_some(),
             sleeve_color: "black".into_some(),
@@ -1176,32 +1317,45 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             notes: "Tournament-ready.".into_some(),
         },
     )?;
-    let _pikachu_deck = decks::create(
+    decks::set_card(conn, luke_deck, "SOR_005", Zone::Main, 1)?;
+    decks::set_card(conn, luke_deck, "SOR_024", Zone::Main, 1)?;
+    for (card_id, qty) in LUKE_MAIN {
+        decks::set_card(conn, luke_deck, card_id, Zone::Main, qty)?;
+    }
+
+    let vader_deck = decks::create(
         conn,
         &NewDeck {
-            name: "Pikachu ex Aggro".into(),
-            description: Some("Fast Lightning aggro.".into()),
-            format: "standard".into_some(),
+            name: "Vader Aggro".into(),
+            description: Some("Fast Aggression beats.".into()),
+            format: "premier".into_some(),
             owner: "Ryan".into_some(),
             state: "ready".into_some(),
-            sleeve_color: "yellow".into_some(),
+            sleeve_color: "red".into_some(),
             storage_location: "Deck Box 2".into_some(),
             notes: None,
         },
     )?;
-    let _vintage_deck = decks::create(
+    decks::set_card(conn, vader_deck, "SOR_010", Zone::Main, 1)?;
+    decks::set_card(conn, vader_deck, "SOR_020", Zone::Main, 1)?;
+    for card_id in ["SOR_100", "SOR_130", "SOR_140", "SOR_171"] {
+        decks::set_card(conn, vader_deck, card_id, Zone::Main, 3)?;
+    }
+    let bounty_deck = decks::create(
         conn,
         &NewDeck {
-            name: "Vintage Base Brawl".into(),
-            description: Some("A casual deck idea using Base Set classics.".into()),
-            format: "casual".into_some(),
+            name: "Bounty Hunters".into(),
+            description: Some("A casual deck idea around Cad Bane.".into()),
+            format: "premier".into_some(),
             owner: "Alice".into_some(),
             state: "idea".into_some(),
             sleeve_color: None,
             storage_location: None,
-            notes: "Needs more energy.".into_some(),
+            notes: "Needs a lot more bounties.".into_some(),
         },
     )?;
+    decks::set_card(conn, bounty_deck, "SHD_001", Zone::Main, 1)?;
+    decks::set_card(conn, bounty_deck, "SHD_100", Zone::Main, 3)?;
 
     // --- Orders --------------------------------------------------------
     // One received order and one still-open order. `orders::create` seeds
@@ -1212,25 +1366,25 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             order_number: "TCG-100001".into_some(),
             source: "tcgplayer".into(),
             seller_name: "CardKingdomLA".into_some(),
-            order_date: "2024-01-05".into_some(),
-            subtotal: Some(31.50),
+            order_date: "2025-06-05".into_some(),
+            subtotal: Some(4.75),
             shipping: Some(4.99),
-            tax: Some(2.84),
-            total: Some(39.33),
+            tax: Some(0.00),
+            total: Some(9.74),
             shipping_status: "delivered".into_some(),
-            estimated_delivery: "2024-01-12".into_some(),
-            notes: "Singles for the Charizard deck.".into_some(),
+            estimated_delivery: "2025-06-09".into_some(),
+            notes: "Singles for the Luke deck.".into_some(),
         },
         &[
             OrderLine {
-                printing_id: "sv3pt5-6-holo".into(),
-                quantity: 1,
-                purchase_price: Some(24.00),
+                printing_id: printing_id("SOR", "070", "Normal"),
+                quantity: 3,
+                purchase_price: Some(0.25),
             },
             OrderLine {
-                printing_id: "sv3pt5-4-normal".into(),
-                quantity: 2,
-                purchase_price: Some(1.00),
+                printing_id: printing_id("SOR", "170", "Foil"),
+                quantity: 1,
+                purchase_price: Some(4.00),
             },
         ],
     )?;
@@ -1241,20 +1395,20 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
         &NewOrder {
             order_number: "EBAY-55012".into_some(),
             source: "ebay".into(),
-            seller_name: "vintage_pulls".into_some(),
-            order_date: "2024-01-14".into_some(),
-            subtotal: Some(320.00),
+            seller_name: "hyperspace_pulls".into_some(),
+            order_date: "2025-06-14".into_some(),
+            subtotal: Some(75.00),
             shipping: Some(0.00),
             tax: Some(0.00),
-            total: Some(320.00),
+            total: Some(75.00),
             shipping_status: "shipped".into_some(),
-            estimated_delivery: "2024-01-22".into_some(),
-            notes: "Base Set Charizard — still in transit.".into_some(),
+            estimated_delivery: "2025-06-22".into_some(),
+            notes: "Showcase Luke — still in transit.".into_some(),
         },
         &[OrderLine {
-            printing_id: "base1-4-holo".into(),
+            printing_id: printing_id("SOR", "520", "Normal"),
             quantity: 1,
-            purchase_price: Some(320.00),
+            purchase_price: Some(75.00),
         }],
     )?;
 
@@ -1265,8 +1419,8 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
         conn,
         &NewBatch {
             batch_type: "manual_id".into(),
-            name: "Vintage holo entry".into_some(),
-            notes: "Hand-entered Base Set holos.".into_some(),
+            name: "Hyperspace entry".into_some(),
+            notes: "Hand-entered Hyperspace and Showcase cards.".into_some(),
             order_id: None,
             binder_id: Some(vault),
         },
@@ -1275,7 +1429,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
         conn,
         &NewBatch {
             batch_type: "binder_click".into(),
-            name: "151 binder page-through".into_some(),
+            name: "Spark of Rebellion binder page-through".into_some(),
             notes: "Registered via the binder-page browser.".into_some(),
             order_id: None,
             binder_id: Some(masters),
@@ -1285,18 +1439,33 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
         conn,
         &NewBatch {
             batch_type: "csv_manabox".into(),
-            name: "ManaBox export 2024-01".into_some(),
-            notes: "Bulk import from a ManaBox CSV.".into_some(),
+            name: "CSV export 2025-06".into_some(),
+            notes: "Bulk import from a CSV.".into_some(),
             order_id: None,
             binder_id: Some(trade_binder),
         },
     )?;
 
+    // --- A user printing -----------------------------------------------
+    // A variant the catalog does not model: the escape hatch for a misprint.
+    let misprint = user_printings::insert(
+        conn,
+        &NewUserPrinting {
+            card_id: "SOR_193".into(),
+            description: Some("Misprint — missing foil stamp.".into()),
+        },
+    )?;
+
+    // `created_at` is a column default, so it reads SQLite's clock rather than
+    // the pinned one; date it from the fixture's own timeline.
+    conn.execute(
+        "UPDATE user_printings SET created_at = ?1 WHERE printing_id = ?2",
+        rusqlite::params![ACQUIRED_AT, misprint.printing_id],
+    )?;
+
     // --- Collection copies --------------------------------------------
-    // Each tuple: printing_id, condition, status, source, binder, deck,
-    // batch, purchase_price, notes.
     struct Copy {
-        printing_id: &'static str,
+        printing_id: String,
         condition: &'static str,
         status: &'static str,
         source: &'static str,
@@ -1306,266 +1475,191 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
         price: Option<f64>,
         notes: Option<&'static str>,
     }
+    // A copy with the common defaults; the table below overrides the rest.
+    let copy = |set: &str, number: &str, finish: &str, condition: &'static str| Copy {
+        printing_id: printing_id(set, number, finish),
+        condition,
+        status: "owned",
+        source: "manual_id",
+        binder: None,
+        deck: None,
+        batch: None,
+        price: None,
+        notes: None,
+    };
     let copies = vec![
-        // Vintage holos — manual batch, Vintage Vault binder.
+        // Hyperspace Vault — manual batch.
         Copy {
-            printing_id: "base1-4-holo",
-            condition: "Lightly Played",
-            status: "owned",
-            source: "manual_id",
             binder: Some(vault),
-            deck: None,
             batch: Some(manual_batch),
-            price: Some(280.00),
-            notes: Some("Childhood card — well loved."),
+            price: Some(28.00),
+            notes: Some("Hyperspace Luke — foil."),
+            ..copy("SOR", "262", "Foil", "Near Mint")
         },
         Copy {
-            printing_id: "base1-2-holo",
-            condition: "Near Mint",
-            status: "owned",
-            source: "manual_id",
             binder: Some(vault),
-            deck: None,
             batch: Some(manual_batch),
-            price: Some(140.00),
-            notes: None,
+            price: Some(16.00),
+            ..copy("SOR", "264", "Normal", "Lightly Played")
         },
         Copy {
-            printing_id: "base1-15-holo",
-            condition: "Moderately Played",
-            status: "owned",
-            source: "manual_id",
             binder: Some(vault),
-            deck: None,
             batch: Some(manual_batch),
-            price: Some(95.00),
-            notes: None,
+            price: Some(120.00),
+            notes: Some("Showcase Falcon — the chase card."),
+            ..copy("SOR", "521", "Normal", "Near Mint")
         },
         Copy {
-            printing_id: "base1-7-holo",
-            condition: "Near Mint",
-            status: "owned",
-            source: "manual_id",
             binder: Some(vault),
-            deck: None,
             batch: Some(manual_batch),
-            price: Some(22.00),
-            notes: None,
+            price: Some(40.00),
+            ..copy("SHD", "515", "Normal", "Near Mint")
+        },
+        Copy {
+            binder: Some(vault),
+            batch: Some(manual_batch),
+            price: Some(6.50),
+            ..copy("SOR", "263", "Normal", "Near Mint")
         },
         // A graded card (set via direct UPDATE after insert).
         Copy {
-            printing_id: "base1-24-holo",
-            condition: "Near Mint",
-            status: "owned",
-            source: "manual_id",
             binder: Some(vault),
-            deck: None,
             batch: Some(manual_batch),
-            price: Some(60.00),
-            notes: Some("PSA 8 slab."),
+            price: Some(70.00),
+            notes: Some("PSA 9 slab."),
+            ..copy("SOR", "520", "Normal", "Near Mint")
         },
-        // 151 binder-click registrations — Master Set binder.
+        // Spark of Rebellion binder-click registrations — Master Set binder.
         Copy {
-            printing_id: "sv3pt5-1-normal",
-            condition: "Near Mint",
-            status: "owned",
             source: "binder_click",
             binder: Some(masters),
-            deck: None,
             batch: Some(click_batch),
-            price: None,
-            notes: None,
+            ..copy("SOR", "005", "Normal", "Near Mint")
         },
         Copy {
-            printing_id: "sv3pt5-1-reverse_holo",
-            condition: "Near Mint",
-            status: "owned",
             source: "binder_click",
             binder: Some(masters),
-            deck: None,
             batch: Some(click_batch),
-            price: None,
-            notes: None,
+            ..copy("SOR", "005", "Foil", "Near Mint")
         },
         Copy {
-            printing_id: "sv3pt5-25-normal",
-            condition: "Near Mint",
-            status: "owned",
             source: "binder_click",
             binder: Some(masters),
-            deck: None,
             batch: Some(click_batch),
-            price: None,
-            notes: None,
+            ..copy("SOR", "010", "Normal", "Near Mint")
         },
         Copy {
-            printing_id: "sv3pt5-25-reverse_holo",
-            condition: "Lightly Played",
-            status: "owned",
             source: "binder_click",
             binder: Some(masters),
-            deck: None,
             batch: Some(click_batch),
-            price: None,
-            notes: None,
+            ..copy("SOR", "010", "Foil", "Lightly Played")
         },
         Copy {
-            printing_id: "sv3pt5-131-holo",
-            condition: "Near Mint",
-            status: "owned",
             source: "binder_click",
             binder: Some(masters),
-            deck: None,
+            batch: Some(click_batch),
+            ..copy("SOR", "020", "Normal", "Near Mint")
+        },
+        Copy {
+            source: "binder_click",
+            binder: Some(masters),
+            batch: Some(click_batch),
+            price: Some(0.10),
+            ..copy("SOR", "024", "Normal", "Near Mint")
+        },
+        Copy {
+            source: "binder_click",
+            binder: Some(masters),
+            batch: Some(click_batch),
+            price: Some(5.50),
+            ..copy("SOR", "193", "Normal", "Near Mint")
+        },
+        Copy {
+            source: "binder_click",
+            binder: Some(masters),
             batch: Some(click_batch),
             price: Some(3.00),
-            notes: None,
+            notes: Some("Foil Vanquish."),
+            ..copy("SOR", "170", "Foil", "Near Mint")
         },
+        // CSV import — Trade Binder.
         Copy {
-            printing_id: "sv3pt5-166-holo",
-            condition: "Near Mint",
-            status: "owned",
-            source: "binder_click",
-            binder: Some(masters),
-            deck: None,
-            batch: Some(click_batch),
-            price: Some(8.50),
-            notes: Some("Bulbasaur illustration rare."),
-        },
-        Copy {
-            printing_id: "sv3pt5-201-holo",
-            condition: "Near Mint",
-            status: "owned",
-            source: "binder_click",
-            binder: Some(masters),
-            deck: None,
-            batch: Some(click_batch),
-            price: Some(95.00),
-            notes: Some("Mew ex hyper rare — chase card."),
-        },
-        // ManaBox CSV import — Trade Binder.
-        Copy {
-            printing_id: "sv8-3-normal",
-            condition: "Near Mint",
-            status: "owned",
             source: "csv_manabox",
             binder: Some(trade_binder),
-            deck: None,
             batch: Some(csv_batch),
-            price: None,
-            notes: None,
+            ..copy("SHD", "001", "Normal", "Near Mint")
         },
         Copy {
-            printing_id: "sv8-32-normal",
-            condition: "Near Mint",
-            status: "owned",
             source: "csv_manabox",
             binder: Some(trade_binder),
-            deck: None,
             batch: Some(csv_batch),
-            price: None,
-            notes: None,
+            ..copy("SHD", "020", "Normal", "Near Mint")
         },
         Copy {
-            printing_id: "sv8-120-normal",
-            condition: "Lightly Played",
-            status: "owned",
             source: "csv_manabox",
             binder: Some(trade_binder),
-            deck: None,
             batch: Some(csv_batch),
-            price: None,
-            notes: None,
+            ..copy("JTL", "050", "Normal", "Lightly Played")
         },
         Copy {
-            printing_id: "sv8-160-holo",
-            condition: "Near Mint",
             status: "listed",
             source: "csv_manabox",
             binder: Some(trade_binder),
-            deck: None,
             batch: Some(csv_batch),
-            price: Some(18.00),
-            notes: Some("Listed for trade — Latias ex."),
+            price: Some(5.00),
+            notes: Some("Listed for trade — Wedge."),
+            ..copy("JTL", "001", "Foil", "Near Mint")
         },
-        // Cards built into the Charizard ex Control deck.
+        // Cards built into the Luke Vigilance Midrange deck.
         Copy {
-            printing_id: "sv3pt5-6-holo",
-            condition: "Near Mint",
-            status: "owned",
-            source: "manual_id",
-            binder: None,
-            deck: Some(charizard_deck),
-            batch: None,
-            price: Some(24.00),
-            notes: Some("Deck centrepiece."),
+            deck: Some(luke_deck),
+            price: Some(3.00),
+            notes: Some("Deck leader."),
+            ..copy("SOR", "005", "Normal", "Near Mint")
         },
         Copy {
-            printing_id: "sv3pt5-4-normal",
-            condition: "Near Mint",
-            status: "owned",
-            source: "manual_id",
-            binder: None,
-            deck: Some(charizard_deck),
-            batch: None,
-            price: Some(1.00),
-            notes: None,
+            deck: Some(luke_deck),
+            price: Some(0.10),
+            ..copy("SOR", "024", "Normal", "Near Mint")
         },
         Copy {
-            printing_id: "sv3pt5-7-normal",
-            condition: "Near Mint",
-            status: "owned",
-            source: "manual_id",
-            binder: None,
-            deck: Some(charizard_deck),
-            batch: None,
-            price: None,
-            notes: None,
+            deck: Some(luke_deck),
+            ..copy("SOR", "070", "Normal", "Near Mint")
+        },
+        Copy {
+            deck: Some(luke_deck),
+            ..copy("SOR", "180", "Normal", "Near Mint")
         },
         // Loose owned copies — unassigned.
         Copy {
-            printing_id: "sv8-57-holo",
-            condition: "Near Mint",
-            status: "owned",
-            source: "manual_id",
-            binder: None,
-            deck: None,
-            batch: None,
-            price: Some(12.00),
-            notes: Some("Pikachu ex — undecided home."),
+            price: Some(0.10),
+            notes: Some("Wampa — undecided home."),
+            ..copy("SOR", "085", "Normal", "Near Mint")
         },
+        copy("SOR", "100", "Normal", "Heavily Played"),
+        // The off-catalog copy.
         Copy {
-            printing_id: "sv3pt5-105-normal",
-            condition: "Heavily Played",
-            status: "owned",
-            source: "manual_id",
-            binder: None,
-            deck: None,
-            batch: None,
-            price: None,
-            notes: None,
+            printing_id: misprint.printing_id.clone(),
+            notes: Some("The misprint."),
+            ..copy("SOR", "193", "Normal", "Near Mint")
         },
         // A sold copy — exercises the disposed-status path.
         Copy {
-            printing_id: "sv3pt5-65-holo",
-            condition: "Near Mint",
             status: "sold",
-            source: "manual_id",
-            binder: None,
-            deck: None,
-            batch: None,
-            price: Some(9.00),
+            price: Some(0.20),
             notes: Some("Sold to a friend."),
+            ..copy("SOR", "130", "Foil", "Near Mint")
         },
     ];
     for c in &copies {
         let id = collection::add(
             conn,
             &NewCopy {
-                printing_id: c.printing_id.into(),
+                printing_id: c.printing_id.clone(),
                 condition: c.condition.into_some(),
                 language: None,
                 purchase_price: c.price,
-                acquired_at: Some("2024-01-10T12:00:00Z".into()),
+                acquired_at: Some(ACQUIRED_AT.into()),
                 source: c.source.into(),
                 status: c.status.into_some(),
                 notes: c.notes.map(str::to_owned),
@@ -1576,10 +1670,10 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             },
         )?;
         // `NewCopy` has no grading fields — apply the one graded card here.
-        if c.printing_id == "base1-24-holo" {
+        if c.printing_id == printing_id("SOR", "520", "Normal") {
             conn.execute(
                 "UPDATE collection SET graded = 1, grade_company = 'PSA', \
-                   grade_value = 8.0, grade_cert = '12345678' WHERE id = ?1",
+                   grade_value = 9.0, grade_cert = '12345678' WHERE id = ?1",
                 [id],
             )?;
         }
@@ -1592,11 +1686,11 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             product_id: 900002,
             quantity: Some(1),
             condition: "Near Mint".into_some(),
-            purchase_price: Some(49.99),
-            purchase_date: "2023-09-22".into_some(),
+            purchase_price: Some(89.99),
+            purchase_date: "2025-05-20".into_some(),
             source: "lgs".into_some(),
             seller_name: "Local Game Store".into_some(),
-            notes: "Sealed Two-Player Starter — keeping factory sealed.".into_some(),
+            notes: "Sealed Shadows of the Galaxy box — keeping factory sealed.".into_some(),
         },
     )?;
     sealed::add(
@@ -1606,10 +1700,10 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             quantity: Some(6),
             condition: "Near Mint".into_some(),
             purchase_price: Some(4.49),
-            purchase_date: "2024-11-08".into_some(),
+            purchase_date: "2025-05-24".into_some(),
             source: "lgs".into_some(),
             seller_name: "Local Game Store".into_some(),
-            notes: "Loose Shadows of the Galaxy packs to rip.".into_some(),
+            notes: "Loose Jump to Lightspeed packs to rip.".into_some(),
         },
     )?;
 
@@ -1617,31 +1711,31 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
     wishlist::add(
         conn,
         &NewWish {
-            card_id: "sv3pt5-199".into(),
-            printing_id: "sv3pt5-199-holo".into_some(),
-            max_price: Some(250.00),
+            card_id: "SHD_001".into(),
+            printing_id: printing_id("SHD", "515", "Normal").into_some(),
+            max_price: Some(50.00),
             priority: Some(3),
-            notes: "Charizard ex SIR — top of the want list.".into_some(),
+            notes: "Showcase Cad Bane — top of the want list.".into_some(),
             ..Default::default()
         },
     )?;
     wishlist::add(
         conn,
         &NewWish {
-            card_id: "sv8-238".into(),
+            card_id: "JTL_001".into(),
             printing_id: None,
-            max_price: Some(120.00),
+            max_price: Some(8.00),
             priority: Some(2),
-            notes: "Pikachu ex SIR from Surging Sparks.".into_some(),
+            notes: "Any printing of Wedge.".into_some(),
             ..Default::default()
         },
     )?;
     wishlist::add(
         conn,
         &NewWish {
-            card_id: "base1-4".into(),
-            printing_id: "base1-4-holo".into_some(),
-            max_price: Some(300.00),
+            card_id: "SOR_005".into(),
+            printing_id: printing_id("SOR", "520", "Normal").into_some(),
+            max_price: Some(90.00),
             priority: Some(1),
             notes: "Already ordered — kept as a price watch.".into_some(),
             ..Default::default()
@@ -1860,7 +1954,8 @@ mod tests {
     }
 
     /// The committed `shared.sqlite` must carry every table, view and column
-    /// `schema_shared.sql` declares — because it is the ONE database this
+    /// a fresh `open_shared` declares (the catalog schema and dumpstar-db's
+    /// overlay together) — because it is the ONE database this
     /// project never repairs on open. Every other file converges: the schema
     /// is re-applied with `CREATE … IF NOT EXISTS` and `add_missing_columns`
     /// ALTERs the rest. The catalog is ATTACHed READ-ONLY at request time, so
@@ -1882,10 +1977,7 @@ mod tests {
         let declared = objects(&reference).unwrap();
         // Not vacuous: a reference that declared nothing would pass whatever
         // the fixture holds.
-        assert!(
-            !declared.is_empty(),
-            "schema_shared.sql declared no objects"
-        );
+        assert!(!declared.is_empty(), "open_shared declared no objects");
 
         let fixture = dumpstar_db::open_shared_readonly(&committed_shared()).unwrap();
         let present = objects(&fixture).unwrap();
@@ -1905,8 +1997,8 @@ mod tests {
 
         assert!(
             missing.is_empty(),
-            "tests/ui/fixtures/shared.sqlite is behind schema_shared.sql \
-             and is never repaired on open (it is ATTACHed read-only). \
+            "tests/ui/fixtures/shared.sqlite is behind the schema open_shared \
+             creates and is never repaired on open (it is ATTACHed read-only). \
              Missing: {}. Regenerate it: cargo run --bin dumpstar -- seed-fixture",
             missing.join(", "),
         );

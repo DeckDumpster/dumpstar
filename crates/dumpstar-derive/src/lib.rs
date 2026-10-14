@@ -31,7 +31,7 @@
 //!
 //! - **the clock** ([`DeriveClock`]) — read once by the landing side,
 //!   recorded in the run's manifests, and read back by the deriving side. See
-//!   `clock.rs`, which is the whole argument.
+//!   `dumpster_kit_derive::clock`, which is the whole argument.
 //! - **repo files** — `data/*.json` are compiled in (`include_str!`), so both
 //!   sides of a comparison are running the same build's copy by construction.
 //!
@@ -43,8 +43,6 @@
 //! materialised prices, and [`land`] fetches the TCGCSV Star Wars: Unlimited
 //! category into `raw/`.
 
-pub mod clock;
-
 use std::path::Path;
 use std::sync::Arc;
 
@@ -52,9 +50,11 @@ use rusqlite::Connection;
 
 use dumpstar_ingest::landing::{ReplaySource, Wire};
 use dumpstar_ingest::tcgcsv::TcgcsvClient;
-use dumpstar_lake::RawLanding;
+use dumpster_kit_lake::RawLanding;
 
-pub use clock::DeriveClock;
+// The clock and the landing bracket are the kit's; re-exported so the site's entry points
+// (`land`, `derive`) and their callers name them from one place.
+pub use dumpster_kit_derive::{DeriveClock, finalize_landing};
 
 /// Everything a derivation needs that is not the database.
 pub struct Options<'a> {
@@ -154,45 +154,4 @@ fn land_tcgcsv(options: &Options<'_>) -> anyhow::Result<usize> {
         client.fetch_prices(group.group_id)?;
     }
     Ok(groups.len())
-}
-
-/// Write the run's manifests and report what landed.
-///
-/// `error` is the acquisition phase's failure, if it had one; every manifest
-/// then records that the run stopped early. A manifest that cannot be
-/// written is an error in its own right — an unwritten manifest is
-/// indistinguishable from a run that never got that far — but it must not
-/// mask the fetch failure that is the more useful diagnosis.
-pub fn finalize_landing(
-    landing: &Arc<RawLanding>,
-    error: Option<&anyhow::Error>,
-) -> anyhow::Result<()> {
-    let text = error.map(|e| format!("{e:#}"));
-    let outcome = landing.finalize(text.as_deref());
-
-    for manifest in landing.manifests() {
-        println!(
-            "  raw: {}/{} — {} part(s), {} byte(s), {}",
-            manifest.source,
-            manifest.dataset,
-            manifest.parts.len(),
-            manifest.total_bytes(),
-            if manifest.complete {
-                "complete".to_string()
-            } else {
-                format!("INCOMPLETE ({} failure(s))", manifest.failures.len())
-            }
-        );
-    }
-
-    match outcome {
-        Ok(()) => Ok(()),
-        // The acquisition error is the one worth propagating; this one still
-        // has to be said out loud rather than dropped.
-        Err(e) if error.is_some() => {
-            eprintln!("WARN: could not write the raw landing manifests: {e}");
-            Ok(())
-        }
-        Err(e) => Err(e.into()),
-    }
 }

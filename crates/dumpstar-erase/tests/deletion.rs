@@ -24,9 +24,9 @@
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-use dumpstar_erase::verify::Check;
-use dumpstar_erase::{StrayCopy, Verdict};
-use dumpstar_lake::{DirStore, ObjectPurge, TenantZoneConfig};
+use dumpster_kit_erase::verify::Check;
+use dumpster_kit_erase::{StrayCopy, Verdict};
+use dumpster_kit_lake::{DirStore, ObjectPurge, TenantZoneConfig};
 
 const ALICE: &str = "01J0000000000000000000000A";
 const BOB: &str = "01J0000000000000000000000B";
@@ -55,15 +55,15 @@ impl World {
         std::fs::create_dir_all(&zone_root).unwrap();
 
         let previous_home = std::env::var("DUMPSTAR_HOME").ok();
-        let previous_key = std::env::var(dumpstar_keys::master::KEY_ENV_FILE).ok();
+        let previous_key = std::env::var(dumpstar_ship::key_env().key_file_var).ok();
         unsafe {
             std::env::set_var("DUMPSTAR_HOME", &home);
             std::env::set_var(
-                dumpstar_keys::master::KEY_ENV_FILE,
+                dumpstar_ship::key_env().key_file_var,
                 dir.path().join("tenant-master.key"),
             );
         }
-        dumpstar_keys::master::create().unwrap();
+        dumpster_kit_keys::master::create(&dumpstar_ship::key_env()).unwrap();
 
         World {
             _dir: dir,
@@ -72,7 +72,7 @@ impl World {
             zone: DirStore::new(zone_root),
             config: TenantZoneConfig {
                 profile: "dumpstar-tenant-test".to_string(),
-                prefix: dumpstar_lake::TENANT_ROOT.to_string(),
+                prefix: dumpster_kit_lake::TENANT_ROOT.to_string(),
             },
             previous_home,
             previous_key,
@@ -99,7 +99,7 @@ impl World {
             .join("tenants")
             .join(format!("{database_id}.sqlite"));
         drop(dumpstar_db::open_user(&path).unwrap());
-        dumpstar_keys::state::register(&registry, database_id).unwrap();
+        dumpster_kit_keys::state::register(&registry, database_id).unwrap();
 
         dumpstar_db::tenants::list()
             .unwrap()
@@ -124,15 +124,13 @@ impl World {
     }
 
     /// Run the real shipper over every tenant.
-    fn ship(&self) -> dumpstar_ship::Report {
+    fn ship(&self) -> dumpster_kit_ship::Report {
         let tenants = dumpstar_db::tenants::list().unwrap();
-        dumpstar_ship::ship_all(
-            &self.zone,
-            &self.config,
-            &self.registry(),
-            &tenants,
-            dumpstar_ship::run::DEFAULT_MAX_ROWS,
-        )
+        let registry = self.registry();
+        let keys = dumpstar_ship::key_env();
+        let ctx = dumpstar_ship::context(&keys, &self.zone, &self.config, &registry);
+        let tenants: Vec<_> = tenants.iter().map(dumpstar_ship::kit_tenant).collect();
+        dumpster_kit_ship::ship_all(&ctx, &tenants, dumpster_kit_ship::run::DEFAULT_MAX_ROWS)
     }
 
     /// Write a valuations object for `database_id` by hand.
@@ -143,18 +141,20 @@ impl World {
     /// the real key layout.
     fn seal_a_valuation(&self, database_id: &str) -> String {
         let object_key = self.config.rooted(
-            dumpstar_lake::part_key(
+            dumpster_kit_lake::part_key(
                 database_id,
-                dumpstar_lake::TenantDataset::Valuations,
+                dumpster_kit_lake::TenantDataset::Valuations,
                 "2026-08-14",
                 0,
             )
             .unwrap(),
         );
-        let key = dumpstar_keys::tenant_key(&self.registry(), database_id).unwrap();
+        let key =
+            dumpster_kit_keys::tenant_key(&dumpstar_ship::key_env(), &self.registry(), database_id)
+                .unwrap();
         let sealed =
-            dumpstar_ship::cipher::seal(&key, &object_key, b"PAR1 what it was worth").unwrap();
-        use dumpstar_lake::ObjectStore;
+            dumpster_kit_ship::cipher::seal(&key, &object_key, b"PAR1 what it was worth").unwrap();
+        use dumpster_kit_lake::ObjectStore;
         self.zone.put(&object_key, sealed).unwrap();
         object_key
     }
@@ -162,7 +162,7 @@ impl World {
     /// Take a copy of one of a tenant's objects, exactly as it is in the
     /// zone — the "stray copy" a deletion has to be proven against.
     fn copy_out(&self, object_key: &str) -> StrayCopy {
-        use dumpstar_lake::ObjectSource;
+        use dumpster_kit_lake::ObjectSource;
         StrayCopy {
             object_key: object_key.to_string(),
             bytes: self.zone.get(object_key).unwrap(),
@@ -181,11 +181,11 @@ impl Drop for World {
             None => unsafe { std::env::remove_var(k) },
         };
         restore("DUMPSTAR_HOME", &self.previous_home);
-        restore(dumpstar_keys::master::KEY_ENV_FILE, &self.previous_key);
+        restore(&dumpstar_ship::key_env().key_file_var, &self.previous_key);
     }
 }
 
-fn proof(verdict: &Verdict, check: Check) -> &dumpstar_erase::Proof {
+fn proof(verdict: &Verdict, check: Check) -> &dumpster_kit_erase::Proof {
     verdict
         .proofs
         .iter()
@@ -205,11 +205,12 @@ fn a_deleted_tenant_s_shipped_holdings_are_unreachable_by_every_path() {
     world.add_holdings(&alice, 6);
     assert_eq!(world.ship().events(), 6);
 
-    let shipped = world.keys_under(&dumpstar_lake::tenant_prefix(ALICE).unwrap());
+    let shipped = world.keys_under(&dumpster_kit_lake::tenant_prefix(ALICE).unwrap());
     assert_eq!(shipped.len(), 1, "one part: {shipped:?}");
     let stray = world.copy_out(&shipped[0]);
 
-    let done = dumpstar_erase::delete(
+    let done = dumpster_kit_erase::delete(
+        &dumpstar_ship::key_env(),
         &world.zone,
         &world.config,
         &world.registry(),
@@ -243,17 +244,19 @@ fn a_copy_that_survived_the_drop_is_ciphertext_nobody_holds_a_key_for() {
     world.add_holdings(&alice, 4);
     world.ship();
 
-    let shipped = world.keys_under(&dumpstar_lake::tenant_prefix(ALICE).unwrap());
+    let shipped = world.keys_under(&dumpster_kit_lake::tenant_prefix(ALICE).unwrap());
     let stray = world.copy_out(&shipped[0]);
 
     // Before: the copy opens, and the plaintext is a tenant's holdings.
-    let key = dumpstar_keys::tenant_key(&world.registry(), ALICE).unwrap();
-    let plaintext = dumpstar_ship::cipher::open(&key, &stray.object_key, &stray.bytes).unwrap();
-    let events = dumpstar_ship::encode::decode(plaintext).unwrap();
+    let key =
+        dumpster_kit_keys::tenant_key(&dumpstar_ship::key_env(), &world.registry(), ALICE).unwrap();
+    let plaintext = dumpster_kit_ship::cipher::open(&key, &stray.object_key, &stray.bytes).unwrap();
+    let events = dumpster_kit_ship::encode::decode(plaintext).unwrap();
     assert_eq!(events.len(), 4);
     drop(key);
 
-    dumpstar_erase::delete(
+    dumpster_kit_erase::delete(
+        &dumpstar_ship::key_env(),
         &world.zone,
         &world.config,
         &world.registry(),
@@ -264,13 +267,15 @@ fn a_copy_that_survived_the_drop_is_ciphertext_nobody_holds_a_key_for() {
     .unwrap();
 
     // After: the bytes are exactly the same bytes, and nothing can open them.
-    let err = dumpstar_keys::tenant_key(&world.registry(), ALICE).unwrap_err();
+    let err = dumpster_kit_keys::tenant_key(&dumpstar_ship::key_env(), &world.registry(), ALICE)
+        .unwrap_err();
     assert!(
         err.is_deliberate_revocation(),
         "the refusal must be a revocation, not a broken box: {err}"
     );
 
-    let verdict = dumpstar_erase::verify(
+    let verdict = dumpster_kit_erase::verify(
+        &dumpstar_ship::key_env(),
         &world.zone,
         &world.config,
         &world.registry(),
@@ -294,14 +299,15 @@ fn before_the_deletion_every_one_of_those_checks_reports_the_path_open() {
     world.ship();
     world.seal_a_valuation(ALICE);
 
-    let shipped = world.keys_under(&dumpstar_lake::tenant_prefix(ALICE).unwrap());
+    let shipped = world.keys_under(&dumpster_kit_lake::tenant_prefix(ALICE).unwrap());
     let holdings = shipped
         .iter()
         .find(|k| k.contains("dataset=holdings"))
         .unwrap();
     let stray = world.copy_out(holdings);
 
-    let verdict = dumpstar_erase::verify(
+    let verdict = dumpster_kit_erase::verify(
+        &dumpstar_ship::key_env(),
         &world.zone,
         &world.config,
         &world.registry(),
@@ -349,7 +355,8 @@ fn a_deletion_takes_the_valuations_with_the_holdings() {
     world.ship();
     let valuation = world.seal_a_valuation(ALICE);
 
-    let done = dumpstar_erase::delete(
+    let done = dumpster_kit_erase::delete(
+        &dumpstar_ship::key_env(),
         &world.zone,
         &world.config,
         &world.registry(),
@@ -381,11 +388,12 @@ fn deleting_one_tenant_leaves_the_others_shipped_data_readable() {
     world.add_holdings(&bob, 5);
     world.ship();
 
-    let bobs = world.keys_under(&dumpstar_lake::tenant_prefix(BOB).unwrap());
+    let bobs = world.keys_under(&dumpster_kit_lake::tenant_prefix(BOB).unwrap());
     assert_eq!(bobs.len(), 1);
     let bobs_copy = world.copy_out(&bobs[0]);
 
-    dumpstar_erase::delete(
+    dumpster_kit_erase::delete(
+        &dumpstar_ship::key_env(),
         &world.zone,
         &world.config,
         &world.registry(),
@@ -398,18 +406,29 @@ fn deleting_one_tenant_leaves_the_others_shipped_data_readable() {
     // Bob's objects are there, his key derives, and his part still opens.
     assert_eq!(
         world
-            .keys_under(&dumpstar_lake::tenant_prefix(BOB).unwrap())
+            .keys_under(&dumpster_kit_lake::tenant_prefix(BOB).unwrap())
             .len(),
         1
     );
-    let key = dumpstar_keys::tenant_key(&world.registry(), BOB).unwrap();
+    let key =
+        dumpster_kit_keys::tenant_key(&dumpstar_ship::key_env(), &world.registry(), BOB).unwrap();
     let plaintext =
-        dumpstar_ship::cipher::open(&key, &bobs_copy.object_key, &bobs_copy.bytes).unwrap();
-    assert_eq!(dumpstar_ship::encode::decode(plaintext).unwrap().len(), 5);
+        dumpster_kit_ship::cipher::open(&key, &bobs_copy.object_key, &bobs_copy.bytes).unwrap();
+    assert_eq!(
+        dumpster_kit_ship::encode::decode(plaintext).unwrap().len(),
+        5
+    );
 
     // …and the same verification says Bob is NOT deleted.
-    let verdict =
-        dumpstar_erase::verify(&world.zone, &world.config, &world.registry(), BOB, None).unwrap();
+    let verdict = dumpster_kit_erase::verify(
+        &dumpstar_ship::key_env(),
+        &world.zone,
+        &world.config,
+        &world.registry(),
+        BOB,
+        None,
+    )
+    .unwrap();
     assert!(!verdict.proven());
 }
 
@@ -424,7 +443,8 @@ fn a_deleted_tenant_is_not_shipped_again() {
     world.add_holdings(&alice, 3);
     world.ship();
 
-    dumpstar_erase::delete(
+    dumpster_kit_erase::delete(
+        &dumpstar_ship::key_env(),
         &world.zone,
         &world.config,
         &world.registry(),
@@ -452,7 +472,7 @@ fn a_deleted_tenant_is_not_shipped_again() {
     assert_eq!(hers.parts, 0);
     assert!(
         world
-            .keys_under(&dumpstar_lake::tenant_prefix(ALICE).unwrap())
+            .keys_under(&dumpster_kit_lake::tenant_prefix(ALICE).unwrap())
             .is_empty(),
         "the shipper put data back under a dropped prefix"
     );
@@ -471,7 +491,8 @@ fn the_deletion_touches_no_collection_database_and_no_user_row() {
 
     let before = std::fs::read(&alice.path).unwrap();
 
-    dumpstar_erase::delete(
+    dumpster_kit_erase::delete(
+        &dumpstar_ship::key_env(),
         &world.zone,
         &world.config,
         &world.registry(),
@@ -498,7 +519,7 @@ fn the_deletion_touches_no_collection_database_and_no_user_row() {
 /// artifacts inherit the obligation" applies here too.
 ///
 /// SEEN RED: add the identity binding but skip the assertion, or run
-/// dumpstar_erase::delete without the identity_delete_all call.
+/// dumpster_kit_erase::delete without the identity_delete_all call.
 #[test]
 fn a_deletion_removes_identity_bindings() {
     let world = World::new();
@@ -524,7 +545,8 @@ fn a_deletion_removes_identity_bindings() {
         "fixture: alice must have one identity binding before the deletion"
     );
 
-    dumpstar_erase::delete(
+    dumpster_kit_erase::delete(
+        &dumpstar_ship::key_env(),
         &world.zone,
         &world.config,
         &world.registry(),
@@ -554,7 +576,8 @@ fn a_tenant_who_never_shipped_is_still_deleted_and_still_proven() {
     world.tenant("alice", ALICE);
     world.tenant("bob", BOB);
 
-    let done = dumpstar_erase::delete(
+    let done = dumpster_kit_erase::delete(
+        &dumpstar_ship::key_env(),
         &world.zone,
         &world.config,
         &world.registry(),

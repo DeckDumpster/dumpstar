@@ -158,6 +158,9 @@ pub fn add(conn: &mut Connection, new: &NewCopy) -> Result<i64> {
          VALUES (?1, NULL, ?2, ?3, 'added')",
         params![id, status, now()],
     )?;
+    if matches!(status, "owned" | "ordered") {
+        crate::wishlist::credit_copy(&tx, &new.printing_id, condition, new.purchase_price)?;
+    }
     tx.commit()?;
     Ok(id)
 }

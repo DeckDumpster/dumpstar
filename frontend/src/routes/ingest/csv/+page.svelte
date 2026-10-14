@@ -7,7 +7,7 @@
 	import type { CombinedReport } from '$lib/types/CombinedReport';
 	import type { CombinedCommitResult } from '$lib/types/CombinedCommitResult';
 
-	let format = $state('manabox');
+	let format = $state('tcgplayer');
 	let content = $state('');
 	let fileName = $state<string | null>(null);
 
@@ -235,7 +235,7 @@
 
 <h1>Import CSV</h1>
 <p class="muted">
-	Bring in a collection from ManaBox, a TCGplayer export, or Collectr. Other ways to add cards:
+	Bring in a collection from a TCGplayer export, a Dumpstar export, or Collectr. Other ways to add cards:
 	<a href="/ingest/manual">manual entry</a> · <a href="/ingest/order">paste an order</a>.
 </p>
 
@@ -251,9 +251,8 @@
 	<label>
 		Format
 		<select bind:value={format} onchange={clearResults}>
-			<option value="manabox">ManaBox</option>
 			<option value="tcgplayer">TCGplayer</option>
-			<option value="dumpstar">Dumpstar (pkmn.gg export)</option>
+			<option value="dumpstar">Dumpstar</option>
 			<option value="collectr">Collectr (cards + sealed)</option>
 		</select>
 	</label>

@@ -63,7 +63,7 @@
 >
 	<label>
 		Set code
-		<input type="text" placeholder="sv3pt5" bind:value={setCode} />
+		<input type="text" placeholder="sor" bind:value={setCode} />
 	</label>
 	<label>
 		Number

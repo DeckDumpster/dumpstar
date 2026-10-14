@@ -36,7 +36,7 @@
 
 	// Human-readable label for a URL segment. Pages can override the full
 	// trail via setBreadcrumbs() when a leaf label can't be derived (e.g.
-	// /browse/me2pt5 → "Ascended Heroes").
+	// /browse/sor → "Spark of Rebellion").
 	function labelFor(seg: string): string {
 		return seg
 			.split('-')

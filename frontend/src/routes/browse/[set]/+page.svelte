@@ -136,8 +136,8 @@
 	// Keep the breadcrumb in sync with the latest known label for this set.
 	// Uses binder.set.name once the API has resolved, the URL param as a
 	// placeholder before that, so the first paint after navigating here
-	// never falls back to the URL-derived "Browse › Base1" — and the
-	// "Base1 → Base" upgrade happens in the same frame as the data load
+	// never falls back to the URL-derived "Browse › sor" — and the
+	// "sor → Spark of Rebellion" upgrade happens in the same frame as the data load
 	// since $effect.pre runs before the DOM updates. No unmount cleanup
 	// needed — the breadcrumbs store is path-keyed.
 	$effect.pre(() => {

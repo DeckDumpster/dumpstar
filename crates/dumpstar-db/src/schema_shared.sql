@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS search_flags (
 -- ---------------------------------------------------------------------
 -- Sealed products (tcgcsv products that carry no collector number).
 -- Backfilled from tcgcsv_products on every convergence
--- (connection.rs::backfill_sealed); the catalog apply job does not write them.
+-- (connection.rs::backfill_sealed); their prices are the catalog apply job's.
 -- ---------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS sealed_products (
@@ -60,17 +60,8 @@ CREATE TABLE IF NOT EXISTS sealed_products (
 CREATE INDEX IF NOT EXISTS idx_sealed_products_set      ON sealed_products(set_code);
 CREATE INDEX IF NOT EXISTS idx_sealed_products_category ON sealed_products(category);
 
-CREATE TABLE IF NOT EXISTS sealed_prices (
-    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
-    tcgplayer_product_id  INTEGER NOT NULL,
-    low_price             REAL,
-    mid_price             REAL,
-    high_price            REAL,
-    market_price          REAL,
-    direct_low_price      REAL,
-    observed_at           TEXT NOT NULL,
-    UNIQUE(tcgplayer_product_id, observed_at)
-);
+-- `sealed_prices` itself is the catalog's (dumpstar-catalog schema.sql): the apply
+-- job writes it.
 CREATE INDEX IF NOT EXISTS idx_sealed_prices_product ON sealed_prices(tcgplayer_product_id);
 CREATE INDEX IF NOT EXISTS idx_sealed_prices_date    ON sealed_prices(observed_at);
 

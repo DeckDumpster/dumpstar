@@ -56,6 +56,7 @@ impl ApplyReport {
                 + self.printings
                 + self.crosswalk
                 + self.prices
+                + self.sealed_prices
                 + self.formats
                 + self.format_rules
                 + self.legality
@@ -359,7 +360,23 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
                 )
                 .ok();
             match product {
-                Some((None, ..)) => r.sealed_prices += 1,
+                Some((None, ..)) => {
+                    r.sealed_prices += tx.execute(
+                        "INSERT OR IGNORE INTO sealed_prices
+                           (tcgplayer_product_id, low_price, mid_price, high_price,
+                            market_price, direct_low_price, observed_at)
+                         VALUES (?1,?2,?3,?4,?5,?6,?7)",
+                        params![
+                            pr.tcgcsv_product_id,
+                            pr.low,
+                            pr.mid,
+                            pr.high,
+                            pr.market,
+                            pr.direct_low,
+                            pr.observed_on
+                        ],
+                    )?
+                }
                 Some((Some(n), ..)) if crosswalk::is_token_back_number(&n) => r.token_backs += 1,
                 Some((_, g, name))
                     if tcgcsv::group_info(g).is_some_and(|i| tcgcsv::is_ignored(&i, &name)) =>

@@ -2,7 +2,7 @@
  * Dumpstar's theme: the only visual decision this site makes on top of
  * dumpster-kit. src/lib/kit/tokens.css (pinned by kit.lock) declares every
  * role; this file adds a gold reference ramp and re-points the brand roles
- * (accent, link, focus, selection) at it, where pokedumpster keeps crimson.
+ * (accent, link, focus, selection) at it, where the kit default is crimson.
  * Like tokens.css it may hold raw colour literals and nothing else may, and
  * semantic roles stay pure aliases of the reference layer. It loads after the
  * kit's tokens, so equal-specificity declarations here win.

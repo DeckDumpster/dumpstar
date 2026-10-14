@@ -1,6 +1,6 @@
 start_page: /decks/1
 involves:
-  - deck detail card table with rows grouped by supertype
+  - deck detail card table
   - 'th columns: Name, Set, #, Variant, Condition, action'
   - Name cell links to the card detail page
   - action cell has a "Remove" link button
@@ -15,4 +15,4 @@ notes: >
   to render. Verify the table header contains the columns Name, Set, #,
   Variant, and Condition. Verify a card row shows the card name as a
   link, the set, the collector number, the variant, and the condition.
-  Verify rows are grouped under supertype headings. Take a screenshot.
+  Take a screenshot.

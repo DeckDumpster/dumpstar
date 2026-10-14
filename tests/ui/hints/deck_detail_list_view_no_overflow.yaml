@@ -1,6 +1,6 @@
 start_page: /decks/1
 involves:
-  - deck detail card table grouped by supertype
+  - deck detail card table
   - body should have no horizontal overflow (scrollWidth <= clientWidth)
 fixture_data:
   deck_id: 1

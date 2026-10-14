@@ -4,7 +4,6 @@ involves:
   - CollectionPicker modal with a search box and checkbox result rows
   - 'search box placeholder "Search your collection…"'
   - '"Add {n} to {deck name}" footer button confirms the selection'
-  - card table rows grouped by supertype (Pokémon / Trainer / Energy)
   - each row has a "Remove" link button that un-assigns the copy
 fixture_data:
   deck_id: 2

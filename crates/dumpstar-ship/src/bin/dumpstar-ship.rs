@@ -16,14 +16,14 @@
 //! ```
 //!
 //! Exit status is the run's, and there are four of them — see
-//! [`dumpstar_ship::run`]. `deploy/ship.sh` is what turns them into a journal
+//! [`dumpster_kit_ship::run`]. `deploy/ship.sh` is what turns them into a journal
 //! line and, for two of them, an alarm.
 
 use std::io::Write;
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
-use dumpstar_ship::run::{DEFAULT_MAX_ROWS, Outcome};
+use dumpster_kit_ship::run::{DEFAULT_MAX_ROWS, Outcome};
 
 #[derive(Parser)]
 #[command(
@@ -177,8 +177,8 @@ fn do_run(a: &RunArgs) -> anyhow::Result<i32> {
         return Ok(0);
     }
 
-    let (zone, config) = dumpstar_lake::open_tenant_zone()?;
-    let registry = dumpstar_keys::state::open()?;
+    let (zone, config) = dumpster_kit_lake::open_tenant_zone(&dumpstar_ship::lake_env())?;
+    let registry = dumpstar_ship::registry()?;
 
     println!(
         "==> shipping {} tenant(s) to {} as {}",
@@ -188,7 +188,10 @@ fn do_run(a: &RunArgs) -> anyhow::Result<i32> {
     );
     let _ = std::io::stdout().flush();
 
-    let report = dumpstar_ship::ship_all(zone.as_ref(), &config, &registry, &tenants, a.max_rows);
+    let keys = dumpstar_ship::key_env();
+    let ctx = dumpstar_ship::context(&keys, zone.as_ref(), &config, &registry);
+    let kit_tenants: Vec<_> = tenants.iter().map(dumpstar_ship::kit_tenant).collect();
+    let report = dumpster_kit_ship::ship_all(&ctx, &kit_tenants, a.max_rows);
     let outcome = report.outcome();
 
     println!();
@@ -255,14 +258,14 @@ fn do_status(a: &ScopeArgs) -> anyhow::Result<i32> {
             continue;
         }
         let conn = dumpstar_db::open_user(&tenant.path)?;
-        let gaps = dumpstar_ship::cursor::gaps(&conn)?;
+        let gaps = dumpster_kit_ship::cursor::gaps(&conn)?;
         any_gap |= !gaps.is_empty();
         println!(
             "{:<28} {:<14} {:>10} {:>8}  {}",
             tenant.user.database_id,
             tenant.user.handle,
-            dumpstar_ship::cursor::shipped_thru(&conn)?,
-            dumpstar_ship::cursor::pending(&conn)?,
+            dumpster_kit_ship::cursor::shipped_thru(&conn)?,
+            dumpster_kit_ship::cursor::pending(&conn)?,
             if gaps.is_empty() {
                 "-".to_string()
             } else {
@@ -302,8 +305,8 @@ fn do_holdings(a: &ScopeArgs) -> anyhow::Result<i32> {
         return Ok(0);
     }
 
-    let (source, config) = dumpstar_lake::open_tenant_zone_reader()?;
-    let registry = dumpstar_keys::state::open()?;
+    let (source, config) = dumpster_kit_lake::open_tenant_zone_reader(&dumpstar_ship::lake_env())?;
+    let registry = dumpstar_ship::registry()?;
     let read_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
 
     println!(
@@ -378,17 +381,17 @@ fn do_holdings(a: &ScopeArgs) -> anyhow::Result<i32> {
 
 /// One tenant. `Ok(None)` is a deliberate revocation, which is not a failure.
 fn materialize_one(
-    source: &dyn dumpstar_lake::ObjectSource,
-    config: &dumpstar_lake::TenantZoneConfig,
+    source: &dyn dumpster_kit_lake::ObjectSource,
+    config: &dumpster_kit_lake::TenantZoneConfig,
     registry: &rusqlite::Connection,
     tenant: &dumpstar_db::tenants::Tenant,
     read_at: &str,
-) -> anyhow::Result<Option<dumpstar_ship::ZoneHoldings>> {
+) -> anyhow::Result<Option<dumpster_kit_ship::ZoneHoldings>> {
     let id = &tenant.user.database_id;
     // The key first, before the database is opened — the same order the
     // shipper uses, and for the same reason: a tenant whose holdings we have
     // undertaken not to hold is not one to go looking for.
-    let key = match dumpstar_keys::tenant_key(registry, id) {
+    let key = match dumpster_kit_keys::tenant_key(&dumpstar_ship::key_env(), registry, id) {
         Ok(key) => key,
         Err(e) if e.is_deliberate_revocation() => return Ok(None),
         Err(e) => return Err(e.into()),
@@ -399,7 +402,8 @@ fn materialize_one(
         tenant.path.display()
     );
 
-    let holdings = dumpstar_ship::zone::read(source, config, &key, id)?;
+    let holdings =
+        dumpster_kit_ship::zone::read(source, config, &key, id, dumpstar_db::outbox::ZONE_SOURCES)?;
     // Named, not merely counted (pd-bbv7). A source the zone carries and this
     // reader has no staging table for is a holding nothing values, every
     // night, and the operator has to be able to read WHICH from one line.
@@ -410,19 +414,24 @@ fn materialize_one(
         );
     }
     let conn = dumpstar_db::open_user(&tenant.path)?;
-    dumpstar_ship::zone::materialize(&conn, &holdings, read_at)?;
+    dumpster_kit_ship::zone::materialize(
+        &conn,
+        &holdings,
+        dumpstar_db::outbox::ZONE_SOURCES,
+        read_at,
+    )?;
     Ok(Some(holdings))
 }
 
 fn do_decrypt(a: &DecryptArgs) -> anyhow::Result<i32> {
     let database_id = database_id_of(&a.key)?;
-    let registry = dumpstar_keys::state::open()?;
-    let key = dumpstar_keys::tenant_key(&registry, &database_id)?;
+    let registry = dumpstar_ship::registry()?;
+    let key = dumpster_kit_keys::tenant_key(&dumpstar_ship::key_env(), &registry, &database_id)?;
 
-    let (source, config) = dumpstar_lake::open_tenant_zone_reader()?;
+    let (source, config) = dumpster_kit_lake::open_tenant_zone_reader(&dumpstar_ship::lake_env())?;
     let object_key = config.rooted(a.key.clone());
     let sealed = source.get(&object_key)?;
-    let parquet = dumpstar_ship::cipher::open(&key, &object_key, &sealed)?;
+    let parquet = dumpster_kit_ship::cipher::open(&key, &object_key, &sealed)?;
 
     if let Some(path) = &a.out {
         std::fs::write(path, &parquet)?;
@@ -434,7 +443,7 @@ fn do_decrypt(a: &DecryptArgs) -> anyhow::Result<i32> {
         return Ok(0);
     }
 
-    let events = dumpstar_ship::encode::decode(parquet)?;
+    let events = dumpster_kit_ship::encode::decode(parquet)?;
     if a.json {
         let mut out = std::io::stdout().lock();
         for e in &events {
@@ -482,7 +491,7 @@ fn database_id_of(key: &str) -> anyhow::Result<String> {
             anyhow::anyhow!(
                 "{key:?} has no database_id= component, so there is no way to know whose key \
                  would decrypt it. Every object in the tenant zone is partitioned by \
-                 database_id first — see dumpstar_lake::tenant."
+                 database_id first — see dumpster_kit_lake::tenant."
             )
         })
 }

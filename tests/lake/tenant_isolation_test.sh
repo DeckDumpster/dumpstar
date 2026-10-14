@@ -419,9 +419,18 @@ zone_roots() { # zone_roots <tenant.rs>
 }
 
 # ── the corpora ─────────────────────────────────────────────────────────────
-LAKE_CRATE="${REPO_DIR}/crates/dumpstar-lake"
+# The lake crate is the kit's (dumpster-kit-lake at the pinned rev). The selftest
+# points KIT_LAKE_DIR at a mutated copy; otherwise it is resolved from the
+# workspace graph, and the guard fails closed if it cannot be.
+LAKE_CRATE="${KIT_LAKE_DIR:-$(bash "${SCRIPT_DIR}/kit_lake_dir.sh")}"
+[[ -d "${LAKE_CRATE}/src" ]] || {
+	echo "FAIL  the kit's lake crate was not found (${LAKE_CRATE:-unresolved})"
+	exit 1
+}
 LAKEHOUSE_CRATE="${REPO_DIR}/crates/dumpstar-lakehouse"
 SHIP_CRATE="${REPO_DIR}/crates/dumpstar-ship"
+# The shipper's logic (key building, the tenant-zone writer) is the kit's.
+KIT_SHIP_CRATE="${KIT_SHIP_DIR:-$(bash "${SCRIPT_DIR}/kit_lake_dir.sh" dumpster-kit-ship)}"
 PYLAKE="${REPO_DIR}/lake/src/dumpstar_lake"
 
 # ── the zone split inside crates/dumpstar-lake ────────────────────────────────
@@ -431,13 +440,13 @@ PYLAKE="${REPO_DIR}/lake/src/dumpstar_lake"
 # one a zone decision rather than an omission.
 #
 # CATALOG: `raw/` and the warehouse beside it. Cross-tenant, shared, forever.
-CATALOG_ZONE_RS=(config.rs error.rs keys.rs manifest.rs reader.rs sink.rs store.rs)
+CATALOG_ZONE_RS=(error.rs keys.rs manifest.rs reader.rs sink.rs store.rs)
 # TENANT: `tenant/`. Tenant-keyed by construction, 90 days, its own credential.
 TENANT_ZONE_RS=(tenant.rs)
 # The crate root routes to both and resolves neither. It is its own class
 # because it is the one file allowed to name the tenant zone's API — and still
 # not allowed to look a tenant up.
-ZONE_ROOT_RS=(lib.rs)
+ZONE_ROOT_RS=(lib.rs config.rs)
 
 # ── the same split, on the Python side ──────────────────────────────────────
 # Classified for the same reason and checked for totality the same way (§12).
@@ -467,7 +476,7 @@ SQLITE_ALLOWED=(value_snapshots.py verify.py)
 # dumpstar-lake by construction. That boundary is a DEPLOYMENT one — the app
 # container is given no lake credential — and it is asserted where it lives,
 # in deploy/refresh.sh and tests/deploy/run.sh.
-ONLINE_CRATES=(dumpstar-db dumpstar-server dumpstar-keys)
+ONLINE_CRATES=(dumpstar-db dumpstar-server)
 
 rust_sources() { # rust_sources <crate-dir>
 	find "$1/src" -name '*.rs' -type f 2>/dev/null | sort
@@ -510,7 +519,7 @@ mapfile -t CATALOG_RS_FILES < <(zone_files CATALOG_ZONE_RS)
 mapfile -t TENANT_RS_FILES < <(zone_files TENANT_ZONE_RS)
 mapfile -t ROOT_RS_FILES < <(zone_files ZONE_ROOT_RS)
 mapfile -t LAKEHOUSE_RS_FILES < <(rust_sources "$LAKEHOUSE_CRATE")
-mapfile -t SHIP_RS_FILES < <(rust_sources "$SHIP_CRATE")
+mapfile -t SHIP_RS_FILES < <(rust_sources "$SHIP_CRATE"; rust_sources "$KIT_SHIP_CRATE")
 
 # One interpreter for each mode, before any section runs. Correctness does not
 # depend on this — rust_code strips on demand for anything not primed — only
@@ -536,7 +545,7 @@ log "1. the lake crate cannot open a database at all (structural)"
 # the reason is exactly this line: filling a tenant part means reading a
 # tenant's SQLite, and a crate that links no SQLite cannot be asked to.
 LAKE_TOML="${LAKE_CRATE}/Cargo.toml"
-check "crates/dumpstar-lake/Cargo.toml exists" "yes" \
+check "the kit's dumpster-kit-lake Cargo.toml exists" "yes" \
 	"$([[ -f "$LAKE_TOML" ]] && echo yes || echo no)"
 DBDEPS="$(grep -nE '^[[:space:]]*(rusqlite|dumpstar-db|libsqlite3-sys|sqlx|diesel)[[:space:]]*[.=]' \
 	"$LAKE_TOML")"
@@ -690,10 +699,10 @@ none "no catalog-zone prefix appears in the shipper" \
 # hand out the catalog's landing zone under the catalog's ambient credentials;
 # the tenant zone has its own entry points because it has its own identity.
 none "the shipper calls no catalog-zone entry point" \
-	"$(scan 'dumpstar_lake::(open|open_reader|keys|sink|manifest|reader)\b|RawLanding|RawZone' \
+	"$(scan '(dumpstar_lake|dumpster_kit_lake)::(open|open_reader|keys|sink|manifest|reader)\b|RawLanding|RawZone' \
 		"${SHIP_RS_FILES[@]}")"
 # And it must not name the catalog's credential. One profile for both zones is
-# not a narrow policy, it is no boundary at all (crates/dumpstar-lake/src/
+# not a narrow policy, it is no boundary at all (the kit lake crate's src/
 # tenant.rs), and the shipper is the process holding a tenant key.
 none "the shipper names no catalog credential" \
 	"$(scan_strings 'AWS_PROFILE|KEY_CATALOG_PROFILE' "${SHIP_RS_FILES[@]}")"
@@ -704,7 +713,7 @@ none "the shipper names no catalog credential" \
 some "the shipper opens the tenant zone through its own entry point" \
 	"$(scan 'open_tenant_zone' "${SHIP_RS_FILES[@]}")"
 some "and builds its object keys from the tenant-zone layout module" \
-	"$(scan 'dumpstar_lake::(range_part_key|part_key|tenant_prefix|partition_prefix)' \
+	"$(scan '(dumpstar_lake|dumpster_kit_lake)::(range_part_key|part_key|tenant_prefix|partition_prefix)' \
 		"${SHIP_RS_FILES[@]}")"
 
 log "10. the online path cannot reach either zone (structural)"
@@ -722,8 +731,8 @@ for c in "${ONLINE_CRATES[@]}"; do
 	toml="${REPO_DIR}/crates/${c}/Cargo.toml"
 	[[ -f "$toml" ]] || continue
 	ONLINE_FOUND=$((ONLINE_FOUND + 1))
-	hits="$(grep -nE '^[[:space:]]*(dumpstar-lake|dumpstar-lakehouse|dumpstar-ship|aws-sdk-s3|aws-config)[[:space:]]*[.=]' \
-		"$toml" | sed "s|^|crates/${c}/Cargo.toml:|")"
+	hits="$(sed '/^\[dev-dependencies\]/,$d' "$toml" | grep -nE '^[[:space:]]*(dumpstar-lake|dumpster-kit-lake|dumpster-kit-ship|dumpstar-lakehouse|dumpstar-ship|aws-sdk-s3|aws-config)[[:space:]]*[.=]' |
+		sed "s|^|crates/${c}/Cargo.toml:|")"
 	[[ -n "$hits" ]] && ONLINE_DEPS+="${hits}"$'\n'
 done
 check "every online crate was found to check" "${#ONLINE_CRATES[@]}" "$ONLINE_FOUND"
@@ -762,7 +771,7 @@ log "12. the guard read something (fail closed)"
 # directory rather than one list of exceptions: a file added to
 # crates/dumpstar-lake/src and classified nowhere is checked by nothing, and the
 # only symptom would be a section quietly scanning one file fewer.
-check "dumpstar-lake has Rust sources" "yes" \
+check "the kit's lake crate has Rust sources" "yes" \
 	"$([[ -n "$(rust_sources "$LAKE_CRATE")" ]] && echo yes || echo no)"
 check "dumpstar-lakehouse has Rust sources" "yes" \
 	"$([[ ${#LAKEHOUSE_RS_FILES[@]} -gt 0 ]] && echo yes || echo no)"

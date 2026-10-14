@@ -28,10 +28,6 @@
 !tests/ui/fixtures/shared.sqlite
 !tests/ui/fixtures/collection.sqlite
 
-# Reference clones — kept locally, not part of the project
-/_deckdumpster-src
-/_pokedex-src
-
 # Python bytecode — the lake jobs and the shell harnesses' fixture servers
 __pycache__/
 *.pyc

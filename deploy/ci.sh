@@ -134,16 +134,8 @@
 #                      required to report the path OPEN: a proof only ever seen
 #                      passing is not known to prove anything. See
 #                      tests/lake/deletion.sh.
-#  15. Refresh gate:   the other half of that — a real `dumpstar data refresh`,
-#                      through the shipped image, over a data directory with
-#                      two provisioned tenants in it, must leave every tenant
-#                      database byte-identical. Since pd-lunn the refresh
-#                      LANDS and builds nothing, so shared.sqlite has to come
-#                      out byte-identical too: the same gate now covers item
-#                      6's acceptance criterion against the shipped binary.
-#                      See tests/refresh/tenant_bytes.sh.
 #
-# Steps 5-9b and 11-15 do not run where they are written. Each one QUEUES itself
+# Steps 5-9b and 11-14f do not run where they are written. Each one QUEUES itself
 # under its own tier guard and they are run together, two at a time, by step
 # 16 — see the "PARALLEL GATES" note below and deploy/ci-parallel.sh.
 #
@@ -250,8 +242,7 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 # It never fired on the old runner because that box had a disk-backed /tmp.
 # Nothing in the repository said so, which is the whole shape of this class of
 # bug: a property of one machine that the suite silently depended on.
-# deckdumpster hit exactly this on its first ephemeral VM (de-323) and fixed it
-# the same way. The durable fix is the Proxmox template giving its clones a
+# The durable fix is the Proxmox template giving its clones a
 # disk-backed /tmp; this holds regardless, and also covers a developer's laptop.
 #
 # Set here, before DUMPSTAR_CI_DISK_PATHS is built, so the floor measures the
@@ -1061,11 +1052,10 @@ if tier container; then
 fi
 
 # --- 5. Gates not armed yet --------------------------------------------------
-# The backup, tenant-isolation, schema-version, lakehouse, refresh and browser
-# gates this script was copied with each drive a Pokémon catalog fixture, a
-# pokemontcg.io upstream or a tenant layout that dumpstar does not have yet.
-# They are not run here, and they are not run half-armed: a gate whose reds are
-# its own fixture's is worse than no gate (it trains everyone to re-run). Each is
+# The backup, tenant-isolation, schema-version, lakehouse and browser gates
+# under tests/ need a catalog fixture, an upstream or a tenant layout that
+# dumpstar does not have yet. They are not run here, and they are not run
+# half-armed: a gate whose reds are its own fixture's is worse than no gate (it trains everyone to re-run). Each is
 # re-armed by the dumpstar bead that gives it something real to assert —
 # tenancy (the isolation gate), the backup drill, the catalog seam (the lakehouse
 # and refresh gates), the SWU UI fixture (the browser tier). Their scripts stay

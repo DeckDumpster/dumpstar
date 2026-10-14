@@ -44,6 +44,19 @@ if [ ! -f "$QUADLET_FILE" ]; then
     echo "==> No instance '$INSTANCE' yet — running setup..."
     bash "$SCRIPT_DIR/setup.sh" "$INSTANCE"
 else
+    # Config first, before anything is built, installed or restarted (sp-kaj3xv):
+    # a release that adds a required key must not restart a running instance into
+    # an env file that lacks it. Same scaffold setup.sh uses; a key that has no
+    # default stops the deploy here, with the old container still serving.
+    # shellcheck source=deploy/config-lib.sh
+    . "$SCRIPT_DIR/config-lib.sh"
+    dumpstar_scaffold_config "$INSTANCE"
+    if ! dumpstar_config_converge "${HOME}/.config/dumpstar/${INSTANCE}"; then
+        echo "ERROR: deploy stopped before touching ${SERVICE_NAME}; it is still running its previous version." >&2
+        echo "       Fix the config named above in ${HOME}/.config/dumpstar/${INSTANCE}/ and redeploy." >&2
+        exit 1
+    fi
+
     echo "==> Rebuilding image dumpstar:${INSTANCE}..."
     # Through the helper, not a bare `podman build` (pd-h3wy). Two things came
     # free with it that this line had been missing for as long as it existed:
@@ -73,13 +86,6 @@ else
     dumpstar_units_install "$INSTANCE"
     dumpstar_units_report
 
-    # Scaffold config files the units require. setup.sh creates them on first
-    # install; a deploy must do the same for config added after the instance was
-    # created — the unit will refuse to start if a required EnvironmentFile is
-    # absent (db-g6ku).
-    # shellcheck source=deploy/config-lib.sh
-    . "$SCRIPT_DIR/config-lib.sh"
-    dumpstar_scaffold_access_env "$INSTANCE" "${HOME}/.config/dumpstar/${INSTANCE}"
 fi
 
 echo "==> Reloading systemd and restarting ${SERVICE_NAME}..."

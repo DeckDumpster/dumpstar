@@ -9,8 +9,8 @@ fixture_data:
   csv: >
     A Collectr export with 6 data rows: a Lorcana card (skipped), Base Set
     Charizard 4/102 Holofoil (matches), Base Set Bulbasaur 46/102 Normal qty 2
-    (matches, 2 copies), Base Set Fakemon 999/102 (unmatched card), 151 Elite
-    Trainer Box sealed (matches), Surging Sparks Booster Pack sealed qty 6
+    (matches, 2 copies), Base Set Fakemon 999/102 (unmatched card), Spark of Rebellion Two-Player
+    Starter sealed (matches), Shadows of the Galaxy Booster Pack sealed qty 6
     (matches), and a Nonexistent Box sealed (unmatched).
 notes: >
   Navigate to /ingest/csv, wait for "Import CSV". Choose the "Collectr (cards
@@ -19,6 +19,6 @@ notes: >
   Click "Preview". The preview renders three panes with headings "Single
   cards", "Sealed products", and "Skipped". Single cards shows "3 matched" and
   "1 unmatched"; Sealed products shows "2 matched" and "1 unmatched"; Skipped
-  lists the Lorcana row with reason "non-Pokémon category 'Lorcana'". Assert
-  each pane heading and the Charizard card and 151 Elite Trainer Box are
+  lists the Lorcana row with reason "not a Star Wars: Unlimited category 'Lorcana'". Assert
+  each pane heading and the Charizard card and Spark of Rebellion Two-Player Starter are
   present, and that the Lorcana skip reason is shown.

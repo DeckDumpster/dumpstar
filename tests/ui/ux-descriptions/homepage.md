@@ -22,7 +22,7 @@ The page content is two static elements rendered inside the shared layout's
 | Region | Element | Content |
 |--------|---------|---------|
 | Title | `<h1>` | "Dumpstar" |
-| Description | `<p>` | "A Pokémon TCG collection tracker. Choose a section from the navigation above." |
+| Description | `<p>` | "A Star Wars: Unlimited collection tracker. Choose a section from the navigation above." |
 
 Above this (provided by `+layout.svelte`, present on every page) is the global
 header: the red "Dumpstar" brand link and a horizontal nav with links to

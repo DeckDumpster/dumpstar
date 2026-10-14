@@ -301,7 +301,7 @@
 	}
 
 	/** Like addCopy but for slots not currently open in the modal — drives
-	 *  the inline Reg/RH/Holo quick-toggle checkboxes in each slot footer. */
+	 *  the inline Normal/Foil quick-toggle checkboxes in each slot footer. */
 	async function addToSlot(slot: BinderSlot, printingId: string) {
 		const printing = slot.printings.find((p) => p.printing_id === printingId);
 		if (!printing) return;

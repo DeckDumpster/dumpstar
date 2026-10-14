@@ -139,7 +139,7 @@ async fn commit_collectr_selected(
 }
 
 /// Preview a Collectr import — singles and sealed resolved separately, plus
-/// any skipped (non-Pokémon) rows. Writes nothing. The `format` field is
+/// any skipped (rows from other games). Writes nothing. The `format` field is
 /// ignored; this endpoint is Collectr-specific.
 async fn preview_collectr(
     State(state): State<AppState>,

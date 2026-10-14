@@ -10,5 +10,5 @@ description: >
   After previewing a Collectr export, when I click Import the matched single
   cards and sealed products are both committed, and I see a confirmation
   banner reporting how many cards and how many sealed products were added
-  (with the non-Pokémon rows counted as skipped) and a link to view the card
+  (with the other-game rows counted as skipped) and a link to view the card
   batch.

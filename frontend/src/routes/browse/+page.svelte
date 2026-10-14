@@ -46,7 +46,7 @@
 	/** Bundle entries go under a fixed "Bundles" pseudo-series so they
 	 *  group together regardless of the synthetic `series` field on the
 	 *  backend SetSummary (which is the bundle's marketing name, not a
-	 *  Pokémon TCG era). */
+	 *  Star Wars: Unlimited era). */
 	function seriesKey(c: SetSummary): string {
 		return c.kind === 'bundle' ? 'Bundles' : c.series;
 	}
@@ -242,7 +242,7 @@
 															variant="soft"
 															shape="tag"
 															size="sm"
-															title="Built from TCGCSV — pokemontcg.io has not published this set yet, so its card list and art are provisional."
+															title="Built from TCGCSV — the official card database has not published this set yet, so its card list and art are provisional."
 														>
 															TCGCSV
 														</Badge>
@@ -292,7 +292,7 @@
 		                       the jump-nav dot that says "you own something in
 		                       this series". The only hue that encodes a number.
 		  amber (warning)      provisional data: the TCGCSV chip on a set
-		                       pokemontcg.io has not published yet.
+		                       the official card database has not published yet.
 		  neutral (ink/slate)  structure and content: surfaces, rules, the
 		                       group header, meter tracks, names, counts, and
 		                       the "Bundle" kind tag. Carries no meaning.

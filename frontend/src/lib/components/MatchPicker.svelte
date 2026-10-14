@@ -95,7 +95,7 @@
 				size="sm"
 				title={q.trim() ? 'No matching printings.' : 'Type to search.'}
 				description={q.trim()
-					? 'Search the card name; add its number to narrow a reprint (“Pikachu 25”).'
+					? 'Search the card name; add its number to narrow a reprint (“Luke Skywalker 5”).'
 					: 'The whole catalog is searchable here, not just what you own.'}
 			/>
 		{:else}
@@ -127,7 +127,7 @@
 			size="sm"
 			title={q.trim() ? 'No matching products.' : 'Type to search.'}
 			description={q.trim()
-				? 'Search the product name as TCGplayer lists it — “Obsidian Flames Booster Box”.'
+				? 'Search the product name as TCGplayer lists it — “Spark of Rebellion Booster Display”.'
 				: 'Every sealed product in the catalog is searchable here.'}
 		/>
 	{:else}

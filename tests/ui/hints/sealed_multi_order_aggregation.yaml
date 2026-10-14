@@ -4,13 +4,13 @@ involves:
   - adding the same product twice with different purchase prices
   - sealed table showing both entries as separate rows
 fixture_data:
-  product_name: "151 Booster Bundle"
-  search_term: "Booster Bundle"
+  product_name: "Spark of Rebellion Prerelease Kit"
+  search_term: "Prerelease Kit"
   first_price: 25.0
   second_price: 30.0
 notes: >
-  Navigate to /sealed. Add a "151 Booster Bundle" via the modal with
+  Navigate to /sealed. Add a "Spark of Rebellion Prerelease Kit" via the modal with
   purchase price 25. Then click "+ Add sealed" again, add the same
   product with purchase price 30. The sealed table shows two separate
-  "151 Booster Bundle" rows, one paid 25 and one paid 30 — there is no
+  "Spark of Rebellion Prerelease Kit" rows, one paid 25 and one paid 30 — there is no
   quantity aggregation across entries.

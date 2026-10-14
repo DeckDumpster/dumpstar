@@ -7,17 +7,17 @@ involves:
   - '"Add to collection" button'
   - "sealed table showing the added row"
 fixture_data:
-  search_term: "Booster Bundle"
-  product_name: "151 Booster Bundle"
+  search_term: "Prerelease Kit"
+  product_name: "Spark of Rebellion Prerelease Kit"
   purchase_price: 27.5
 notes: >
   1. Navigate to /sealed. Click "+ Add sealed" to open the modal.
-  2. Type "Booster Bundle" into the search input (live search, fires on
+  2. Type "Prerelease Kit" into the search input (live search, fires on
      every input once >= 2 characters).
   3. Wait for search results to appear.
-  4. Click the "151 Booster Bundle" result to advance to the confirm
+  4. Click the "Spark of Rebellion Prerelease Kit" result to advance to the confirm
      sub-state.
   5. Enter 27.5 in the "Purchase price" input.
   6. Click "Add to collection".
   7. Verify the modal closes, its fields reset, and the sealed table
-     reloads with a "151 Booster Bundle" row paid 27.5.
+     reloads with a "Spark of Rebellion Prerelease Kit" row paid 27.5.

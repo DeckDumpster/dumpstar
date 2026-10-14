@@ -6,5 +6,5 @@
 description: >
   On the Import order page I can pick a different value from the Source
   dropdown. It defaults to tcgplayer; I select ebay and the select
-  reflects ebay, then I select pokemoncenter and it reflects
-  pokemoncenter. The other metadata inputs are unaffected by the change.
+  reflects ebay, then I select lgs and it reflects
+  lgs. The other metadata inputs are unaffected by the change.

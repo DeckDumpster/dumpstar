@@ -1,5 +1,5 @@
 //! Repository for the sealed-product collection (PLAN.md §8): the user's
-//! booster boxes, ETBs, bundles, and tins, plus catalog search to add them.
+//! booster packs, booster displays, starter decks, and prerelease kits, plus catalog search to add them.
 
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -237,7 +237,7 @@ mod tests {
             let c = open_shared(&shared).unwrap();
             c.execute(
                 "INSERT INTO sealed_products (product_id, name, category, fetched_at) \
-                 VALUES (5001, '151 Elite Trainer Box', 'elite_trainer_box', '2026-05-18')",
+                 VALUES (5001, 'Spark of Rebellion Two-Player Starter', 'two_player_starter', '2026-05-18')",
                 [],
             )
             .unwrap();
@@ -251,7 +251,7 @@ mod tests {
         let (_d, conn) = conn();
 
         // Catalog search finds the product.
-        let found = search_products(&conn, "Elite", 10).unwrap();
+        let found = search_products(&conn, "Starter", 10).unwrap();
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].product_id, 5001);
 
@@ -266,7 +266,7 @@ mod tests {
         .unwrap();
 
         let entry = get(&conn, id).unwrap().unwrap();
-        assert_eq!(entry.name, "151 Elite Trainer Box");
+        assert_eq!(entry.name, "Spark of Rebellion Two-Player Starter");
         assert_eq!(entry.quantity, 1);
         assert_eq!(entry.status, "owned");
 
@@ -303,8 +303,8 @@ mod tests {
             // NULL, as TCGCSV often reports for sealed); 5003 has no snapshot.
             c.execute(
                 "INSERT INTO sealed_products (product_id, name, category, fetched_at) VALUES \
-                   (5001, '151 Elite Trainer Box', 'elite_trainer_box', '2026-05-18'), \
-                   (5002, 'Obsidian Flames Booster Box', 'booster_box', '2026-05-18'), \
+                   (5001, 'Spark of Rebellion Two-Player Starter', 'two_player_starter', '2026-05-18'), \
+                   (5002, 'Shadows of the Galaxy Booster Display', 'booster_display', '2026-05-18'), \
                    (5003, 'Paldea Evolved Bundle', 'bundle', '2026-05-18')",
                 [],
             )

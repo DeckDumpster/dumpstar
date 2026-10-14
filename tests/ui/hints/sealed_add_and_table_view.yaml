@@ -6,11 +6,11 @@ involves:
   - '"Add to collection" confirm button'
   - sealed table showing the new row
 fixture_data:
-  product_name: "Base Set Booster Box"
-  search_term: "Base Set"
+  product_name: "Spark of Rebellion Booster Display"
+  search_term: "Booster Display"
 notes: >
   Navigate to /sealed. Click "+ Add sealed" to open the modal. Type
-  "Base Set" into the search input and wait for results. Click the
-  "Base Set Booster Box" result to advance to the confirm step. Click
+  "Booster Display" into the search input and wait for results. Click the
+  "Spark of Rebellion Booster Display" result to advance to the confirm step. Click
   "Add to collection". The modal closes and the sealed table now shows
-  a "Base Set Booster Box" row.
+  a "Spark of Rebellion Booster Display" row.

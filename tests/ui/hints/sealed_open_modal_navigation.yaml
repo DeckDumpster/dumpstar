@@ -6,13 +6,13 @@ involves:
   - '"← Back" link returning to the search sub-state'
   - '"×" close button'
 fixture_data:
-  search_term: "151 Elite"
-  product_name: "151 Elite Trainer Box"
+  search_term: "Spark of Rebellion Two"
+  product_name: "Spark of Rebellion Two-Player Starter"
 notes: >
   1. Navigate to /sealed. Click "+ Add sealed" to open the modal.
-  2. Type "151 Elite" into the search input.
+  2. Type "Spark of Rebellion Two" into the search input.
   3. Wait for results to appear.
-  4. Click the "151 Elite Trainer Box" result; the modal advances to the
+  4. Click the "Spark of Rebellion Two-Player Starter" result; the modal advances to the
      confirm sub-state showing the chosen product name and a purchase
      price input.
   5. Click the "← Back" link.

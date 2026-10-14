@@ -687,7 +687,7 @@ fn commit_matched(
 
 // --- Collectr: the combined single + sealed import path (garden wall) ---
 
-/// A row skipped during a combined import (e.g. a non-Pokémon Collectr row).
+/// A row skipped during a combined import (e.g. a Collectr row from another game).
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
 #[ts(export)]
 pub struct SkippedRow {
@@ -827,8 +827,8 @@ mod tests {
 
     const CSV: &str = "\
 Set code,Set name,Collector number,Foil,Quantity,Condition,Language,Purchase price
-MEW,151,6,normal,2,near_mint,en,1.50
-MEW,151,6,foil,1,near_mint,en,5.00
+SOR,Spark of Rebellion,6,normal,2,near_mint,en,1.50
+SOR,Spark of Rebellion,6,foil,1,near_mint,en,5.00
 NOPE,Mystery,1,normal,1,near_mint,en,";
 
     fn db() -> (tempfile::TempDir, Connection) {
@@ -838,13 +838,13 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
             let c = open_shared(&shared).unwrap();
             c.execute(
                 "INSERT INTO sets (set_code, ptcgo_code, name, series) \
-                 VALUES ('sv3pt5', 'MEW', '151', 'SV')",
+                 VALUES ('sv3pt5', 'SOR', 'Spark of Rebellion', 'SOR')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Charizard ex')",
+                 VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Luke Skywalker')",
                 [],
             )
             .unwrap();
@@ -878,10 +878,10 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         let (_d, conn) = db();
         let report = preview(&conn, ImportFormat::Manabox, CSV).unwrap();
 
-        // Two 'normal' copies of #6 resolve via the ptcgo code 'MEW'.
+        // Two 'normal' copies of #6 resolve via the ptcgo code 'SOR'.
         assert_eq!(report.matched.len(), 2);
         assert_eq!(report.matched[0].set_code, "sv3pt5");
-        assert_eq!(report.matched[0].card_name, "Charizard ex");
+        assert_eq!(report.matched[0].card_name, "Luke Skywalker");
         assert_eq!(report.matched[0].purchase_price, Some(1.50));
 
         // The 'foil' copy (no holo printing) and the unknown set both miss.
@@ -1105,14 +1105,14 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
             .unwrap();
             c.execute(
                 "INSERT INTO cards (card_id, set_code, number, number_sortable, name) VALUES \
-                   ('seta-5', 'seta', '5', 5, 'Pikachu'), \
-                   ('setb-5', 'setb', '5', 5, 'Pikachu')",
+                   ('seta-5', 'seta', '5', 5, 'Darth Vader'), \
+                   ('setb-5', 'setb', '5', 5, 'Darth Vader')",
                 [],
             )
             .unwrap();
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-        let report = resolve(&conn, &[misc_row("Pikachu", "5", "normal")]).unwrap();
+        let report = resolve(&conn, &[misc_row("Darth Vader", "5", "normal")]).unwrap();
         assert!(report.matched.is_empty());
         assert_eq!(report.unmatched.len(), 1);
         let reason = &report.unmatched[0].reason;
@@ -1241,9 +1241,9 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
 
     const COLLECTR_CSV: &str = "\
 Portfolio Name,Category,Set,Product Name,Card Number,Rarity,Variance,Grade,Card Condition,Average Cost Paid,Quantity,Market Price (As of 2026-07-17),Price Override,Watchlist,Date Added,Notes
-Main,Lorcana,Disney Lorcana Promo Cards,Elsa,6,Promo,Holofoil,Ungraded,Near Mint,0,1,7.12,0,false,2026-01-24,
-Main,Pokemon,151,Charizard ex,6,Double Rare,Normal,Ungraded,Near Mint,1.50,2,5.00,0,false,2026-04-14,
-Sealed Pokemon TCG,Pokemon,151,151 Elite Trainer Box,,,Normal,Ungraded,Near Mint,49.99,3,60.00,0,false,2026-02-28,";
+Main,Lorcana,Disney Lorcana Promo Cards,Elsa,6,Promo,Foil,Ungraded,Near Mint,0,1,7.12,0,false,2026-01-24,
+Main,Star Wars Unlimited,Spark of Rebellion,Luke Skywalker,6,Legendary,Normal,Ungraded,Near Mint,1.50,2,5.00,0,false,2026-04-14,
+Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebellion Two-Player Starter,,,Normal,Ungraded,Near Mint,49.99,3,60.00,0,false,2026-02-28,";
 
     fn sealed_db() -> (tempfile::TempDir, Connection) {
         let (dir, conn) = {
@@ -1253,13 +1253,13 @@ Sealed Pokemon TCG,Pokemon,151,151 Elite Trainer Box,,,Normal,Ungraded,Near Mint
                 let c = open_shared(&shared).unwrap();
                 c.execute(
                     "INSERT INTO sets (set_code, ptcgo_code, name, series) \
-                     VALUES ('sv3pt5', 'MEW', '151', 'SV')",
+                     VALUES ('sv3pt5', 'SOR', 'Spark of Rebellion', 'SOR')",
                     [],
                 )
                 .unwrap();
                 c.execute(
                     "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                     VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Charizard ex')",
+                     VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Luke Skywalker')",
                     [],
                 )
                 .unwrap();
@@ -1271,7 +1271,7 @@ Sealed Pokemon TCG,Pokemon,151,151 Elite Trainer Box,,,Normal,Ungraded,Near Mint
                 .unwrap();
                 c.execute(
                     "INSERT INTO sealed_products (product_id, set_code, name, category, fetched_at) \
-                     VALUES (7001, 'sv3pt5', '151 Elite Trainer Box', 'elite_trainer_box', '2026-02-28')",
+                     VALUES (7001, 'sv3pt5', 'Spark of Rebellion Two-Player Starter', 'two_player_starter', '2026-02-28')",
                     [],
                 )
                 .unwrap();
@@ -1287,14 +1287,14 @@ Sealed Pokemon TCG,Pokemon,151,151 Elite Trainer Box,,,Normal,Ungraded,Near Mint
         let (_d, conn) = sealed_db();
         let report = preview_collectr(&conn, COLLECTR_CSV).unwrap();
 
-        // Two 'normal' Charizard copies resolve; set '151' matches by name.
+        // Two 'normal' Luke copies resolve; set 'Spark of Rebellion' matches by name.
         assert_eq!(report.singles.matched.len(), 2);
-        assert_eq!(report.singles.matched[0].card_name, "Charizard ex");
+        assert_eq!(report.singles.matched[0].card_name, "Luke Skywalker");
         assert_eq!(
             report.singles.matched[0].acquired_at.as_deref(),
             Some("2026-04-14T00:00:00Z")
         );
-        // The ETB resolves on the sealed side, quantity 3 preserved.
+        // The starter resolves on the sealed side, quantity 3 preserved.
         assert_eq!(report.sealed.matched.len(), 1);
         assert_eq!(report.sealed.matched[0].quantity, 3);
         // Lorcana row is skipped.
@@ -1311,7 +1311,7 @@ Sealed Pokemon TCG,Pokemon,151,151 Elite Trainer Box,,,Normal,Ungraded,Near Mint
         assert_eq!(result.skipped, 1);
 
         // Singles landed in `collection`, sealed in `sealed_collection` —
-        // one ETB row with quantity 3, never leaked into singles.
+        // one starter row with quantity 3, never leaked into singles.
         let singles = collection::list_by_batch(&conn, result.singles.batch_id).unwrap();
         assert_eq!(singles.len(), 2);
         assert!(singles.iter().all(|c| c.source == "csv_collectr"));
@@ -1324,7 +1324,7 @@ Sealed Pokemon TCG,Pokemon,151,151 Elite Trainer Box,,,Normal,Ungraded,Near Mint
     #[test]
     fn collectr_preview_annotates_owned_on_both_sides() {
         let (_d, mut conn) = sealed_db();
-        // Own one Charizard copy and the ETB up front.
+        // Own one Luke copy and the starter up front.
         collection::add(
             &mut conn,
             &NewCopy {

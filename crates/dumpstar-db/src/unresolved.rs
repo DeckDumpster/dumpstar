@@ -372,13 +372,13 @@ mod tests {
             let c = open_shared(&shared).unwrap();
             c.execute(
                 "INSERT INTO sets (set_code, ptcgo_code, name, series) \
-                 VALUES ('sv3pt5', 'MEW', '151', 'SV')",
+                 VALUES ('sv3pt5', 'SOR', 'Spark of Rebellion', 'SOR')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Charizard ex')",
+                 VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Luke Skywalker')",
                 [],
             )
             .unwrap();
@@ -390,7 +390,7 @@ mod tests {
             .unwrap();
             c.execute(
                 "INSERT INTO sealed_products (product_id, set_code, name, category, fetched_at) \
-                 VALUES (7001, 'sv3pt5', '151 Elite Trainer Box', 'elite_trainer_box', '2026-02-28')",
+                 VALUES (7001, 'sv3pt5', 'Spark of Rebellion Two-Player Starter', 'two_player_starter', '2026-02-28')",
                 [],
             )
             .unwrap();
@@ -402,9 +402,9 @@ mod tests {
     fn single(number: &str, variant: &str) -> ParsedRow {
         ParsedRow {
             source_line: 2,
-            set_hint: "MEW".into(),
-            set_name: Some("151".into()),
-            name: Some("Charizard ex".into()),
+            set_hint: "SOR".into(),
+            set_name: Some("Spark of Rebellion".into()),
+            name: Some("Luke Skywalker".into()),
             number: number.into(),
             variant: variant.into(),
             condition: "Lightly Played".into(),
@@ -419,8 +419,8 @@ mod tests {
         ParsedSealedRow {
             source_line: 3,
             name: name.into(),
-            set_hint: "151".into(),
-            set_name: Some("151".into()),
+            set_hint: "Spark of Rebellion".into(),
+            set_name: Some("Spark of Rebellion".into()),
             category_hint: None,
             quantity: qty,
             condition: "Near Mint".into(),
@@ -442,9 +442,9 @@ mod tests {
             None,
             Some(2),
             &raw,
-            Some("MEW"),
+            Some("SOR"),
             Some("6"),
-            Some("Charizard ex"),
+            Some("Luke Skywalker"),
             Some("holo"),
             None,
             "variant 'holo' not available",
@@ -454,7 +454,7 @@ mod tests {
         let open = list_open(&conn).unwrap();
         assert_eq!(open.len(), 1);
         assert_eq!(open[0].kind, "single");
-        assert_eq!(open[0].name.as_deref(), Some("Charizard ex"));
+        assert_eq!(open[0].name.as_deref(), Some("Luke Skywalker"));
 
         // Resolve to the real 'normal' printing — the replayed copy keeps the
         // parked condition/price/acquired/tags.
@@ -480,7 +480,7 @@ mod tests {
     #[test]
     fn resolve_sealed_replays_quantity_and_metadata() {
         let (_d, mut conn) = db();
-        let raw = serde_json::to_string(&sealed_row("Elite Trainer Box", 3)).unwrap();
+        let raw = serde_json::to_string(&sealed_row("Two-Player Starter", 3)).unwrap();
         park(
             &conn,
             "sealed",
@@ -488,9 +488,9 @@ mod tests {
             None,
             Some(3),
             &raw,
-            Some("151"),
+            Some("Spark of Rebellion"),
             None,
-            Some("Elite Trainer Box"),
+            Some("Two-Player Starter"),
             None,
             Some(3),
             "ambiguous product",
@@ -524,7 +524,7 @@ mod tests {
             None,
             Some(2),
             &raw,
-            Some("MEW"),
+            Some("SOR"),
             Some("999"),
             Some("Ghost Card"),
             Some("normal"),
@@ -551,9 +551,9 @@ mod tests {
             None,
             Some(2),
             &raw,
-            Some("MEW"),
+            Some("SOR"),
             Some("6"),
-            Some("Charizard ex"),
+            Some("Luke Skywalker"),
             Some("holo"),
             None,
             "variant holo",
@@ -571,8 +571,8 @@ mod tests {
         let (_d, mut conn) = db();
         const CSV: &str = "\
 Set code,Set name,Collector number,Foil,Quantity,Condition,Language,Purchase price
-MEW,151,6,normal,1,near_mint,en,1.50
-MEW,151,6,foil,1,near_mint,en,5.00
+SOR,Spark of Rebellion,6,normal,1,near_mint,en,1.50
+SOR,Spark of Rebellion,6,foil,1,near_mint,en,5.00
 NOPE,Mystery,1,normal,1,near_mint,en,";
 
         let result = import::commit_selected(

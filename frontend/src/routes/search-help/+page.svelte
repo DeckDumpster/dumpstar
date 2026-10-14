@@ -26,13 +26,13 @@
 	];
 
 	const examples: { q: string; what: string }[] = [
-		{ q: 't:fire hp>=200', what: 'Fire Pokémon with 200+ HP that you own' },
-		{ q: 's:pfl rarity>=rare', what: 'Phantasmal Flames cards, rare or better' },
-		{ q: 'is:missing s:sv3pt5 sub:ex', what: "151 'ex' cards you're still missing" },
-		{ q: 'charizard is:holo', what: 'Holo Charizards in your collection' },
+		{ q: 'luke is:foil', what: 'Foil Luke Skywalkers in your collection' },
+		{ q: 's:sor rarity>=rare', what: 'Spark of Rebellion cards, rare or better' },
+		{ q: 'is:missing s:sor', what: "Spark of Rebellion cards you're still missing" },
+		{ q: 'vader -is:foil', what: 'Non-foil Vaders in your collection' },
 		{ q: 'price>20 added>=2026-01-01', what: 'Recent pickups worth over $20' },
-		{ q: 'pikachu qty>=2', what: 'Printings you own 2 or more copies of' },
-		{ q: 't:water or t:lightning -is:graded', what: 'Water/Lightning, excluding graded copies' },
+		{ q: 'trooper qty>=2', what: 'Printings you own 2 or more copies of' },
+		{ q: 'yoda or obi-wan -is:graded', what: 'Yodas and Obi-Wans, excluding graded copies' },
 		{ q: 'order:price direction:desc', what: 'Everything, most valuable first' }
 	];
 

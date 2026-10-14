@@ -1,0 +1,17 @@
+# Scenario: The homepage tagline names Star Wars: Unlimited
+
+# Related: homepage_page_structure
+
+description: >
+  When I visit the homepage, the tagline under the "Dumpstar" title says it is
+  a Star Wars: Unlimited collection tracker, and no other trading card game's
+  name appears on the page.
+start_page: /
+involves:
+  - "tagline paragraph under the h1: 'A Star Wars: Unlimited collection tracker.'"
+fixture_data:
+  none: "homepage is fully static markup; it carries no data"
+notes: >
+  1. Navigate to /. 2. Assert the tagline text "A Star Wars: Unlimited
+  collection tracker." is visible. 3. Assert no text "Pokémon" is present
+  on the page. 4. Screenshot.

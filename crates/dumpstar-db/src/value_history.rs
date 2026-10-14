@@ -733,7 +733,7 @@ mod tests {
         let c = open_shared(shared).unwrap();
         c.execute(
             "INSERT OR IGNORE INTO sealed_products (product_id, name, category, fetched_at) \
-             VALUES (?1, 'A Booster Box', 'booster_box', '2026-01-01T00:00:00Z')",
+             VALUES (?1, 'A Booster Display', 'booster_display', '2026-01-01T00:00:00Z')",
             params![product],
         )
         .unwrap();

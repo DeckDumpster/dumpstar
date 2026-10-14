@@ -171,7 +171,7 @@
 	<span class="logo"><DeathStar size={56} /></span>
 	<div>
 		<h1>Dumpstar</h1>
-		<p class="tagline">A Pokémon TCG collection tracker.</p>
+		<p class="tagline">A Star Wars: Unlimited collection tracker.</p>
 	</div>
 </header>
 

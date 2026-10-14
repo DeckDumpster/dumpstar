@@ -75,10 +75,44 @@ r="$scratch/data"; mkrepo "$r"
 echo '[]' >"$r/data/variants.json"
 check "a removed Pokémon data file fails the gate" 1 "$(run_gate "$r")"
 
+# The words are assembled so this file does not contain what it forbids.
+ETB="E""TB"
+TAG="Pok""émon TCG collection tracker"
+
+r="$scratch/etb"; mkrepo "$r"
+mkdir -p "$r/frontend/src/lib/components"
+echo "<p>Sealed: ${ETB}</p>" >"$r/frontend/src/lib/components/Sealed.svelte"
+check "a Pokémon sealed kind in the frontend fails the gate" 1 "$(run_gate "$r")"
+check "…and the gate names the file" 1 "$(grep -c 'Sealed.svelte' "$scratch/out")"
+
+r="$scratch/tagline"; mkrepo "$r"
+mkdir -p "$r/frontend/src/routes"
+echo "<p class=\"tagline\">A ${TAG}.</p>" >"$r/frontend/src/routes/+page.svelte"
+check "the Pokémon tagline fails the gate" 1 "$(run_gate "$r")"
+
+r="$scratch/example"; mkrepo "$r"
+mkdir -p "$r/frontend/src/routes/search-help"
+echo "{ q: 'pika""chu qty>=2' }" >"$r/frontend/src/routes/search-help/+page.svelte"
+check "a Pokémon example in a page fails the gate" 1 "$(run_gate "$r")"
+
+r="$scratch/crate-visible"; mkrepo "$r"
+mkdir -p "$r/crates/dumpstar-server/src"
+echo 'const ABOUT: &str = "A Pok''émon tracker";' >"$r/crates/dumpstar-server/src/lib.rs"
+check "Pokémon wording in the server fails the gate" 1 "$(run_gate "$r")"
+
+r="$scratch/crate-product"; mkrepo "$r"
+echo "// 151 Elite"" Trainer Box" >"$r/crates/dumpstar-ingest/src/lib.rs"
+check "a Pokémon sealed product name anywhere in crates fails the gate" 1 "$(run_gate "$r")"
+
 echo "==> §2 a clean tree passes"
 r="$scratch/clean"; mkrepo "$r"
 echo 'Star Wars: Unlimited' >"$r/README.md"
 check "a tree without them passes" 0 "$(run_gate "$r")"
+
+r="$scratch/card-model"; mkrepo "$r"
+mkdir -p "$r/crates/dumpstar-db/src"
+echo '// Pok''émon card model, owed to the catalog seam' >"$r/crates/dumpstar-db/src/search.rs"
+check "the Pokémon card model outside the user-visible paths passes" 0 "$(run_gate "$r")"
 
 echo "==> §3 the real tree"
 # The gate's own output is shown when it fails, so CI names the offending file

@@ -329,7 +329,7 @@
 	{:else if entries.length === 0}
 		<EmptyState
 			title="No sealed products yet."
-			description="Sealed tracks boxes, packs and ETBs as inventory rather than as cards — each one keeps its own quantity, cost and status."
+			description="Sealed tracks booster displays, packs and starter decks as inventory rather than as cards — each one keeps its own quantity, cost and status."
 		>
 			{#snippet action()}
 				<Button onclick={openAdd}>Add sealed product</Button>
@@ -512,7 +512,7 @@
 					<EmptyState
 						size="sm"
 						title="No matching products."
-						description="Search the product name as TCGplayer lists it — “Obsidian Flames Booster Box”."
+						description="Search the product name as TCGplayer lists it — “Spark of Rebellion Booster Display”."
 					/>
 				{/if}
 			</div>

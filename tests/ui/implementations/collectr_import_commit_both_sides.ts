@@ -9,10 +9,10 @@
 import type { ReplayHarness } from '../replay';
 
 const CSV = `Portfolio Name,Category,Set,Product Name,Card Number,Rarity,Variance,Grade,Card Condition,Average Cost Paid,Quantity,Market Price (As of 2026-07-19),Price Override,Watchlist,Date Added,Notes
-Main,Pokemon,Base Set,Charizard,4/102,Rare Holo,Holofoil,Ungraded,Lightly Played,280,1,300,0,false,2024-01-10,
-Main,Pokemon,Base Set,Bulbasaur,46/102,Common,Normal,Ungraded,Near Mint,1.00,2,2,0,false,2024-01-10,
-Sealed Pokemon TCG,Pokemon,151,151 Elite Trainer Box,,,Normal,Ungraded,Near Mint,49.99,1,60,0,false,2023-09-22,
-Sealed Pokemon TCG,Pokemon,Surging Sparks,Surging Sparks Booster Pack,,,Normal,Ungraded,Near Mint,4.49,6,5,0,false,2024-11-08,`;
+Main,Star Wars Unlimited,Base Set,Charizard,4/102,Rare Holo,Holofoil,Ungraded,Lightly Played,280,1,300,0,false,2024-01-10,
+Main,Star Wars Unlimited,Base Set,Bulbasaur,46/102,Common,Normal,Ungraded,Near Mint,1.00,2,2,0,false,2024-01-10,
+Sealed Star Wars Unlimited,Star Wars Unlimited,151,Spark of Rebellion Two-Player Starter,,,Normal,Ungraded,Near Mint,49.99,1,60,0,false,2023-09-22,
+Sealed Star Wars Unlimited,Star Wars Unlimited,Surging Sparks,Shadows of the Galaxy Booster Pack,,,Normal,Ungraded,Near Mint,4.49,6,5,0,false,2024-11-08,`;
 
 export async function steps(h: ReplayHarness) {
   await h.navigate('/ingest/csv');

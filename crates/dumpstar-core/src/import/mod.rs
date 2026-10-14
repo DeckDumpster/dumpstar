@@ -62,7 +62,7 @@ pub struct ParsedSealedRow {
     pub set_hint: String,
     /// Set name as written, a resolution fallback. May be empty.
     pub set_name: Option<String>,
-    /// Optional product-category hint (e.g. `booster_box`), if the source
+    /// Optional product-category hint (e.g. `booster_display`), if the source
     /// carries one. Collectr does not, so this is usually `None`.
     pub category_hint: Option<String>,
     /// Number of sealed items — kept, not expanded 1:1.

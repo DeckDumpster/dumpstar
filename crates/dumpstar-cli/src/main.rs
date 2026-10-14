@@ -23,7 +23,7 @@ use clap::{Parser, Subcommand};
 #[command(
     name = "dumpstar",
     version,
-    about = "Dumpstar — a Pokémon TCG collection tracker"
+    about = "Dumpstar — a Star Wars: Unlimited collection tracker"
 )]
 struct Cli {
     #[command(subcommand)]

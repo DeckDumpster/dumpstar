@@ -22,7 +22,7 @@ export const variants = new VariantsStore();
 // +layout.ts load gate awaits variants.load() before any page renders,
 // so in practice the map is always populated when these are called.
 
-/** Human-readable label, e.g. 'pokeball_rh' → 'Poké Ball Reverse Holo'. */
+/** Human-readable label, e.g. 'hyperspace_foil' → 'Hyperspace Foil'. */
 export function variantLabel(code: string): string {
 	return variants.map[code]?.label ?? code;
 }
@@ -60,8 +60,8 @@ export function variantTag(code: string): string {
 	return variants.map[code]?.short ?? code;
 }
 
-/** Origin-of-the-printing description, e.g. "Build & Battle Box" or
- *  "Trick or Trade BOOster Bundle". Null when no canonical source is
+/** Origin-of-the-printing description, e.g. "Prerelease Kit" or
+ *  "Two-Player Starter". Null when no canonical source is
  *  known. Rendered as a small subtitle on variant rows. */
 export function variantProvenance(code: string): string | null {
 	return variants.map[code]?.provenance ?? null;

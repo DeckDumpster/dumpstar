@@ -5,6 +5,7 @@
 //! architecture/SEARCH_QUERY_LANGUAGE.md.
 
 pub mod card;
+pub mod deck;
 pub mod import;
 pub mod query;
 

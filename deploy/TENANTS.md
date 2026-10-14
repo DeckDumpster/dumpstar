@@ -273,7 +273,7 @@ identity bindings it had. `dumpstar tenant purge <database_id> --yes` destroys a
 A tenant's requests reach a connection opened against that tenant's own
 database file, so another tenant's rows are not in scope for any query — there
 is no `WHERE tenant_id = ?` that a route could forget. Four things hold that
-up, all in `crates/dumpstar-server/src/tenant.rs`:
+up, all in `dumpster-kit-tenancy` (`src/tenant.rs`):
 
 - The application state holds **no connection**. The only way to a database is
   `blocking()`, and the only way to name one is a `TenantId` that the
@@ -290,7 +290,7 @@ up, all in `crates/dumpstar-server/src/tenant.rs`:
 **The email is a lookup key, not a filename.** What the identity carries is an
 *email address*; what a request is served from is `tenants/<database_id>.sqlite`,
 and the two are joined by a row in the user registry (`registry.sqlite`, see
-`crates/dumpstar-db/src/registry.rs`) rather than by string equality. Resolution
+`dumpster-kit-tenancy`, `src/registry.rs`) rather than by string equality. Resolution
 is a `SELECT` with the email as a bound parameter, and the only string that
 reaches a path constructor is the `database_id` that lookup returned — which
 only the registry mints, and which `dumpstar_db::tenant_db_file` re-checks is a
@@ -692,7 +692,7 @@ first half means something. It runs in `deploy/ci.sh`.
 ## Authentication — Cloudflare Access JWT validation
 
 Cloudflare Access JWT validation is in place
-(`crates/dumpstar-server/src/access.rs`). When configured, every request to
+(`dumpster-kit-tenancy`, `src/access.rs`). When configured, every request to
 `/api/*` must carry a valid RS256 JWT from Cloudflare Access, either in the
 `Cf-Access-Jwt-Assertion` header or the `CF_Authorization` cookie. A request
 with a missing or invalid token returns **401**.

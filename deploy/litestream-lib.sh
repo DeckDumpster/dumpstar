@@ -18,7 +18,7 @@
 # Sourced, not executed. Callers must have the instance's litestream.env in the
 # environment (LITESTREAM_S3_BUCKET / _PATH / _REGION, optionally _ENDPOINT).
 
-# Mirrors dumpstar-db's validate_tenant_name (crates/dumpstar-db/src/paths.rs):
+# Mirrors dumpstar-db's validate_tenant_name (dumpster-kit-tenancy src/paths.rs):
 # the charset a HANDLE is held to where it is issued. A handle is no longer a
 # filename — `pd-fci1` split the two, and what names a file is a `database_id`
 # (validate_database_id, below) — but a handle-named database from before
@@ -43,7 +43,7 @@ validate_tenant_name() {
     esac
 }
 
-# Mirrors dumpstar-db's validate_database_id (crates/dumpstar-db/src/paths.rs):
+# Mirrors dumpstar-db's validate_database_id (dumpster-kit-tenancy src/paths.rs):
 # 26 characters of UPPERCASE Crockford base32. pd-zr9n settled the case question
 # deliberately — `01J8…` and `01j8…` are one file on a case-insensitive
 # filesystem but two S3 prefixes, which is the same disagreement the handle

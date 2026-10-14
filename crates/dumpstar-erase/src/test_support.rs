@@ -85,9 +85,7 @@ pub fn dir_zone() -> (Fixture, DirStore, TenantZoneConfig) {
 
 /// A registry carrying the real schema, with `ids` registered as live tenants.
 pub fn registry(ids: &[&str]) -> Connection {
-    let conn = Connection::open_in_memory().unwrap();
-    conn.execute_batch(include_str!("../../dumpstar-db/src/schema_registry.sql"))
-        .unwrap();
+    let conn = dumpstar_db::open_registry(std::path::Path::new(":memory:")).unwrap();
     for id in ids {
         dumpstar_keys::state::register(&conn, id).unwrap();
     }

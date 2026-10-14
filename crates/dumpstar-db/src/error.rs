@@ -54,5 +54,18 @@ impl From<dumpstar_core::import::ImportError> for DbError {
     }
 }
 
+impl From<dumpster_kit_tenancy::TenancyError> for DbError {
+    fn from(e: dumpster_kit_tenancy::TenancyError) -> Self {
+        use dumpster_kit_tenancy::TenancyError as T;
+        match e {
+            T::Sqlite(e) => DbError::Sqlite(e),
+            T::Env(m) => DbError::Env(m),
+            T::NotFound(m) => DbError::NotFound(m),
+            T::Conflict(m) => DbError::Conflict(m),
+            T::SchemaVersion(m) => DbError::SchemaVersion(m),
+        }
+    }
+}
+
 /// Convenience alias for results in this crate.
 pub type Result<T> = std::result::Result<T, DbError>;

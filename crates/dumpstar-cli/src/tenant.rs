@@ -47,7 +47,7 @@
 //! works against a running instance the same way `dumpstar db` does.
 
 use dumpstar_db::registry;
-use dumpstar_db::schema_version::{Database, SchemaState};
+use dumpstar_db::schema_version::{self, SchemaState};
 use dumpstar_db::tenants::{self, TenantSchema};
 
 /// Arguments for `dumpstar tenant`.
@@ -469,7 +469,7 @@ fn list() -> anyhow::Result<()> {
             dumpstar_db::registry_db_path()?.display()
         );
     } else {
-        let known = Database::User.version();
+        let known = schema_version::User.version;
         // Measured, not guessed: a timestamp is as long as the registry
         // wrote it, and a detached row carries its holder's real handle.
         let widest = |header: &str, of: &dyn Fn(&TenantSchema) -> &str| {

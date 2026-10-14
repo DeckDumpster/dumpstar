@@ -36,7 +36,9 @@ dumpstar-server = { path = "crates/dumpstar-server" }
 dumpstar-ship = { path = "crates/dumpstar-ship" }
 
 # The shared kit, pinned to a revision (the kit has no tags yet); moves only through a bump bead.
-dumpster-kit-tcgcsv = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "5987630bd14623f215f12b40cf399072f3fca7c7" }
+dumpster-kit-tcgcsv = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "ecc3ed6ebf32d551262609f61fe519546c0878ea" }
+dumpster-kit-tenancy = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "ecc3ed6ebf32d551262609f61fe519546c0878ea" }
+dumpster-kit-conformance = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "ecc3ed6ebf32d551262609f61fe519546c0878ea" }
 
 # External — crates opt in via `dep.workspace = true` as tasks need them
 anyhow = "1"

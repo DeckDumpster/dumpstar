@@ -50,7 +50,7 @@ use crate::paths::{
     validate_tenant_name,
 };
 use crate::registry::{self, User, UserState};
-use crate::schema_version::{self, Database, SchemaState};
+use crate::schema_version::{self, SchemaState};
 
 /// Sidecar files SQLite keeps beside a database in WAL mode.
 const WAL_SIDECARS: [&str; 2] = ["-wal", "-shm"];
@@ -347,7 +347,7 @@ pub fn purge(database_id: &str) -> Result<User> {
     }
     remove_sidecars(&path);
     let _ = std::fs::remove_dir_all(litestream_dir(&path));
-    registry::delete(&conn, database_id)
+    Ok(registry::delete(&conn, database_id)?)
 }
 
 /// One database moved between the two ways of naming it.
@@ -476,7 +476,7 @@ pub fn unmigrate() -> Result<(Vec<Moved>, Vec<User>)> {
             // Put it back rather than leaving a handle-named file that a row
             // still claims under its id.
             let _ = std::fs::rename(&to, &from);
-            return Err(e);
+            return Err(e.into());
         }
         moved.push(Moved {
             handle: user.handle,
@@ -565,7 +565,7 @@ impl TenantSchema {
     /// Where this user's database stands relative to this build, or `None`
     /// for a database that is not here to have a version.
     pub fn state(&self) -> Option<SchemaState> {
-        self.version.map(|v| Database::User.state_of(v))
+        self.version.map(|v| schema_version::User.state_of(v))
     }
 }
 
@@ -1260,7 +1260,7 @@ mod tests {
     #[test]
     fn versions_reports_each_users_own_schema_version() {
         with_home(|_| {
-            let known = Database::User.version();
+            let known = crate::schema_version::User.version;
             let current = create("current").unwrap();
             let behind = create("behind").unwrap();
             let ahead = create("ahead").unwrap();
@@ -1307,7 +1307,7 @@ mod tests {
         with_home(|_| {
             let alice = create("alice").unwrap();
             create("bob").unwrap();
-            let ahead = Database::User.version() + 1;
+            let ahead = crate::schema_version::User.version + 1;
             set_version(&alice.path, ahead);
 
             assert!(
@@ -1341,7 +1341,10 @@ mod tests {
             assert_eq!(reported[0].version, None);
             assert_eq!(reported[0].state(), None);
             assert!(!reported[0].tenant.present);
-            assert_eq!(reported[1].version, Some(Database::User.version()));
+            assert_eq!(
+                reported[1].version,
+                Some(crate::schema_version::User.version)
+            );
         });
     }
 
@@ -1388,7 +1391,10 @@ mod tests {
 
             let reported = versions().unwrap();
             assert_eq!(reported[0].tenant.user.handle, "alice");
-            assert_eq!(reported[0].version, Some(Database::User.version()));
+            assert_eq!(
+                reported[0].version,
+                Some(crate::schema_version::User.version)
+            );
             assert_eq!(reported[1].tenant.user.handle, "bob");
             assert_eq!(reported[1].version, Some(0));
             assert_ne!(alice.user.database_id, bob.user.database_id);

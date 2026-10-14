@@ -8,6 +8,7 @@ authors.workspace = true
 [dependencies]
 dumpstar-core.workspace = true
 dumpstar-db.workspace = true
+dumpster-kit-tenancy.workspace = true
 rusqlite.workspace = true
 axum.workspace = true
 tokio.workspace = true
@@ -18,10 +19,10 @@ serde.workspace = true
 serde_json.workspace = true
 ts-rs.workspace = true
 # Cloudflare Access JWT validation.
-jsonwebtoken.workspace = true
-reqwest.workspace = true
 
 [dev-dependencies]
+dumpster-kit-tenancy = { workspace = true, features = ["testing"] }
+dumpster-kit-conformance.workspace = true
 dumpstar-catalog.workspace = true
 chrono.workspace = true
 tempfile.workspace = true

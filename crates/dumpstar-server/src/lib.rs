@@ -25,11 +25,10 @@ use dumpstar_core::query::KeywordRegistry;
 use dumpstar_db::DbError;
 use dumpstar_db::search_meta::SearchFlag;
 
-pub mod access;
 mod routes;
-pub mod tenant;
 
-use tenant::Tenants;
+use dumpster_kit_tenancy::{AccessState, HttpError, Tenants};
+pub use dumpster_kit_tenancy::{access, tenant};
 
 /// Shared application state: the collection databases this process may serve
 /// plus the immutable search registry/flags loaded once at startup.
@@ -47,7 +46,7 @@ pub struct AppState {
     /// freshness marker the host-side Layer 1 checker writes (ivq.5).
     data_dir: Arc<PathBuf>,
     /// Cloudflare Access JWT validation state (JWKS cache + config).
-    pub(crate) access: Arc<access::AccessState>,
+    pub(crate) access: Arc<AccessState>,
 }
 
 /// An error rendered as an HTTP response. `DbError::NotFound` → 404,
@@ -83,6 +82,12 @@ impl From<DbError> for AppError {
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         AppError(code, e.to_string())
+    }
+}
+
+impl From<HttpError> for AppError {
+    fn from(HttpError(code, body): HttpError) -> Self {
+        AppError(code, body)
     }
 }
 
@@ -228,8 +233,14 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
     // separately, without the auth layers, so they remain reachable from
     // plain localhost — e.g. `alarm-status.sh` reading `/api/backup-status`.
     let authenticated_api = routes::authenticated_api_router()
-        .route_layer(middleware::from_fn_with_state(state.clone(), tenant::layer))
-        .route_layer(middleware::from_fn_with_state(state.clone(), access::layer));
+        .route_layer(middleware::from_fn_with_state(
+            state.tenants.clone(),
+            tenant::layer,
+        ))
+        .route_layer(middleware::from_fn_with_state(
+            state.access.clone(),
+            access::layer,
+        ));
     let public_api = routes::public_api_router();
     Router::new()
         .route("/health", get(|| async { "ok" }))
@@ -299,8 +310,14 @@ pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
     };
     // Cloudflare Access JWT validation: primes the JWKS cache; a failed fetch
     // is a startup failure.
-    let access = access::AccessState::new(cfg.access).await?;
-    let tenants = Tenants::new(cfg.tenants_dir, cfg.shared_db, &cfg.registry_db)?;
+    let access = AccessState::new(cfg.access).await?;
+    let tenants = Tenants::new(
+        dumpstar_db::app::app().clone(),
+        cfg.tenants_dir,
+        cfg.shared_db,
+        &cfg.registry_db,
+        dumpstar_db::user_spec(),
+    )?;
     let state = AppState {
         tenants: Arc::new(tenants),
         registry,
@@ -318,9 +335,9 @@ pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use access::test_support::TestAccessFixture;
     use axum::body::Body;
     use axum::http::{Request, header};
+    use dumpster_kit_tenancy::testing::TestAccessFixture;
     use tower::ServiceExt;
 
     /// A catalog holding one printing (`SOR-1-normal`), plus the static
@@ -391,6 +408,21 @@ mod tests {
         (dir, router, tenants_dir, fx)
     }
 
+    fn test_tenants(
+        tenants_dir: PathBuf,
+        shared: PathBuf,
+        registry_db: &std::path::Path,
+    ) -> Tenants {
+        Tenants::new(
+            dumpstar_db::app::app().clone(),
+            tenants_dir,
+            shared,
+            registry_db,
+            dumpstar_db::user_spec(),
+        )
+        .unwrap()
+    }
+
     /// The router for a data directory whose catalog already exists at
     /// `shared`, with `handles` provisioned.
     async fn serve_over(
@@ -421,7 +453,7 @@ mod tests {
         let router = router_for(
             dir,
             shared,
-            Tenants::new(tenants_dir.clone(), shared.to_path_buf(), &registry_db).unwrap(),
+            test_tenants(tenants_dir.clone(), shared.to_path_buf(), &registry_db),
             fx.access.clone(),
         );
         (router, tenants_dir, fx)
@@ -1161,6 +1193,43 @@ mod tests {
     mod isolation {
         use super::*;
 
+        /// The kit's negative-JWT corpus, minted by the kit's own JWKS fixture, is refused by
+        /// dumpstar's router with the status the corpus states; the valid token under the same
+        /// fixture is the positive control.
+        #[tokio::test]
+        async fn every_entry_of_the_kit_negative_jwt_corpus_is_refused() {
+            let (_d, router, _dir, fx) = multi_tenant_app(&["alice"]).await;
+            let ok = router
+                .clone()
+                .oneshot(request(
+                    "GET",
+                    "/api/collection",
+                    Some(&fx.valid_token("alice@example.com")),
+                    None,
+                ))
+                .await
+                .unwrap();
+            assert_eq!(ok.status(), StatusCode::OK, "the positive control");
+
+            for case in dumpster_kit_conformance::negative_jwts() {
+                let token = fx
+                    .negative_token(&case.name, "alice@example.com")
+                    .unwrap_or_else(|| panic!("no minter for corpus entry {}", case.name));
+                let resp = router
+                    .clone()
+                    .oneshot(request("GET", "/api/collection", Some(&token), None))
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    resp.status().as_u16(),
+                    case.status,
+                    "{}: {}",
+                    case.name,
+                    case.describes
+                );
+            }
+        }
+
         /// Each tenant's JWT email resolves to their own database only.
         #[tokio::test]
         async fn one_tenant_cannot_reach_another_tenants_collection() {
@@ -1378,7 +1447,7 @@ mod tests {
                     .database_id
             };
             let state = AppState {
-                tenants: Arc::new(Tenants::new(tenants_dir, shared, &registry_db).unwrap()),
+                tenants: Arc::new(test_tenants(tenants_dir, shared, &registry_db)),
                 registry: Arc::new(Default::default()),
                 flags: Arc::new(Vec::new()),
                 data_dir: Arc::new(dir.path().to_path_buf()),
@@ -1393,7 +1462,7 @@ mod tests {
             .await;
             assert!(unscoped.is_err(), "a connection without a resolved tenant");
 
-            let scoped = tenant::test_support::as_tenant(
+            let scoped = tenant::as_tenant(
                 &database_id,
                 blocking(&state, |c| {
                     Ok(c.query_row("SELECT count(*) FROM collection", [], |r| {

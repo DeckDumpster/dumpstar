@@ -36,10 +36,7 @@ const A: &str = "01J0000000000000000000000A";
 const B: &str = "01J0000000000000000000000B";
 
 fn registry() -> rusqlite::Connection {
-    let conn = rusqlite::Connection::open_in_memory().unwrap();
-    conn.execute_batch(include_str!("../../dumpstar-db/src/schema_registry.sql"))
-        .unwrap();
-    conn
+    dumpstar_db::open_registry(std::path::Path::new(":memory:")).unwrap()
 }
 
 /// Point the key file at `path` for the duration. Serialised by the same

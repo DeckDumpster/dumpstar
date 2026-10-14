@@ -567,12 +567,15 @@ write_phase early
 # The user registry (pd-nd6w). At the data ROOT, deliberately outside tenants/,
 # holding the only statement anywhere of which file belongs to whom.
 #
-# Applied from the SHIPPED schema rather than a copy of it, so this fixture
+# Applied from the kit's SHIPPED schema (dumpster-kit-tenancy, at the revision the
+# workspace pins) rather than a copy of it, so this fixture
 # cannot drift away from the table the product actually writes. Seeded with
 # sqlite3 rather than the app for the same reason the tenant databases are: the
 # drill exercises the BACKUP layer and should not need a build to run.
 sqlite3 "$(registry_file)" 'PRAGMA journal_mode=WAL;' >/dev/null
-sqlite3 "$(registry_file)" < "${REPO_DIR}/crates/dumpstar-db/src/schema_registry.sql"
+kit_manifest="$(cd "${REPO_DIR}" && cargo metadata --format-version 1 --locked 2>/dev/null \
+    | python3 -c 'import json,sys; print(next(p["manifest_path"] for p in json.load(sys.stdin)["packages"] if p["name"]=="dumpster-kit-tenancy"))')"
+sqlite3 "$(registry_file)" < "$(dirname "${kit_manifest}")/src/schema_registry.sql"
 # RFC3339, with no space in it, because that is what `registry::insert` writes —
 # and because `dumpstar tenant list` prints the registry as a whitespace-separated
 # table, so a `datetime('now')` fixture (which has a space) would silently shift

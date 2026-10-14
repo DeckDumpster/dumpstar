@@ -7,4 +7,12 @@ export type WishlistEntry = { id: number, card_id: string,
 /**
  * A specific wanted printing, or null for "any printing".
  */
-printing_id: string | null, max_price: number | null, priority: number, notes: string | null, added_at: string, source: string, fulfilled_at: string | null, set_code: string, set_name: string, number: string, name: string, rarity: string | null, image_small: string | null, };
+printing_id: string | null, max_price: number | null, priority: number, notes: string | null, added_at: string, source: string, fulfilled_at: string | null, 
+/**
+ * Worst acceptable condition, or null for any.
+ */
+min_condition: string | null, quantity: number, 
+/**
+ * Matching copies added so far; the want is fulfilled at `quantity`.
+ */
+quantity_have: number, set_code: string, set_name: string, number: string, name: string, rarity: string | null, image_small: string | null, };

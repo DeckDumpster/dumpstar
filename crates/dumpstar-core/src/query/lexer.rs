@@ -3,7 +3,6 @@
 //! A regex tokenizer was deliberately avoided to keep `dumpstar-core`
 //! dependency-light; the grammar's context-sensitive bits (keyword-vs-word,
 //! `-`-as-negation-vs-hyphen-in-name) are handled directly by the scanner.
-//! See architecture/SEARCH_QUERY_LANGUAGE.md §2–3.
 
 use crate::query::ast::Op;
 use crate::query::error::QueryError;

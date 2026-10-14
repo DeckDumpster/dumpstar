@@ -1,9 +1,9 @@
-//! Scryfall-style search query language — pure parsing stage.
+//! Keyword search query language — pure parsing stage.
 //!
 //! Pipeline: tokenize → recursive-descent parse → [`Ast`]. There is no IO
 //! here; the [`KeywordRegistry`] (alias → canonical resolution) is injected by
 //! the caller so the crate stays IO-free. The SQL compiler that consumes the
-//! [`Ast`] lives in `dumpstar-db`. See architecture/SEARCH_QUERY_LANGUAGE.md.
+//! [`Ast`] lives in `dumpstar-db`.
 
 pub mod ast;
 pub mod error;

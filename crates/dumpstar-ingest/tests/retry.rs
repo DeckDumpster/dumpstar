@@ -3,7 +3,7 @@
 //! `crates/dumpstar-ingest/src/retry.rs` proves the schedule and the
 //! classification in isolation. What it cannot prove is the thing that
 //! actually failed on 2026-08-11: that a transient 5xx on the way to
-//! `api.pokemontcg.io` no longer ends a run — and that a 404 still does,
+//! the upstream catalog no longer ends a run — and that a 404 still does,
 //! immediately, because asking a second time cannot change what a URL is.
 //!
 //! Every test here fixes its own budget with `.retry(...)` rather than

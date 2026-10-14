@@ -116,19 +116,19 @@ mod tests {
         {
             let c = open_shared(&shared).unwrap();
             c.execute(
-                "INSERT INTO sets (set_code, name, series) VALUES ('sv3pt5', '151', 'SV')",
+                "INSERT INTO sets (set_code, name, series) VALUES ('sor', 'Spark of Rebellion', 'SWU')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('sv3pt5-1', 'sv3pt5', '1', 1, 'Bulbasaur')",
+                 VALUES ('sor-1', 'sor', '1', 1, 'Luke Skywalker')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES ('sv3pt5-1-normal', 'sv3pt5-1', 'normal')",
+                 VALUES ('sor-1-normal', 'sor-1', 'normal')",
                 [],
             )
             .unwrap();
@@ -152,7 +152,7 @@ mod tests {
         coll::add(
             &mut conn,
             &NewCopy {
-                printing_id: "sv3pt5-1-normal".into(),
+                printing_id: "sor-1-normal".into(),
                 source: "manual_id".into(),
                 batch_id: Some(batch_id),
                 ..Default::default()
@@ -163,7 +163,7 @@ mod tests {
         let detail = get_detail(&conn, batch_id).unwrap().unwrap();
         assert_eq!(detail.batch.card_count, 1);
         assert_eq!(detail.cards.len(), 1);
-        assert_eq!(detail.cards[0].name, "Bulbasaur");
+        assert_eq!(detail.cards[0].name, "Luke Skywalker");
 
         assert_eq!(list(&conn, 0).unwrap().len(), 1);
         assert!(get_detail(&conn, 9999).unwrap().is_none());

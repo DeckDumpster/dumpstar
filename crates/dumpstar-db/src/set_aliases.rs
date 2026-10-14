@@ -1,6 +1,6 @@
 //! External set-name aliases: an import platform's set label mapped to a
 //! catalog `set_code`. Collectr names sets differently from the catalog
-//! ("Scarlet & Violet Promo" vs "Scarlet & Violet Black Star Promos"), so
+//! ("SWU Promo" vs "Star Wars: Unlimited Promos"), so
 //! the resolver ([`crate::import::resolve_set`]) consults this table as a
 //! fallback after its code/ptcgo/name lookups.
 //!
@@ -60,8 +60,8 @@ pub(crate) mod tests {
 
     /// A test-owned seed: the shipped file starts empty for Star Wars: Unlimited.
     pub(crate) const TEST_SEED: &str = r#"[
-      {"alias": "Scarlet & Violet Promo", "set_code": "svp"},
-      {"alias": "Mega Evolution Promos", "set_code": "mep"}
+      {"alias": "SWU Promo", "set_code": "swp"},
+      {"alias": "OP Promos", "set_code": "opp"}
     ]"#;
 
     #[test]
@@ -77,8 +77,8 @@ pub(crate) mod tests {
         // Add the two promo sets, then reconcile writes both aliases.
         conn.execute(
             "INSERT INTO sets (set_code, name, series) VALUES \
-               ('svp', 'Scarlet & Violet Black Star Promos', 'SV'), \
-               ('mep', 'ME Black Star Promos', 'SV')",
+               ('swp', 'Star Wars: Unlimited Promos', 'SWU'), \
+               ('opp', 'Organized Play Promos', 'SWU')",
             [],
         )
         .unwrap();
@@ -88,11 +88,11 @@ pub(crate) mod tests {
         // Case-insensitive lookup lands the canonical code.
         let code: String = conn
             .query_row(
-                "SELECT set_code FROM set_aliases WHERE alias = 'scarlet & violet promo'",
+                "SELECT set_code FROM set_aliases WHERE alias = 'swu promo'",
                 [],
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(code, "svp");
+        assert_eq!(code, "swp");
     }
 }

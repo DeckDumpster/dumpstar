@@ -241,7 +241,7 @@ mod tests {
         let id = create(
             &conn,
             &NewDeck {
-                name: "Alice's Charizard deck".into(),
+                name: "Alice's Vader deck".into(),
                 owner: Some("Alice".into()),
                 ..Default::default()
             },

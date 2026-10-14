@@ -330,7 +330,7 @@ mod tests {
     use axum::http::{Request, header};
     use tower::ServiceExt;
 
-    /// A catalog holding one printing (`sv3pt5-1-normal`), plus the static
+    /// A catalog holding one printing (`sor-1-normal`), plus the static
     /// dir the router serves the SPA shell from.
     fn seed(dir: &std::path::Path) -> PathBuf {
         let shared = dir.join("shared.sqlite");
@@ -338,19 +338,19 @@ mod tests {
         dumpstar_db::search_meta::reconcile(&mut c).unwrap();
         c.execute(
             "INSERT INTO sets (set_code, ptcgo_code, name, series) \
-             VALUES ('sv3pt5', 'MEW', '151', 'Scarlet & Violet')",
+             VALUES ('sor', 'SOR', 'Spark of Rebellion', 'Star Wars: Unlimited')",
             [],
         )
         .unwrap();
         c.execute(
             "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-             VALUES ('sv3pt5-1', 'sv3pt5', '1', 1, 'Bulbasaur')",
+             VALUES ('sor-1', 'sor', '1', 1, 'Luke Skywalker')",
             [],
         )
         .unwrap();
         c.execute(
             "INSERT INTO printings (printing_id, card_id, variant) \
-             VALUES ('sv3pt5-1-normal', 'sv3pt5-1', 'normal')",
+             VALUES ('sor-1-normal', 'sor-1', 'normal')",
             [],
         )
         .unwrap();
@@ -447,7 +447,7 @@ mod tests {
         }
     }
 
-    const ADD_CARD: &str = r#"{"printing_id":"sv3pt5-1-normal","source":"manual_id"}"#;
+    const ADD_CARD: &str = r#"{"printing_id":"sor-1-normal","source":"manual_id"}"#;
 
     async fn body_string(resp: Response) -> String {
         let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
@@ -515,7 +515,7 @@ mod tests {
         let unauthenticated_routes = [
             "GET /api/collection",
             "GET /api/sets",
-            "GET /api/card/sv3pt5/1",
+            "GET /api/card/sor/1",
             "GET /api/binders",
             "GET /api/decks",
             "GET /api/wishlist",
@@ -709,11 +709,11 @@ mod tests {
         let symbols = dir.path().join("symbols");
         std::fs::create_dir_all(&symbols).unwrap();
         let png = vec![b'P'; 8 * 1024];
-        std::fs::write(symbols.join("sv3pt5.png"), &png).unwrap();
+        std::fs::write(symbols.join("sor.png"), &png).unwrap();
 
         // Images are not under /api so no token is needed.
         let (encoding, body) =
-            get_encoding(&router, "/sym/sv3pt5.png", Some("gzip, br"), None).await;
+            get_encoding(&router, "/sym/sor.png", Some("gzip, br"), None).await;
         assert_eq!(encoding, "");
         assert_eq!(body, png);
     }
@@ -729,7 +729,7 @@ mod tests {
                 "POST",
                 "/api/collection",
                 Some(&tok),
-                Some(r#"{"printing_id":"sv3pt5-1-normal","source":"manual_id"}"#),
+                Some(r#"{"printing_id":"sor-1-normal","source":"manual_id"}"#),
             ))
             .await
             .unwrap();
@@ -741,7 +741,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(listed.status(), StatusCode::OK);
-        assert!(body_string(listed).await.contains("sv3pt5-1-normal"));
+        assert!(body_string(listed).await.contains("sor-1-normal"));
 
         let bad = router
             .clone()
@@ -749,7 +749,7 @@ mod tests {
                 "POST",
                 "/api/collection",
                 Some(&tok),
-                Some(r#"{"printing_id":"sv3pt5-1-nope","source":"manual_id"}"#),
+                Some(r#"{"printing_id":"sor-1-nope","source":"manual_id"}"#),
             ))
             .await
             .unwrap();
@@ -773,7 +773,7 @@ mod tests {
                 "POST",
                 "/api/manual-prices",
                 Some(&tok),
-                Some(r#"{"printing_id":"sv3pt5-1-normal","price":29.0}"#),
+                Some(r#"{"printing_id":"sor-1-normal","price":29.0}"#),
             ))
             .await
             .unwrap();
@@ -803,14 +803,14 @@ mod tests {
 
         let found = router
             .clone()
-            .oneshot(request("GET", "/api/card/sv3pt5/1", Some(&tok), None))
+            .oneshot(request("GET", "/api/card/sor/1", Some(&tok), None))
             .await
             .unwrap();
         assert_eq!(found.status(), StatusCode::OK);
-        assert!(body_string(found).await.contains("Bulbasaur"));
+        assert!(body_string(found).await.contains("Luke Skywalker"));
 
         let missing = router
-            .oneshot(request("GET", "/api/card/sv3pt5/999", Some(&tok), None))
+            .oneshot(request("GET", "/api/card/sor/999", Some(&tok), None))
             .await
             .unwrap();
         assert_eq!(missing.status(), StatusCode::NOT_FOUND);
@@ -827,7 +827,7 @@ mod tests {
                 "POST",
                 "/api/collection",
                 Some(&tok),
-                Some(r#"{"printing_id":"sv3pt5-1-normal","source":"manual_id"}"#),
+                Some(r#"{"printing_id":"sor-1-normal","source":"manual_id"}"#),
             ))
             .await
             .unwrap();
@@ -839,7 +839,7 @@ mod tests {
             .unwrap();
         assert_eq!(owned.status(), StatusCode::OK);
         let body = body_string(owned).await;
-        assert!(body.contains("sv3pt5-1-normal"), "owned search: {body}");
+        assert!(body.contains("sor-1-normal"), "owned search: {body}");
         assert!(body.contains("\"owned\":true"), "owned flag: {body}");
 
         let none = router
@@ -926,7 +926,7 @@ mod tests {
             let c = dumpstar_db::open_shared(&dir.path().join("shared.sqlite")).unwrap();
             c.execute(
                 "INSERT INTO catalog_price_overrides (printing_id, price, observed_at) \
-                 VALUES ('sv3pt5-1-normal', 12.5, '2025-01-01')",
+                 VALUES ('sor-1-normal', 12.5, '2025-01-01')",
                 [],
             )
             .unwrap();
@@ -1167,7 +1167,7 @@ mod tests {
                 .oneshot(request("GET", "/api/collection", Some(&alice_tok), None))
                 .await
                 .unwrap();
-            assert!(body_string(alices).await.contains("sv3pt5-1-normal"));
+            assert!(body_string(alices).await.contains("sor-1-normal"));
         }
 
         /// An unbound email is a 403 and does not create a database.
@@ -1277,7 +1277,7 @@ mod tests {
             dumpstar_db::registry::reattach(&reg, &alice.database_id).unwrap();
             let resp = get().await.unwrap();
             assert_eq!(resp.status(), StatusCode::OK);
-            assert!(body_string(resp).await.contains("sv3pt5-1-normal"));
+            assert!(body_string(resp).await.contains("sor-1-normal"));
         }
 
         /// A leftover `x-dumpstar-tenant` header cannot be used to reach another
@@ -1319,7 +1319,7 @@ mod tests {
             assert_eq!(resp.status(), StatusCode::OK);
             let body = body_string(resp).await;
             assert!(
-                body.contains("sv3pt5-1-normal"),
+                body.contains("sor-1-normal"),
                 "alice's header claim resolved to the wrong collection: {body}"
             );
         }
@@ -1385,7 +1385,7 @@ mod tests {
 
             for (uri, body) in [
                 ("/api/collection", ADD_CARD),
-                ("/api/wishlist", r#"{"card_id":"sv3pt5-1"}"#),
+                ("/api/wishlist", r#"{"card_id":"sor-1"}"#),
                 ("/api/binders", r#"{"name":"alice-binder"}"#),
                 ("/api/decks", r#"{"name":"alice-deck"}"#),
             ] {
@@ -1429,8 +1429,8 @@ mod tests {
 
             // ...and everything is still there, unchanged, for A.
             for (uri, needle) in [
-                ("/api/collection", "sv3pt5-1-normal"),
-                ("/api/wishlist", "sv3pt5-1"),
+                ("/api/collection", "sor-1-normal"),
+                ("/api/wishlist", "sor-1"),
                 ("/api/binders", "alice-binder"),
                 ("/api/decks", "alice-deck"),
             ] {
@@ -1564,11 +1564,11 @@ mod tests {
                 (
                     "PUT",
                     "/api/collection/1/printing",
-                    Some(r#"{"printing_id":"sv3pt5-1-normal"}"#),
+                    Some(r#"{"printing_id":"sor-1-normal"}"#),
                 ),
                 (
                     "DELETE",
-                    "/api/collection/by-printing/sv3pt5-1-normal",
+                    "/api/collection/by-printing/sor-1-normal",
                     None,
                 ),
                 ("DELETE", "/api/collection/1", None),
@@ -1603,7 +1603,7 @@ mod tests {
                     );
                 } else {
                     assert!(
-                        !out.contains("sv3pt5-1-normal"),
+                        !out.contains("sor-1-normal"),
                         "bob reads alice's copy through {uri}: {out}"
                     );
                 }
@@ -1611,7 +1611,7 @@ mod tests {
 
             let (s, out) = send("GET", "/api/collection/1", &a, None).await;
             assert_eq!(s, StatusCode::OK, "alice lost her copy: {out}");
-            assert!(out.contains("sv3pt5-1-normal"), "{out}");
+            assert!(out.contains("sor-1-normal"), "{out}");
             assert!(!out.contains("pwned") && !out.contains("sold"), "{out}");
         }
 
@@ -1669,7 +1669,7 @@ mod tests {
                 let (s, sets) = get(tok, "/api/sets".into()).await;
                 assert_eq!(s, StatusCode::OK);
                 let rows = sets.as_array().unwrap();
-                for code in ["sv3pt5", "empty", "two"] {
+                for code in ["sor", "empty", "two"] {
                     let row = rows.iter().find(|r| r["set_code"] == code);
                     let row = row.unwrap_or_else(|| panic!("{who}: set {code} missing"));
                     let (s, page) = get(tok, format!("/api/sets/{code}/binder")).await;
@@ -1727,7 +1727,7 @@ mod tests {
                 conn.execute_batch(&format!(
                     "INSERT INTO collection (printing_id, acquired_at, source)
                      WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < {N})
-                     SELECT 'sv3pt5-1-normal', '2026-01-01', 'manual_id' FROM n;"
+                     SELECT 'sor-1-normal', '2026-01-01', 'manual_id' FROM n;"
                 ))
                 .unwrap();
             }

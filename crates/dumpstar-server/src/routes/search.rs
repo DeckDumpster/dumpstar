@@ -1,5 +1,5 @@
-//! `/api/collection/search` and `/api/search/keywords` — the Scryfall-style
-//! collection search (see architecture/SEARCH_QUERY_LANGUAGE.md §8).
+//! `/api/collection/search` and `/api/search/keywords` — the keyword
+//! collection search.
 //!
 //! The query is parsed against the registry, compiled, and executed. A parse
 //! error returns HTTP 400 with a JSON body `{error, position}` so the frontend

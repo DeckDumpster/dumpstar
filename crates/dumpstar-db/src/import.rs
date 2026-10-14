@@ -134,8 +134,8 @@ pub struct CommitResult {
 /// Resolve a set hint to a catalog `set_code`: exact code, then ptcgo code,
 /// then set name (the explicit name field, then the hint read as a name),
 /// and finally the external set-name alias table (`set_aliases`) so an
-/// import platform's own label (Collectr's "Scarlet & Violet Promo") lands
-/// on the catalog code ('svp'). Aliases are data — see [`crate::set_aliases`].
+/// import platform's own label (Collectr's "SWU Promo") lands
+/// on the catalog code ('swp'). Aliases are data — see [`crate::set_aliases`].
 ///
 /// Shared with the sealed import pipeline ([`crate::sealed_import`]).
 pub(crate) fn resolve_set(
@@ -187,10 +187,10 @@ pub(crate) fn resolve_set(
 
 /// Strip trailing parenthetical/bracketed descriptor groups an import
 /// platform appends to a card name that the catalog name doesn't carry —
-/// "Great Tusk ex (Paldean Fates Stamped)" → "Great Tusk ex", "Ancient Mew
-/// [2000]" → "Ancient Mew". Only *trailing* groups are removed (repeatedly),
+/// "Boba Fett (Prerelease Stamped)" → "Boba Fett", "Yoda
+/// [2000]" → "Yoda". Only *trailing* groups are removed (repeatedly),
 /// so interior text is untouched; the catalog side is never stripped, so a
-/// genuinely distinct printing like "Ancient Mew (Japanese Exclusive Print)"
+/// genuinely distinct printing like "Yoda (Convention Exclusive Print)"
 /// stays its own card.
 fn strip_trailing_descriptors(name: &str) -> String {
     let mut s = name.trim();
@@ -259,11 +259,11 @@ fn global_card_fallback(conn: &Connection, want_name: &str, number: &str) -> Res
 
 /// Reduce a collector number to a comparable "core" so the catalog's
 /// inconsistent promo numbering still matches. Some promo cards are stored
-/// with a redundant lowercase set-code prefix ("svp 176", "svp193") and
+/// with a redundant lowercase set-code prefix ("swp 176", "swp193") and
 /// others bare ("163") — upstream data we can't renumber without orphaning
 /// owned printings. Strip a leading copy of the set code (case-insensitive,
 /// optional following space), then unpad leading zeros on a purely-numeric
-/// result. Genuinely alphanumeric numbers like "GG01" are left intact.
+/// result. Genuinely alphanumeric numbers like "X01" are left intact.
 fn number_core(number: &str, set_code: &str) -> String {
     let lower = number.trim().to_lowercase();
     let sc = set_code.to_lowercase();
@@ -380,8 +380,8 @@ pub fn resolve(conn: &Connection, rows: &[ParsedRow]) -> Result<ResolutionReport
         // that carry a card name can use it.
         // Set resolved but the exact number missed: retry within the set on
         // the number core before going global — this rescues the catalog's
-        // inconsistent promo prefixes (e.g. svp 'Umbreon ex' stored as
-        // "svp 176" vs Collectr's "SVP 176").
+        // inconsistent promo prefixes (e.g. swp 'Darth Maul' stored as
+        // "swp 176" vs Collectr's "SWP 176").
         let scoped = match (&direct, &set_code) {
             (None, Some(sc)) => {
                 set_scoped_number_match(conn, sc, &lookup_number, row.name.as_deref())?
@@ -837,19 +837,19 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
             let c = open_shared(&shared).unwrap();
             c.execute(
                 "INSERT INTO sets (set_code, ptcgo_code, name, series) \
-                 VALUES ('sv3pt5', 'SOR', 'Spark of Rebellion', 'SOR')",
+                 VALUES ('sor', 'SOR', 'Spark of Rebellion', 'SOR')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Luke Skywalker')",
+                 VALUES ('sor-6', 'sor', '6', 6, 'Luke Skywalker')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES ('sv3pt5-6-normal', 'sv3pt5-6', 'normal')",
+                 VALUES ('sor-6-normal', 'sor-6', 'normal')",
                 [],
             )
             .unwrap();
@@ -857,13 +857,13 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
             // regression fixture (Collectr writes '090').
             c.execute(
                 "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('sv3pt5-90', 'sv3pt5', '90', 90, 'Simisage')",
+                 VALUES ('sor-90', 'sor', '90', 90, 'Simisage')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES ('sv3pt5-90-normal', 'sv3pt5-90', 'normal')",
+                 VALUES ('sor-90-normal', 'sor-90', 'normal')",
                 [],
             )
             .unwrap();
@@ -879,7 +879,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
 
         // Two 'normal' copies of #6 resolve via the ptcgo code 'SOR'.
         assert_eq!(report.matched.len(), 2);
-        assert_eq!(report.matched[0].set_code, "sv3pt5");
+        assert_eq!(report.matched[0].set_code, "sor");
         assert_eq!(report.matched[0].card_name, "Luke Skywalker");
         assert_eq!(report.matched[0].purchase_price, Some(1.50));
 
@@ -918,7 +918,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         let (_d, conn) = db();
         let rows = vec![ParsedRow {
             source_line: 2,
-            set_hint: "sv3pt5".into(),
+            set_hint: "sor".into(),
             set_name: None,
             name: None,
             number: "090".into(),
@@ -932,13 +932,13 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         let report = resolve(&conn, &rows).unwrap();
         assert_eq!(report.matched.len(), 1, "{:?}", report.unmatched);
         assert_eq!(report.matched[0].card_name, "Simisage");
-        assert_eq!(report.matched[0].printing_id, "sv3pt5-90-normal");
+        assert_eq!(report.matched[0].printing_id, "sor-90-normal");
     }
 
     #[test]
     fn set_alias_plus_leading_zero_resolves_promo_card() {
-        // Collectr sends set 'Mega Evolution Promos' (aliased to mep) and a
-        // zero-padded number '009'; the catalog has mep #9 Alakazam. Both the
+        // Collectr sends set 'OP Promos' (aliased to opp) and a
+        // zero-padded number '009'; the catalog has opp #9 Han Solo. Both the
         // alias fallback and the leading-zero fix must fire together.
         let dir = tempfile::tempdir().unwrap();
         let shared = dir.path().join("shared.sqlite");
@@ -946,27 +946,27 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
             let mut c = open_shared(&shared).unwrap();
             c.execute(
                 "INSERT INTO sets (set_code, name, series) \
-                 VALUES ('mep', 'ME Black Star Promos', 'SV')",
+                 VALUES ('opp', 'Organized Play Promos', 'SWU')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('mep-9', 'mep', '9', 9, 'Alakazam')",
+                 VALUES ('opp-9', 'opp', '9', 9, 'Han Solo')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES ('mep-9-normal', 'mep-9', 'normal')",
+                 VALUES ('opp-9-normal', 'opp-9', 'normal')",
                 [],
             )
             .unwrap();
-            // Now that the mep set exists, the seed writes its alias.
+            // Now that the opp set exists, the seed writes its alias.
             let n =
                 crate::set_aliases::reconcile_from(&mut c, crate::set_aliases::tests::TEST_SEED)
                     .unwrap();
-            assert!(n >= 1, "expected the mep alias to seed once its set exists");
+            assert!(n >= 1, "expected the opp alias to seed once its set exists");
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
 
@@ -974,17 +974,17 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         assert_eq!(
             resolve_set(
                 &conn,
-                "Mega Evolution Promos",
-                Some("Mega Evolution Promos")
+                "OP Promos",
+                Some("OP Promos")
             )
             .unwrap(),
-            Some("mep".to_string())
+            Some("opp".to_string())
         );
 
         let rows = vec![ParsedRow {
             source_line: 2,
-            set_hint: "Mega Evolution Promos".into(),
-            set_name: Some("Mega Evolution Promos".into()),
+            set_hint: "OP Promos".into(),
+            set_name: Some("OP Promos".into()),
             name: None,
             number: "009".into(),
             variant: "normal".into(),
@@ -996,8 +996,8 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         }];
         let report = resolve(&conn, &rows).unwrap();
         assert_eq!(report.matched.len(), 1, "{:?}", report.unmatched);
-        assert_eq!(report.matched[0].set_code, "mep");
-        assert_eq!(report.matched[0].card_name, "Alakazam");
+        assert_eq!(report.matched[0].set_code, "opp");
+        assert_eq!(report.matched[0].card_name, "Han Solo");
     }
 
     /// A catalog with the catch-all cards used by the fallback tests.
@@ -1009,28 +1009,28 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
             c.execute(
                 "INSERT INTO sets (set_code, name, series) VALUES \
                    ('mcap', 'Miscellaneous Promos', 'Other'), \
-                   ('svp', 'Scarlet & Violet Black Star Promos', 'SV'), \
-                   ('sv4pt5', 'Paldean Fates', 'SV')",
+                   ('swp', 'Star Wars: Unlimited Promos', 'SWU'), \
+                   ('shd', 'Shadows of the Galaxy', 'SWU')",
                 [],
             )
             .unwrap();
-            // Ancient Mew at #1, and a distinct Japanese-exclusive printing at
+            // Yoda at #1, and a distinct convention-exclusive printing at
             // #1a — the catalog side keeps its "(...)" so it stays separate.
-            // Great Tusk ex #72 in svp vs Oinkologne #72 in sv4pt5 (same
+            // Boba Fett #72 in swp vs Jabba the Hutt #72 in shd (same
             // number, different name → the name disambiguates).
             c.execute(
                 "INSERT INTO cards (card_id, set_code, number, number_sortable, name) VALUES \
-                   ('mcap-1',  'mcap',   '1',  1, 'Ancient Mew'), \
-                   ('mcap-1a', 'mcap',   '1a', 1, 'Ancient Mew (Japanese Exclusive Print)'), \
-                   ('svp-72',  'svp',    '72', 72, 'Great Tusk ex'), \
-                   ('sv4pt5-72','sv4pt5','72', 72, 'Oinkologne')",
+                   ('mcap-1',  'mcap',   '1',  1, 'Yoda'), \
+                   ('mcap-1a', 'mcap',   '1a', 1, 'Yoda (Convention Exclusive Print)'), \
+                   ('swp-72',  'swp',    '72', 72, 'Boba Fett'), \
+                   ('shd-72','shd','72', 72, 'Jabba the Hutt')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO printings (printing_id, card_id, variant) VALUES \
                    ('mcap-1-normal', 'mcap-1', 'normal'), \
-                   ('svp-72-holo', 'svp-72', 'holo')",
+                   ('swp-72-holo', 'swp-72', 'holo')",
                 [],
             )
             .unwrap();
@@ -1059,33 +1059,33 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
     fn misc_card_resolves_by_name_stripping_year_suffix() {
         // Collectr's Misc bucket doesn't resolve as a set; the name (with its
         // "[2000]" suffix stripped) plus number falls back to mcap #1, not the
-        // distinct "(Japanese Exclusive Print)" at #1a.
+        // distinct "(Convention Exclusive Print)" at #1a.
         let (_d, conn) = misc_db();
-        let report = resolve(&conn, &[misc_row("Ancient Mew [2000]", "1", "normal")]).unwrap();
+        let report = resolve(&conn, &[misc_row("Yoda [2000]", "1", "normal")]).unwrap();
         assert_eq!(report.matched.len(), 1, "{:?}", report.unmatched);
-        assert_eq!(report.matched[0].card_name, "Ancient Mew");
+        assert_eq!(report.matched[0].card_name, "Yoda");
         assert_eq!(report.matched[0].set_code, "mcap");
         assert_eq!(report.matched[0].printing_id, "mcap-1-normal");
     }
 
     #[test]
     fn stamped_promo_resolves_by_name_and_number_across_sets() {
-        // "Great Tusk ex (Paldean Fates Stamped)" #072 → svp #72 (leading-zero
-        // strip + descriptor strip), never sv4pt5 #72 (Oinkologne).
+        // "Boba Fett (Prerelease Stamped)" #072 → swp #72 (leading-zero
+        // strip + descriptor strip), never shd #72 (Jabba the Hutt).
         let (_d, conn) = misc_db();
         let report = resolve(
             &conn,
             &[misc_row(
-                "Great Tusk ex (Paldean Fates Stamped)",
+                "Boba Fett (Prerelease Stamped)",
                 "072",
                 "holo",
             )],
         )
         .unwrap();
         assert_eq!(report.matched.len(), 1, "{:?}", report.unmatched);
-        assert_eq!(report.matched[0].set_code, "svp");
+        assert_eq!(report.matched[0].set_code, "swp");
         assert_eq!(report.matched[0].number, "72");
-        assert_eq!(report.matched[0].printing_id, "svp-72-holo");
+        assert_eq!(report.matched[0].printing_id, "swp-72-holo");
     }
 
     #[test]
@@ -1133,7 +1133,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         collection::add(
             &mut conn,
             &NewCopy {
-                printing_id: "sv3pt5-6-normal".into(),
+                printing_id: "sor-6-normal".into(),
                 source: "manual_id".into(),
                 ..Default::default()
             },
@@ -1144,7 +1144,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
             report
                 .matched
                 .iter()
-                .all(|r| r.printing_id != "sv3pt5-6-normal" || r.already_owned == 1),
+                .all(|r| r.printing_id != "sor-6-normal" || r.already_owned == 1),
             "matched normal rows should report already_owned == 1"
         );
     }
@@ -1174,9 +1174,9 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
 
     #[test]
     fn set_prefixed_catalog_number_matches_bare_import_number() {
-        // svp stores some promo numbers with a redundant 'svp ' prefix
-        // ('svp 176' = Umbreon ex) and others bare ('163' = Cinderace ex) —
-        // upstream inconsistency we can't renumber. A Collectr 'SVP 176'
+        // swp stores some promo numbers with a redundant 'swp ' prefix
+        // ('swp 176' = Darth Maul) and others bare ('163' = Ahsoka Tano) —
+        // upstream inconsistency we can't renumber. A Collectr 'SWP 176'
         // (normalized to '176') must still resolve to the prefixed card.
         let dir = tempfile::tempdir().unwrap();
         let shared = dir.path().join("shared.sqlite");
@@ -1184,21 +1184,21 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
             let c = open_shared(&shared).unwrap();
             c.execute(
                 "INSERT INTO sets (set_code, name, series) \
-                 VALUES ('svp', 'Scarlet & Violet Black Star Promos', 'SV')",
+                 VALUES ('swp', 'Star Wars: Unlimited Promos', 'SWU')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO cards (card_id, set_code, number, number_sortable, name) VALUES \
-                   ('svp-svp 176', 'svp', 'svp 176', 176, 'Umbreon ex'), \
-                   ('svp-163', 'svp', '163', 163, 'Cinderace ex')",
+                   ('swp-swp 176', 'swp', 'swp 176', 176, 'Darth Maul'), \
+                   ('swp-163', 'swp', '163', 163, 'Ahsoka Tano')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO printings (printing_id, card_id, variant) VALUES \
-                   ('svp-svp 176-holo', 'svp-svp 176', 'holo'), \
-                   ('svp-163-holo', 'svp-163', 'holo')",
+                   ('swp-swp 176-holo', 'swp-swp 176', 'holo'), \
+                   ('swp-163-holo', 'swp-163', 'holo')",
                 [],
             )
             .unwrap();
@@ -1207,7 +1207,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
 
         let row = |name: &str, num: &str| ParsedRow {
             source_line: 2,
-            set_hint: "svp".into(),
+            set_hint: "swp".into(),
             set_name: None,
             name: Some(name.into()),
             number: num.into(),
@@ -1219,13 +1219,13 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
             tags: Vec::new(),
         };
         // Prefixed catalog number vs bare import number — the reported bug.
-        let r = resolve(&conn, &[row("Umbreon ex - 176", "176")]).unwrap();
+        let r = resolve(&conn, &[row("Darth Maul - 176", "176")]).unwrap();
         assert_eq!(r.matched.len(), 1, "{:?}", r.unmatched);
-        assert_eq!(r.matched[0].printing_id, "svp-svp 176-holo");
+        assert_eq!(r.matched[0].printing_id, "swp-swp 176-holo");
         // Bare catalog number still resolves directly (regression guard).
-        let r2 = resolve(&conn, &[row("Cinderace ex", "163")]).unwrap();
+        let r2 = resolve(&conn, &[row("Ahsoka Tano", "163")]).unwrap();
         assert_eq!(r2.matched.len(), 1, "{:?}", r2.unmatched);
-        assert_eq!(r2.matched[0].printing_id, "svp-163-holo");
+        assert_eq!(r2.matched[0].printing_id, "swp-163-holo");
     }
 
     #[test]
@@ -1252,25 +1252,25 @@ Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebel
                 let c = open_shared(&shared).unwrap();
                 c.execute(
                     "INSERT INTO sets (set_code, ptcgo_code, name, series) \
-                     VALUES ('sv3pt5', 'SOR', 'Spark of Rebellion', 'SOR')",
+                     VALUES ('sor', 'SOR', 'Spark of Rebellion', 'SOR')",
                     [],
                 )
                 .unwrap();
                 c.execute(
                     "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                     VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Luke Skywalker')",
+                     VALUES ('sor-6', 'sor', '6', 6, 'Luke Skywalker')",
                     [],
                 )
                 .unwrap();
                 c.execute(
                     "INSERT INTO printings (printing_id, card_id, variant) \
-                     VALUES ('sv3pt5-6-normal', 'sv3pt5-6', 'normal')",
+                     VALUES ('sor-6-normal', 'sor-6', 'normal')",
                     [],
                 )
                 .unwrap();
                 c.execute(
                     "INSERT INTO sealed_products (product_id, set_code, name, category, fetched_at) \
-                     VALUES (7001, 'sv3pt5', 'Spark of Rebellion Two-Player Starter', 'two_player_starter', '2026-02-28')",
+                     VALUES (7001, 'sor', 'Spark of Rebellion Two-Player Starter', 'two_player_starter', '2026-02-28')",
                     [],
                 )
                 .unwrap();
@@ -1327,7 +1327,7 @@ Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebel
         collection::add(
             &mut conn,
             &NewCopy {
-                printing_id: "sv3pt5-6-normal".into(),
+                printing_id: "sor-6-normal".into(),
                 source: "manual_id".into(),
                 ..Default::default()
             },

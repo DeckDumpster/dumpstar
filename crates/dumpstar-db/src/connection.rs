@@ -219,7 +219,7 @@ pub struct IngestSeeds {
 ///
 /// The fix is not to make the skip cleverer — a seed row whose target is
 /// genuinely absent must still be skipped, which is what lets a minimal test
-/// catalog carry neither `svp` nor most of the real sets. It is to run this
+/// catalog carry none of the promo sets nor most of the real sets. It is to run this
 /// group **again at the end of a build**, once the ingest has created
 /// everything it is going to. `dumpstar_derive::derive` and `dumpstar setup` both
 /// end with it, so a single run reaches the fixed point.
@@ -773,7 +773,7 @@ mod tests {
         // between `open_shared` and its own last phase.
         conn.execute_batch(
             "INSERT INTO sets (set_code, name, series) \
-               VALUES ('svp', 'Scarlet & Violet Black Star Promos', 'SV'), \
+               VALUES ('swp', 'Star Wars: Unlimited Promos', 'SWU'), \
                       ('basep', 'Wizards Black Star Promos', 'Base'); \
              INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
                VALUES ('basep-10', 'basep', '10', 10, 'Meowth'); \
@@ -826,13 +826,13 @@ mod tests {
     fn seed_shared(path: &Path) {
         let conn = open_shared(path).unwrap();
         conn.execute(
-            "INSERT INTO sets (set_code, name, series) VALUES ('sv3pt5', '151', 'Scarlet & Violet')",
+            "INSERT INTO sets (set_code, name, series) VALUES ('sor', 'Spark of Rebellion', 'Star Wars: Unlimited')",
             [],
         )
         .unwrap();
         conn.execute(
             "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-             VALUES ('sv3pt5-1', 'sv3pt5', '1', 1, 'Bulbasaur')",
+             VALUES ('sor-1', 'sor', '1', 1, 'Luke Skywalker')",
             [],
         )
         .unwrap();
@@ -878,16 +878,16 @@ mod tests {
 
         // Catalog tables are reachable unqualified via the temp views.
         let name: String = user
-            .query_row("SELECT name FROM sets WHERE set_code = 'sv3pt5'", [], |r| {
+            .query_row("SELECT name FROM sets WHERE set_code = 'sor'", [], |r| {
                 r.get(0)
             })
             .unwrap();
-        assert_eq!(name, "151");
+        assert_eq!(name, "Spark of Rebellion");
 
         // FK-existence helpers see the attached catalog.
-        assert!(catalog::card_exists(&user, "sv3pt5-1").unwrap());
-        assert!(!catalog::card_exists(&user, "sv3pt5-999").unwrap());
-        assert!(!catalog::printing_exists(&user, "sv3pt5-1-normal").unwrap());
+        assert!(catalog::card_exists(&user, "sor-1").unwrap());
+        assert!(!catalog::card_exists(&user, "sor-999").unwrap());
+        assert!(!catalog::printing_exists(&user, "sor-1-normal").unwrap());
 
         // The attachment is read-only: writing to the catalog fails.
         let write = user.execute(
@@ -965,7 +965,7 @@ mod tests {
         .unwrap();
         conn.execute(
             "INSERT INTO collection (printing_id, acquired_at, source, binder_id) \
-             VALUES ('sv3pt5-1-normal', '2026-08-08', 'manual_id', 1)",
+             VALUES ('sor-1-normal', '2026-08-08', 'manual_id', 1)",
             [],
         )
         .unwrap();
@@ -1044,7 +1044,7 @@ mod tests {
         assert_eq!(file_user_version(&path), 0);
 
         let conn = open_shared(&path).unwrap();
-        assert!(crate::catalog::card_exists(&conn, "sv3pt5-1").unwrap());
+        assert!(crate::catalog::card_exists(&conn, "sor-1").unwrap());
         drop(conn);
         assert_eq!(file_user_version(&path), Database::Shared.version() as u32);
     }
@@ -1333,7 +1333,7 @@ mod tests {
 
         let conn = open_shared(&path).unwrap();
         assert!(!has_table(&conn, "refinery_schema_history"));
-        assert!(crate::catalog::card_exists(&conn, "sv3pt5-1").unwrap());
+        assert!(crate::catalog::card_exists(&conn, "sor-1").unwrap());
     }
 
     /// The drop is a statement in the schema, which is re-applied on every
@@ -1377,7 +1377,7 @@ mod tests {
             .unwrap();
         conn.execute(
             "INSERT INTO collection (printing_id, acquired_at, source, condition) \
-             VALUES ('sv3pt5-1-normal', '2026-08-08', 'manual_id', 'Lightly Played')",
+             VALUES ('sor-1-normal', '2026-08-08', 'manual_id', 'Lightly Played')",
             [],
         )
         .unwrap();
@@ -1462,7 +1462,7 @@ mod tests {
 
         let conn = open_shared(&path).unwrap();
         assert!(!has_table(&conn, "conditions"));
-        assert!(catalog::card_exists(&conn, "sv3pt5-1").unwrap());
+        assert!(catalog::card_exists(&conn, "sor-1").unwrap());
     }
 
     /// A catalog built before the move, still physically carrying the table.
@@ -1517,7 +1517,7 @@ mod tests {
         seed_shared(&shared_path);
 
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared_path).unwrap();
-        assert!(catalog::card_exists(&conn, "sv3pt5-1").unwrap());
+        assert!(catalog::card_exists(&conn, "sor-1").unwrap());
     }
 
     #[test]
@@ -1543,7 +1543,7 @@ mod tests {
         // A card may sit in a binder OR a deck.
         conn.execute(
             "INSERT INTO collection (printing_id, acquired_at, source, binder_id) \
-             VALUES ('sv3pt5-1-normal', '2026-05-18', 'manual_id', 1)",
+             VALUES ('sor-1-normal', '2026-05-18', 'manual_id', 1)",
             [],
         )
         .unwrap();
@@ -1551,7 +1551,7 @@ mod tests {
         // ...but not both — the exclusivity CHECK rejects it.
         let both = conn.execute(
             "INSERT INTO collection (printing_id, acquired_at, source, binder_id, deck_id) \
-             VALUES ('sv3pt5-1-reverse_holo', '2026-05-18', 'manual_id', 1, 1)",
+             VALUES ('sor-1-holo', '2026-05-18', 'manual_id', 1, 1)",
             [],
         );
         assert!(

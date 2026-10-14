@@ -103,8 +103,7 @@ impl Wire {
     ///
     /// The reason this is on the `Wire` and not on each client: one
     /// invocation builds one `Wire` and hands it to every client it
-    /// constructs — including the one `japan::import_all` builds internally,
-    /// which nothing outside that function can otherwise reach.
+    /// constructs, so one budget governs the whole invocation.
     pub fn retrying(mut self, retry: RetryPolicy) -> Self {
         self.retry = retry;
         self

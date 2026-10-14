@@ -2,7 +2,6 @@
 //!
 //! Walks the [`Ast`] produced by `dumpstar_core::query` and emits a
 //! parameterized WHERE clause, then assembles a full per-printing query.
-//! See architecture/SEARCH_QUERY_LANGUAGE.md §5–7.
 //!
 //! Design highlights:
 //! - **One row per printing** in both modes (decision D3). Collection-row

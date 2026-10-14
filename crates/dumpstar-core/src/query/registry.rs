@@ -1,10 +1,10 @@
 //! The keyword registry: the data-driven definition of every search keyword.
 //!
-//! Per decision D1 (see architecture/SEARCH_QUERY_LANGUAGE.md) keyword
-//! definitions are DATA, not code: they live in `data/search_keywords.json`
-//! and the `search_keywords` table, and are loaded into a [`KeywordRegistry`]
-//! that the pure parser borrows. `dumpstar-core` only *consumes* the registry —
-//! the loader that reads the DB/JSON lives in `dumpstar-db` (task idf.6).
+//! Keyword definitions are DATA, not code: they live in
+//! `data/search_keywords.json` and the `search_keywords` table, and are
+//! loaded into a [`KeywordRegistry`] that the pure parser borrows.
+//! `dumpstar-core` only *consumes* the registry — the loader that reads the
+//! DB/JSON lives in `dumpstar-db` (task idf.6).
 
 use std::collections::HashMap;
 

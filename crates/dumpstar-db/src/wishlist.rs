@@ -290,13 +290,13 @@ mod tests {
         {
             let c = open_shared(&shared).unwrap();
             c.execute(
-                "INSERT INTO sets (set_code, name, series) VALUES ('sv3pt5', '151', 'SV')",
+                "INSERT INTO sets (set_code, name, series) VALUES ('sor', 'Spark of Rebellion', 'SWU')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Charizard ex')",
+                 VALUES ('sor-6', 'sor', '6', 6, 'Darth Vader')",
                 [],
             )
             .unwrap();
@@ -311,7 +311,7 @@ mod tests {
         let id = add(
             &conn,
             &NewWish {
-                card_id: "sv3pt5-6".into(),
+                card_id: "sor-6".into(),
                 priority: Some(5),
                 max_price: Some(200.0),
                 ..Default::default()
@@ -321,15 +321,15 @@ mod tests {
 
         let active = list(&conn, false).unwrap();
         assert_eq!(active.len(), 1);
-        assert_eq!(active[0].name, "Charizard ex");
+        assert_eq!(active[0].name, "Darth Vader");
         assert_eq!(active[0].priority, 5);
-        assert!(exists_for_card(&conn, "sv3pt5-6").unwrap());
+        assert!(exists_for_card(&conn, "sor-6").unwrap());
 
         // Fulfilled wishes drop out of the active list.
         assert!(set_fulfilled(&conn, id, true).unwrap());
         assert_eq!(list(&conn, false).unwrap().len(), 0);
         assert_eq!(list(&conn, true).unwrap().len(), 1);
-        assert!(!exists_for_card(&conn, "sv3pt5-6").unwrap());
+        assert!(!exists_for_card(&conn, "sor-6").unwrap());
 
         assert!(delete(&conn, id).unwrap());
         assert_eq!(list(&conn, true).unwrap().len(), 0);
@@ -342,20 +342,20 @@ mod tests {
         for v in ["normal", "foil"] {
             c.execute(
                 "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES (?1, 'sv3pt5-6', ?2)",
-                params![format!("sv3pt5-6-{v}"), v],
+                 VALUES (?1, 'sor-6', ?2)",
+                params![format!("sor-6-{v}"), v],
             )
             .unwrap();
         }
         c.execute(
             "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-             VALUES ('sv3pt5-7', 'sv3pt5', '7', 7, 'Other')",
+             VALUES ('sor-7', 'sor', '7', 7, 'Other')",
             [],
         )
         .unwrap();
         c.execute(
             "INSERT INTO printings (printing_id, card_id, variant) \
-             VALUES ('sv3pt5-7-normal', 'sv3pt5-7', 'normal')",
+             VALUES ('sor-7-normal', 'sor-7', 'normal')",
             [],
         )
         .unwrap();
@@ -367,7 +367,7 @@ mod tests {
         add(
             conn,
             &NewWish {
-                card_id: "sv3pt5-6".into(),
+                card_id: "sor-6".into(),
                 printing_id: printing.map(String::from),
                 ..Default::default()
             },
@@ -386,7 +386,7 @@ mod tests {
         crate::collection::add(
             &mut conn,
             &crate::collection::NewCopy {
-                printing_id: "sv3pt5-6-foil".into(),
+                printing_id: "sor-6-foil".into(),
                 source: "manual_id".into(),
                 ..Default::default()
             },
@@ -398,16 +398,16 @@ mod tests {
     #[test]
     fn specific_printing_want_is_not_fulfilled_by_a_different_printing() {
         let (_d, mut conn) = with_printings();
-        want(&conn, Some("sv3pt5-6-foil"));
+        want(&conn, Some("sor-6-foil"));
         let copy = |p: &str| crate::collection::NewCopy {
             printing_id: p.into(),
             source: "manual_id".into(),
             ..Default::default()
         };
-        crate::collection::add(&mut conn, &copy("sv3pt5-6-normal")).unwrap();
-        crate::collection::add(&mut conn, &copy("sv3pt5-7-normal")).unwrap();
+        crate::collection::add(&mut conn, &copy("sor-6-normal")).unwrap();
+        crate::collection::add(&mut conn, &copy("sor-7-normal")).unwrap();
         assert_eq!(active(&conn), 1);
-        crate::collection::add(&mut conn, &copy("sv3pt5-6-foil")).unwrap();
+        crate::collection::add(&mut conn, &copy("sor-6-foil")).unwrap();
         assert_eq!(active(&conn), 0);
     }
 
@@ -417,7 +417,7 @@ mod tests {
         let id = add(
             &conn,
             &NewWish {
-                card_id: "sv3pt5-6".into(),
+                card_id: "sor-6".into(),
                 min_condition: Some("Lightly Played".into()),
                 max_price: Some(10.0),
                 quantity: Some(2),
@@ -426,7 +426,7 @@ mod tests {
         )
         .unwrap();
         let copy = |cond: &str, price: f64| crate::collection::NewCopy {
-            printing_id: "sv3pt5-6-normal".into(),
+            printing_id: "sor-6-normal".into(),
             condition: Some(cond.into()),
             purchase_price: Some(price),
             source: "manual_id".into(),
@@ -450,12 +450,12 @@ mod tests {
         let (_d, conn) = with_printings();
         let bad = |w: NewWish| add(&conn, &w).unwrap_err();
         let base = || NewWish {
-            card_id: "sv3pt5-6".into(),
+            card_id: "sor-6".into(),
             ..Default::default()
         };
         assert!(matches!(
             bad(NewWish {
-                printing_id: Some("sv3pt5-7-normal".into()),
+                printing_id: Some("sor-7-normal".into()),
                 ..base()
             }),
             DbError::NotFound(_)

@@ -1149,7 +1149,7 @@ check "and the netns is left alone" "present" \
 # namespace too. A nightly job may not restart another project's service to get
 # its own work done.
 ns_case foreign
-printf '%s\n' "household mtgc-net" "dumpstar-nessie-prod dumpstar-lake-prod" > "${NS_STATE}/ps"
+printf '%s\n' "household other-net" "dumpstar-nessie-prod dumpstar-lake-prod" > "${NS_STATE}/ps"
 set +e
 ENS_OUT="$(dumpstar_store_netns_ensure dumpstar-lake-prod 2>&1)"
 ENS_RC=$?
@@ -3111,7 +3111,7 @@ case "$args" in
 		exit 254
 		;;
 	denied)
-		echo "An error occurred (AccessDenied) when calling the GetBucketLifecycleConfiguration operation: User: arn:aws:iam::111:user/gantt-mtgc-backup is not authorized to perform: s3:GetLifecycleConfiguration" >&2
+		echo "An error occurred (AccessDenied) when calling the GetBucketLifecycleConfiguration operation: User: arn:aws:iam::111:user/gantt-other-backup is not authorized to perform: s3:GetLifecycleConfiguration" >&2
 		exit 254
 		;;
 	weird)
@@ -3188,7 +3188,7 @@ check "…and never renders the ABSENT verdict" "0" \
 check "…and names the missing permission" "1" \
 	"$(tz_has "$TZ_DENIED" 's3:GetLifecycleConfiguration')"
 check "…and quotes what aws actually said" "1" \
-	"$(tz_has "$TZ_DENIED" 'gantt-mtgc-backup')"
+	"$(tz_has "$TZ_DENIED" 'gantt-other-backup')"
 
 # Fail closed: an error nobody anticipated is "cannot verify", never absence.
 TZ_WEIRD="$(tz_check weird)"

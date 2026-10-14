@@ -39,8 +39,8 @@ adoption beyond tokens and primitives, and a Star Wars: Unlimited rework of the
 `tests/ui` intents and `tests/visual` baselines (`dumpstar seed-fixture` builds
 an SWU fixture; those two still name the Pokémon cards they were written for
 and are outside CI). Sealed products are filled from tcgcsv's numberless
-products at convergence, without prices: the catalog apply job does not yet
-store sealed prices.
+products at convergence; their daily prices are `sealed_prices`, written by the
+catalog apply job as a series apart from the card `prices`.
 
 ## Build and test
 

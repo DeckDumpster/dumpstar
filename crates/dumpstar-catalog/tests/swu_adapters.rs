@@ -523,6 +523,47 @@ fn the_recorded_sor_load_raises_no_alarm_of_its_own() {
     assert!(info > 0, "unlisted promos are counted, not hidden");
 }
 
+#[test]
+fn sealed_products_get_their_own_price_series_and_the_card_prices_are_unchanged() {
+    let (e, _) = loaded();
+    let c = Catalog::open_readonly(&e.db).unwrap();
+    let sealed = count(
+        c.conn(),
+        "SELECT COUNT(*) FROM tcgcsv_products WHERE number IS NULL",
+    );
+    assert!(sealed > 0, "the recorded load has sealed products");
+    let stored = count(c.conn(), "SELECT COUNT(*) FROM sealed_prices");
+    assert!(stored > 0, "sealed price rows are stored");
+    assert_eq!(
+        count(
+            c.conn(),
+            "SELECT COUNT(*) FROM sealed_prices s
+              WHERE NOT EXISTS (SELECT 1 FROM tcgcsv_products t
+                                 WHERE t.product_id = s.tcgplayer_product_id AND t.number IS NULL)"
+        ),
+        0,
+        "only numberless products land in the sealed series"
+    );
+    assert_eq!(
+        count(
+            c.conn(),
+            "SELECT COUNT(*) FROM prices WHERE observed_on = '2026-10-12'"
+        ),
+        count(
+            c.conn(),
+            "SELECT COUNT(*) FROM prices p JOIN printings g USING (printing_id)
+              WHERE p.observed_on = '2026-10-12'"
+        ),
+        "the card series holds card printings only"
+    );
+    let again = {
+        let http = sor();
+        sync_tcgcsv(&e, &http, at(13, 5));
+        count(c.conn(), "SELECT COUNT(*) FROM sealed_prices")
+    };
+    assert_eq!(again, stored, "a second sync of the same day adds nothing");
+}
+
 fn edit_products(http: &mut Recorded, f: impl FnOnce(&mut Vec<Value>)) {
     let mut v: Value = serde_json::from_slice(&http.products[&23405]).unwrap();
     f(v["results"].as_array_mut().unwrap());

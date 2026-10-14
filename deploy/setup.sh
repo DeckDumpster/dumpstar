@@ -48,7 +48,7 @@ POSITIONAL=()
 for arg in "$@"; do
     case $arg in
         --init) INIT=true ;;
-        --test) TEST=true ;;
+        --test) TEST=true; export DUMPSTAR_UNITS_TEST=1 ;;
         *) POSITIONAL+=("$arg") ;;
     esac
 done

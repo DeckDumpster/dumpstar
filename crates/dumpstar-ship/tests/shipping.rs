@@ -1184,3 +1184,108 @@ fn dump(conn: &Connection, table: &str) -> Vec<String> {
         .collect::<rusqlite::Result<_>>()
         .unwrap()
 }
+
+// ── one tenant's failure is that tenant's alone (sp-5vdixy) ──────────────────
+
+/// A zone whose writes for one tenant's prefix fail, as a revoked credential
+/// or a full quota for that tenant would.
+struct FailsFor {
+    inner: DirStore,
+    database_id: &'static str,
+}
+
+impl ObjectStore for FailsFor {
+    fn put(&self, key: &str, body: Vec<u8>) -> dumpstar_lake::Result<()> {
+        if key.contains(self.database_id) {
+            return Err(dumpstar_lake::LakeError::S3(format!(
+                "injected: zone refuses {key}"
+            )));
+        }
+        self.inner.put(key, body)
+    }
+
+    fn describe(&self) -> String {
+        self.inner.describe()
+    }
+}
+
+#[test]
+fn one_tenant_s_shipping_failure_delays_no_other_tenant() {
+    let world = World::new();
+    let alice = world.tenant("alice", ALICE);
+    let bob = world.tenant("bob", BOB);
+    add_holdings(&world.collection(ALICE), 3, "2026-08-14");
+    add_holdings(&world.collection(BOB), 3, "2026-08-14");
+
+    // Alice is first in the run and her writes fail; Bob must still ship.
+    let broken = FailsFor {
+        inner: world.zone(),
+        database_id: ALICE,
+    };
+    let report = dumpstar_ship::ship_all(
+        &broken,
+        &config(),
+        &world.registry(),
+        &[alice.clone(), bob.clone()],
+        100,
+    );
+    assert!(matches!(report.tenants[0].status, Status::Skipped(_)));
+    assert_eq!(report.tenants[1].status, Status::Shipped);
+    assert_eq!(report.tenants[1].events, 3);
+    let objects = world.objects();
+    assert!(objects.keys().all(|k| k.contains(BOB)), "{objects:?}");
+    assert!(!objects.is_empty());
+
+    // Her cursor did not move past what never landed: once the zone works,
+    // the next run ships all of it.
+    let again = ship(&world, &[alice, bob], 100);
+    assert_eq!(again.tenants[0].events, 3);
+    assert_eq!(again.tenants[1].events, 0);
+    assert!(world.objects().keys().any(|k| k.contains(ALICE)));
+}
+
+// ── SWU holdings (sp-5vdixy) ─────────────────────────────────────────────────
+
+/// Printing ids are opaque to the shipper; the SWU catalog's variants and
+/// finishes reach the zone as the payload the trigger wrote, and come back
+/// out of the read-back unchanged.
+#[test]
+fn swu_printings_of_every_variant_and_finish_round_trip_through_the_zone() {
+    let world = World::new();
+    let alice = world.tenant("alice", ALICE);
+    let conn = world.collection(ALICE);
+    let ids = [
+        "SOR-005-standard-normal",
+        "SOR-005-standard-foil",
+        "SOR-005-hyperspace-normal",
+        "SOR-005-hyperspace-foil",
+        "SOR-262-showcase-foil",
+        "P25-001-promo-normal",
+    ];
+    for id in ids {
+        conn.execute(
+            "INSERT INTO collection (printing_id, acquired_at, source) \
+             VALUES (?1, '2026-08-14T00:00:00Z', 'test')",
+            [id],
+        )
+        .unwrap();
+    }
+    redate(&conn, 0, "2026-08-14");
+
+    assert_eq!(ship(&world, &[alice], 100).outcome(), Outcome::Clean);
+
+    let key = dumpstar_keys::tenant_key(&world.registry(), ALICE).unwrap();
+    let holdings = dumpstar_ship::zone::read(&world.zone(), &config(), &key, ALICE).unwrap();
+    dumpstar_ship::zone::materialize(&conn, &holdings, "2026-08-14T09:00:00Z").unwrap();
+    let mut staged: Vec<String> = conn
+        .prepare("SELECT printing_id FROM zone_holdings")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(|r| r.unwrap())
+        .collect();
+    staged.sort();
+    let mut want: Vec<String> = ids.iter().map(|s| s.to_string()).collect();
+    want.sort();
+    assert_eq!(staged, want);
+}

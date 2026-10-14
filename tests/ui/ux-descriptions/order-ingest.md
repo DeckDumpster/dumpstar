@@ -20,7 +20,7 @@ and navigates to its detail page.
 
 - **Header** — `<h1>` "Import order".
 - **Order metadata section (`.meta`)** — a Source `<select>` (tcgplayer,
-  ebay, pokemoncenter, lgs, other) and text/date/number inputs for Seller,
+  ebay, lgs, other) and text/date/number inputs for Seller,
   Order date, Total, and Notes.
 - **Paste section (`.paste`)** — a textarea for raw order text and a "Parse"
   button.

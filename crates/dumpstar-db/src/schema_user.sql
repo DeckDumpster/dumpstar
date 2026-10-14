@@ -106,7 +106,7 @@ CREATE TABLE IF NOT EXISTS deck_cards (
 CREATE TABLE IF NOT EXISTS orders (
     id                 INTEGER PRIMARY KEY AUTOINCREMENT,
     order_number       TEXT,
-    source             TEXT NOT NULL,          -- 'tcgplayer'|'ebay'|'pokemoncenter'|'lgs'|'other'
+    source             TEXT NOT NULL,          -- 'tcgplayer'|'ebay'|'lgs'|'other'
     seller_name        TEXT,
     order_date         TEXT,
     subtotal           REAL,

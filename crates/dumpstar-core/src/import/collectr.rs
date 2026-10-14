@@ -2,7 +2,7 @@
 //! single file mixing single cards and sealed products across multiple
 //! game categories. This parser splits that file along the garden wall:
 //! singles become [`ParsedRow`]s, sealed products become
-//! [`ParsedSealedRow`]s, and everything else (non-Pokémon rows) is reported
+//! [`ParsedSealedRow`]s, and everything else (rows from other games) is reported
 //! as skipped rather than silently dropped.
 //!
 //! Collectr columns: `Portfolio Name, Category, Set, Product Name,
@@ -84,13 +84,13 @@ pub fn parse(input: &str) -> Result<CollectrParsed> {
         let name = get(Some(col_name)).to_string();
         let set = get(Some(col_set));
 
-        // Dumpstar is a Pokémon tracker — drop other games, but say so.
-        if !category.eq_ignore_ascii_case("pokemon") {
+        // Dumpstar tracks Star Wars: Unlimited — drop other games, but say so.
+        if !is_swu_category(&category) {
             out.skipped.push(SkippedRow {
                 source_line: line,
                 category: category.clone(),
                 name,
-                reason: format!("non-Pokémon category '{category}'"),
+                reason: format!("not a Star Wars: Unlimited category '{category}'"),
             });
             continue;
         }
@@ -213,6 +213,17 @@ fn clean_notes(raw: &str) -> Option<String> {
     (!s.is_empty()).then(|| s.to_string())
 }
 
+/// Collectr's category cell for Star Wars: Unlimited, tolerant of punctuation
+/// and case ("Star Wars Unlimited", "Star Wars: Unlimited").
+fn is_swu_category(category: &str) -> bool {
+    let key: String = category
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .map(|c| c.to_ascii_lowercase())
+        .collect();
+    key == "starwarsunlimited"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -223,21 +234,21 @@ mod tests {
     const SAMPLE: &str = "\
 Portfolio Name,Category,Set,Product Name,Card Number,Rarity,Variance,Grade,Card Condition,Average Cost Paid,Quantity,Market Price (As of 2026-07-17),Price Override,Watchlist,Date Added,Notes
 Main,Lorcana,Disney Lorcana Promo Cards,Elsa - The Fifth Spirit,6,Promo,Holofoil,Ungraded,Near Mint,0.0000,1,7.12,0,false,2026-01-24,
-Main,Pokemon,Ascended Heroes,Budew,221/217,Illustration Rare,Holofoil,Ungraded,Near Mint,0,1,7.19,0,false,2026-04-14,
-Main,Pokemon,Scarlet & Violet Promo,Umbreon ex - 176,SVP 176,Promo,Holofoil,Ungraded,Near Mint,0,2,41.43,0,false,2026-03-30,
-Main,Pokemon,Mega Evolution Promos,Meloetta,026,Illustration Rare,Normal,Ungraded,Near Mint,0,1,14.69,0,false,2026-04-02,
-Sealed Pokemon TCG,Pokemon,Journey Together,Journey Together Elite Trainer Box,,,Normal,Ungraded,Near Mint,75.0000,1,135.35,0,false,2026-02-28,
-Sealed Pokemon TCG,Pokemon,Chaos Rising,Chaos Rising Booster Box,,,Normal,Ungraded,Near Mint,200.0000,2,200.26,0,false,2026-03-23,; ";
+Main,Star Wars Unlimited,Spark of Rebellion,Luke Skywalker - Jedi Knight,005/252,Legendary,Foil,Ungraded,Near Mint,0,1,7.19,0,false,2026-04-14,
+Main,Star Wars Unlimited,Prerelease Promos,Darth Vader - Dark Lord of the Sith,P 176,Promo,Foil,Ungraded,Near Mint,0,2,41.43,0,false,2026-03-30,
+Main,Star Wars Unlimited,Spark of Rebellion,Boba Fett - Disintegrator,026,Rare,Normal,Ungraded,Near Mint,0,1,14.69,0,false,2026-04-02,
+Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebellion Two-Player Starter,,,Normal,Ungraded,Near Mint,75.0000,1,135.35,0,false,2026-02-28,
+Sealed Star Wars Unlimited,Star Wars Unlimited,Twilight of the Republic,Twilight of the Republic Booster Display,,,Normal,Ungraded,Near Mint,200.0000,2,200.26,0,false,2026-03-23,; ";
 
     #[test]
-    fn splits_singles_sealed_and_skips_non_pokemon() {
+    fn splits_singles_sealed_and_skips_other_games() {
         let out = parse(SAMPLE).unwrap();
 
         // Lorcana row is skipped, not imported.
         assert_eq!(out.skipped.len(), 1);
         assert_eq!(out.skipped[0].category, "Lorcana");
 
-        // Singles: Budew(x1) + Umbreon(x2, expanded) + Meloetta(x1) = 4 copies.
+        // Singles: Luke(x1) + Vader(x2, expanded) + Boba(x1) = 4 copies.
         assert_eq!(out.singles.len(), 4);
         // Sealed: 2 distinct products (quantities kept, not expanded).
         assert_eq!(out.sealed.len(), 2);
@@ -246,19 +257,19 @@ Sealed Pokemon TCG,Pokemon,Chaos Rising,Chaos Rising Booster Box,,,Normal,Ungrad
     #[test]
     fn normalizes_numbers_and_variants() {
         let out = parse(SAMPLE).unwrap();
-        let budew = &out.singles[0];
-        assert_eq!(budew.number, "221"); // 221/217 → 221
-        assert_eq!(budew.variant, "holo"); // Holofoil → holo
-        assert_eq!(budew.set_hint, "Ascended Heroes");
-        assert_eq!(budew.acquired_at.as_deref(), Some("2026-04-14T00:00:00Z"));
+        let luke = &out.singles[0];
+        assert_eq!(luke.number, "5"); // 005/252 → 5
+        assert_eq!(luke.variant, "holo"); // Foil → holo
+        assert_eq!(luke.set_hint, "Spark of Rebellion");
+        assert_eq!(luke.acquired_at.as_deref(), Some("2026-04-14T00:00:00Z"));
 
-        let umbreon = &out.singles[1];
-        assert_eq!(umbreon.number, "176"); // SVP 176 → 176
+        let vader = &out.singles[1];
+        assert_eq!(vader.number, "176"); // P 176 → 176
         assert_eq!(out.singles[1], out.singles[2]); // both expanded copies identical
 
-        let meloetta = &out.singles[3];
-        assert_eq!(meloetta.number, "26"); // 026 → 26 (zero-padding stripped)
-        assert_eq!(meloetta.variant, "normal"); // Variance Normal → normal
+        let boba = &out.singles[3];
+        assert_eq!(boba.number, "26"); // 026 → 26 (zero-padding stripped)
+        assert_eq!(boba.variant, "normal"); // Variance Normal → normal
     }
 
     #[test]
@@ -276,11 +287,11 @@ Sealed Pokemon TCG,Pokemon,Chaos Rising,Chaos Rising Booster Box,,,Normal,Ungrad
     #[test]
     fn sealed_keeps_quantity_and_cleans_notes() {
         let out = parse(SAMPLE).unwrap();
-        let etb = &out.sealed[0];
-        assert_eq!(etb.name, "Journey Together Elite Trainer Box");
-        assert_eq!(etb.quantity, 1);
-        assert_eq!(etb.purchase_price, Some(75.0));
-        assert_eq!(etb.purchase_date.as_deref(), Some("2026-02-28"));
+        let starter = &out.sealed[0];
+        assert_eq!(starter.name, "Spark of Rebellion Two-Player Starter");
+        assert_eq!(starter.quantity, 1);
+        assert_eq!(starter.purchase_price, Some(75.0));
+        assert_eq!(starter.purchase_date.as_deref(), Some("2026-02-28"));
 
         let box_ = &out.sealed[1];
         assert_eq!(box_.quantity, 2); // not expanded

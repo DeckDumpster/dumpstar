@@ -5,10 +5,10 @@ involves:
   - "Status select per row"
 fixture_data:
   active_entries: "2"
-  owned_products: "151 Elite Trainer Box, Surging Sparks Booster Pack"
+  owned_products: "Spark of Rebellion Two-Player Starter, Shadows of the Galaxy Booster Pack"
 notes: >
   Navigate to /sealed. The page loads with the "Show opened / disposed"
   checkbox unchecked. Verify only entries with status owned or listed
-  appear in the table. The fixture seeds two sealed entries (1x 151 Elite
-  Trainer Box, 6x Surging Sparks Booster Pack), both owned, so both rows
+  appear in the table. The fixture seeds two sealed entries (1x Spark of Rebellion
+  Two-Player Starter, 6x Shadows of the Galaxy Booster Pack), both owned, so both rows
   are visible. No opened/sold/traded/gifted rows appear by default.

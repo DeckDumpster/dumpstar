@@ -13,7 +13,7 @@ export type BinderSlot = { card_id: string, number: string, name: string, rarity
 section: string, printings: Array<SlotPrinting>, 
 /**
  * Home set of the slot's card when different from the container —
- * bundle slots use this to surface "lives in Obsidian Flames" and
+ * bundle slots use this to surface "lives in <set name>" and
  * to route the card-detail link. `None` for regular set slots.
  */
 external_set: ExternalSet | null, };

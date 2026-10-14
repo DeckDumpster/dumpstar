@@ -1,0 +1,9 @@
+start_page: /
+involves:
+  - "tagline paragraph under the h1: 'A Star Wars: Unlimited collection tracker.'"
+fixture_data:
+  none: "homepage is fully static markup; it carries no data"
+notes: >
+  1. Navigate to /. 2. Assert the tagline text "A Star Wars: Unlimited
+  collection tracker." is visible. 3. Assert no text "Pokémon" is present
+  on the page. 4. Screenshot.

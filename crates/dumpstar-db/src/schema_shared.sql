@@ -308,7 +308,7 @@ CREATE TABLE IF NOT EXISTS sealed_products (
     product_id      INTEGER PRIMARY KEY,       -- TCGplayer productId
     set_code        TEXT REFERENCES sets(set_code),
     name            TEXT NOT NULL,
-    category        TEXT NOT NULL,             -- 'booster_pack'|'booster_box'|'etb'|'bundle'|'tin'|...
+    category        TEXT NOT NULL,             -- 'booster_pack'|'booster_display'|'booster_case'|'two_player_starter'|'prerelease_kit'
     subtype         TEXT,
     card_count      INTEGER,                   -- cards per pack
     product_size    INTEGER,                   -- packs per box/bundle

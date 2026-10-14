@@ -223,7 +223,7 @@
 					</a>
 				</div>
 				<p class="muted small">
-					Paste the list into Mass Entry, then pick the printing (holo / reverse / normal)
+					Paste the list into Mass Entry, then pick the printing (Normal / Foil)
 					during cart review.
 				</p>
 			{/if}

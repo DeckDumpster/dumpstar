@@ -6,7 +6,7 @@
 //! two files, never one — even though Collectr itself keeps both in one file
 //! distinguished by portfolio. Each file is a valid Collectr CSV on its own:
 //! the singles file lands in a `Main` portfolio, the sealed file in a
-//! `Sealed Pokemon TCG` portfolio. Both also round-trip through this app's
+//! `Sealed Star Wars Unlimited` portfolio. Both also round-trip through this app's
 //! own Collectr importer.
 //!
 //! Only `owned` rows are exported — a migration should carry what you have,
@@ -74,7 +74,7 @@ pub fn collectr_singles_csv(conn: &Connection) -> Result<String> {
         writer
             .write_record([
                 "Main",
-                "Pokemon",
+                "Star Wars Unlimited",
                 &set_name,
                 &card_name,
                 &card_number(&number, printed_total),
@@ -96,7 +96,7 @@ pub fn collectr_singles_csv(conn: &Connection) -> Result<String> {
 }
 
 /// Export owned sealed products as a Collectr-shaped CSV (portfolio
-/// `Sealed Pokemon TCG`). Sealed keeps its `Quantity` — it is not expanded.
+/// `Sealed Star Wars Unlimited`). Sealed keeps its `Quantity` — it is not expanded.
 pub fn collectr_sealed_csv(conn: &Connection) -> Result<String> {
     let mut stmt = conn.prepare(
         "SELECT s.name, sp.name, sc.quantity, sc.condition, \
@@ -123,8 +123,8 @@ pub fn collectr_sealed_csv(conn: &Connection) -> Result<String> {
 
         writer
             .write_record([
-                "Sealed Pokemon TCG",
-                "Pokemon",
+                "Sealed Star Wars Unlimited",
+                "Star Wars Unlimited",
                 &set_name.unwrap_or_default(),
                 &product_name,
                 "", // Card Number — blank marks a sealed product.
@@ -155,12 +155,11 @@ fn card_number(number: &str, printed_total: Option<i64>) -> String {
 }
 
 /// Dumpstar variant code → Collectr `Variance`. The inverse of the
-/// importer's foil mapping; uncommon holo variants fold to `Holofoil`.
+/// importer's foil mapping; uncommon holo variants fold to `Foil`.
 fn variant_to_collectr(variant: &str) -> &'static str {
     match variant {
         "normal" => "Normal",
-        "reverse_holo" => "Reverse Holofoil",
-        _ => "Holofoil",
+        _ => "Foil",
     }
 }
 
@@ -220,13 +219,13 @@ mod tests {
             let c = open_shared(&shared).unwrap();
             c.execute(
                 "INSERT INTO sets (set_code, ptcgo_code, name, series, printed_total, set_sort_order) \
-                 VALUES ('sv3pt5', 'MEW', '151', 'SV', 165, 1)",
+                 VALUES ('sv3pt5', 'SOR', 'Spark of Rebellion', 'SOR', 165, 1)",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO cards (card_id, set_code, number, number_sortable, name, rarity) \
-                 VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Charizard ex', 'Double Rare')",
+                 VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Luke Skywalker', 'Legendary')",
                 [],
             )
             .unwrap();
@@ -238,7 +237,7 @@ mod tests {
             .unwrap();
             c.execute(
                 "INSERT INTO sealed_products (product_id, set_code, name, category, fetched_at) \
-                 VALUES (7001, 'sv3pt5', '151 Elite Trainer Box', 'elite_trainer_box', '2026-02-28')",
+                 VALUES (7001, 'sv3pt5', 'Spark of Rebellion Two-Player Starter', 'two_player_starter', '2026-02-28')",
                 [],
             )
             .unwrap();
@@ -268,7 +267,7 @@ mod tests {
         assert!(lines[0].starts_with("Portfolio Name,Category,Set,Product Name,Card Number"));
         let row = lines[1];
         assert!(row.starts_with(
-            "Main,Pokemon,151,Charizard ex,6/165,Double Rare,Holofoil,Ungraded,Near Mint,4.50,1"
+            "Main,Star Wars Unlimited,Spark of Rebellion,Luke Skywalker,6/165,Legendary,Foil,Ungraded,Near Mint,4.50,1"
         ));
         assert!(row.contains("2026-04-14"));
     }
@@ -294,7 +293,7 @@ mod tests {
         // Portfolio, blank Card Number + Rarity, quantity preserved.
         assert!(
             row.starts_with(
-                "Sealed Pokemon TCG,Pokemon,151,151 Elite Trainer Box,,,Normal,Ungraded"
+                "Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebellion Two-Player Starter,,,Normal,Ungraded"
             )
         );
         assert!(row.contains(",3,")); // quantity 3, not expanded
@@ -330,9 +329,9 @@ mod tests {
         let (_d, mut conn) = db();
         let csv = "\
 Portfolio Name,Category,Set,Product Name,Card Number,Rarity,Variance,Grade,Card Condition,Average Cost Paid,Quantity,Market Price (As of 2026-07-17),Price Override,Watchlist,Date Added,Notes
-Main,Pokemon,151,Charizard ex,6/165,Double Rare,Holofoil,Ungraded,Near Mint,4.50,2,5.00,0,false,2026-04-14,
-Sealed Pokemon TCG,Pokemon,151,151 Elite Trainer Box,,,Normal,Ungraded,Near Mint,49.99,3,60.00,0,false,2026-02-28,
-Main,Lorcana,Foo,Bar,1,Promo,Holofoil,Ungraded,Near Mint,0,1,1.00,0,false,2026-01-01,";
+Main,Star Wars Unlimited,Spark of Rebellion,Luke Skywalker,6/165,Legendary,Foil,Ungraded,Near Mint,4.50,2,5.00,0,false,2026-04-14,
+Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebellion Two-Player Starter,,,Normal,Ungraded,Near Mint,49.99,3,60.00,0,false,2026-02-28,
+Main,Lorcana,Foo,Bar,1,Promo,Foil,Ungraded,Near Mint,0,1,1.00,0,false,2026-01-01,";
 
         // Import: two card copies, one sealed row (qty kept), Lorcana skipped.
         let imported = crate::import::commit_collectr(&mut conn, csv, Some("collectr")).unwrap();

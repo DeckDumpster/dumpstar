@@ -166,10 +166,10 @@ holds all of that; `tests/ui/intents/browse_japanese_set_*.yaml` walk it.
 
 | `product_id` | Name | Category | Set | Quoted |
 | --- | --- | --- | --- | --- |
-| 900001 | Base Set Booster Box | `booster_box` | `base1` | — |
-| 900002 | 151 Elite Trainer Box | `etb` | `sv3pt5` | market $59.42 |
-| 900003 | 151 Booster Bundle | `bundle` | `sv3pt5` | — |
-| 900004 | Surging Sparks Booster Pack | `booster_pack` | `sv8` | mid $5.24, no market |
+| 900001 | Spark of Rebellion Booster Display | `booster_display` | `base1` | — |
+| 900002 | Spark of Rebellion Two-Player Starter | `two_player_starter` | `sv3pt5` | market $59.42 |
+| 900003 | Spark of Rebellion Prerelease Kit | `prerelease_kit` | `sv3pt5` | — |
+| 900004 | Shadows of the Galaxy Booster Pack | `booster_pack` | `sv8` | mid $5.24, no market |
 
 The two the collection HOLDS are quoted one way each, so a screenshot goes
 through both halves of `sealed_market_price_expr_from!` —
@@ -239,8 +239,8 @@ Notable copies:
 
 | Product | Qty | Paid (each) | Market (each) | Source |
 | --- | --- | --- | --- | --- |
-| 151 Elite Trainer Box (900002) | 1 | $49.99 | $59.42 (market) | pokemoncenter |
-| Surging Sparks Booster Pack (900004) | 6 | $4.49 | $5.24 (mid) | lgs |
+| Spark of Rebellion Two-Player Starter (900002) | 1 | $49.99 | $59.42 (market) | lgs |
+| Shadows of the Galaxy Booster Pack (900004) | 6 | $4.49 | $5.24 (mid) | lgs |
 
 7 units, $76.93 paid, $90.86 market — the `dimension='sealed'` point on the
 value chart and the `sealed $90.86` half of the home page's headline. `/`

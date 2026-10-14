@@ -262,7 +262,7 @@
 		<p class="hint">
 			A Collectr export mixes single cards and sealed products. They're imported
 			separately — cards into your collection, sealed into your sealed shelf — and
-			non-Pokémon rows are skipped.
+			rows from other games are skipped.
 		</p>
 	{/if}
 
@@ -631,7 +631,7 @@
 		{#if combined.skipped.length}
 			<div class="pane">
 				<h2 class="pane-head">
-					Skipped <span class="counts muted">{combined.skipped.length} non-Pokémon rows</span>
+					Skipped <span class="counts muted">{combined.skipped.length} rows from other games</span>
 				</h2>
 				<table>
 					<thead>

@@ -12,16 +12,16 @@ import type { ReplayHarness } from '../replay';
 
 // 6 data rows: Lorcana (skipped); Base Set Charizard (matched); Base Set
 // Bulbasaur qty 2 (matched, 2 copies); Base Set Fakemon (unmatched card);
-// 151 ETB (matched sealed); Surging Sparks pack qty 6 (matched sealed);
+// Two-Player Starter (matched sealed); Surging Sparks pack qty 6 (matched sealed);
 // Nonexistent Box (unmatched sealed).
 const CSV = `Portfolio Name,Category,Set,Product Name,Card Number,Rarity,Variance,Grade,Card Condition,Average Cost Paid,Quantity,Market Price (As of 2026-07-19),Price Override,Watchlist,Date Added,Notes
 Main,Lorcana,Disney Lorcana Promo Cards,Elsa - The Fifth Spirit,6,Promo,Holofoil,Ungraded,Near Mint,0,1,7.12,0,false,2026-01-24,
-Main,Pokemon,Base Set,Charizard,4/102,Rare Holo,Holofoil,Ungraded,Lightly Played,280,1,300,0,false,2024-01-10,
-Main,Pokemon,Base Set,Bulbasaur,46/102,Common,Normal,Ungraded,Near Mint,1.00,2,2,0,false,2024-01-10,
-Main,Pokemon,Base Set,Fakemon,999/102,Common,Normal,Ungraded,Near Mint,0,1,0,0,false,2024-01-10,
-Sealed Pokemon TCG,Pokemon,151,151 Elite Trainer Box,,,Normal,Ungraded,Near Mint,49.99,1,60,0,false,2023-09-22,
-Sealed Pokemon TCG,Pokemon,Surging Sparks,Surging Sparks Booster Pack,,,Normal,Ungraded,Near Mint,4.49,6,5,0,false,2024-11-08,
-Sealed Pokemon TCG,Pokemon,151,Nonexistent Box,,,Normal,Ungraded,Near Mint,10,1,10,0,false,2024-01-01,`;
+Main,Star Wars Unlimited,Base Set,Charizard,4/102,Rare Holo,Holofoil,Ungraded,Lightly Played,280,1,300,0,false,2024-01-10,
+Main,Star Wars Unlimited,Base Set,Bulbasaur,46/102,Common,Normal,Ungraded,Near Mint,1.00,2,2,0,false,2024-01-10,
+Main,Star Wars Unlimited,Base Set,Fakemon,999/102,Common,Normal,Ungraded,Near Mint,0,1,0,0,false,2024-01-10,
+Sealed Star Wars Unlimited,Star Wars Unlimited,151,Spark of Rebellion Two-Player Starter,,,Normal,Ungraded,Near Mint,49.99,1,60,0,false,2023-09-22,
+Sealed Star Wars Unlimited,Star Wars Unlimited,Surging Sparks,Shadows of the Galaxy Booster Pack,,,Normal,Ungraded,Near Mint,4.49,6,5,0,false,2024-11-08,
+Sealed Star Wars Unlimited,Star Wars Unlimited,151,Nonexistent Box,,,Normal,Ungraded,Near Mint,10,1,10,0,false,2024-01-01,`;
 
 export async function steps(h: ReplayHarness) {
   await h.navigate('/ingest/csv');
@@ -41,7 +41,7 @@ export async function steps(h: ReplayHarness) {
   // Each split pane surfaced its own unmatched sub-table.
   await h.assert_text_present('Unmatched cards');
   await h.assert_text_present('Unmatched sealed');
-  // The non-Pokémon row is reported skipped with a backend-generated reason.
-  await h.assert_text_present("non-Pokémon category");
+  // The other-game row is reported skipped with a backend-generated reason.
+  await h.assert_text_present("not a Star Wars: Unlimited category");
   await h.screenshot('final_state');
 }

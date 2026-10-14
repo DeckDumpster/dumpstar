@@ -6,12 +6,12 @@ involves:
 fixture_data:
   broad_term: "151"
   broad_results: 2
-  narrow_term: "Booster Bundle"
+  narrow_term: "Prerelease Kit"
   narrow_results: 1
 notes: >
   Navigate to /sealed. Click "+ Add sealed" to open the modal. Type
   "151" into the search input; verify the result list shows the two 151
-  sealed products (151 Elite Trainer Box and 151 Booster Bundle). Refine
-  the query to "Booster Bundle"; verify the list narrows to just the
-  "151 Booster Bundle" result. Clear the input back below 2 characters;
+  sealed products (Spark of Rebellion Two-Player Starter and Spark of Rebellion Prerelease Kit). Refine
+  the query to "Prerelease Kit"; verify the list narrows to just the
+  "Spark of Rebellion Prerelease Kit" result. Clear the input back below 2 characters;
   verify the result list empties without firing a request.

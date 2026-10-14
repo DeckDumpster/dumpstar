@@ -1,5 +1,5 @@
 // Shared builder for "facet" links — clickable card metadata (artist, set,
-// rarity, type, Pokédex #, ability, attack, …) that lands on the collection
+// rarity, type, ability, attack, …) that lands on the collection
 // page pre-filtered by the proper search DSL. Used by the card detail/modal
 // (CardDetailView) and the collection table view so both emit identical,
 // correct queries instead of a bare card-name search.
@@ -22,7 +22,7 @@ export function facetClause(field: string, value: string): string {
 
 /** A `/collection` URL pre-filtered by one facet. Always catalog-wide
  *  (`all=1`) so unowned matches show too — clicking "Mitsuhiro Arita" or a
- *  Pokédex number is an exploration of the whole catalog, not just owned
+ *  A card-name facet is an exploration of the whole catalog, not just owned
  *  cards (dumpstar-67l). */
 export function facetHref(field: string, value: string): string {
 	const params = new URLSearchParams({ q: facetClause(field, value), all: '1' });

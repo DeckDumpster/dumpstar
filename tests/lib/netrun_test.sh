@@ -30,10 +30,13 @@ REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=tests/lib/netrun.sh
 . "${SCRIPT_DIR}/netrun.sh"
 
-# Sub-second: the window this library exists for is an aardvark-dns reload, and
-# the test has no interest in waiting out the real budget.
-NETRUN_TIMEOUT=2
+# The attempt count is the bound here, never the clock: how many attempts fit in
+# a wall-clock budget depends on how fast the runner is, and a slow one (an EC2
+# spill) ran out of budget after one. The timeout is far beyond any run and
+# NETRUN_MAX_ATTEMPTS is what ends a retry that never succeeds.
+NETRUN_TIMEOUT=3600
 NETRUN_INTERVAL=0
+NETRUN_MAX_ATTEMPTS=4
 
 pass=0
 fail=0
@@ -157,14 +160,14 @@ GAVE_UP="$(grep -c 'still unresolved after' "${WORK}/e")"
 check "…saying it gave up rather than absorbing it" "1" "$GAVE_UP"
 KEPT="$(grep -c 'Temporary failure in name resolution' "${WORK}/e")"
 check "…and reproducing what the command said" "1" "$KEPT"
-TRIES=$(wc -l <"$CALLS")
-if [[ "$TRIES" -ge 2 ]]; then
-	echo "  PASS  …after more than one attempt (= ${TRIES})"
-	pass=$((pass + 1))
-else
-	echo "  FAIL  …after more than one attempt (= ${TRIES})"
-	fail=$((fail + 1))
-fi
+check "…after exactly NETRUN_MAX_ATTEMPTS attempts" "4" "$(wc -l <"$CALLS")"
+
+# Independent of speed: every attempt takes longer than a second and the count
+# is still the one the script dictates.
+slow_stub() { sleep 1.1; stub; }
+script "1:1:err:${GAIERROR}"
+OUT="$(netrun slow_stub 2>/dev/null)"
+check "a slow command is still retried, once" "ok-2" "$OUT"
 
 # ---------------------------------------------------------------------------
 log "6. stdout and stderr are kept apart"

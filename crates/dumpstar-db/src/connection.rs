@@ -339,6 +339,24 @@ const USER_ADDED_COLUMNS: &[(&str, &str, &str)] = &[
         "sealed_rows",
         "ALTER TABLE zone_holdings_run ADD COLUMN sealed_rows INTEGER NOT NULL DEFAULT 0",
     ),
+    // sp-eocx2y. A want gains a minimum condition and a quantity. Existing
+    // wants were each for one copy of any condition, which is what the
+    // defaults say; no `user_version` bump, an older binary ignores them.
+    (
+        "wishlist",
+        "min_condition",
+        "ALTER TABLE wishlist ADD COLUMN min_condition TEXT",
+    ),
+    (
+        "wishlist",
+        "quantity",
+        "ALTER TABLE wishlist ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity >= 1)",
+    ),
+    (
+        "wishlist",
+        "quantity_have",
+        "ALTER TABLE wishlist ADD COLUMN quantity_have INTEGER NOT NULL DEFAULT 0",
+    ),
 ];
 
 fn add_missing_columns(conn: &Connection) -> Result<()> {

@@ -3,4 +3,4 @@
 /**
  * Fields for adding a wish.
  */
-export type NewWish = { card_id: string, printing_id: string | null, max_price: number | null, priority: number | null, notes: string | null, };
+export type NewWish = { card_id: string, printing_id: string | null, max_price: number | null, priority: number | null, notes: string | null, min_condition: string | null, quantity: number | null, };

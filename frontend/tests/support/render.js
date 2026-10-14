@@ -25,7 +25,7 @@ import { render } from 'svelte/server';
 const here = dirname(fileURLToPath(import.meta.url));
 
 /** @type {string} */
-export const uiDir = join(here, '../../src/lib/components/ui');
+export const uiDir = join(here, '../../src/lib/kit/ui');
 
 /**
  * Server-render a component and return its markup.
@@ -72,7 +72,7 @@ export function rootClass(html) {
  * A primitive may reference visual values only through the semantic layer.
  * Checked against the source file rather than the rendered CSS so that a
  * literal smuggled into an inline `style` attribute is caught too.
- * @param {string} file basename inside src/lib/components/ui
+ * @param {string} file basename inside src/lib/kit/ui
  */
 export function assertTokenOnly(file) {
 	// Comments are stripped first, the same way tokens.contrast.test.js does it:
@@ -115,7 +115,7 @@ export function tokensUsed(css) {
  * @param {string} css
  */
 export function assertTokensDeclared(css) {
-	const tokensCss = readFileSync(join(here, '../../src/lib/styles/tokens.css'), 'utf8').replace(
+	const tokensCss = readFileSync(join(here, '../../src/lib/kit/tokens.css'), 'utf8').replace(
 		/\/\*[\s\S]*?\*\//g,
 		''
 	);

@@ -3,7 +3,7 @@
  *
  * Parses `src/lib/styles/tokens.css`, resolves every token through the
  * semantic -> reference layers, and asserts that each pairing declared in
- * `src/lib/styles/contrast-pairs.json` meets WCAG AA. Also guards the
+ * `src/lib/kit/contrast-pairs.json` meets WCAG AA. Also guards the
  * two-layer split itself: semantic tokens must be pure aliases of reference
  * tokens, and nothing outside tokens.css may reach for `--pd-*`.
  *
@@ -15,15 +15,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const frontendRoot = join(here, '..');
 const srcRoot = join(frontendRoot, 'src');
-const tokensPath = join(srcRoot, 'lib/styles/tokens.css');
-const pairsPath = join(srcRoot, 'lib/styles/contrast-pairs.json');
+const kitDir = join(srcRoot, 'lib/kit');
+const tokensPath = join(kitDir, 'tokens.css');
+const themePath = join(srcRoot, 'lib/styles/theme.css');
+/** The token layer: the kit's vendored files and dumpstar's theme. */
+const isTokenLayer = (/** @type {string} */ f) => f === themePath || f.startsWith(kitDir + sep);
+const pairsPath = join(kitDir, 'contrast-pairs.json');
 
-const tokensCss = readFileSync(tokensPath, 'utf8');
+const tokensCss = readFileSync(tokensPath, 'utf8') + '\n' + readFileSync(themePath, 'utf8');
 /** @type {{ exempt: Record<string, string>, pairs: Array<Record<string, string>> }} */
 const manifest = JSON.parse(readFileSync(pairsPath, 'utf8'));
 
@@ -197,13 +201,21 @@ test('semantic colour tokens are pure aliases of the reference layer', () => {
 });
 
 test('every reference colour token is reachable from the semantic layer', () => {
-	const referenced = new Set();
-	for (const [name, value] of tokens) {
-		if (name.startsWith('--pd-')) continue;
-		for (const m of value.matchAll(/var\(\s*(--pd-[a-z0-9-]+)\s*\)/g)) referenced.add(m[1]);
-	}
-	const orphans = [...tokens.keys()].filter((n) => n.startsWith('--pd-') && !referenced.has(n));
-	assert.deepEqual(orphans, [], `reference tokens no semantic role points at: ${orphans.join(', ')}`);
+	// A theme re-points roles away from some of the kit's steps, so the kit's own
+	// steps are audited against the kit alone (the kit's CI holds that invariant)
+	// and the theme's steps against the combined semantic layer.
+	const orphans = (/** @type {Map<string, string>} */ declared, /** @type {Map<string, string>} */ roles) => {
+		const referenced = new Set();
+		for (const [name, value] of roles) {
+			if (name.startsWith('--pd-')) continue;
+			for (const m of value.matchAll(/var\(\s*(--pd-[a-z0-9-]+)\s*\)/g)) referenced.add(m[1]);
+		}
+		return [...declared.keys()].filter((n) => n.startsWith('--pd-') && !referenced.has(n));
+	};
+	const kit = parseTokens(readFileSync(tokensPath, 'utf8'));
+	const theme = parseTokens(readFileSync(themePath, 'utf8'));
+	assert.deepEqual(orphans(kit, kit), [], 'the pinned kit has orphan reference steps');
+	assert.deepEqual(orphans(theme, tokens), [], 'theme.css declares reference steps no role points at');
 });
 
 test('every reference ramp is monotonic in luminance', () => {
@@ -294,7 +306,7 @@ const srcFiles = walk(srcRoot);
 test('tokens.css is imported exactly once', () => {
 	const importers = srcFiles.filter(
 		(f) =>
-			f !== tokensPath &&
+			!isTokenLayer(f) &&
 			/\.(svelte|ts|js|css)$/.test(f) &&
 			/(^|\s)(import\s+['"][^'"]*tokens\.css['"]|@import\s+[^;]*tokens\.css)/m.test(
 				readFileSync(f, 'utf8')
@@ -322,7 +334,7 @@ test('every raw colour still in frontend/src maps to a semantic role', () => {
 
 	const found = new Set();
 	for (const file of srcFiles) {
-		if (file === tokensPath || !/\.(svelte|ts|js|css)$/.test(file)) continue;
+		if (isTokenLayer(file) || !/\.(svelte|ts|js|css)$/.test(file)) continue;
 		const text = decolour(readFileSync(file, 'utf8'));
 		for (const m of text.matchAll(/(?<![\w&])(#[0-9a-fA-F]{3,8})(?![\w-])/g)) {
 			found.add(m[1].toLowerCase());
@@ -351,7 +363,7 @@ test('components reference only the semantic layer', () => {
 	const offenders = srcFiles
 		.filter(
 			(f) =>
-				f !== tokensPath &&
+				!isTokenLayer(f) &&
 				/\.(svelte|ts|js|css)$/.test(f) &&
 				/var\(\s*--pd-/.test(readFileSync(f, 'utf8'))
 		)

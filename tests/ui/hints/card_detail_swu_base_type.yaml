@@ -1,0 +1,12 @@
+start_page: /card/SOR/020
+involves:
+  - "card detail page for the seeded base (SOR 020)"
+  - "Type facet reads Base"
+  - "HP shown; no Power, Cost or Arena rows"
+fixture_data:
+  start_card: "Echo Base"
+  card_type: "Base"
+  hp: "30"
+notes: >
+  Assert the Type row links to Base, HP is drawn, and Power, Cost and Arena
+  are absent.

@@ -1,0 +1,21 @@
+# Scenario: The card page of a Star Wars: Unlimited leader shows its type, Leader, with power and HP and no resource cost
+#
+# Related:
+#   issues: [sp-iszds1]
+#   pull_requests: []
+
+description: >
+  The card page of a Star Wars: Unlimited leader shows its type, Leader, with
+  cost, power and HP.
+start_page: /card/SOR/010
+involves:
+  - "card detail page for the seeded leader (SOR 010)"
+  - "Type facet reads Leader"
+  - "Cost, Power and HP rows"
+fixture_data:
+  start_card: "Darth Vader"
+  card_type: "Leader"
+  power: "5"
+  hp: "8"
+notes: >
+  Assert the Type row links to Leader, Cost, Power and HP are drawn.

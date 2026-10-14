@@ -5,8 +5,8 @@
 #   pull_requests: []
 
 description: >
-  On the Collection page I can type a Scryfall-style query like "t:fire"
-  into the search bar. The list narrows to cards of that energy type —
-  Charizard appears, while a Lightning card like Pikachu does not. The
+  On the Collection page I can type a Scryfall-style query like "aspect:Aggression"
+  into the search bar. The list narrows to cards of that aspect —
+  Wampa appears, while a Command card like Battlefield Marine does not. The
   filtering happens server-side via the query language, not a name
   substring match.

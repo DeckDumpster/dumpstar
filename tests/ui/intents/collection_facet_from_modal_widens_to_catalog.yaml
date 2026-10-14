@@ -6,7 +6,7 @@
 
 description: >
   When I open a card's modal on the collection page and click a facet link
-  that carries "All cards" (e.g. the Pokédex number), the results widen to
+  that carries "All cards" (e.g. the aspect), the results widen to
   the whole catalog immediately — unowned matches appear as dimmed tiles —
   with no page reload. This guards a regression where a client-side facet
   navigation updated the query but left the "All cards" toggle owned-only

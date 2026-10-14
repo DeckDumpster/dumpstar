@@ -1,17 +1,17 @@
-start_page: /card/sv3pt5/6
+start_page: /card/SOR/005
 involves:
   - 'card image in the left .art column'
   - 'card name as the h1 in the .info panel'
   - 'subtitle line "{set_code} · #{number} · {rarity}"'
-  - 'definition list of optional metadata fields (Type, HP, Energy, Artist)'
+  - 'definition list of optional metadata fields (Type, Cost, Aspects, HP, Artist)'
   - 'Printings section listing the card variants'
   - 'global header with the Dumpstar nav links'
 fixture_data:
-  card_name: "Charizard ex"
-  subtitle: "sv3pt5 · #6 · Double Rare"
+  card_name: "Luke Skywalker"
+  subtitle: "SOR · #005 · Special"
 notes: >
-  Navigate directly to /card/sv3pt5/6. The page fetches card detail,
-  binders, and decks in parallel. Verify "Charizard ex" appears as the h1
-  heading. Verify the subtitle line shows "sv3pt5 · #6 · Double Rare".
+  Navigate directly to /card/SOR/005. The page fetches card detail,
+  binders, and decks in parallel. Verify "Luke Skywalker" appears as the h1
+  heading. Verify the subtitle line shows "SOR · #005 · Special".
   Verify the Printings section is present. The global header shows the
   Dumpstar brand with the standard nav links.

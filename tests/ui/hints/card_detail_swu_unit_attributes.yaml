@@ -1,0 +1,16 @@
+start_page: /card/SOR/100
+involves:
+  - "card detail page for the seeded unit (SOR 100)"
+  - "definition list rows Type, Cost, Aspects, Arena, Power, HP, Traits"
+  - "no img.energy and no Pokédex facet"
+fixture_data:
+  start_card: "Death Star Stormtrooper"
+  card_type: "Unit"
+  cost: "1"
+  aspects: "Aggression, Villainy"
+  arena: "Ground"
+  power: "3"
+  hp: "1"
+notes: >
+  Open the unit's card page and assert each SWU attribute label and value is
+  present, then assert nothing Pokémon-shaped is drawn.

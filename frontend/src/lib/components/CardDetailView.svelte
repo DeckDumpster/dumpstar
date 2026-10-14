@@ -227,7 +227,7 @@
 	}
 
 	// Price chart: by default only plot the variants the user owns, so an
-	// unowned chase printing (e.g. a $10k 1st-edition NM) doesn't dwarf the
+	// unowned chase printing (e.g. a $500 Showcase Leader NM) doesn't dwarf the
 	// lines that matter (dumpstar-vgo). A toggle reveals the rest; if the
 	// user owns no priced variant, fall back to showing all so the chart isn't
 	// empty.

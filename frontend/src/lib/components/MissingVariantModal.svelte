@@ -86,7 +86,7 @@
 			<input
 				type="text"
 				bind:value={description}
-				placeholder="e.g. no set stamp misprint"
+				placeholder="e.g. Hyperspace foil with a print line"
 				disabled={busy}
 			/>
 		</label>

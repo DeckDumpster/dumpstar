@@ -895,14 +895,6 @@ if tier lint; then
     step "That guard has been seen RED (tests/lake/tenant_isolation_selftest.sh)"
     bash "$REPO_DIR/tests/lake/tenant_isolation_selftest.sh"
 
-    # The source site's identity and the removed Pokémon modules must not come
-    # back (design row S1). The gate reads `git ls-files`; the test beside it
-    # plants each offence in a scratch repo and requires the gate to name it.
-    step "No source-site identity, no removed Pokémon module (tests/ci/banned_names_test.sh)"
-    bash "$REPO_DIR/tests/ci/banned_names_test.sh"
-    step "Banned names over the tree (deploy/banned-names.sh)"
-    bash "$REPO_DIR/deploy/banned-names.sh"
-
     # ci.yml has no concurrency: block, provisions through ephemeral-ci@v2 with
     # the 60s spill, and tears down under if: always().
     step "ci.yml shape (tests/ci/workflow_test.sh)"

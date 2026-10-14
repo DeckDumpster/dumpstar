@@ -4,7 +4,7 @@
 
 description: >
   On a binder browse page, with the "Subset" checkbox on, cards flagged as a
-  subset (such as a Galaxy or Trainer Gallery sub-collection) render as a
+  subset render as a
   separate appended section. After the numbered set — and after any secret
   rares — a full-width "Subset" divider appears, followed by the subset slots.
   Subset cards are never interleaved with the main numbered run.

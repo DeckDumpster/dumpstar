@@ -3,7 +3,7 @@ involves:
   - 'card image in the left .art column'
   - 'card name as the h1 in the .info panel'
   - 'subtitle line "{set_code} · #{number} · {rarity}"'
-  - 'definition list of optional metadata fields (Type, HP, Energy, Artist)'
+  - 'definition list of optional metadata fields (HP, Artist)'
   - 'Printings section listing the card variants'
   - 'global header with the Dumpstar nav links'
 fixture_data:

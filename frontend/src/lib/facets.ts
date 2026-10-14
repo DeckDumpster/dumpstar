@@ -1,5 +1,5 @@
 // Shared builder for "facet" links — clickable card metadata (artist, set,
-// rarity, type, ability, attack, …) that lands on the collection
+// rarity, …) that lands on the collection
 // page pre-filtered by the proper search DSL. Used by the card detail/modal
 // (CardDetailView) and the collection table view so both emit identical,
 // correct queries instead of a bare card-name search.

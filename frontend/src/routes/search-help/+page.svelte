@@ -46,7 +46,7 @@
 <div class="wrap" data-testid="search-help">
 	<h1>Search syntax</h1>
 	<p class="lead">
-		The collection search bar speaks a Scryfall-style query language: combine keywords with
+		The collection search bar speaks a small query language: combine keywords with
 		<code>AND</code> (just a space), <code>or</code>, <code>-</code> (not), and parentheses. By
 		default it searches the cards you own; add <code>is:missing</code> to include cards you don't.
 	</p>

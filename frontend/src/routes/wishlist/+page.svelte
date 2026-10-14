@@ -83,7 +83,7 @@
 		add();
 	}}
 >
-	<label>Set <input type="text" placeholder="sv3pt5" bind:value={setCode} /></label>
+	<label>Set <input type="text" placeholder="sor" bind:value={setCode} /></label>
 	<label>Number <input type="text" placeholder="6" bind:value={number} /></label>
 	<label>Priority <input type="number" min="0" bind:value={priority} /></label>
 	<label>Max price <input type="number" min="0" step="0.01" bind:value={maxPrice} /></label>

@@ -94,7 +94,7 @@ export const api = {
 	collection: () => getJson<CollectionRow[]>('/api/collection'),
 
 	/**
-	 * Scryfall-style collection search — one row per printing (owned or not).
+	 * Collection search — one row per printing (owned or not).
 	 * An empty `q` returns the default owned view. Throws {@link SearchQueryError}
 	 * (with a caret `position`) when the query fails to parse.
 	 *

@@ -9,17 +9,19 @@ description = "The deletion path: tombstone the key, drop the partition, prove i
 
 [dependencies]
 dumpstar-db.workspace = true
-dumpstar-keys.workspace = true
-dumpstar-lake.workspace = true
+dumpster-kit-erase.workspace = true
+dumpster-kit-keys.workspace = true
+dumpster-kit-lake.workspace = true
 # The verification opens a stray copy under a live tenant's key, which is the
 # only thing that makes "it does not open after deletion" mean anything. That
 # is `cipher::open`, and there is exactly one implementation of the envelope.
+dumpster-kit-ship.workspace = true
 dumpstar-ship.workspace = true
 
 anyhow.workspace = true
 clap.workspace = true
 rusqlite.workspace = true
-thiserror.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+dumpster-kit-ship.workspace = true

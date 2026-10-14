@@ -8,7 +8,9 @@ authors.workspace = true
 [dependencies]
 dumpstar-db.workspace = true
 dumpstar-ingest.workspace = true
-dumpstar-lake.workspace = true
+dumpster-kit-lake.workspace = true
+dumpster-kit-derive.workspace = true
+
 rusqlite.workspace = true
 anyhow.workspace = true
 chrono.workspace = true

@@ -20,6 +20,9 @@ ulid.workspace = true
 sha2.workspace = true
 
 [dev-dependencies]
+# The outbox reader and its one reduction (`Event`, `events`, `project`) are the kit shipper's;
+# these tests read them back to prove the writers here agree with it.
+dumpster-kit-ship.workspace = true
 dumpster-kit-tenancy = { workspace = true, features = ["testing"] }
 dumpster-kit-conformance.workspace = true
 tempfile.workspace = true

@@ -428,7 +428,7 @@ mod tests {
     #[test]
     fn unknown_keyword_position_points_at_keyword() {
         let err = parse("t:vigilance bogus:1", &registry()).unwrap_err();
-        assert_eq!(err.position, 7); // index of 'bogus'
+        assert_eq!(err.position, 12); // index of 'bogus'
     }
 
     #[test]

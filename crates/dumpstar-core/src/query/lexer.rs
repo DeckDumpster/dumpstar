@@ -83,7 +83,7 @@ pub(crate) fn tokenize(s: &str) -> Result<Vec<Token>, QueryError> {
             }
             '-' => {
                 // `-` negates only when it leads a keyword, word, or group;
-                // a `-` inside a bare word (ho-oh) is never seen here because
+                // a `-` inside a bare word (k-2so) is never seen here because
                 // bare words are read as a single run.
                 let next = char_at(s, i + 1);
                 if matches!(next, Some(ch) if ch.is_alphabetic() || ch == '(' || ch == '"') {

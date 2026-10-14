@@ -18,7 +18,7 @@ use crate::sealed_import::{self, SealedCommitResult, SealedResolutionReport};
 pub enum ImportFormat {
     Manabox,
     Tcgplayer,
-    /// Dumpstar-native — what the pkmn.gg Tampermonkey export writes.
+    /// Dumpstar-native — Dumpstar's own CSV shape, carrying variant codes directly.
     Dumpstar,
     /// Collectr (getcollectr.com). Yields both singles and sealed products,
     /// so it goes through the combined path ([`preview_collectr`] /
@@ -28,13 +28,12 @@ pub enum ImportFormat {
 
 impl ImportFormat {
     /// Parse the wire name (`"manabox"`, `"tcgplayer"`, `"dumpstar"`,
-    /// `"collectr"`). `"pkmngg"` is accepted as an alias for `"dumpstar"`
-    /// since that is currently the only producer of the format.
+    /// `"collectr"`).
     pub fn parse(name: &str) -> Result<Self> {
         match name.trim().to_lowercase().as_str() {
             "manabox" => Ok(Self::Manabox),
             "tcgplayer" => Ok(Self::Tcgplayer),
-            "dumpstar" | "pkmngg" => Ok(Self::Dumpstar),
+            "dumpstar" => Ok(Self::Dumpstar),
             "collectr" => Ok(Self::Collectr),
             other => Err(DbError::Import(format!("unknown import format '{other}'"))),
         }

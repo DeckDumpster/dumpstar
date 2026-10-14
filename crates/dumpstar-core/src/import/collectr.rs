@@ -161,13 +161,13 @@ pub fn parse(input: &str) -> Result<CollectrParsed> {
 }
 
 /// Collectr writes collector numbers as `number/total` (`221/217`),
-/// occasionally with a set-abbrev prefix (`SVP 176`), and zero-padded to
+/// occasionally with a set-abbrev prefix (`P 176`), and zero-padded to
 /// three digits (`090/086`). Reduce to the bare, unpadded collector number
 /// the catalog stores.
 fn normalize_number(raw: &str) -> String {
     let s = raw.trim();
     let s = s.split('/').next().unwrap_or(s).trim();
-    // "SVP 176" → "176": drop an alphabetic prefix before a numeric tail.
+    // "P 176" → "176": drop an alphabetic prefix before a numeric tail.
     let s = if let Some((prefix, tail)) = s.rsplit_once(' ')
         && !tail.is_empty()
         && tail.chars().all(|c| c.is_ascii_digit())
@@ -277,11 +277,11 @@ Sealed Star Wars Unlimited,Star Wars Unlimited,Twilight of the Republic,Twilight
         // Collectr zero-pads to three digits; the catalog stores unpadded.
         assert_eq!(normalize_number("090/086"), "90");
         assert_eq!(normalize_number("009"), "9");
-        assert_eq!(normalize_number("SVP 176"), "176");
+        assert_eq!(normalize_number("P 176"), "176");
         // Alphanumeric collector numbers must survive untouched.
-        assert_eq!(normalize_number("GG01"), "GG01");
-        assert_eq!(normalize_number("SWSH123"), "SWSH123");
-        assert_eq!(normalize_number("TG01/TG30"), "TG01");
+        assert_eq!(normalize_number("X01"), "X01");
+        assert_eq!(normalize_number("ABC123"), "ABC123");
+        assert_eq!(normalize_number("X01/X30"), "X01");
     }
 
     #[test]

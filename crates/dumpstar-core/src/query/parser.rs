@@ -177,12 +177,12 @@ mod tests {
     use super::*;
     use crate::query::registry::KeywordDef;
 
-    /// A representative Pokémon keyword registry for parser tests. The real
+    /// A representative Star Wars: Unlimited keyword registry for parser tests. The real
     /// definitions are data (task idf.6); the parser only needs alias
     /// resolution, so this covers enough keywords to exercise it.
     fn registry() -> KeywordRegistry {
         KeywordRegistry::new(vec![
-            KeywordDef::new("energy_type", &["t", "type"]),
+            KeywordDef::new("aspect", &["t", "type"]),
             KeywordDef::new("hp", &["hp"]),
             KeywordDef::new("rarity", &["r", "rarity"]),
             KeywordDef::new("set", &["s", "set", "e"]),
@@ -203,32 +203,32 @@ mod tests {
 
     #[test]
     fn single_bare_word() {
-        assert_eq!(parse_ok("charizard"), Ast::NameSearch("charizard".into()));
+        assert_eq!(parse_ok("vader"), Ast::NameSearch("vader".into()));
     }
 
     #[test]
     fn two_words_are_implicit_and() {
         assert_eq!(
-            parse_ok("lightning rod"),
+            parse_ok("millennium falcon"),
             Ast::And(vec![
-                Ast::NameSearch("lightning".into()),
-                Ast::NameSearch("rod".into()),
+                Ast::NameSearch("millennium".into()),
+                Ast::NameSearch("falcon".into()),
             ])
         );
     }
 
     #[test]
     fn hyphen_inside_name_is_one_word() {
-        assert_eq!(parse_ok("ho-oh"), Ast::NameSearch("ho-oh".into()));
+        assert_eq!(parse_ok("k-2so"), Ast::NameSearch("k-2so".into()));
     }
 
     #[test]
     fn exact_name_quoted_and_unquoted() {
         assert_eq!(
-            parse_ok("!\"Charizard ex\""),
-            Ast::ExactName("Charizard ex".into())
+            parse_ok("!\"Luke Skywalker\""),
+            Ast::ExactName("Luke Skywalker".into())
         );
-        assert_eq!(parse_ok("!pikachu"), Ast::ExactName("pikachu".into()));
+        assert_eq!(parse_ok("!vanquish"), Ast::ExactName("vanquish".into()));
     }
 
     // --- keyword comparisons & operators -----------------------------------
@@ -236,11 +236,11 @@ mod tests {
     #[test]
     fn colon_comparison() {
         assert_eq!(
-            parse_ok("t:fire"),
+            parse_ok("t:vigilance"),
             Ast::Comparison {
-                keyword: "energy_type".into(),
+                keyword: "aspect".into(),
                 op: Op::Contains,
-                value: "fire".into(),
+                value: "vigilance".into(),
             }
         );
     }
@@ -283,8 +283,8 @@ mod tests {
     #[test]
     fn aliases_resolve_to_canonical() {
         for alias in ["t", "type", "TYPE"] {
-            match parse_ok(&format!("{alias}:water")) {
-                Ast::Comparison { keyword, .. } => assert_eq!(keyword, "energy_type"),
+            match parse_ok(&format!("{alias}:command")) {
+                Ast::Comparison { keyword, .. } => assert_eq!(keyword, "aspect"),
                 other => panic!("unexpected {other:?}"),
             }
         }
@@ -299,11 +299,11 @@ mod tests {
     #[test]
     fn is_flag() {
         assert_eq!(
-            parse_ok("is:holo"),
+            parse_ok("is:foil"),
             Ast::Comparison {
                 keyword: "is_flag".into(),
                 op: Op::Contains,
-                value: "holo".into(),
+                value: "foil".into(),
             }
         );
     }
@@ -312,7 +312,7 @@ mod tests {
 
     #[test]
     fn implicit_and() {
-        match parse_ok("t:fire hp>=100") {
+        match parse_ok("t:vigilance hp>=100") {
             Ast::And(children) => assert_eq!(children.len(), 2),
             other => panic!("expected And, got {other:?}"),
         }
@@ -320,7 +320,7 @@ mod tests {
 
     #[test]
     fn explicit_or_case_insensitive() {
-        for q in ["t:fire or t:water", "t:fire OR t:water"] {
+        for q in ["t:vigilance or t:command", "t:vigilance OR t:command"] {
             match parse_ok(q) {
                 Ast::Or(children) => assert_eq!(children.len(), 2, "{q:?}"),
                 other => panic!("expected Or for {q:?}, got {other:?}"),
@@ -330,7 +330,7 @@ mod tests {
 
     #[test]
     fn or_flattens() {
-        match parse_ok("t:fire or t:water or t:grass") {
+        match parse_ok("t:vigilance or t:command or t:cunning") {
             Ast::Or(children) => assert_eq!(children.len(), 3),
             other => panic!("expected flattened Or, got {other:?}"),
         }
@@ -338,12 +338,12 @@ mod tests {
 
     #[test]
     fn explicit_and_connector_is_noop() {
-        assert_eq!(parse_ok("t:fire and t:water"), parse_ok("t:fire t:water"));
+        assert_eq!(parse_ok("t:vigilance and t:command"), parse_ok("t:vigilance t:command"));
     }
 
     #[test]
     fn negation_of_comparison() {
-        match parse_ok("-t:fire") {
+        match parse_ok("-t:vigilance") {
             Ast::Not(inner) => assert!(matches!(*inner, Ast::Comparison { .. })),
             other => panic!("expected Not, got {other:?}"),
         }
@@ -359,7 +359,7 @@ mod tests {
 
     #[test]
     fn negation_combines_with_and() {
-        match parse_ok("-is:graded t:fire") {
+        match parse_ok("-is:graded t:vigilance") {
             Ast::And(children) => {
                 assert!(matches!(children[0], Ast::Not(_)));
                 assert!(matches!(children[1], Ast::Comparison { .. }));
@@ -370,7 +370,7 @@ mod tests {
 
     #[test]
     fn parentheses_group() {
-        match parse_ok("(t:fire or t:water) hp>=100") {
+        match parse_ok("(t:vigilance or t:command) hp>=100") {
             Ast::And(children) => {
                 assert!(matches!(children[0], Ast::Or(_)));
                 assert!(matches!(children[1], Ast::Comparison { .. }));
@@ -382,14 +382,14 @@ mod tests {
     #[test]
     fn nested_parentheses() {
         assert!(matches!(
-            parse_ok("((t:fire or t:water) hp>=100)"),
+            parse_ok("((t:vigilance or t:command) hp>=100)"),
             Ast::And(_)
         ));
     }
 
     #[test]
     fn negated_group() {
-        match parse_ok("-(t:fire or t:water)") {
+        match parse_ok("-(t:vigilance or t:command)") {
             Ast::Not(inner) => assert!(matches!(*inner, Ast::Or(_))),
             other => panic!("expected Not(Or), got {other:?}"),
         }
@@ -397,7 +397,7 @@ mod tests {
 
     #[test]
     fn complex_query() {
-        match parse_ok("s:pfl t:fire rarity>=rare -is:graded") {
+        match parse_ok("s:sor t:vigilance rarity>=rare -is:graded") {
             Ast::And(children) => assert_eq!(children.len(), 4),
             other => panic!("expected And of 4, got {other:?}"),
         }
@@ -424,7 +424,7 @@ mod tests {
 
     #[test]
     fn unknown_keyword_position_points_at_keyword() {
-        let err = parse("t:fire bogus:1", &registry()).unwrap_err();
+        let err = parse("t:vigilance bogus:1", &registry()).unwrap_err();
         assert_eq!(err.position, 7); // index of 'bogus'
     }
 
@@ -436,7 +436,7 @@ mod tests {
 
     #[test]
     fn missing_close_paren_errors() {
-        let err = parse("(t:fire", &registry()).unwrap_err();
+        let err = parse("(t:vigilance", &registry()).unwrap_err();
         assert!(err.message.to_lowercase().contains("paren"));
     }
 }

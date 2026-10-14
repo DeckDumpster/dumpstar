@@ -16,7 +16,7 @@ use std::collections::HashMap;
 /// owner.
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct KeywordDef {
-    /// Canonical internal name, e.g. `energy_type`.
+    /// Canonical internal name, e.g. `aspect`.
     pub canonical: String,
     /// Accepted aliases, e.g. `["t", "type"]`.
     #[serde(default)]
@@ -31,7 +31,7 @@ pub struct KeywordDef {
     /// Target column or JSON path, e.g. `cards.types`.
     #[serde(default)]
     pub target: Option<String>,
-    /// Optional reference to an enum value-set (energy types, conditions, …).
+    /// Optional reference to an enum value-set (aspects, conditions, …).
     #[serde(default)]
     pub value_enum: Option<String>,
     /// Free-form semantics tag the compiler reads (`superset`/`subset`/`exists`/…).
@@ -117,10 +117,10 @@ mod tests {
 
     #[test]
     fn resolves_aliases_and_canonical_case_insensitively() {
-        let reg = KeywordRegistry::new(vec![KeywordDef::new("energy_type", &["t", "type"])]);
-        assert_eq!(reg.resolve("t"), Some("energy_type"));
-        assert_eq!(reg.resolve("TYPE"), Some("energy_type"));
-        assert_eq!(reg.resolve("energy_type"), Some("energy_type"));
+        let reg = KeywordRegistry::new(vec![KeywordDef::new("aspect", &["t", "type"])]);
+        assert_eq!(reg.resolve("t"), Some("aspect"));
+        assert_eq!(reg.resolve("TYPE"), Some("aspect"));
+        assert_eq!(reg.resolve("aspect"), Some("aspect"));
         assert_eq!(reg.resolve("nope"), None);
     }
 }

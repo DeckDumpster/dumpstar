@@ -131,7 +131,7 @@ pub(crate) fn is_true(s: &str) -> bool {
 /// Reduce a purely-numeric collector number to its canonical unpadded form,
 /// so a zero-padded source token (Collectr's `090`) matches the catalog's
 /// stored `90`. Only all-ASCII-digit tokens are stripped — alphanumeric
-/// numbers (`SWSH123`, `GG01`, `TG01`, `SVP`) are returned unchanged — and at
+/// numbers (`ABC123`, `X01`, `T01`, `P`) are returned unchanged — and at
 /// least one digit is always kept (`000` → `0`). The canonical normalizer,
 /// shared by the Collectr parser and the catalog resolver so both sides of a
 /// `number =` lookup agree.
@@ -162,9 +162,9 @@ mod number_tests {
         // All-zero keeps a single digit rather than collapsing to empty.
         assert_eq!(normalize_collector_number("000"), "0");
         // Alphanumeric collector numbers are left exactly as written.
-        assert_eq!(normalize_collector_number("GG01"), "GG01");
-        assert_eq!(normalize_collector_number("TG01"), "TG01");
-        assert_eq!(normalize_collector_number("SWSH123"), "SWSH123");
-        assert_eq!(normalize_collector_number("SVP"), "SVP");
+        assert_eq!(normalize_collector_number("X01"), "X01");
+        assert_eq!(normalize_collector_number("T01"), "T01");
+        assert_eq!(normalize_collector_number("ABC123"), "ABC123");
+        assert_eq!(normalize_collector_number("P"), "P");
     }
 }

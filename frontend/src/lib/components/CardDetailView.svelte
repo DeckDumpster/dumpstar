@@ -697,7 +697,7 @@
 		background: var(--color-surface-selected);
 		color: var(--color-text);
 	}
-	.facet:hover .setsym,
+	.facet:hover .setsym {
 		filter: brightness(1.2);
 	}
 	.flavor {
@@ -706,7 +706,8 @@
 		margin: var(--space-6) var(--space-0) var(--space-0);
 	}
 	section {
-
+		margin-top: var(--space-8);
+	}
 
 	/* Printings list — one row per variant with [- N +] stepper, mirroring
 	   the browse-page VariantModal so the same muscle memory works here. */

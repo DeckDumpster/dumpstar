@@ -104,7 +104,7 @@ fn a_serving_open_of_a_converged_catalog_hands_back_a_handle_that_cannot_write()
     let conn = dumpstar_db::open_shared_for_serving(&path).unwrap();
     let err = conn
         .execute(
-            "INSERT INTO sets (set_code, name, series) VALUES ('zz', 'nope', 'nope')",
+            "INSERT INTO sets (set_code, name) VALUES ('ZZZ', 'nope')",
             [],
         )
         .expect_err("a serving open must not be able to write the catalog");

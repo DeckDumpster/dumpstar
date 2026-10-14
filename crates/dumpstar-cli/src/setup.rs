@@ -1,13 +1,14 @@
 //! `dumpstar setup` — create the shared catalog database.
 //!
 //! Opening the catalog read-write creates it and converges its schema and
-//! shipped seeds ([`dumpstar_db::open_shared`]). With `--land-raw` setup also
+//! shipped seeds ([`dumpstar_db::open_shared`]); a `shared.sqlite` written by
+//! the Pokémon-shaped schema this project was forked with is emptied there
+//! first. With `--land-raw` setup also
 //! fetches the TCGCSV Star Wars: Unlimited category into the raw landing zone,
 //! the same acquisition `dumpstar data refresh` runs nightly.
 //!
-//! The Star Wars: Unlimited catalog itself is built from `raw/` by
-//! `dumpstar-lake-derive shared` once the catalog seam lands (design row S6);
-//! setup writes no card rows.
+//! The Star Wars: Unlimited catalog itself is filled by `dumpstar catalog-apply`
+//! (`--swu` live, `--fake` for the test tiers); setup writes no card rows.
 
 use std::path::PathBuf;
 
@@ -38,7 +39,7 @@ pub fn run(args: SetupArgs) -> anyhow::Result<()> {
         None => dumpstar_db::shared_db_path()?,
     };
     println!("Opening shared catalog at {}", db_path.display());
-    let mut conn = dumpstar_db::open_shared(&db_path)?;
+    let conn = dumpstar_db::open_shared(&db_path)?;
 
     // The run's clock, read ONCE — see `dumpstar_derive::clock`. It picks the
     // ingest_date partition and it is recorded in every manifest.
@@ -70,20 +71,6 @@ pub fn run(args: SetupArgs) -> anyhow::Result<()> {
     println!(
         "  {} keywords, {} rarities, {} flags",
         sm.keywords, sm.rarities, sm.flags
-    );
-
-    // Materialize latest_prices so the per-row market-price lookup on the
-    // collection/search/binder pages is an indexed point read.
-    println!("Refreshing materialized latest_prices...");
-    let n_latest = dumpstar_db::latest_prices::refresh_latest_prices(&conn)?;
-    println!("  {n_latest} latest-price rows materialized");
-
-    // The seeds whose rows FK into rows a build creates, run again at the end
-    // so one setup is a fixed point rather than the first of two.
-    let seeds = dumpstar_db::reconcile_ingest_dependent_seeds(&mut conn)?;
-    println!(
-        "  {} curated catalog price overrides, {} set aliases reconciled",
-        seeds.catalog_prices, seeds.set_aliases
     );
 
     // `setup` writes the catalog and then exits, and nothing that runs

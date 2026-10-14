@@ -6,7 +6,7 @@ use axum::{Json, Router};
 use serde::Deserialize;
 
 use dumpstar_db::DbError;
-use dumpstar_db::binder::{self, BinderPage, BinderQuery, MissingExport};
+use dumpstar_db::binder::{self, BinderPage, BinderQuery};
 use dumpstar_db::sets::{self, SetAnalytics, SetSummary};
 
 use crate::{AppError, AppState, blocking};
@@ -17,7 +17,6 @@ pub fn routes() -> Router<AppState> {
         .route("/sets", get(list))
         .route("/sets/{code}/binder", get(binder_page))
         .route("/sets/{code}/analytics", get(analytics))
-        .route("/sets/{code}/tcg-export", get(tcg_export))
 }
 
 async fn list(State(state): State<AppState>) -> Result<Json<Vec<SetSummary>>, AppError> {
@@ -36,25 +35,12 @@ async fn analytics(
     Ok(Json(stats))
 }
 
-/// Every missing card in a set as TCGplayer Mass Entry lines.
-async fn tcg_export(
-    State(state): State<AppState>,
-    Path(code): Path<String>,
-) -> Result<Json<MissingExport>, AppError> {
-    let export = blocking(&state, move |c| {
-        binder::missing_for_export(c, &code)?
-            .ok_or_else(|| DbError::NotFound(format!("set {code}")))
-    })
-    .await?;
-    Ok(Json(export))
-}
-
 #[derive(Deserialize)]
 struct BinderParams {
     page: Option<i64>,
     layout: Option<i64>,
-    secret: Option<bool>,
-    subset: Option<bool>,
+    hyperspace: Option<bool>,
+    showcase: Option<bool>,
     promos: Option<bool>,
     /// `number` | `number_desc` | `price` | `name` | `rarity`.
     sort: Option<String>,
@@ -72,8 +58,8 @@ async fn binder_page(
     let query = BinderQuery {
         page: p.page.unwrap_or(1),
         layout: p.layout.unwrap_or(9),
-        include_secret: p.secret.unwrap_or(true),
-        include_subset: p.subset.unwrap_or(true),
+        include_hyperspace: p.hyperspace.unwrap_or(true),
+        include_showcase: p.showcase.unwrap_or(true),
         include_promos: p.promos.unwrap_or(false),
         sort: p.sort.unwrap_or_else(|| "number".into()),
         search: p.q.unwrap_or_default(),

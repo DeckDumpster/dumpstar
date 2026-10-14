@@ -53,50 +53,32 @@ impl Rng {
 // Value pools by keyword kind / value_enum
 // ---------------------------------------------------------------------------
 
-const ENERGY: &[&str] = &[
-    "fire",
-    "water",
-    "grass",
-    "lightning",
-    "psychic",
-    "fighting",
-    "darkness",
-    "metal",
-    "fairy",
-    "dragon",
-    "colorless",
+const CARD_TYPES: &[&str] = &["leader", "unit", "event", "upgrade", "base", "token"];
+const ASPECTS: &[&str] = &[
+    "vigilance",
+    "command",
+    "aggression",
+    "cunning",
+    "heroism",
+    "villainy",
 ];
-const SUPERTYPE: &[&str] = &["pokemon", "trainer", "energy"];
-const SUBTYPE: &[&str] = &[
-    "ex",
-    "Basic",
-    "Stage 1",
-    "Stage 2",
-    "V",
-    "VMAX",
-    "Supporter",
-];
-const FORMATS: &[&str] = &["standard", "expanded", "unlimited"];
+const ARENAS: &[&str] = &["ground", "space"];
+const TRAITS: &[&str] = &["rebel", "force", "vehicle", "trooper", "jedi", "underworld"];
+const FINISHES: &[&str] = &["normal", "foil"];
+const FORMATS: &[&str] = &["premier", "twin_suns", "nonexistent"];
 const CONDITIONS: &[&str] = &["nm", "lp", "mp", "hp", "dmg", "Near Mint"];
 const GRADERS: &[&str] = &["psa", "bgs", "cgc", "sgc"];
 const STATUSES: &[&str] = &["owned", "ordered", "sold", "traded", "listed"];
 const LANGS: &[&str] = &["english", "japanese", "german"];
 const SOURCES: &[&str] = &["manual_id", "csv_manabox", "order_import"];
 const DATES: &[&str] = &["2023-01-01", "2024-06-15", "2025-03-01"];
-const SETS: &[&str] = &["base", "base1", "mew", "pfl", "151"];
-const NAMES: &[&str] = &["charizard", "pikachu", "blastoise", "char"];
-const WORDS: &[&str] = &["fire", "draw", "damage", "spin", "jolt"];
-const VARIANTS: &[&str] = &["holo", "reverse", "pokeball", "normal", "first"];
-const HAS: &[&str] = &[
-    "ability",
-    "flavor",
-    "attack",
-    "weakness",
-    "resistance",
-    "retreat",
-];
+const SETS: &[&str] = &["sor", "shd", "spark", "shadows", "jtl"];
+const NAMES: &[&str] = &["luke", "falcon", "vanquish", "han"];
+const WORDS: &[&str] = &["heal", "draw", "damage", "attack", "pilot"];
+const VARIANTS: &[&str] = &["standard", "hyperspace", "showcase", "promo"];
+const HAS: &[&str] = &["text", "subtitle", "artist"];
 const TAGS: &[&str] = &["favorite", "trade", "graded"];
-const EXACT: &[&str] = &["Charizard ex", "Pikachu", "Mewtwo"];
+const EXACT: &[&str] = &["Luke Skywalker", "Vanquish", "Darth Vader"];
 
 struct KwGen {
     canonical: String,
@@ -258,32 +240,33 @@ impl Generator<'_> {
                 }
             }
             "legality" => self.rng.pick(FORMATS).to_string(),
-            "energy" => self.rng.pick(ENERGY).to_string(),
             "set" => self.rng.pick(SETS).to_string(),
             "name" => self.rng.pick(NAMES).to_string(),
             "flag" => match value_enum {
                 Some("has_flag") => self.rng.pick(HAS).to_string(),
                 _ => {
                     if self.spec.flags.is_empty() {
-                        "holo".to_string()
+                        "foil".to_string()
                     } else {
                         self.spec.flags[self.rng.below(self.spec.flags.len())].clone()
                     }
                 }
             },
-            "json_array" => match value_enum {
-                Some("energy_type") => self.rng.pick(ENERGY).to_string(),
-                _ => self.rng.pick(SUBTYPE).to_string(),
+            "json_array" => match (value_enum, canonical) {
+                (Some("aspect"), _) => self.rng.pick(ASPECTS).to_string(),
+                (Some("arena"), _) => self.rng.pick(ARENAS).to_string(),
+                (_, "tag") => self.rng.pick(TAGS).to_string(),
+                _ => self.rng.pick(TRAITS).to_string(),
             },
             "enum" => match value_enum {
-                Some("supertype") => self.rng.pick(SUPERTYPE).to_string(),
+                Some("card_type") => self.rng.pick(CARD_TYPES).to_string(),
+                Some("finish") => self.rng.pick(FINISHES).to_string(),
                 Some("condition") => self.rng.pick(CONDITIONS).to_string(),
                 Some("grader") => self.rng.pick(GRADERS).to_string(),
                 Some("status") => self.rng.pick(STATUSES).to_string(),
                 _ => match canonical {
                     "language" => self.rng.pick(LANGS).to_string(),
                     "source" => self.rng.pick(SOURCES).to_string(),
-                    "regulation" => self.rng.pick(&["F", "G", "H"]).to_string(),
                     _ => self.rng.pick(WORDS).to_string(),
                 },
             },
@@ -291,9 +274,7 @@ impl Generator<'_> {
                 if self.rng.chance(0.4) {
                     "*".to_string()
                 } else {
-                    self.rng
-                        .pick(&["Mono Fire", "Trade", "Standard"])
-                        .to_string()
+                    self.rng.pick(&["Rebels", "Trade", "Aggro"]).to_string()
                 }
             }
             "text" => match canonical {
@@ -323,40 +304,36 @@ fn fixture() -> (
         let mut c = open_shared(&shared).unwrap();
         search_meta::reconcile(&mut c).unwrap();
         c.execute(
-            "INSERT INTO sets (set_code, ptcgo_code, name, series, set_sort_order, release_date)
-             VALUES ('base1','BS','Base Set','Base',1,'1999/01/09')",
+            "INSERT INTO sets (set_code, name, release_date, sort_order)
+             VALUES ('SOR','Spark of Rebellion','2024-03-08',1)",
             [],
         )
         .unwrap();
         c.execute(
-            "INSERT INTO cards (card_id,set_code,number,number_sortable,name,supertype,subtypes,
-                hp,types,rarity,artist,flavor_text,attacks,abilities,weaknesses,resistances,
-                retreat_cost,regulation_mark,national_pokedex_numbers,legalities)
+            "INSERT INTO cards (card_id,name,subtitle,card_type,cost,power,hp,aspects,traits,
+                arenas,rules_text)
              VALUES
-             ('base1-4','base1','4',4,'Charizard','Pokémon','[\"Stage 2\"]',120,'[\"Fire\"]',
-               'Rare Holo','Mitsuhiro Arita','Spits fire.',
-               '[{\"name\":\"Fire Spin\",\"damage\":\"100\"}]','[{\"name\":\"Energy Burn\"}]',
-               '[{\"type\":\"Water\",\"value\":\"×2\"}]','[{\"type\":\"Fighting\",\"value\":\"-30\"}]',
-               '[\"Colorless\",\"Colorless\"]','G','[6]','{\"unlimited\":\"Legal\"}'),
-             ('base1-2','base1','2',2,'Blastoise','Pokémon','[\"Stage 2\"]',100,'[\"Water\"]',
-               'Rare Holo','Ken Sugimori','Crushes foes.',
-               '[{\"name\":\"Hydro Pump\",\"damage\":\"60\"}]','[]',
-               '[{\"type\":\"Lightning\",\"value\":\"×2\"}]','[]',
-               '[\"Colorless\"]','G','[9]','{\"unlimited\":\"Legal\"}')",
+             ('luke','Luke Skywalker','Faithful Friend','Unit',3,3,5,
+               '[\"Vigilance\",\"Heroism\"]','[\"Force\",\"Rebel\"]','[\"Ground\"]',
+               'On Attack: Heal 2 damage from a base.'),
+             ('han','Han Solo','Reluctant Hero','Unit',6,7,6,
+               '[\"Aggression\",\"Villainy\"]','[\"Underworld\"]','[\"Ground\"]',
+               'When Played: Deal 2 damage to a unit.')",
             [],
         )
         .unwrap();
         c.execute(
-            "INSERT INTO printings (printing_id,card_id,variant) VALUES
-             ('base1-4-holo','base1-4','holo'),
-             ('base1-2-holo','base1-2','holo')",
+            "INSERT INTO printings (printing_id,card_id,set_code,number,variant,finish,rarity,artist)
+             VALUES
+             ('luke-foil','luke','SOR','005','Standard','Foil','Legendary','Borja Pindado'),
+             ('han-std','han','SOR','010','Standard','Normal','Rare','Ryan Grayson')",
             [],
         )
         .unwrap();
     }
     let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
     conn.execute(
-        "INSERT INTO decks (id,name,created_at,updated_at) VALUES (1,'Mono Fire','2026-01-01','2026-01-01')",
+        "INSERT INTO decks (id,name,created_at,updated_at) VALUES (1,'Rebels','2026-01-01','2026-01-01')",
         [],
     )
     .unwrap();
@@ -367,7 +344,7 @@ fn fixture() -> (
     .unwrap();
     conn.execute(
         "INSERT INTO collection (printing_id,condition,language,acquired_at,source,status,graded,binder_id)
-         VALUES ('base1-4-holo','Near Mint','English','2024-01-01','manual_id','owned',1,1)",
+         VALUES ('luke-foil','Near Mint','English','2024-01-01','manual_id','owned',1,1)",
         [],
     )
     .unwrap();

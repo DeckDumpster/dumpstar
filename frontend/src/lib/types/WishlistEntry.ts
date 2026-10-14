@@ -15,4 +15,4 @@ min_condition: string | null, quantity: number,
 /**
  * Matching copies added so far; the want is fulfilled at `quantity`.
  */
-quantity_have: number, set_code: string, set_name: string, number: string, name: string, rarity: string | null, image_small: string | null, };
+quantity_have: number, set_code: string, set_name: string, number: string, name: string, subtitle: string | null, rarity: string | null, image_url: string | null, };

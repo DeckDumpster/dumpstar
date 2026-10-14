@@ -19,19 +19,20 @@ use serde::{Deserialize, Serialize};
 pub struct ParsedRow {
     /// 1-based source line (counting the header), for preview diagnostics.
     pub source_line: usize,
-    /// Set code (or ptcgo code) as written in the file.
+    /// Set code (or name) as written in the file.
     pub set_hint: String,
     /// Set name as written, used as a resolution fallback. May be empty.
     pub set_name: Option<String>,
     /// Card name as written, used only as a global-search fallback when the
-    /// set+number lookup fails (e.g. Collectr's "Miscellaneous Cards &
-    /// Products" catch-all, where the stated set doesn't resolve). `None`
+    /// set+number lookup fails (e.g. Collectr's catch-all category, where the stated set doesn't resolve). `None`
     /// when the format carries no reliable name column.
     pub name: Option<String>,
     /// Collector number, verbatim.
     pub number: String,
-    /// Dumpstar variant code (the flat enum) the foil column mapped to.
-    pub variant: String,
+    /// `Normal` or `Foil`, as the file's foil column mapped. A collector
+    /// number names its variant (Hyperspace and Showcase run past the numbered
+    /// set), so (set, number, finish) names one printing.
+    pub finish: String,
     /// Grading condition, mapped to Dumpstar's five-tier scale.
     pub condition: String,
     pub language: String,
@@ -131,7 +132,7 @@ pub(crate) fn is_true(s: &str) -> bool {
 /// Reduce a purely-numeric collector number to its canonical unpadded form,
 /// so a zero-padded source token (Collectr's `090`) matches the catalog's
 /// stored `90`. Only all-ASCII-digit tokens are stripped — alphanumeric
-/// numbers (`SWSH123`, `GG01`, `TG01`, `SVP`) are returned unchanged — and at
+/// numbers (`P01`, `T02`) are returned unchanged — and at
 /// least one digit is always kept (`000` → `0`). The canonical normalizer,
 /// shared by the Collectr parser and the catalog resolver so both sides of a
 /// `number =` lookup agree.
@@ -162,9 +163,7 @@ mod number_tests {
         // All-zero keeps a single digit rather than collapsing to empty.
         assert_eq!(normalize_collector_number("000"), "0");
         // Alphanumeric collector numbers are left exactly as written.
-        assert_eq!(normalize_collector_number("GG01"), "GG01");
-        assert_eq!(normalize_collector_number("TG01"), "TG01");
-        assert_eq!(normalize_collector_number("SWSH123"), "SWSH123");
-        assert_eq!(normalize_collector_number("SVP"), "SVP");
+        assert_eq!(normalize_collector_number("P01"), "P01");
+        assert_eq!(normalize_collector_number("T02"), "T02");
     }
 }

@@ -41,15 +41,15 @@ const HEADER: &[&str] = &[
 /// One row per physical copy (`Quantity` always 1 — no aggregation).
 pub fn collectr_singles_csv(conn: &Connection) -> Result<String> {
     let mut stmt = conn.prepare(
-        "SELECT s.name, s.printed_total, cd.name, cd.number, cd.rarity, \
-                p.variant, c.condition, c.purchase_price, c.acquired_at, \
+        "SELECT s.name, cd.name, cd.subtitle, p.number, p.rarity, \
+                p.finish, c.condition, c.purchase_price, c.acquired_at, \
                 c.graded, c.grade_company, c.grade_value, c.notes \
          FROM collection c \
            JOIN printings p ON c.printing_id = p.printing_id \
            JOIN cards cd ON p.card_id = cd.card_id \
-           JOIN sets s ON cd.set_code = s.set_code \
+           JOIN sets s ON p.set_code = s.set_code \
          WHERE c.status = 'owned' \
-         ORDER BY s.release_date, s.set_code, cd.number_sortable, p.variant, c.id",
+         ORDER BY s.release_date, s.set_code, CAST(p.number AS INTEGER), p.number, p.finish, c.id",
     )?;
 
     let mut writer = csv::Writer::from_writer(Vec::new());
@@ -58,11 +58,11 @@ pub fn collectr_singles_csv(conn: &Connection) -> Result<String> {
     let mut rows = stmt.query([])?;
     while let Some(r) = rows.next()? {
         let set_name: String = r.get(0)?;
-        let printed_total: Option<i64> = r.get(1)?;
-        let card_name: String = r.get(2)?;
+        let name: String = r.get(1)?;
+        let subtitle: Option<String> = r.get(2)?;
         let number: String = r.get(3)?;
         let rarity: Option<String> = r.get(4)?;
-        let variant: String = r.get(5)?;
+        let finish: String = r.get(5)?;
         let condition: String = r.get(6)?;
         let purchase_price: Option<f64> = r.get(7)?;
         let acquired_at: Option<String> = r.get(8)?;
@@ -71,15 +71,19 @@ pub fn collectr_singles_csv(conn: &Connection) -> Result<String> {
         let grade_value: Option<f64> = r.get(11)?;
         let notes: Option<String> = r.get(12)?;
 
+        let card_name = match subtitle.as_deref() {
+            Some(s) if !s.is_empty() => format!("{name} - {s}"),
+            _ => name,
+        };
         writer
             .write_record([
                 "Main",
-                "Star Wars Unlimited",
+                CATEGORY,
                 &set_name,
                 &card_name,
-                &card_number(&number, printed_total),
+                &number,
                 &rarity.unwrap_or_default(),
-                variant_to_collectr(&variant),
+                variance(&finish),
                 &grade(graded, grade_company.as_deref(), grade_value),
                 &condition,
                 &money(purchase_price),
@@ -124,7 +128,7 @@ pub fn collectr_sealed_csv(conn: &Connection) -> Result<String> {
         writer
             .write_record([
                 "Sealed Star Wars Unlimited",
-                "Star Wars Unlimited",
+                CATEGORY,
                 &set_name.unwrap_or_default(),
                 &product_name,
                 "", // Card Number — blank marks a sealed product.
@@ -145,22 +149,12 @@ pub fn collectr_sealed_csv(conn: &Connection) -> Result<String> {
     finish(writer)
 }
 
-/// `number` plus `/printed_total` when the set total is known — Collectr's
-/// `221/217` shape. Bare number otherwise.
-fn card_number(number: &str, printed_total: Option<i64>) -> String {
-    match printed_total {
-        Some(t) => format!("{number}/{t}"),
-        None => number.to_string(),
-    }
-}
+/// Collectr's name for the game.
+const CATEGORY: &str = "Star Wars Unlimited";
 
-/// Dumpstar variant code → Collectr `Variance`. The inverse of the
-/// importer's foil mapping; uncommon holo variants fold to `Foil`.
-fn variant_to_collectr(variant: &str) -> &'static str {
-    match variant {
-        "normal" => "Normal",
-        _ => "Foil",
-    }
+/// Finish → Collectr `Variance`. The inverse of the importer's foil mapping.
+fn variance(finish: &str) -> &'static str {
+    if finish == "Foil" { "Foil" } else { "Normal" }
 }
 
 /// A Collectr `Grade` cell: `Ungraded`, or e.g. `PSA 10`.
@@ -217,27 +211,27 @@ mod tests {
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, ptcgo_code, name, series, printed_total, set_sort_order) \
-                 VALUES ('sv3pt5', 'SOR', 'Spark of Rebellion', 'SOR', 165, 1)",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name, rarity) \
-                 VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Luke Skywalker', 'Legendary')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES ('sv3pt5-6-holo', 'sv3pt5-6', 'holo')",
-                [],
-            )
-            .unwrap();
+            crate::testkit::set(&c, "SOR", "Spark of Rebellion");
+            crate::testkit::card_full(
+                &c,
+                "SOR-5",
+                "Luke Skywalker",
+                Some("Faithful Friend"),
+                "Leader",
+                None,
+                None,
+                None,
+                "[]",
+                "[]",
+                "[]",
+                None,
+            );
+            crate::testkit::printing(&c, "SOR-5-foil", "SOR-5", "SOR", "5", "Standard", "Foil");
+            c.execute("UPDATE printings SET rarity = 'Legendary'", [])
+                .unwrap();
             c.execute(
                 "INSERT INTO sealed_products (product_id, set_code, name, category, fetched_at) \
-                 VALUES (7001, 'sv3pt5', 'Spark of Rebellion Two-Player Starter', 'two_player_starter', '2026-02-28')",
+                 VALUES (7001, 'SOR', 'Spark of Rebellion Booster Box', 'sealed', '2026-02-28')",
                 [],
             )
             .unwrap();
@@ -252,7 +246,7 @@ mod tests {
         crate::collection::add(
             &mut conn,
             &NewCopy {
-                printing_id: "sv3pt5-6-holo".into(),
+                printing_id: "SOR-5-foil".into(),
                 condition: Some("Near Mint".into()),
                 purchase_price: Some(4.5),
                 acquired_at: Some("2026-04-14T00:00:00Z".into()),
@@ -267,7 +261,7 @@ mod tests {
         assert!(lines[0].starts_with("Portfolio Name,Category,Set,Product Name,Card Number"));
         let row = lines[1];
         assert!(row.starts_with(
-            "Main,Star Wars Unlimited,Spark of Rebellion,Luke Skywalker,6/165,Legendary,Foil,Ungraded,Near Mint,4.50,1"
+            "Main,Star Wars Unlimited,Spark of Rebellion,Luke Skywalker - Faithful Friend,5,Legendary,Foil,Ungraded,Near Mint,4.50,1"
         ));
         assert!(row.contains("2026-04-14"));
     }
@@ -293,7 +287,7 @@ mod tests {
         // Portfolio, blank Card Number + Rarity, quantity preserved.
         assert!(
             row.starts_with(
-                "Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebellion Two-Player Starter,,,Normal,Ungraded"
+                "Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebellion Booster Box,,,Normal,Ungraded"
             )
         );
         assert!(row.contains(",3,")); // quantity 3, not expanded
@@ -306,7 +300,7 @@ mod tests {
         let id = crate::collection::add(
             &mut conn,
             &NewCopy {
-                printing_id: "sv3pt5-6-holo".into(),
+                printing_id: "SOR-5-foil".into(),
                 source: "test".into(),
                 ..Default::default()
             },
@@ -329,9 +323,9 @@ mod tests {
         let (_d, mut conn) = db();
         let csv = "\
 Portfolio Name,Category,Set,Product Name,Card Number,Rarity,Variance,Grade,Card Condition,Average Cost Paid,Quantity,Market Price (As of 2026-07-17),Price Override,Watchlist,Date Added,Notes
-Main,Star Wars Unlimited,Spark of Rebellion,Luke Skywalker,6/165,Legendary,Foil,Ungraded,Near Mint,4.50,2,5.00,0,false,2026-04-14,
-Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebellion Two-Player Starter,,,Normal,Ungraded,Near Mint,49.99,3,60.00,0,false,2026-02-28,
-Main,Lorcana,Foo,Bar,1,Promo,Foil,Ungraded,Near Mint,0,1,1.00,0,false,2026-01-01,";
+Main,Star Wars Unlimited,Spark of Rebellion,Luke Skywalker - Faithful Friend,005/252,Legendary,Foil,Ungraded,Near Mint,4.50,2,5.00,0,false,2026-04-14,
+Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebellion Booster Box,,,Normal,Ungraded,Near Mint,49.99,3,60.00,0,false,2026-02-28,
+Main,Lorcana,Foo,Bar,1,Promo,Holofoil,Ungraded,Near Mint,0,1,1.00,0,false,2026-01-01,";
 
         // Import: two card copies, one sealed row (qty kept), Lorcana skipped.
         let imported = crate::import::commit_collectr(&mut conn, csv, Some("collectr")).unwrap();
@@ -368,50 +362,30 @@ Main,Lorcana,Foo,Bar,1,Promo,Foil,Ungraded,Near Mint,0,1,1.00,0,false,2026-01-01
         assert_eq!(re_sealed_report.matched[0].product_id, 7001);
     }
 
-    /// The singles export groups cards by set even when set_sort_order is NULL
-    /// for every set (the prod state — db-hdwl).  Uses two sets so interleaving
-    /// is detectable; set_sort_order is deliberately absent from the INSERT.
+    /// The singles export groups cards by set, oldest release first, however
+    /// the sets were inserted. Uses two sets so interleaving is detectable.
     #[test]
-    fn singles_export_groups_by_set_with_null_set_sort_order() {
+    fn singles_export_groups_by_set_in_release_order() {
         let dir = tempfile::tempdir().unwrap();
         let shared = dir.path().join("shared.sqlite");
+        let pids = ["NEW-1", "OLD-1", "NEW-2", "OLD-2"];
         {
             let c = open_shared(&shared).unwrap();
-            // Two sets, set_sort_order NULL (omitted), one with an earlier date.
-            c.execute(
-                "INSERT INTO sets (set_code, name, series, printed_total, release_date)
-                 VALUES ('old', 'Old Set', 'Gen1', 10, '1999/01/01'),
-                        ('new', 'New Set', 'Gen2', 10, '2023/01/01')",
-                [],
-            )
-            .unwrap();
-            // Two cards in each set, numbers 1 and 2.
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name, rarity)
-                 VALUES ('old-1','old','1',1,'Old One','Common'),
-                        ('old-2','old','2',2,'Old Two','Common'),
-                        ('new-1','new','1',1,'New One','Common'),
-                        ('new-2','new','2',2,'New Two','Common')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO printings (printing_id, card_id, variant)
-                 VALUES ('old-1-n','old-1','normal'),
-                        ('old-2-n','old-2','normal'),
-                        ('new-1-n','new-1','normal'),
-                        ('new-2-n','new-2','normal')",
-                [],
-            )
-            .unwrap();
+            // The newer set is inserted first.
+            crate::testkit::set_on(&c, "NEW", "New Set", "2025-01-01");
+            crate::testkit::set_on(&c, "OLD", "Old Set", "2023-03-08");
+            for pid in pids {
+                let (set, number) = pid.split_once('-').unwrap();
+                crate::testkit::simple(&c, set, number, pid);
+            }
         }
         let mut conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         // Own one copy of every printing so all four show up.
-        for pid in ["old-1-n", "old-2-n", "new-1-n", "new-2-n"] {
+        for pid in pids {
             crate::collection::add(
                 &mut conn,
                 &crate::collection::NewCopy {
-                    printing_id: pid.into(),
+                    printing_id: format!("{pid}-normal"),
                     source: "test".into(),
                     ..Default::default()
                 },
@@ -437,7 +411,7 @@ Main,Lorcana,Foo,Bar,1,Promo,Foil,Ungraded,Near Mint,0,1,1.00,0,false,2026-01-01
         assert_eq!(
             runs,
             vec!["Old Set", "New Set"],
-            "export must group by set with set_sort_order NULL: {runs:?}"
+            "export must group by set, oldest first: {runs:?}"
         );
     }
 }

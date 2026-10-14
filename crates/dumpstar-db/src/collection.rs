@@ -202,32 +202,35 @@ pub struct CollectionRow {
     #[ts(type = "number | null")]
     pub deck_id: Option<i64>,
     pub variant: String,
+    /// `Normal` or `Foil`.
+    pub finish: String,
     pub card_id: String,
     pub set_code: String,
-    /// Full human-readable set name (e.g. "Surging Sparks", "Base Set") —
-    /// preferred over `set_code` for any column or breadcrumb label.
+    /// Full human-readable set name (e.g. "Spark of Rebellion") — preferred
+    /// over `set_code` for any column or breadcrumb label.
     pub set_name: String,
-    /// The collector-facing 3-letter set code (e.g. "MEW", "PFL"), if known.
-    pub set_ptcgo_code: Option<String>,
-    pub set_symbol_url: Option<String>,
     pub number: String,
     pub name: String,
+    pub subtitle: Option<String>,
     pub rarity: Option<String>,
     /// Artist credit, surfaced so the /collection search can filter by it.
     pub artist: Option<String>,
-    /// `Pokémon` | `Trainer` | `Energy`.
-    pub supertype: Option<String>,
-    /// JSON array, e.g. `["Supporter"]` or `["Basic","ex"]`.
-    pub subtypes: Option<String>,
-    /// JSON array of the card's energy types, e.g. `["Fire"]`.
-    pub types: Option<String>,
-    /// JSON array of attacks, each with a `cost` energy list — the table
-    /// renders one pip line per attack.
-    pub attacks: Option<String>,
-    /// Latest TCGplayer market price for this exact printing (NULL when
-    /// the printing isn't linked to a product, or no snapshot exists).
+    /// `Leader` | `Unit` | `Event` | `Upgrade` | `Base` | `Token`.
+    pub card_type: Option<String>,
+    #[ts(type = "number | null")]
+    pub cost: Option<i64>,
+    #[ts(type = "number | null")]
+    pub power: Option<i64>,
+    #[ts(type = "number | null")]
+    pub hp: Option<i64>,
+    /// JSON array, e.g. `["Vigilance","Heroism"]`.
+    pub aspects: Option<String>,
+    /// JSON array, e.g. `["Ground"]`.
+    pub arenas: Option<String>,
+    /// Latest market price for this exact printing (NULL when the feed has
+    /// none and nothing was entered by hand).
     pub market_price: Option<f64>,
-    pub image_small: Option<String>,
+    pub image_url: Option<String>,
     /// Free-text description carried by user_printings rows (the
     /// "Missing Variant" escape hatch). NULL for catalog printings.
     pub variant_description: Option<String>,
@@ -237,36 +240,27 @@ pub struct CollectionRow {
 const ROW_COLUMNS_SQL: &str = concat!(
     "c.id, c.printing_id, c.condition, c.language, \
      c.purchase_price, c.sale_price, c.acquired_at, c.source, c.notes, \
-     c.status, c.graded, c.binder_id, c.deck_id, p.variant, cd.card_id, \
-     cd.set_code, s.name AS set_name, s.ptcgo_code, s.symbol_url, \
-     cd.number, cd.name, cd.rarity, cd.artist, cd.supertype, cd.subtypes, \
-     cd.types, cd.attacks, \
+     c.status, c.graded, c.binder_id, c.deck_id, p.variant, p.finish, cd.card_id, \
+     p.set_code, s.name AS set_name, p.number, cd.name, cd.subtitle, p.rarity, p.artist, \
+     cd.card_type, cd.cost, cd.power, cd.hp, cd.aspects, cd.arenas, \
      ",
     crate::market_price_expr!(),
     " AS market_price, \
-     cd.image_small, p.variant_description"
+     p.image_url, p.variant_description"
 );
 
-// `p` is a UNION of shared.printings and the user-DB user_printings
-// table (decision dumpstar-x7k) so the collection list includes
-// copies of "Missing Variant" entries the user has logged via the
-// escape hatch. tcgplayer_product_id and sub_type_name are NULL for
-// user rows — the price-COALESCE then falls through to manual_prices,
-// which is the only source for these.
-const ROW_FROM: &str = "FROM collection c \
-     JOIN ( \
-        SELECT printing_id, card_id, variant, \
-               tcgplayer_product_id, sub_type_name, \
-               NULL AS variant_description \
-          FROM printings \
-        UNION ALL \
-        SELECT printing_id, card_id, variant, \
-               NULL AS tcgplayer_product_id, NULL AS sub_type_name, \
-               description AS variant_description \
-          FROM user_printings \
-     ) p ON c.printing_id = p.printing_id \
+// `p` is `PRINTING_REL`: shared.printings plus the user-DB user_printings
+// table (decision dumpstar-x7k), so the collection list includes copies of
+// "Missing Variant" entries the user has logged via the escape hatch. Those
+// have no feed price; the price COALESCE falls through to manual_prices,
+// which is the only source for them.
+const ROW_FROM: &str = concat!(
+    "FROM collection c JOIN ",
+    crate::printing_rel!(),
+    " p ON c.printing_id = p.printing_id \
      JOIN cards cd ON p.card_id = cd.card_id \
-     JOIN sets s ON cd.set_code = s.set_code";
+     JOIN sets s ON p.set_code = s.set_code"
+);
 
 fn collection_row_from_row(r: &rusqlite::Row) -> rusqlite::Result<CollectionRow> {
     Ok(CollectionRow {
@@ -284,22 +278,24 @@ fn collection_row_from_row(r: &rusqlite::Row) -> rusqlite::Result<CollectionRow>
         binder_id: r.get(11)?,
         deck_id: r.get(12)?,
         variant: r.get(13)?,
-        card_id: r.get(14)?,
-        set_code: r.get(15)?,
-        set_name: r.get(16)?,
-        set_ptcgo_code: r.get(17)?,
-        set_symbol_url: r.get(18)?,
-        number: r.get(19)?,
-        name: r.get(20)?,
+        finish: r.get(14)?,
+        card_id: r.get(15)?,
+        set_code: r.get(16)?,
+        set_name: r.get(17)?,
+        number: r.get(18)?,
+        name: r.get(19)?,
+        subtitle: r.get(20)?,
         rarity: r.get(21)?,
         artist: r.get(22)?,
-        supertype: r.get(23)?,
-        subtypes: r.get(24)?,
-        types: r.get(25)?,
-        attacks: r.get(26)?,
-        market_price: r.get(27)?,
-        image_small: r.get(28)?,
-        variant_description: r.get(29)?,
+        card_type: r.get(23)?,
+        cost: r.get(24)?,
+        power: r.get(25)?,
+        hp: r.get(26)?,
+        aspects: r.get(27)?,
+        arenas: r.get(28)?,
+        market_price: r.get(29)?,
+        image_url: r.get(30)?,
+        variant_description: r.get(31)?,
     })
 }
 
@@ -562,32 +558,16 @@ pub fn change_printing(conn: &Connection, id: i64, new_printing_id: &str) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testkit;
     use crate::{connect_user, open_shared};
 
-    /// A user connection whose catalog holds one printing, `sv3pt5-1-normal`.
+    /// A user connection whose catalog holds one printing, `SOR-1-normal`.
     fn user_conn() -> (tempfile::TempDir, Connection) {
         let dir = tempfile::tempdir().unwrap();
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series) \
-                 VALUES ('sv3pt5', '151', 'Scarlet & Violet')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('sv3pt5-1', 'sv3pt5', '1', 1, 'Bulbasaur')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES ('sv3pt5-1-normal', 'sv3pt5-1', 'normal')",
-                [],
-            )
-            .unwrap();
+            testkit::simple(&c, "SOR", "1", "Luke Skywalker");
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         (dir, conn)
@@ -595,7 +575,7 @@ mod tests {
 
     fn a_copy() -> NewCopy {
         NewCopy {
-            printing_id: "sv3pt5-1-normal".into(),
+            printing_id: "SOR-1-normal".into(),
             source: "manual_id".into(),
             ..Default::default()
         }
@@ -607,7 +587,7 @@ mod tests {
         let id = add(&mut conn, &a_copy()).unwrap();
 
         let entry = get(&conn, id).unwrap().unwrap();
-        assert_eq!(entry.printing_id, "sv3pt5-1-normal");
+        assert_eq!(entry.printing_id, "SOR-1-normal");
         assert_eq!(entry.condition, "Near Mint"); // default
         assert_eq!(entry.status, "owned"); // default
 
@@ -628,7 +608,7 @@ mod tests {
         let err = add(
             &mut conn,
             &NewCopy {
-                printing_id: "sv3pt5-1-mysteryfoil".into(),
+                printing_id: "SOR-1-mysteryfoil".into(),
                 source: "manual_id".into(),
                 ..Default::default()
             },
@@ -743,51 +723,19 @@ mod tests {
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series) VALUES ('sv3pt5', '151', 'SV')",
-                [],
-            )
-            .unwrap();
-            for n in ["1", "2"] {
-                c.execute(
-                    "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                     VALUES (?1, 'sv3pt5', ?2, ?3, 'Card')",
-                    rusqlite::params![format!("sv3pt5-{n}"), n, n.parse::<i64>().unwrap()],
-                )
-                .unwrap();
-            }
-            for (pid, card, variant) in [
-                ("sv3pt5-1-normal", "sv3pt5-1", "normal"),
-                ("sv3pt5-1-reverse_holo", "sv3pt5-1", "reverse_holo"),
-                ("sv3pt5-2-normal", "sv3pt5-2", "normal"),
-            ] {
-                c.execute(
-                    "INSERT INTO printings (printing_id, card_id, variant) VALUES (?1, ?2, ?3)",
-                    rusqlite::params![pid, card, variant],
-                )
-                .unwrap();
-            }
+            testkit::simple(&c, "SOR", "1", "Luke Skywalker");
+            testkit::foil_of(&c, "SOR", "1");
+            testkit::simple(&c, "SOR", "2", "Millennium Falcon");
         }
         let mut conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-        let id = add(
-            &mut conn,
-            &NewCopy {
-                printing_id: "sv3pt5-1-normal".into(),
-                source: "manual_id".into(),
-                ..Default::default()
-            },
-        )
-        .unwrap();
+        let id = add(&mut conn, &a_copy()).unwrap();
 
-        // Swapping to another variant of the same card succeeds.
-        change_printing(&conn, id, "sv3pt5-1-reverse_holo").unwrap();
-        assert_eq!(
-            get(&conn, id).unwrap().unwrap().printing_id,
-            "sv3pt5-1-reverse_holo"
-        );
+        // Swapping to another finish of the same card succeeds.
+        change_printing(&conn, id, "SOR-1-foil").unwrap();
+        assert_eq!(get(&conn, id).unwrap().unwrap().printing_id, "SOR-1-foil");
 
         // Swapping to a printing of a different card is rejected.
-        let err = change_printing(&conn, id, "sv3pt5-2-normal").unwrap_err();
+        let err = change_printing(&conn, id, "SOR-2-normal").unwrap_err();
         assert!(matches!(err, DbError::Conflict(_)));
     }
 }

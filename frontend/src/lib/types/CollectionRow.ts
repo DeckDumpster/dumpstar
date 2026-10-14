@@ -4,42 +4,37 @@
  * A collection entry joined to its printing and card — the display-ready
  * shape the `/collection` UI renders.
  */
-export type CollectionRow = { id: number, printing_id: string, condition: string, language: string, purchase_price: number | null, sale_price: number | null, acquired_at: string, source: string, notes: string | null, status: string, graded: boolean, binder_id: number | null, deck_id: number | null, variant: string, card_id: string, set_code: string, 
+export type CollectionRow = { id: number, printing_id: string, condition: string, language: string, purchase_price: number | null, sale_price: number | null, acquired_at: string, source: string, notes: string | null, status: string, graded: boolean, binder_id: number | null, deck_id: number | null, variant: string, 
 /**
- * Full human-readable set name (e.g. "Surging Sparks", "Base Set") —
- * preferred over `set_code` for any column or breadcrumb label.
+ * `Normal` or `Foil`.
  */
-set_name: string, 
+finish: string, card_id: string, set_code: string, 
 /**
- * The collector-facing 3-letter set code (e.g. "MEW", "PFL"), if known.
+ * Full human-readable set name (e.g. "Spark of Rebellion") — preferred
+ * over `set_code` for any column or breadcrumb label.
  */
-set_ptcgo_code: string | null, set_symbol_url: string | null, number: string, name: string, rarity: string | null, 
+set_name: string, number: string, name: string, subtitle: string | null, rarity: string | null, 
 /**
  * Artist credit, surfaced so the /collection search can filter by it.
  */
 artist: string | null, 
 /**
- * `Pokémon` | `Trainer` | `Energy`.
+ * `Leader` | `Unit` | `Event` | `Upgrade` | `Base` | `Token`.
  */
-supertype: string | null, 
+card_type: string | null, cost: number | null, power: number | null, hp: number | null, 
 /**
- * JSON array, e.g. `["Supporter"]` or `["Basic","ex"]`.
+ * JSON array, e.g. `["Vigilance","Heroism"]`.
  */
-subtypes: string | null, 
+aspects: string | null, 
 /**
- * JSON array of the card's energy types, e.g. `["Fire"]`.
+ * JSON array, e.g. `["Ground"]`.
  */
-types: string | null, 
+arenas: string | null, 
 /**
- * JSON array of attacks, each with a `cost` energy list — the table
- * renders one pip line per attack.
+ * Latest market price for this exact printing (NULL when the feed has
+ * none and nothing was entered by hand).
  */
-attacks: string | null, 
-/**
- * Latest TCGplayer market price for this exact printing (NULL when
- * the printing isn't linked to a product, or no snapshot exists).
- */
-market_price: number | null, image_small: string | null, 
+market_price: number | null, image_url: string | null, 
 /**
  * Free-text description carried by user_printings rows (the
  * "Missing Variant" escape hatch). NULL for catalog printings.

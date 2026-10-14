@@ -21,3 +21,21 @@ export function money(n: number | null | undefined): string {
 export function count(n: number | null | undefined): string {
 	return n == null ? '—' : INT.format(n);
 }
+
+/** A printing's human label: its variant, plus the finish when it is not the
+ *  plain one — `Standard`, `Standard Foil`, `Hyperspace Foil`. */
+export function printingLabel(variant: string, finish: string): string {
+	return finish === 'Normal' || !finish ? variant : `${variant} ${finish}`;
+}
+
+/** Parse a JSON-array column (`aspects`, `traits`, `arenas`) the API passes
+ *  through as a string. Anything that is not an array of strings is empty. */
+export function jsonList(raw: string | null | undefined): string[] {
+	if (!raw) return [];
+	try {
+		const v: unknown = JSON.parse(raw);
+		return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+	} catch {
+		return [];
+	}
+}

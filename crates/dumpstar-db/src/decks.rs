@@ -241,7 +241,7 @@ mod tests {
         let id = create(
             &conn,
             &NewDeck {
-                name: "Alice's Charizard deck".into(),
+                name: "Alice's Luke deck".into(),
                 owner: Some("Alice".into()),
                 ..Default::default()
             },
@@ -293,24 +293,11 @@ mod tests {
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series) VALUES ('swu','SWU','SWU')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('C1', 'swu', '1', 1, 'Card One')",
-                [],
-            )
-            .unwrap();
-            for p in ["C1-std", "C1-hyper"] {
-                c.execute(
-                    "INSERT INTO printings (printing_id, card_id, variant) VALUES (?1, 'C1', ?1)",
-                    [p],
-                )
-                .unwrap();
-            }
+            crate::testkit::set(&c, "SOR", "Spark of Rebellion");
+            crate::testkit::card(&c, "C1", "Card One");
+            // Standard and Hyperspace print under different numbers.
+            crate::testkit::printing(&c, "C1-std", "C1", "SOR", "1", "Standard", "Normal");
+            crate::testkit::printing(&c, "C1-hyper", "C1", "SOR", "251", "Hyperspace", "Normal");
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         for p in ["C1-std", "C1-hyper"] {

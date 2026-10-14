@@ -92,7 +92,7 @@ pub fn parse(input: &str) -> Result<Vec<ParsedRow>> {
             }
         };
 
-        let variant = map_variant(get(col_printing));
+        let finish = super::manabox::map_finish(get(col_printing));
         let condition = map_condition(get(col_condition));
         let language = map_language(get(col_language));
 
@@ -103,7 +103,7 @@ pub fn parse(input: &str) -> Result<Vec<ParsedRow>> {
                 set_name: (!set_name.is_empty()).then(|| set_name.to_string()),
                 name: None,
                 number: number.clone(),
-                variant: variant.clone(),
+                finish: finish.clone(),
                 condition: condition.clone(),
                 language: language.clone(),
                 purchase_price,
@@ -115,28 +115,14 @@ pub fn parse(input: &str) -> Result<Vec<ParsedRow>> {
     Ok(rows)
 }
 
-/// TCGplayer `Printing` value → Dumpstar variant code.
-fn map_variant(printing: &str) -> String {
-    match printing.trim().to_lowercase().as_str() {
-        "holofoil" | "holo" => "holo",
-        "reverse holofoil" | "reverse holo" => "reverse_holo",
-        "1st edition holofoil" => "first_ed_holo",
-        "1st edition" | "1st edition normal" => "first_ed_normal",
-        "unlimited holofoil" => "unlimited_holo",
-        // "normal", "unlimited", "" and anything unrecognised.
-        _ => "normal",
-    }
-    .to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     const SAMPLE: &str = "\
 Quantity,Name,Set,Card Number,Set Code,Printing,Condition,Language,Price
-3,Pikachu,Base Set,58,BS,Holofoil,Near Mint,English,$12.50
-1,Squirtle,Base Set,63,BS,Reverse Holofoil,Lightly Played Foil,English,";
+3,Luke Skywalker,Spark of Rebellion,5,SOR,Foil,Near Mint,English,$12.50
+1,Vanquish,Spark of Rebellion,63,SOR,Normal,Lightly Played Foil,English,";
 
     #[test]
     fn parses_printing_price_and_quantity() {
@@ -144,22 +130,22 @@ Quantity,Name,Set,Card Number,Set Code,Printing,Condition,Language,Price
         assert_eq!(rows.len(), 4); // 3 + 1
 
         let pika = &rows[0];
-        assert_eq!(pika.set_hint, "BS");
-        assert_eq!(pika.set_name.as_deref(), Some("Base Set"));
-        assert_eq!(pika.number, "58");
-        assert_eq!(pika.variant, "holo");
+        assert_eq!(pika.set_hint, "SOR");
+        assert_eq!(pika.set_name.as_deref(), Some("Spark of Rebellion"));
+        assert_eq!(pika.number, "5");
+        assert_eq!(pika.finish, "Foil");
         assert_eq!(pika.condition, "Near Mint");
         assert_eq!(pika.purchase_price, Some(12.50));
 
         let squirtle = &rows[3];
-        assert_eq!(squirtle.variant, "reverse_holo");
+        assert_eq!(squirtle.finish, "Normal");
         assert_eq!(squirtle.condition, "Lightly Played"); // ' Foil' suffix stripped
         assert_eq!(squirtle.purchase_price, None);
     }
 
     #[test]
     fn missing_card_number_column_is_an_error() {
-        let csv = "Quantity,Set\n1,Base Set";
+        let csv = "Quantity,Set\n1,Spark of Rebellion";
         assert!(matches!(parse(csv), Err(ImportError::MissingColumn(_))));
     }
 }

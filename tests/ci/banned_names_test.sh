@@ -104,6 +104,29 @@ r="$scratch/crate-product"; mkrepo "$r"
 echo "// 151 Elite"" Trainer Box" >"$r/crates/dumpstar-ingest/src/lib.rs"
 check "a Pokémon sealed product name anywhere in crates fails the gate" 1 "$(run_gate "$r")"
 
+# The removed card model's column names, assembled for the same reason.
+SUPER="super""type"
+r="$scratch/column"; mkrepo "$r"
+mkdir -p "$r/crates/dumpstar-db/src"
+echo "SELECT c.${SUPER} FROM cards c" >"$r/crates/dumpstar-db/src/q.rs"
+check "a removed Pokémon column in crates/ fails the gate" 1 "$(run_gate "$r")"
+check "…and the gate names the file and the column" 1 "$(grep -c "q.rs:1.*'${SUPER}'" "$scratch/out")"
+
+r="$scratch/frontcolumn"; mkrepo "$r"
+mkdir -p "$r/frontend/src/lib"
+echo "export const t = row.ptcgo_code;" >"$r/frontend/src/lib/x.ts"
+check "a removed Pokémon field in frontend/ fails the gate" 1 "$(run_gate "$r")"
+
+r="$scratch/vendored"; mkrepo "$r"
+mkdir -p "$r/frontend/src/lib/kit"
+echo "/* ${SUPER} */" >"$r/frontend/src/lib/kit/tokens.css"
+check "the vendored kit is not held to the card model" 0 "$(run_gate "$r")"
+
+r="$scratch/detector"; mkrepo "$r"
+mkdir -p "$r/crates/dumpstar-catalog/src"
+echo "(\"cards\", \"${SUPER}\")," >"$r/crates/dumpstar-catalog/src/catalog.rs"
+check "the catalog crate's legacy detector may name them" 0 "$(run_gate "$r")"
+
 echo "==> §2 a clean tree passes"
 r="$scratch/clean"; mkrepo "$r"
 echo 'Star Wars: Unlimited' >"$r/README.md"

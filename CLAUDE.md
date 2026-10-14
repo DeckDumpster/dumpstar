@@ -11,7 +11,7 @@ catalog, tenancy and the shared kit arrive in later rows.
 | | |
 | --- | --- |
 | `crates/dumpstar-core` | domain types, the collection search query parser, importers |
-| `crates/dumpstar-db` | SQLite schemas (`schema_shared.sql`, `schema_user.sql`), queries, seeds |
+| `crates/dumpstar-db` | SQLite schemas — `shared.sqlite` is `dumpstar-catalog`'s `schema.sql` plus the overlay `schema_shared.sql`, tenants are `schema_user.sql` — and the queries and seeds over them |
 | `crates/dumpstar-catalog` | the SWU catalog seam: `schema.sql`, record types, raw landing, idempotent apply, the fake source, the `catalog-apply` job; the official-API and tcgcsv adapters (`swu`, `official`, `tcgcsv`), the join (`crosswalk`, `groups.tsv`), alarms (`check`, `catalog-check`) |
 | `crates/dumpstar-ingest` | the transport for the kit's TCGCSV client (`dumpster-kit-tcgcsv`, pinned by rev in the workspace `Cargo.toml`; category 79, Star Wars: Unlimited), retry, raw landing wire |
 | `crates/dumpstar-lake`, `-lakehouse`, `-derive` | the raw landing zone, the offline derive, replay |
@@ -21,12 +21,26 @@ catalog, tenancy and the shared kit arrive in later rows.
 | `deploy/`, `Containerfile` | container image, units, `deploy/ci.sh` |
 | `fixtures/swu/` | verbatim captures of the SWU data sources (official API, tcgcsv) and, in `rules/`, the retrieved Comprehensive Rules the format data cites |
 
-**Not here yet** (each is its own bead of the dumpstar design): the SWU catalog
-seam and variant model (a derive builds no card rows today), authentication and
-tenant resolution under the dumpstar name, the shared `dumpster-kit`, and a
-Star Wars: Unlimited UI fixture. `dumpstar seed-fixture` and `tests/ui` still
-carry the Pokémon-flavoured test data they were copied with; it is test data
-only and is replaced with the catalog seam.
+**One card model.** `shared.sqlite` holds the Star Wars: Unlimited catalog and
+nothing else: `dumpstar-catalog/src/schema.sql` (sets, cards, printings, the
+crosswalk, prices, formats, the FTS index) with `dumpstar-db`'s overlay on top
+(search registry, sealed products). A card belongs to no set; a *printing*
+carries set, collector number, variant (Standard, Hyperspace, Showcase, Promo)
+and finish (Normal, Foil), and (set, number, finish) names one. Collection,
+deck, binder, wishlist and sealed rows reference `printing_id` / `card_id` from
+it. A `shared.sqlite` written by the Pokémon-shaped schema this repository was
+forked with is detected (`dumpstar_catalog::reset_if_legacy`) and emptied on the
+next read-write open or `catalog-apply`; it is derived data, tenant files are
+other files and are never touched.
+
+**Not here yet** (each is its own bead of the dumpstar design): authentication
+and tenant resolution under the dumpstar name, the shared `dumpster-kit`
+adoption beyond tokens and primitives, and a Star Wars: Unlimited rework of the
+`tests/ui` intents and `tests/visual` baselines (`dumpstar seed-fixture` builds
+an SWU fixture; those two still name the Pokémon cards they were written for
+and are outside CI). Sealed products are filled from tcgcsv's numberless
+products at convergence, without prices: the catalog apply job does not yet
+store sealed prices.
 
 ## Build and test
 
@@ -70,7 +84,8 @@ Nothing here may carry the identity this workspace was copied from (its
 environment prefix, its crate and unit prefix, its application name) or any of
 the removed Pokémon modules (variant model, pokemontcg and Japan catalogs,
 overrides, symbols, bundles, set discovery, standalone promos, the sub-type
-map). `deploy/banned-names.sh` enforces it in CI (the `lint` tier) and
+map) and the removed card model's column names (`deploy/banned-names.sh` lists
+them; only the catalog crate's legacy detector may). The script enforces it in CI (the `lint` tier) and
 `tests/ci/banned_names_test.sh` proves the gate fails when it should.
 
 ## CI

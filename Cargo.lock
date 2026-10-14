@@ -1234,6 +1234,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "csv",
+ "dumpstar-catalog",
  "dumpstar-core",
  "reqwest",
  "rusqlite",
@@ -1358,6 +1359,8 @@ dependencies = [
  "axum",
  "base64",
  "brotli",
+ "chrono",
+ "dumpstar-catalog",
  "dumpstar-core",
  "dumpstar-db",
  "flate2",

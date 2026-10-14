@@ -2,13 +2,11 @@
 
 /**
  * A set with its card count and how many of its cards the user owns —
- * the shape the `/browse` set picker renders. Bundles project into the
- * same type with `kind="bundle"` and synthesized series/null totals so
- * the picker can render them through the same tile component.
+ * the shape the `/browse` set picker renders.
  */
-export type SetSummary = { set_code: string, ptcgo_code: string | null, name: string, series: string, total: number | null, printed_total: number | null, release_date: string | null, logo_url: string | null, symbol_url: string | null, 
+export type SetSummary = { set_code: string, name: string, release_date: string | null, 
 /**
- * Cards catalogued in the set.
+ * Distinct cards printed in the set.
  */
 total_cards: number, 
 /**
@@ -16,28 +14,6 @@ total_cards: number,
  */
 owned_cards: number, 
 /**
- * Base-set cards only — `number_sortable <= printed_total`. Excludes
- * secret rares, subset sections, and promos. `None` when the set has
- * no `printed_total` so the UI can hide the bar gracefully (avoids
- * rendering 0/0 = NaN%).
+ * Printings in the set (the master set), and how many are owned.
  */
-base_total_cards: number | null, base_owned_cards: number | null, 
-/**
- * `"set"` for real catalogued sets, `"bundle"` for TTBB-style
- * logical-set containers.
- */
-kind: string, 
-/**
- * The set was built locally from TCGCSV — either a bridge entry or
- * TCGCSV set discovery (pd-558b1e4f) — because pokemontcg.io hasn't
- * published it yet. Its cards, art and totals are provisional. Goes
- * false on its own the refresh after upstream lands the real set.
- *
- * **A set upstream does not carry at all is not synthesized in this
- * sense** (pd-mt57). The Japanese catalog is TCGCSV-native forever —
- * pokemontcg.io has no Japanese data — so its rows have nothing to
- * wait for and this stays false for them. `sets.ptcgio_covered` is
- * what tells the two apart; "provisional" is a promise, and a badge
- * that makes one has to be able to keep it.
- */
-synthesized: boolean, };
+total_printings: number, owned_printings: number, };

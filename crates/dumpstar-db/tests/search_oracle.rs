@@ -1,487 +1,717 @@
-//! Tier 4 — pokémontcg.io differential oracle (opt-in, cached).
+//! Tier 4 — differential oracle (offline, always on).
 //!
-//! The collection search language is ours, not pokémontcg.io's, so we
-//! translate the *card-metadata subset* of a parsed query into pokémontcg.io's
-//! Lucene syntax and diff the result sets. Queries that touch keywords with no
-//! clean pokémontcg.io equivalent (set, rules/attack text, variant, is:/has:
-//! flags, every collection keyword, modifiers, rarity ordinals) are
-//! untranslatable — [`to_lucene`] returns `None` and the oracle skips them,
-//! exactly as DeckDumpster skips its collection extensions against Scryfall.
+//! The compiler turns a parsed query into SQL. The oracle evaluates the same
+//! parsed query a second, independent way: directly, in Rust, over a small
+//! in-memory table of Star Wars: Unlimited printings. The fixture database is
+//! built *from* that table, so any disagreement between the two result sets is
+//! a bug in the compiler (or in this evaluator, which is deliberately written
+//! from the grammar's documented semantics and not from the SQL).
 //!
-//! The translator itself is pure and unit-tested below (always runs, no
-//! network). The two `#[ignore]` tests hit the live API (cached in
-//! `tests/.ptcg_cache.sqlite`):
-//!   cargo test -p dumpstar-db --test search_oracle -- --ignored
-//! The differential test needs a real catalog; point it at one with
-//! `DUMPSTAR_ORACLE_DB=/path/to/shared.sqlite` (it skips otherwise).
+//! The evaluator covers the card-metadata subset: names, card type, aspect,
+//! arena, trait, cost/power/hp, rarity (equality, group and ordinal), set,
+//! artist, rules text, year, legality, variant, finish, the printing flags,
+//! `has:`, `qty`, and the owned/missing/dupe flags. Keywords with no
+//! card-metadata meaning (status, condition, price, deck, modifiers, ...)
+//! make [`Oracle::eval`] return `None` and the query is skipped, so the
+//! coverage claim at the bottom is checked rather than assumed.
+//!
+//! Single queries come from a curated list; the boolean grammar (`and`, `or`,
+//! `-`, grouping) is then swept by combining every pair of atoms.
 
-use dumpstar_core::query::{Ast, Op, parse};
-
-// ---------------------------------------------------------------------------
-// AST -> pokémontcg.io Lucene translation (the card-metadata subset)
-// ---------------------------------------------------------------------------
-
-/// Translate a parsed query into a pokémontcg.io Lucene query, or `None` if any
-/// part of it has no clean pokémontcg.io equivalent.
-pub fn to_lucene(ast: &Ast) -> Option<String> {
-    match ast {
-        Ast::And(children) => join(children, " AND "),
-        Ast::Or(children) => join(children, " OR "),
-        Ast::Not(inner) => Some(format!("-({})", to_lucene(inner)?)),
-        Ast::NameSearch(term) => Some(name_match(term)),
-        Ast::ExactName(name) => Some(format!("name:{}", quote(name))),
-        Ast::Comparison { keyword, op, value } => comparison(keyword, *op, value),
-    }
-}
-
-fn join(children: &[Ast], sep: &str) -> Option<String> {
-    let parts: Option<Vec<String>> = children
-        .iter()
-        .map(|c| to_lucene(c).map(|s| format!("({s})")))
-        .collect();
-    Some(parts?.join(sep))
-}
-
-fn comparison(keyword: &str, op: Op, value: &str) -> Option<String> {
-    match keyword {
-        "name" => Some(match op {
-            Op::Eq => format!("name:{}", quote(value)),
-            Op::Ne => format!("-name:{}", quote(value)),
-            _ => name_match(value),
-        }),
-        "energy_type" => enum_field("types", op, value),
-        "supertype" => enum_field("supertype", op, value),
-        "subtype" => enum_field("subtypes", op, value),
-        "regulation" => enum_field("regulationMark", op, value),
-        "rarity" => match op {
-            // Only equality maps; our ordinal/group rarity has no Lucene analog.
-            Op::Contains | Op::Eq => Some(format!("rarity:{}", quote(value))),
-            Op::Ne => Some(format!("-rarity:{}", quote(value))),
-            _ => None,
-        },
-        "artist" => Some(match op {
-            Op::Ne => format!("-artist:{}", quote(value)),
-            _ => format!("artist:{}", quote(value)),
-        }),
-        "flavor" => Some(format!("flavorText:{}", quote(value))),
-        "hp" => num_range("hp", op, value),
-        "pokedex" => num_range("nationalPokedexNumbers", op, value),
-        "legality" => Some(format!("legalities.{}:Legal", value.to_ascii_lowercase())),
-        // Everything else is untranslatable for the oracle.
-        _ => None,
-    }
-}
-
-fn enum_field(field: &str, op: Op, value: &str) -> Option<String> {
-    match op {
-        Op::Contains | Op::Eq => Some(format!("{field}:{}", quote(value))),
-        Op::Ne => Some(format!("-{field}:{}", quote(value))),
-        _ => None,
-    }
-}
-
-fn num_range(field: &str, op: Op, value: &str) -> Option<String> {
-    let n: f64 = value.parse().ok()?;
-    let n = trim_num(n);
-    Some(match op {
-        Op::Contains | Op::Eq => format!("{field}:{n}"),
-        Op::Ne => format!("-{field}:{n}"),
-        Op::Ge => format!("{field}:[{n} TO *]"),
-        Op::Le => format!("{field}:[* TO {n}]"),
-        Op::Gt => format!("{field}:{{{n} TO *}}"),
-        Op::Lt => format!("{field}:{{* TO {n}}}"),
-    })
-}
-
-fn trim_num(n: f64) -> String {
-    if n.fract() == 0.0 {
-        format!("{}", n as i64)
-    } else {
-        format!("{n}")
-    }
-}
-
-/// `value` → a name match. Wildcard-contains for a single token; quoted exact
-/// when it contains spaces (pokémontcg.io wildcards don't span quotes well).
-fn name_match(value: &str) -> String {
-    if value.contains(' ') {
-        format!("name:{}", quote(value))
-    } else {
-        format!("name:*{value}*")
-    }
-}
-
-fn quote(value: &str) -> String {
-    format!("\"{}\"", value.replace('"', ""))
-}
+use dumpstar_core::query::{Ast, KeywordRegistry, Op, parse};
+use dumpstar_db::search::{self, compile};
+use dumpstar_db::search_meta::{self, SearchFlag};
+use dumpstar_db::{connect_user, open_shared};
+use rusqlite::Connection;
+use std::collections::BTreeSet;
 
 // ---------------------------------------------------------------------------
-// Unit tests — translator only, no network (always run)
+// The universe
 // ---------------------------------------------------------------------------
 
-#[cfg(test)]
-mod translate_tests {
-    use super::*;
-    use dumpstar_core::query::{KeywordDef, KeywordRegistry};
-
-    fn registry() -> KeywordRegistry {
-        KeywordRegistry::new(vec![
-            KeywordDef::new("energy_type", &["t", "type"]),
-            KeywordDef::new("supertype", &["super", "supertype"]),
-            KeywordDef::new("subtype", &["sub", "subtype"]),
-            KeywordDef::new("hp", &["hp"]),
-            KeywordDef::new("rarity", &["r", "rarity"]),
-            KeywordDef::new("artist", &["a", "artist"]),
-            KeywordDef::new("name", &["name", "n"]),
-            KeywordDef::new("pokedex", &["dex", "pokedex"]),
-            KeywordDef::new("regulation", &["reg", "regulation"]),
-            KeywordDef::new("legality", &["legal", "f", "format"]),
-            // Untranslatable ones, to prove they short-circuit to None.
-            KeywordDef::new("set", &["s", "set", "e"]),
-            KeywordDef::new("is_flag", &["is"]),
-            KeywordDef::new("status", &["status"]),
-            KeywordDef::new("variant", &["v", "variant"]),
-        ])
-    }
-
-    fn lucene(q: &str) -> Option<String> {
-        to_lucene(&parse(q, &registry()).unwrap())
-    }
-
-    #[test]
-    fn translates_card_metadata() {
-        assert_eq!(lucene("t:fire").as_deref(), Some("types:\"fire\""));
-        assert_eq!(
-            lucene("super:pokemon").as_deref(),
-            Some("supertype:\"pokemon\"")
-        );
-        assert_eq!(lucene("sub:ex").as_deref(), Some("subtypes:\"ex\""));
-        assert_eq!(lucene("hp>=120").as_deref(), Some("hp:[120 TO *]"));
-        assert_eq!(lucene("hp<70").as_deref(), Some("hp:{* TO 70}"));
-        assert_eq!(lucene("hp:60").as_deref(), Some("hp:60"));
-        assert_eq!(
-            lucene("dex>=150").as_deref(),
-            Some("nationalPokedexNumbers:[150 TO *]")
-        );
-        assert_eq!(
-            lucene("r:\"rare holo\"").as_deref(),
-            Some("rarity:\"rare holo\"")
-        );
-        assert_eq!(lucene("a:arita").as_deref(), Some("artist:\"arita\""));
-        assert_eq!(lucene("reg:G").as_deref(), Some("regulationMark:\"G\""));
-        assert_eq!(
-            lucene("legal:standard").as_deref(),
-            Some("legalities.standard:Legal")
-        );
-    }
-
-    #[test]
-    fn translates_names_and_booleans() {
-        assert_eq!(lucene("charizard").as_deref(), Some("name:*charizard*"));
-        assert_eq!(
-            lucene("!\"Charizard ex\"").as_deref(),
-            Some("name:\"Charizard ex\"")
-        );
-        assert_eq!(
-            lucene("t:fire t:water").as_deref(),
-            Some("(types:\"fire\") AND (types:\"water\")")
-        );
-        assert_eq!(
-            lucene("t:fire or t:water").as_deref(),
-            Some("(types:\"fire\") OR (types:\"water\")")
-        );
-        assert_eq!(lucene("-t:fire").as_deref(), Some("-(types:\"fire\")"));
-    }
-
-    #[test]
-    fn untranslatable_parts_yield_none() {
-        // Any untranslatable keyword poisons the whole query.
-        assert_eq!(lucene("s:base"), None);
-        assert_eq!(lucene("is:holo"), None);
-        assert_eq!(lucene("status:owned"), None);
-        assert_eq!(lucene("v:holo"), None);
-        // Rarity ordinals have no Lucene analog.
-        assert_eq!(lucene("r>=rare"), None);
-        // A translatable AND an untranslatable term ⇒ None.
-        assert_eq!(lucene("t:fire s:base"), None);
-    }
+struct Card {
+    id: &'static str,
+    name: &'static str,
+    subtitle: Option<&'static str>,
+    card_type: &'static str,
+    cost: Option<i64>,
+    power: Option<i64>,
+    hp: Option<i64>,
+    aspects: &'static [&'static str],
+    traits: &'static [&'static str],
+    arenas: &'static [&'static str],
+    rules: &'static str,
 }
 
-// ---------------------------------------------------------------------------
-// Live oracle (opt-in, cached) — #[ignore]
-// ---------------------------------------------------------------------------
+struct Printing {
+    id: &'static str,
+    card: &'static str,
+    set: &'static str,
+    number: &'static str,
+    variant: &'static str,
+    finish: &'static str,
+    rarity: &'static str,
+    artist: &'static str,
+    /// Copies of this printing in the collection.
+    owned: i64,
+}
 
-#[cfg(test)]
-mod live {
-    use super::*;
-    use dumpstar_db::{open_shared, search, search_meta};
-    use rusqlite::Connection;
-    use std::time::Duration;
+const SETS: &[(&str, &str, &str)] = &[
+    ("SOR", "Spark of Rebellion", "2024-03-08"),
+    ("SHD", "Shadows of the Galaxy", "2024-07-12"),
+    ("TWI", "Twilight of the Republic", "2025-11-08"),
+];
 
-    const BASE: &str = "https://api.pokemontcg.io/v2/cards";
-    const USER_AGENT: &str = "Dumpstar/1.0 SearchOracle";
+/// The rarities table, as `data/rarities.json` ranks it: (name, rank, group).
+const RARITIES: &[(&str, i64, &str)] = &[
+    ("Common", 0, "common"),
+    ("Uncommon", 1, "uncommon"),
+    ("Rare", 2, "rare"),
+    ("Legendary", 3, "legendary"),
+    ("Special", 4, "special"),
+    ("Promo", 2, "promo"),
+];
 
-    fn cache() -> Connection {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/.ptcg_cache.sqlite");
-        let c = Connection::open(path).unwrap();
-        c.execute(
-            "CREATE TABLE IF NOT EXISTS cache (
-                lucene TEXT PRIMARY KEY, status INTEGER NOT NULL,
-                ids TEXT NOT NULL, total INTEGER NOT NULL, fetched_at TEXT NOT NULL)",
-            [],
-        )
-        .unwrap();
-        c
-    }
+const CARDS: &[Card] = &[
+    Card {
+        id: "luke",
+        name: "Luke Skywalker",
+        subtitle: Some("Faithful Friend"),
+        card_type: "Unit",
+        cost: Some(3),
+        power: Some(3),
+        hp: Some(5),
+        aspects: &["Vigilance", "Heroism"],
+        traits: &["Force", "Rebel", "Jedi"],
+        arenas: &["Ground"],
+        rules: "On Attack: Heal 2 damage from a base.",
+    },
+    Card {
+        id: "falcon",
+        name: "Millennium Falcon",
+        subtitle: Some("Piece of Junk"),
+        card_type: "Unit",
+        cost: Some(2),
+        power: Some(3),
+        hp: Some(3),
+        aspects: &["Cunning", "Heroism"],
+        traits: &["Vehicle", "Transport", "Underworld"],
+        arenas: &["Space"],
+        rules: "Piloting [2].",
+    },
+    Card {
+        id: "han",
+        name: "Han Solo",
+        subtitle: Some("Reluctant Hero"),
+        card_type: "Leader",
+        cost: Some(6),
+        power: Some(7),
+        hp: Some(6),
+        aspects: &["Aggression", "Villainy"],
+        traits: &["Underworld", "Rebel"],
+        arenas: &["Ground"],
+        rules: "When Played: Deal 2 damage to a unit.",
+    },
+    Card {
+        id: "vanquish",
+        name: "Vanquish",
+        subtitle: None,
+        card_type: "Event",
+        cost: Some(5),
+        power: None,
+        hp: None,
+        aspects: &["Vigilance"],
+        traits: &[],
+        arenas: &[],
+        rules: "Defeat a non-leader unit.",
+    },
+    Card {
+        id: "base",
+        name: "Echo Base",
+        subtitle: None,
+        card_type: "Base",
+        cost: None,
+        power: None,
+        hp: Some(30),
+        aspects: &["Command"],
+        traits: &[],
+        arenas: &[],
+        rules: "Epic Action: Put a Rebel unit into play.",
+    },
+    Card {
+        id: "vader",
+        name: "Darth Vader",
+        subtitle: Some("Dark Lord of the Sith"),
+        card_type: "Leader",
+        cost: Some(7),
+        power: Some(5),
+        hp: Some(7),
+        aspects: &["Aggression", "Villainy"],
+        traits: &["Force", "Imperial", "Sith"],
+        arenas: &["Ground"],
+        rules: "Action: Deal 1 damage to a unit.",
+    },
+];
 
-    /// (status, card_ids, total_count) for a Lucene query, cached by query text.
-    fn ptcg_search(cache: &Connection, lucene: &str) -> (u16, Vec<String>, i64) {
-        if let Ok((status, ids_json, total)) = cache.query_row(
-            "SELECT status, ids, total FROM cache WHERE lucene = ?1",
-            [lucene],
-            |r| {
-                Ok((
-                    r.get::<_, i64>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, i64>(2)?,
-                ))
-            },
-        ) {
-            let ids: Vec<String> = serde_json::from_str(&ids_json).unwrap();
-            return (status as u16, ids, total);
-        }
+const PRINTINGS: &[Printing] = &[
+    Printing {
+        id: "luke-std",
+        card: "luke",
+        set: "SOR",
+        number: "005",
+        variant: "Standard",
+        finish: "Normal",
+        rarity: "Legendary",
+        artist: "Borja Pindado",
+        owned: 2,
+    },
+    Printing {
+        id: "luke-foil",
+        card: "luke",
+        set: "SOR",
+        number: "005",
+        variant: "Standard",
+        finish: "Foil",
+        rarity: "Legendary",
+        artist: "Borja Pindado",
+        owned: 1,
+    },
+    Printing {
+        id: "luke-hyper",
+        card: "luke",
+        set: "SOR",
+        number: "400",
+        variant: "Hyperspace",
+        finish: "Normal",
+        rarity: "Legendary",
+        artist: "Borja Pindado",
+        owned: 0,
+    },
+    Printing {
+        id: "falcon-std",
+        card: "falcon",
+        set: "SHD",
+        number: "252",
+        variant: "Standard",
+        finish: "Normal",
+        rarity: "Common",
+        artist: "Ralph McQuarrie",
+        owned: 1,
+    },
+    Printing {
+        id: "falcon-showcase",
+        card: "falcon",
+        set: "SHD",
+        number: "520",
+        variant: "Showcase",
+        finish: "Normal",
+        rarity: "Special",
+        artist: "Ralph McQuarrie",
+        owned: 0,
+    },
+    Printing {
+        id: "han-std",
+        card: "han",
+        set: "SOR",
+        number: "010",
+        variant: "Standard",
+        finish: "Normal",
+        rarity: "Rare",
+        artist: "Ryan Grayson",
+        owned: 0,
+    },
+    Printing {
+        id: "han-promo",
+        card: "han",
+        set: "TWI",
+        number: "P01",
+        variant: "Promo",
+        finish: "Foil",
+        rarity: "Promo",
+        artist: "",
+        owned: 3,
+    },
+    Printing {
+        id: "vanquish-std",
+        card: "vanquish",
+        set: "SOR",
+        number: "193",
+        variant: "Standard",
+        finish: "Normal",
+        rarity: "Uncommon",
+        artist: "Kamil Murzyn",
+        owned: 0,
+    },
+    Printing {
+        id: "base-std",
+        card: "base",
+        set: "SOR",
+        number: "020",
+        variant: "Standard",
+        finish: "Normal",
+        rarity: "Common",
+        artist: "Eric Robinson",
+        owned: 0,
+    },
+    Printing {
+        id: "vader-std",
+        card: "vader",
+        set: "SHD",
+        number: "001",
+        variant: "Standard",
+        finish: "Normal",
+        rarity: "Rare",
+        artist: "Ryan Grayson",
+        owned: 0,
+    },
+];
 
-        std::thread::sleep(Duration::from_millis(120)); // be polite
-        let http = reqwest::blocking::Client::builder()
-            .user_agent(USER_AGENT)
-            .timeout(Duration::from_secs(30))
-            .build()
+/// (format, card, status). A card with no row is legal in every format.
+const LEGALITY: &[(&str, &str, &str)] = &[
+    ("premier", "vader", "banned"),
+    ("premier", "falcon", "not_legal"),
+    ("twin_suns", "luke", "banned"),
+    ("twin_suns", "han", "restricted"),
+];
+
+fn fixture() -> (
+    tempfile::TempDir,
+    Connection,
+    KeywordRegistry,
+    Vec<SearchFlag>,
+) {
+    let dir = tempfile::tempdir().unwrap();
+    let shared = dir.path().join("shared.sqlite");
+    {
+        let mut c = open_shared(&shared).unwrap();
+        search_meta::reconcile(&mut c).unwrap();
+        for (i, (code, name, date)) in SETS.iter().enumerate() {
+            c.execute(
+                "INSERT INTO sets (set_code,name,release_date,sort_order) VALUES (?1,?2,?3,?4)",
+                rusqlite::params![code, name, date, i as i64],
+            )
             .unwrap();
-
-        let mut ids = Vec::new();
-        let mut total = 0i64;
-        let mut status = 0u16;
-        for page in 1..=4 {
-            // Report mode: a transient network error degrades to fewer results
-            // (treated as truncation), never a panic.
-            let resp = match http
-                .get(BASE)
-                .query(&[
-                    ("q", lucene),
-                    ("page", &page.to_string()),
-                    ("pageSize", "250"),
-                ])
-                .send()
-            {
-                Ok(r) => r,
-                Err(_) => break,
-            };
-            status = resp.status().as_u16();
-            if status != 200 {
-                break;
-            }
-            let Ok(body) = resp.json::<serde_json::Value>() else {
-                break;
-            };
-            total = body.get("totalCount").and_then(|v| v.as_i64()).unwrap_or(0);
-            let data = body
-                .get("data")
-                .and_then(|v| v.as_array())
-                .cloned()
-                .unwrap_or_default();
-            if data.is_empty() {
-                break;
-            }
-            for card in &data {
-                if let Some(id) = card.get("id").and_then(|v| v.as_str()) {
-                    ids.push(id.to_string());
-                }
-            }
-            if (ids.len() as i64) >= total {
-                break;
-            }
         }
-
-        cache
-            .execute(
-                "INSERT OR REPLACE INTO cache (lucene, status, ids, total, fetched_at)
-                 VALUES (?1, ?2, ?3, ?4, datetime('now'))",
+        for card in CARDS {
+            let json = |xs: &[&str]| serde_json::to_string(xs).unwrap();
+            c.execute(
+                "INSERT INTO cards (card_id,name,subtitle,card_type,cost,power,hp,aspects,traits,
+                    arenas,rules_text) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
                 rusqlite::params![
-                    lucene,
-                    status as i64,
-                    serde_json::to_string(&ids).unwrap(),
-                    total
+                    card.id,
+                    card.name,
+                    card.subtitle,
+                    card.card_type,
+                    card.cost,
+                    card.power,
+                    card.hp,
+                    json(card.aspects),
+                    json(card.traits),
+                    json(card.arenas),
+                    card.rules
                 ],
             )
             .unwrap();
-        (status, ids, total)
-    }
-
-    /// Lightweight acceptance check: does pokémontcg.io accept this query?
-    /// Fetches a single result (page 1, size 1) — no full pagination — and
-    /// returns (status, total_count). Cached under an `ACCEPT::` namespace so
-    /// it never collides with the full-result cache the diff test uses.
-    fn ptcg_accepts(cache: &Connection, lucene: &str) -> (u16, i64) {
-        let key = format!("ACCEPT::{lucene}");
-        if let Ok((status, total)) = cache.query_row(
-            "SELECT status, total FROM cache WHERE lucene = ?1",
-            [&key],
-            |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)),
-        ) {
-            return (status as u16, total);
         }
-        std::thread::sleep(Duration::from_millis(120));
-        let http = reqwest::blocking::Client::builder()
-            .user_agent(USER_AGENT)
-            .timeout(Duration::from_secs(30))
-            .build()
-            .unwrap();
-        let resp = http
-            .get(BASE)
-            .query(&[("q", lucene), ("page", "1"), ("pageSize", "1")])
-            .send()
-            .unwrap();
-        let status = resp.status().as_u16();
-        let total = if status == 200 {
-            resp.json::<serde_json::Value>()
-                .ok()
-                .and_then(|b| b.get("totalCount").and_then(|v| v.as_i64()))
-                .unwrap_or(0)
-        } else {
-            0
-        };
-        cache
-            .execute(
-                "INSERT OR REPLACE INTO cache (lucene, status, ids, total, fetched_at)
-                 VALUES (?1, ?2, '[]', ?3, datetime('now'))",
-                rusqlite::params![key, status as i64, total],
+        for p in PRINTINGS {
+            c.execute(
+                "INSERT INTO printings (printing_id,card_id,set_code,number,variant,finish,
+                    rarity,artist) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
+                rusqlite::params![
+                    p.id, p.card, p.set, p.number, p.variant, p.finish, p.rarity, p.artist
+                ],
             )
             .unwrap();
-        (status, total)
-    }
-
-    /// A registry sufficient to parse card-metadata queries.
-    fn registry() -> dumpstar_core::query::KeywordRegistry {
-        let dir = tempfile::tempdir().unwrap();
-        let mut c = open_shared(&dir.path().join("shared.sqlite")).unwrap();
-        search_meta::reconcile(&mut c).unwrap();
-        search_meta::load_registry(&c).unwrap()
-    }
-
-    /// Queries whose translation should be accepted by pokémontcg.io.
-    const QUERIES: &[&str] = &[
-        "t:fire",
-        "t:water hp>=100",
-        "sub:ex",
-        "supertype:pokemon",
-        "r:\"rare holo\"",
-        "a:arita",
-        "dex>=150",
-        "reg:G",
-        "legal:standard",
-        "t:fire or t:lightning",
-        "-t:fire hp>=200",
-        "!\"Charizard ex\"",
-    ];
-
-    #[test]
-    #[ignore = "hits the live pokémontcg.io API; run with --ignored"]
-    fn parse_agreement() {
-        let reg = registry();
-        let cache = cache();
-        let mut checked = 0;
-        for q in QUERIES {
-            let ast = parse(q, &reg).unwrap_or_else(|e| panic!("we reject {q:?}: {e}"));
-            let Some(lucene) = to_lucene(&ast) else {
-                panic!("expected {q:?} to be translatable");
-            };
-            let (status, total) = ptcg_accepts(&cache, &lucene);
-            assert_eq!(status, 200, "pokémontcg.io rejected {q:?} -> {lucene:?}");
-            checked += 1;
-            println!("  ok  {q:30} -> {lucene:40} ({total} cards)");
         }
-        println!("parse_agreement: {checked} translated queries accepted by pokémontcg.io");
+        for format in ["premier", "twin_suns"] {
+            c.execute(
+                "INSERT INTO formats (format_id,name) VALUES (?1,?1)",
+                [format],
+            )
+            .unwrap();
+        }
+        for (format, card, status) in LEGALITY {
+            c.execute(
+                "INSERT INTO card_legality (format_id,card_id,status) VALUES (?1,?2,?3)",
+                rusqlite::params![format, card, status],
+            )
+            .unwrap();
+        }
     }
+    let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
+    for p in PRINTINGS {
+        for _ in 0..p.owned {
+            conn.execute(
+                "INSERT INTO collection (printing_id,condition,language,acquired_at,source,status)
+                 VALUES (?1,'Near Mint','English','2024-01-01','manual_id','owned')",
+                [p.id],
+            )
+            .unwrap();
+        }
+    }
+    let registry = search_meta::load_registry(&conn).unwrap();
+    let flags = search_meta::load_flags(&conn).unwrap();
+    (dir, conn, registry, flags)
+}
 
-    #[test]
-    #[ignore = "needs a real catalog (DUMPSTAR_ORACLE_DB) + live API; run with --ignored"]
-    fn differential() {
-        // The diff is only meaningful against a real catalog; the tiny UI
-        // fixture would report noise. Point at one explicitly.
-        let Ok(db_path) = std::env::var("DUMPSTAR_ORACLE_DB") else {
-            eprintln!("SKIP differential: set DUMPSTAR_ORACLE_DB=/path/to/shared.sqlite");
-            return;
-        };
-        let dir = tempfile::tempdir().unwrap();
-        // The compiler queries the user connection (catalog attached); attach
-        // the real shared DB to a throwaway user DB.
-        let conn = dumpstar_db::connect_user(
-            &dir.path().join("collection.sqlite"),
-            std::path::Path::new(&db_path),
-        )
-        .unwrap();
-        let reg = {
-            let c = open_shared(std::path::Path::new(&db_path)).unwrap();
-            search_meta::load_registry(&c).unwrap()
-        };
-        let flags = search_meta::load_flags(&conn).unwrap();
-        let cache = cache();
+// ---------------------------------------------------------------------------
+// The oracle
+// ---------------------------------------------------------------------------
 
-        // Known universe = every card_id in the catalog.
-        let known: std::collections::HashSet<String> = {
-            let mut stmt = conn.prepare("SELECT card_id FROM cards").unwrap();
-            let rows = stmt.query_map([], |r| r.get::<_, String>(0)).unwrap();
-            rows.filter_map(Result::ok).collect()
-        };
+struct Oracle;
 
-        let mut compared = 0;
-        let mut real_bugs = 0;
-        let mut coverage = 0;
-        for q in QUERIES {
-            let ast = parse(q, &reg).unwrap();
-            let Some(lucene) = to_lucene(&ast) else {
-                continue;
-            };
+fn ci_eq(a: &str, b: &str) -> bool {
+    a.eq_ignore_ascii_case(b)
+}
 
-            // Local: catalog-wide (all cards, not just owned), dedup to card_id.
-            let mut compiled = search::compile(&ast, &flags);
-            compiled.set_catalog_wide(true);
-            let local: std::collections::HashSet<String> = search::search(&conn, &compiled)
-                .unwrap()
-                .into_iter()
-                .map(|r| r.card_id)
-                .collect();
+fn ci_contains(hay: &str, needle: &str) -> bool {
+    hay.to_lowercase().contains(&needle.to_lowercase())
+}
 
-            let (status, ptcg_ids, total) = ptcg_search(&cache, &lucene);
-            if status != 200 {
-                continue;
+fn cmp_num(op: Op, lhs: Option<i64>, rhs: f64) -> bool {
+    let Some(l) = lhs else { return false };
+    let l = l as f64;
+    match op {
+        Op::Contains | Op::Eq => l == rhs,
+        Op::Ne => l != rhs,
+        Op::Lt => l < rhs,
+        Op::Gt => l > rhs,
+        Op::Le => l <= rhs,
+        Op::Ge => l >= rhs,
+    }
+}
+
+fn rank_of(name: &str) -> Option<i64> {
+    RARITIES.iter().find(|r| r.0 == name).map(|r| r.1)
+}
+
+fn set_of(p: &Printing) -> (&'static str, &'static str, &'static str) {
+    *SETS.iter().find(|s| s.0 == p.set).unwrap()
+}
+
+fn card_of(p: &Printing) -> &'static Card {
+    CARDS.iter().find(|c| c.id == p.card).unwrap()
+}
+
+fn member(xs: &[&str], v: &str, op: Op) -> bool {
+    let has = xs.iter().any(|x| ci_eq(x, v));
+    if matches!(op, Op::Ne) { !has } else { has }
+}
+
+impl Oracle {
+    /// Does `p` match `ast`? `None` when the query uses a keyword the oracle
+    /// does not model.
+    fn eval(ast: &Ast, p: &Printing) -> Option<bool> {
+        let card = card_of(p);
+        Some(match ast {
+            Ast::And(cs) => {
+                let mut all = true;
+                for c in cs {
+                    all &= Self::eval(c, p)?;
+                }
+                all
             }
-            let truncated = (ptcg_ids.len() as i64) < total;
-            let ptcg_in_known: std::collections::HashSet<String> = ptcg_ids
-                .into_iter()
-                .filter(|id| known.contains(id))
-                .collect();
-
-            let local_only: Vec<&String> = local.difference(&ptcg_in_known).collect();
-            let ptcg_only: Vec<&String> = ptcg_in_known.difference(&local).collect();
-            compared += 1;
-            if !local_only.is_empty() && !truncated {
-                real_bugs += 1;
-                println!(
-                    "  TOO LOOSE {q:?}: local-only {:?}",
-                    &local_only[..local_only.len().min(5)]
-                );
+            Ast::Or(cs) => {
+                let mut any = false;
+                for c in cs {
+                    any |= Self::eval(c, p)?;
+                }
+                any
             }
-            if !ptcg_only.is_empty() {
-                coverage += 1;
-                println!(
-                    "  TOO STRICT {q:?}: ptcg-only {:?}",
-                    &ptcg_only[..ptcg_only.len().min(5)]
-                );
+            Ast::Not(inner) => !Self::eval(inner, p)?,
+            Ast::NameSearch(t) => ci_contains(card.name, t),
+            Ast::ExactName(n) => ci_eq(card.name, n),
+            Ast::Comparison { keyword, op, value } => {
+                let (op, v) = (*op, value.as_str());
+                match keyword.as_str() {
+                    "name" => match op {
+                        Op::Eq => ci_eq(card.name, v),
+                        Op::Ne => !ci_eq(card.name, v),
+                        _ => ci_contains(card.name, v),
+                    },
+                    "card_type" => match op {
+                        Op::Ne => !ci_eq(card.card_type, v),
+                        _ => ci_eq(card.card_type, v),
+                    },
+                    "finish" => match op {
+                        Op::Ne => !ci_eq(p.finish, v),
+                        _ => ci_eq(p.finish, v),
+                    },
+                    "aspect" => member(card.aspects, v, op),
+                    "arena" => member(card.arenas, v, op),
+                    "trait" => member(card.traits, v, op),
+                    "cost" => cmp_num(op, card.cost, v.parse().ok()?),
+                    "power" => cmp_num(op, card.power, v.parse().ok()?),
+                    "hp" => cmp_num(op, card.hp, v.parse().ok()?),
+                    "year" => {
+                        let year: i64 = set_of(p).2[..4].parse().unwrap();
+                        cmp_num(op, Some(year), v.parse().ok()?)
+                    }
+                    "artist" => ci_contains(p.artist, v),
+                    "oracle" => ci_contains(card.rules, v),
+                    "variant" => {
+                        let m = ci_contains(p.variant, v);
+                        if matches!(op, Op::Ne) { !m } else { m }
+                    }
+                    "rarity" => {
+                        let eq = ci_eq(p.rarity, v)
+                            || RARITIES.iter().any(|r| r.0 == p.rarity && ci_eq(r.2, v));
+                        match op {
+                            Op::Contains | Op::Eq => eq,
+                            Op::Ne => !eq,
+                            _ => {
+                                // The right-hand side is a rarity *name*; an
+                                // unknown one ranks NULL and matches nothing.
+                                let rhs = RARITIES.iter().find(|r| ci_eq(r.0, v))?.1;
+                                cmp_num(op, rank_of(p.rarity), rhs as f64)
+                            }
+                        }
+                    }
+                    "set" => {
+                        let (code, name, _) = set_of(p);
+                        match op {
+                            Op::Eq => ci_eq(code, v),
+                            Op::Ne => !ci_eq(code, v),
+                            _ => ci_eq(code, v) || ci_contains(name, v),
+                        }
+                    }
+                    "legality" | "banned" => {
+                        let banned = keyword == "banned";
+                        if !LEGALITY.iter().any(|l| ci_eq(l.0, v)) {
+                            // An unknown format matches nothing, either way.
+                            return Some(false);
+                        }
+                        let status = LEGALITY
+                            .iter()
+                            .find(|l| ci_eq(l.0, v) && l.1 == card.id)
+                            .map(|l| l.2);
+                        if banned {
+                            status == Some("banned")
+                        } else {
+                            !matches!(status, Some("banned" | "not_legal"))
+                        }
+                    }
+                    "is_flag" => match v.to_ascii_lowercase().as_str() {
+                        "foil" => p.finish == "Foil",
+                        "nonfoil" => p.finish == "Normal",
+                        "standard" => ci_contains(p.variant, "standard"),
+                        "hyperspace" => ci_contains(p.variant, "hyperspace"),
+                        "showcase" => ci_contains(p.variant, "showcase"),
+                        "promo" => ci_contains(p.variant, "promo"),
+                        "dupe" => p.owned >= 2,
+                        "owned" => p.owned > 0,
+                        "missing" | "unowned" => p.owned == 0,
+                        _ => return None,
+                    },
+                    "has_flag" => match v.to_ascii_lowercase().as_str() {
+                        "text" => !card.rules.is_empty(),
+                        "subtitle" => card.subtitle.is_some_and(|s| !s.is_empty()),
+                        "artist" => !p.artist.is_empty(),
+                        _ => return None,
+                    },
+                    "qty" => cmp_num(op, Some(p.owned), v.parse().ok()?),
+                    _ => return None,
+                }
+            }
+        })
+    }
+}
+
+/// Run `query` catalog-wide through the compiler and compare with the oracle.
+/// Returns `false` (and compares nothing) when the oracle does not model it.
+fn agrees(conn: &Connection, reg: &KeywordRegistry, flags: &[SearchFlag], query: &str) -> bool {
+    let ast = parse(query, reg).unwrap_or_else(|e| panic!("{query:?} must parse: {e}"));
+    let mut expected = BTreeSet::new();
+    for p in PRINTINGS {
+        match Oracle::eval(&ast, p) {
+            Some(true) => {
+                expected.insert(p.id.to_string());
+            }
+            Some(false) => {}
+            None => return false,
+        }
+    }
+    let mut compiled = compile(&ast, flags);
+    assert!(compiled.is_supported(), "{query:?} compiled to a sentinel");
+    compiled.set_catalog_wide(true);
+    let got: BTreeSet<String> = search::search(conn, &compiled)
+        .unwrap_or_else(|e| panic!("{query:?} failed to execute: {e:?}"))
+        .into_iter()
+        .map(|r| r.printing_id)
+        .collect();
+    assert_eq!(
+        got,
+        expected,
+        "{query:?}: SQL result (left) disagrees with the oracle (right)\n  where: {}",
+        compiled.where_sql()
+    );
+    true
+}
+
+// ---------------------------------------------------------------------------
+// Atoms: one or more per supported card-metadata keyword
+// ---------------------------------------------------------------------------
+
+const ATOMS: &[&str] = &[
+    "luke",
+    "han",
+    "solo",
+    "name:falcon",
+    "name=Vanquish",
+    "name!=Vanquish",
+    "!\"Darth Vader\"",
+    "t:unit",
+    "type:leader",
+    "t=event",
+    "t!=unit",
+    "t:base",
+    "a:vigilance",
+    "aspect:heroism",
+    "a=villainy",
+    "a!=aggression",
+    "arena:ground",
+    "arena:space",
+    "arena!=ground",
+    "trait:rebel",
+    "trait:force",
+    "trait!=underworld",
+    "cost:3",
+    "c<=3",
+    "c>=6",
+    "cost>4",
+    "c!=2",
+    "power:3",
+    "p>=5",
+    "p<3",
+    "p!=3",
+    "hp:5",
+    "hp>=6",
+    "hp<=3",
+    "hp>10",
+    "hp!=30",
+    "r:common",
+    "r:legendary",
+    "r:promo",
+    "r=rare",
+    "r!=common",
+    "r>=rare",
+    "r<rare",
+    "r>uncommon",
+    "r<=rare",
+    "s:sor",
+    "s:shadows",
+    "e:twi",
+    "s=shd",
+    "s!=sor",
+    "artist:pindado",
+    "artist:\"Ralph McQuarrie\"",
+    "o:damage",
+    "text:unit",
+    "o:\"on attack\"",
+    "year:2024",
+    "year>=2025",
+    "year<2025",
+    "legal:premier",
+    "legal:twin_suns",
+    "format:premier",
+    "banned:premier",
+    "banned:twin_suns",
+    "legal:nonexistent",
+    "v:standard",
+    "variant:hyperspace",
+    "v!=standard",
+    "v:promo",
+    "f:foil",
+    "finish:normal",
+    "f!=foil",
+    "is:foil",
+    "is:nonfoil",
+    "is:standard",
+    "is:hyperspace",
+    "is:showcase",
+    "is:promo",
+    "is:dupe",
+    "is:owned",
+    "is:missing",
+    "is:unowned",
+    "has:text",
+    "has:subtitle",
+    "has:artist",
+    "qty:0",
+    "qty>=1",
+    "qty>1",
+    "count<3",
+];
+
+#[test]
+fn every_atom_agrees_with_the_oracle() {
+    let (_d, conn, reg, flags) = fixture();
+    let mut skipped = Vec::new();
+    for q in ATOMS {
+        if !agrees(&conn, &reg, &flags, q) {
+            skipped.push(*q);
+        }
+    }
+    assert!(
+        skipped.is_empty(),
+        "every atom is meant to be modelled by the oracle, but these were not: {skipped:?}"
+    );
+}
+
+#[test]
+fn boolean_combinations_agree_with_the_oracle() {
+    let (_d, conn, reg, flags) = fixture();
+    let mut checked = 0;
+    // Every pair, as AND, OR, and negated-AND; plus a grouped form. Each pair of atoms is taken exactly once.
+    for (i, a) in ATOMS.iter().enumerate() {
+        for b in &ATOMS[i + 1..] {
+            for q in [
+                format!("{a} {b}"),
+                format!("{a} or {b}"),
+                format!("-({a} {b})"),
+                format!("({a} or {b}) -({a})"),
+            ] {
+                assert!(agrees(&conn, &reg, &flags, &q), "{q:?} not modelled");
+                checked += 1;
             }
         }
-        println!(
-            "differential: {compared} compared, {real_bugs} too-loose, {coverage} too-strict (report mode)"
-        );
     }
+    assert!(checked > 10_000, "sweep shrank to {checked} queries");
+}
+
+#[test]
+fn unmodelled_keywords_are_skipped_not_guessed() {
+    // The coverage claim: collection and pricing keywords are not card
+    // metadata, so the oracle declines them rather than answering.
+    let (_d, conn, reg, flags) = fixture();
+    for q in [
+        "status:owned",
+        "condition:nm",
+        "price>5",
+        "deck:*",
+        "is:graded",
+        "tag:favorite",
+    ] {
+        assert!(!agrees(&conn, &reg, &flags, q), "{q:?} should be skipped");
+    }
+}
+
+#[test]
+fn the_oracle_is_not_vacuous() {
+    // Positive control: a query that matches some printings and not others, so
+    // the equality in `agrees` compares two non-trivial sets rather than two
+    // empty ones (or two full ones).
+    let (_d, conn, reg, flags) = fixture();
+    let ast = parse("a:vigilance", &reg).unwrap();
+    let expected: BTreeSet<&str> = PRINTINGS
+        .iter()
+        .filter(|p| Oracle::eval(&ast, p) == Some(true))
+        .map(|p| p.id)
+        .collect();
+    // Luke's three printings and Vanquish.
+    assert_eq!(
+        expected,
+        BTreeSet::from(["luke-std", "luke-foil", "luke-hyper", "vanquish-std"])
+    );
+    assert!(agrees(&conn, &reg, &flags, "a:vigilance"));
 }

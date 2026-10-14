@@ -197,10 +197,9 @@ fn shared(args: SharedArgs) -> anyhow::Result<()> {
     println!("  raw coverage: complete — every upstream request was answered from raw/");
 
     println!(
-        "Derive complete: {} ({} printings, {} latest prices)",
+        "Derive complete: {} ({} printings)",
         db_path.display(),
-        report.printings,
-        report.latest_prices
+        report.printings
     );
     reclaim(&conn);
     Ok(())

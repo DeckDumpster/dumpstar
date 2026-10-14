@@ -4,14 +4,14 @@ export type Crumb = { label: string; href?: string };
 
 // Per-page breadcrumb override. Set from a page's script (synchronously,
 // not in an async $effect) when the leaf label can't be derived from the
-// URL — e.g. /browse/me2pt5 → "Ascended Heroes" or /card/sv10/153 →
-// "Browse › Destined Rivals › Team Rocket's Porygon #153".
+// URL — e.g. /browse/sor → "Spark of Rebellion" or /card/sor/5 →
+// "Browse › Spark of Rebellion › Luke Skywalker #5".
 //
 // The store tags every override with the pathname that set it. Reading
 // `crumbs` from a different URL returns null — the override "expires" the
 // moment SvelteKit's router moves to a new page, so stale crumbs from
 // the previously-mounted page can't leak into the next render. This is
-// what eliminates the "Card › Base1 › 4" → "Browse › Base › …" flash
+// what eliminates the "Card › SOR › 5" → "Browse › Spark of Rebellion › …" flash
 // the URL-derived fallback used to produce while async data loaded.
 function createBreadcrumbs() {
 	let entry = $state<{ path: string; crumbs: Crumb[] } | null>(null);

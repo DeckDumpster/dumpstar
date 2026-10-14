@@ -3,7 +3,15 @@
 /**
  * A row that resolved cleanly to a catalog printing — ready to commit.
  */
-export type ResolvedRow = { source_line: number, printing_id: string, card_name: string, set_code: string, number: string, variant: string, condition: string, language: string, purchase_price: number | null, acquired_at: string | null, tags: Array<string>, 
+export type ResolvedRow = { source_line: number, printing_id: string, card_name: string, set_code: string, number: string, 
+/**
+ * The printing's variant (`Standard`, `Hyperspace`, …).
+ */
+variant: string, 
+/**
+ * `Normal` or `Foil`.
+ */
+finish: string, condition: string, language: string, purchase_price: number | null, acquired_at: string | null, tags: Array<string>, 
 /**
  * How many copies of this printing are already `owned` in the collection
  * (duplicate flag for the import preview). Filled by [`annotate_owned`]

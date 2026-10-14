@@ -3,7 +3,6 @@
 	import { goto, afterNavigate, beforeNavigate } from '$app/navigation';
 	import { api } from '$lib/api';
 	import VariantModal from '$lib/components/VariantModal.svelte';
-	import TcgExportModal from '$lib/components/TcgExportModal.svelte';
 	import { breadcrumbs } from '$lib/breadcrumbs.svelte';
 	import {
 		Button,
@@ -14,7 +13,8 @@
 		SectionHeader,
 		Toolbar
 	} from '$lib/components/ui';
-	import { variantColor, variantLabel, variantSortCmp } from '$lib/variants.svelte';
+	import { printingLabel } from '$lib/format';
+	import { variantColor, variantSortCmp } from '$lib/variants.svelte';
 	import type { BinderPage } from '$lib/types/BinderPage';
 	import type { BinderSlot } from '$lib/types/BinderSlot';
 
@@ -53,8 +53,8 @@
 	const initialView = (urlStr('view', 'binder') === 'card' ? 'card' : 'binder') as ViewMode;
 	let view = $state<ViewMode>(initialView);
 	const layout = $derived(cols * 3);
-	let includeSecret = $state(urlBool('secret', true));
-	let includeSubset = $state(urlBool('subset', true));
+	let includeHyperspace = $state(urlBool('hyperspace', true));
+	let includeShowcase = $state(urlBool('showcase', true));
 	let includePromos = $state(urlBool('promos', false));
 
 	// Sort, in-set search, and the ownership tab — all server-side, since
@@ -117,8 +117,6 @@
 	}
 
 	let selectedSlot = $state<BinderSlot | null>(null);
-	// "Buy missing" → TCGplayer Mass Entry export modal.
-	let showTcgExport = $state(false);
 
 	// Default condition for new copies on this page. Sticky across modal
 	// opens within the same visit (the modal binds to this), defaults back
@@ -136,8 +134,8 @@
 	// Keep the breadcrumb in sync with the latest known label for this set.
 	// Uses binder.set.name once the API has resolved, the URL param as a
 	// placeholder before that, so the first paint after navigating here
-	// never falls back to the URL-derived "Browse › Base1" — and the
-	// "Base1 → Base" upgrade happens in the same frame as the data load
+	// never falls back to the URL-derived "Browse › SOR" — and the
+	// "SOR → Spark of Rebellion" upgrade happens in the same frame as the data load
 	// since $effect.pre runs before the DOM updates. No unmount cleanup
 	// needed — the breadcrumbs store is path-keyed.
 	$effect.pre(() => {
@@ -163,8 +161,8 @@
 			binder = await api.binder(set, {
 				page: pageNum,
 				layout,
-				secret: includeSecret,
-				subset: includeSubset,
+				hyperspace: includeHyperspace,
+				showcase: includeShowcase,
 				promos: includePromos,
 				sort,
 				q: search,
@@ -250,8 +248,8 @@
 		};
 		set('page', String(pageNum), '1');
 		set('cols', String(cols), '3');
-		set('secret', includeSecret ? '1' : '0', '1');
-		set('subset', includeSubset ? '1' : '0', '1');
+		set('hyperspace', includeHyperspace ? '1' : '0', '1');
+		set('showcase', includeShowcase ? '1' : '0', '1');
 		set('promos', includePromos ? '1' : '0', '0');
 		set('sort', sort, 'number');
 		set('q', search, '');
@@ -275,8 +273,8 @@
 		void page.params.set;
 		void pageNum;
 		void cols;
-		void includeSecret;
-		void includeSubset;
+		void includeHyperspace;
+		void includeShowcase;
 		void includePromos;
 		void sort;
 		void search;
@@ -301,7 +299,7 @@
 	}
 
 	/** Like addCopy but for slots not currently open in the modal — drives
-	 *  the inline Normal/Foil quick-toggle checkboxes in each slot footer. */
+	 *  the inline variant pips in each slot footer. */
 	async function addToSlot(slot: BinderSlot, printingId: string) {
 		const printing = slot.printings.find((p) => p.printing_id === printingId);
 		if (!printing) return;
@@ -342,16 +340,10 @@
 
 	const sectionLabel: Record<string, string> = {
 		base: '',
-		secret: 'Secret Rares',
-		subset: 'Subset',
+		hyperspace: 'Hyperspace',
+		showcase: 'Showcase',
 		promo: 'Promos'
 	};
-
-	// Bundles (e.g. TTBB) are single-section containers — the
-	// secret/subset/promo toggles don't apply, and per-slot prices come
-	// straight from one TTBB-specific printing, so sort-by-price still
-	// makes sense. Drives the rendering branches below.
-	const isBundle = $derived(binder?.set.kind === 'bundle');
 
 	function resetPage() {
 		pageNum = 1;
@@ -443,18 +435,7 @@
 				     and /browse already draws these same two figures green on
 				     its set tiles. Clicking a tile used to swap them to
 				     crimson for the identical number (pd-2lk2). -->
-				{#if isBundle}
-					<!-- Bundles have a single section: base == master. Show one
-					     progress bar instead of two identical ones. -->
-					<ProgressBar
-						class="stat"
-						tone="complete"
-						label="Collected {binder.master_owned}/{binder.master_total}"
-						value={binder.master_owned}
-						max={binder.master_total}
-					/>
-				{:else}
-					<ProgressBar
+				<ProgressBar
 						class="stat"
 						tone="complete"
 						label="Base {binder.base_owned}/{binder.base_total}"
@@ -468,7 +449,6 @@
 						value={binder.master_owned}
 						max={binder.master_total}
 					/>
-				{/if}
 			</div>
 		</header>
 
@@ -565,27 +545,25 @@
 					aria-label="More cards per row">+</Button
 				>
 			</div>
-			<!-- Section-include toggles. Secret usually has content on modern
-			     sets but it's not something you flip every visit; Subset and
-			     Promos are mostly empty on SV/ME-era sets — tuck all three
-			     into an overflow menu so they don't take a row of real estate.
-			     Hidden for bundles since they have a single section. -->
-			{#if !isBundle}
+			<!-- Section-include toggles: Hyperspace and Showcase printings sit
+			     in their own sections after the base cards; Promos are off by
+			     default. Tucked into an overflow menu so they don't take a row
+			     of real estate. -->
 				<details class="overflow">
 					<summary aria-label="More filters" title="More filters">⋯</summary>
 					<Panel variant="overlay" elevation="md" padding="sm" class="overflow-menu">
 						<Field
 							inline
 							type="checkbox"
-							label="Secret"
-							bind:checked={includeSecret}
+							label="Hyperspace"
+							bind:checked={includeHyperspace}
 							onchange={resetPage}
 						/>
 						<Field
 							inline
 							type="checkbox"
-							label="Subset"
-							bind:checked={includeSubset}
+							label="Showcase"
+							bind:checked={includeShowcase}
 							onchange={resetPage}
 						/>
 						<Field
@@ -597,16 +575,6 @@
 						/>
 					</Panel>
 				</details>
-				<!-- One-click: collect every missing card as a TCGplayer Mass
-				     Entry list. Real sets only — bundles span many home sets. -->
-				<Button
-					variant="ghost"
-					size="sm"
-					onclick={() => (showTcgExport = true)}
-					title="Build a TCGplayer Mass Entry list of every card you're missing"
-					>🛒 Buy missing</Button
-				>
-			{/if}
 			<span class="spacer"></span>
 			<!-- Top pager — entire row hidden on mobile (the bottom pager
 			     handles paging there); arrow keys work either way. -->
@@ -654,7 +622,7 @@
 			{:else}
 				<EmptyState
 					title="No cards in this view."
-					description="Every section this set has is switched off — turn Secret, Subset or Promos back on in the ⋯ menu."
+					description="Every section this set has is switched off — turn Hyperspace, Showcase or Promos back on in the ⋯ menu."
 				/>
 			{/if}
 		{:else}
@@ -677,17 +645,17 @@
 					{#snippet pips(slot: BinderSlot)}
 						<div class="vchips">
 							{#each slot.printings
-								.filter((p) => !p.deprecated)
 								.slice()
 								.sort((a, b) => variantSortCmp(a.variant, b.variant)) as p (p.printing_id)}
 								<button
 									class="vchip"
 									class:owned={p.owned_count > 0}
+									class:foil={p.finish === 'Foil'}
 									style:--c={variantColor(p.variant)}
-									title="{variantLabel(p.variant)}{p.owned_count > 0
+									title="{printingLabel(p.variant, p.finish)}{p.owned_count > 0
 										? ` ×${p.owned_count}`
 										: ''} — click to add"
-									aria-label="Add one {variantLabel(p.variant)}{p.owned_count > 0
+									aria-label="Add one {printingLabel(p.variant, p.finish)}{p.owned_count > 0
 										? ` (own ${p.owned_count})`
 										: ''}"
 									onclick={() => addToSlot(slot, p.printing_id)}
@@ -699,8 +667,8 @@
 					{/snippet}
 					<div class="slotwrap" class:missing={!ownedAny(slot)}>
 						<button class="slot" onclick={() => (selectedSlot = slot)}>
-							{#if slot.image_large}
-								<img src={slot.image_large} alt={slot.name} loading="lazy" />
+							{#if slot.image_url}
+								<img src={slot.image_url} alt={slot.name} loading="lazy" />
 							{:else}
 								<div class="noart">{slot.name}</div>
 							{/if}
@@ -714,13 +682,6 @@
 								{/if}
 								{@render pips(slot)}
 							</div>
-							{#if slot.external_set}
-								<!-- Bundle slot: the underlying card lives in another set.
-								     Link out so the user can land on the home-set's binder. -->
-								<a class="extset" href="/browse/{slot.external_set.set_code}"
-									>{slot.external_set.name}</a
-								>
-							{/if}
 						{:else}
 							{@render pips(slot)}
 						{/if}
@@ -759,11 +720,6 @@
 		onClose={() => (selectedSlot = null)}
 	/>
 {/if}
-
-{#if showTcgExport && binder}
-	<TcgExportModal setCode={binder.set.set_code} onClose={() => (showTcgExport = false)} />
-{/if}
-
 
 <style>
 	/*
@@ -1076,16 +1032,7 @@
 	.slotwrap.missing .meta .num {
 		color: var(--color-text-subtle);
 	}
-	/* Bundle-slot home-set link, sits under the meta row in card view. */
-	.extset {
-		font-size: var(--text-xs);
-		color: var(--color-text-subtle);
-		text-decoration: none;
-	}
-	.extset:hover {
-		color: var(--color-text-accent);
-	}
-	/* Color-coded variant chips centered below the card. Empty (border-
+	/* Color-coded printing chips centered below the card. Empty (border-
 	   only) when unowned, filled with the variant's color when owned;
 	   count badge appears when owned > 1. The fill is per-variant data
 	   (the `variants` table), delivered as --c by the markup. */
@@ -1113,6 +1060,11 @@
 	}
 	.vchip.owned {
 		background: var(--c);
+	}
+	/* A foil printing is a dashed ring: same variant colour, told apart from
+	   its Normal printing by shape rather than by a second hue. */
+	.vchip.foil {
+		border-style: dashed;
 	}
 	.vchip:hover {
 		transform: scale(1.15);

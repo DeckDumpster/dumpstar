@@ -11,7 +11,6 @@ pub mod binder;
 pub mod binders;
 pub mod cards;
 pub mod catalog;
-pub mod catalog_prices;
 pub mod clock;
 pub mod collection;
 pub mod collectr_export;
@@ -20,7 +19,6 @@ pub mod decks;
 pub mod export;
 pub mod import;
 pub mod json_backup;
-pub mod latest_prices;
 pub mod manual_prices;
 pub mod orders;
 pub mod outbox;
@@ -32,7 +30,6 @@ pub mod sealed;
 pub mod sealed_import;
 pub mod search;
 pub mod search_meta;
-pub mod set_aliases;
 pub mod sets;
 pub mod tenants;
 pub mod unresolved;
@@ -44,12 +41,14 @@ mod connection;
 mod convergence;
 mod error;
 mod paths;
+#[cfg(test)]
+mod testkit;
 
 pub use connection::{
-    BUSY_TIMEOUT, IngestSeeds, WalCheckpoint, WalReclaim, attach_shared_readonly,
-    checkpoint_truncate, connect_user, init_user_schema, open_registry, open_shared,
-    open_shared_for_serving, open_shared_readonly, open_shared_with_patience, open_user,
-    reclaim_catalog_wal, reconcile_ingest_dependent_seeds, restore_db, snapshot_db,
+    BUSY_TIMEOUT, WalCheckpoint, WalReclaim, attach_shared_readonly, checkpoint_truncate,
+    connect_user, init_user_schema, open_registry, open_shared, open_shared_for_serving,
+    open_shared_readonly, open_shared_with_patience, open_user, reclaim_catalog_wal, restore_db,
+    snapshot_db,
 };
 pub use error::{DbError, Result};
 pub use paths::{

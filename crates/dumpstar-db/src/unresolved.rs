@@ -136,7 +136,7 @@ pub fn park_report(
             Some(&row.set_hint),
             Some(&row.number),
             row.name.as_deref(),
-            Some(&row.variant),
+            Some(&row.finish), // the queue column named `variant` holds a single's finish
             None,
             &reason,
         )?;
@@ -370,27 +370,10 @@ mod tests {
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, ptcgo_code, name, series) \
-                 VALUES ('sv3pt5', 'SOR', 'Spark of Rebellion', 'SOR')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Luke Skywalker')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES ('sv3pt5-6-normal', 'sv3pt5-6', 'normal')",
-                [],
-            )
-            .unwrap();
+            crate::testkit::simple(&c, "SOR", "5", "Luke Skywalker");
             c.execute(
                 "INSERT INTO sealed_products (product_id, set_code, name, category, fetched_at) \
-                 VALUES (7001, 'sv3pt5', 'Spark of Rebellion Two-Player Starter', 'two_player_starter', '2026-02-28')",
+                 VALUES (7001, 'SOR', 'Spark of Rebellion Booster Box', 'sealed', '2026-02-28')",
                 [],
             )
             .unwrap();
@@ -399,14 +382,14 @@ mod tests {
         (dir, conn)
     }
 
-    fn single(number: &str, variant: &str) -> ParsedRow {
+    fn single(number: &str, finish: &str) -> ParsedRow {
         ParsedRow {
             source_line: 2,
             set_hint: "SOR".into(),
             set_name: Some("Spark of Rebellion".into()),
             name: Some("Luke Skywalker".into()),
             number: number.into(),
-            variant: variant.into(),
+            finish: finish.into(),
             condition: "Lightly Played".into(),
             language: "English".into(),
             purchase_price: Some(4.25),
@@ -433,8 +416,8 @@ mod tests {
     #[test]
     fn park_list_then_resolve_single_replays_metadata() {
         let (_d, mut conn) = db();
-        // Park a single that couldn't resolve (variant 'holo' unavailable).
-        let raw = serde_json::to_string(&single("6", "holo")).unwrap();
+        // Park a single that couldn't resolve (finish 'Foil' unavailable).
+        let raw = serde_json::to_string(&single("5", "Foil")).unwrap();
         park(
             &conn,
             "single",
@@ -443,11 +426,11 @@ mod tests {
             Some(2),
             &raw,
             Some("SOR"),
-            Some("6"),
+            Some("5"),
             Some("Luke Skywalker"),
-            Some("holo"),
+            Some("Foil"),
             None,
-            "variant 'holo' not available",
+            "finish 'Foil' not available",
         )
         .unwrap();
 
@@ -458,8 +441,8 @@ mod tests {
 
         // Resolve to the real 'normal' printing — the replayed copy keeps the
         // parked condition/price/acquired/tags.
-        let created = resolve_single(&mut conn, open[0].id, "sv3pt5-6-normal").unwrap();
-        assert_eq!(created.printing_id, "sv3pt5-6-normal");
+        let created = resolve_single(&mut conn, open[0].id, "SOR-5-normal").unwrap();
+        assert_eq!(created.printing_id, "SOR-5-normal");
         assert_eq!(created.condition, "Lightly Played");
         assert_eq!(created.purchase_price, Some(4.25));
         assert_eq!(created.acquired_at, "2026-04-14T00:00:00Z");
@@ -480,7 +463,7 @@ mod tests {
     #[test]
     fn resolve_sealed_replays_quantity_and_metadata() {
         let (_d, mut conn) = db();
-        let raw = serde_json::to_string(&sealed_row("Two-Player Starter", 3)).unwrap();
+        let raw = serde_json::to_string(&sealed_row("Booster Box", 3)).unwrap();
         park(
             &conn,
             "sealed",
@@ -490,7 +473,7 @@ mod tests {
             &raw,
             Some("Spark of Rebellion"),
             None,
-            Some("Two-Player Starter"),
+            Some("Booster Box"),
             None,
             Some(3),
             "ambiguous product",
@@ -516,7 +499,7 @@ mod tests {
     #[test]
     fn dismiss_drops_row_without_writing_a_copy() {
         let (_d, conn) = db();
-        let raw = serde_json::to_string(&single("999", "normal")).unwrap();
+        let raw = serde_json::to_string(&single("999", "Normal")).unwrap();
         let id = park(
             &conn,
             "single",
@@ -527,7 +510,7 @@ mod tests {
             Some("SOR"),
             Some("999"),
             Some("Ghost Card"),
-            Some("normal"),
+            Some("Normal"),
             None,
             "card #999 not found",
         )
@@ -543,7 +526,7 @@ mod tests {
     #[test]
     fn resolve_rejects_wrong_kind() {
         let (_d, mut conn) = db();
-        let raw = serde_json::to_string(&single("6", "holo")).unwrap();
+        let raw = serde_json::to_string(&single("5", "Foil")).unwrap();
         let id = park(
             &conn,
             "single",
@@ -552,11 +535,11 @@ mod tests {
             Some(2),
             &raw,
             Some("SOR"),
-            Some("6"),
+            Some("5"),
             Some("Luke Skywalker"),
-            Some("holo"),
+            Some("Foil"),
             None,
-            "variant holo",
+            "finish Foil",
         )
         .unwrap();
         // A single row can't be resolved as sealed.
@@ -565,14 +548,14 @@ mod tests {
 
     #[test]
     fn park_unmatched_on_selected_commit_parks_the_misses() {
-        // A ManaBox CSV: line 2 resolves (normal), line 3 misses (holo has no
+        // A ManaBox CSV: line 2 resolves (normal), line 3 misses (Foil has no
         // printing), line 4 misses (unknown set). Commit line 2 with
         // park_unmatched=true — the two misses land in the queue.
         let (_d, mut conn) = db();
         const CSV: &str = "\
 Set code,Set name,Collector number,Foil,Quantity,Condition,Language,Purchase price
-SOR,Spark of Rebellion,6,normal,1,near_mint,en,1.50
-SOR,Spark of Rebellion,6,foil,1,near_mint,en,5.00
+SOR,Spark of Rebellion,5,normal,1,near_mint,en,1.50
+SOR,Spark of Rebellion,5,foil,1,near_mint,en,5.00
 NOPE,Mystery,1,normal,1,near_mint,en,";
 
         let result = import::commit_selected(

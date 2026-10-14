@@ -19,7 +19,7 @@
 
 	function buildConfig(series: PriceSeries[]): ChartConfiguration {
 		// Distinct line color per series; cycles if there are more printings than
-		// palette entries (SWU cards have at most four printings).
+		// palette entries (a card rarely has more than 4 printings).
 		// Resolved here rather than at module scope because the token layer only
 		// exists once the document does.
 		const palette = chartPalette();

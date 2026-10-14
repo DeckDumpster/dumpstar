@@ -1,6 +1,6 @@
 //! The raw landing zone, end to end through the real HTTP clients.
 //!
-//! `crates/dumpstar-lake` proves the key layout and the manifest in isolation.
+//! `dumpster-kit-lake` proves the key layout and the manifest in isolation.
 //! What it cannot prove is the property this feature actually promises: that
 //! landing is a **tee**, not a transform — the bytes stored are the bytes
 //! received, and the catalog built from a landed run is identical to the

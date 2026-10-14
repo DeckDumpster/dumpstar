@@ -572,7 +572,7 @@ echo "==> §8  The prefixes and the window do not drift across their three homes
 # them) and the deploy script (bash) cannot share an implementation. What they
 # can share is this check. A prefix changed in one and not the others does not
 # fail loudly — it silently widens a policy.
-RS="${REPO_DIR}/crates/dumpstar-lake/src/tenant.rs"
+RS="$(bash "${REPO_DIR}/tests/lake/kit_lake_dir.sh")/src/tenant.rs"
 RUST_TENANT=$(grep -oP 'TENANT_ROOT: &str = "\K[^"]+' "$RS")
 RUST_DAYS=$(grep -oP 'RETENTION_DAYS: u32 = \K[0-9]+' "$RS")
 # Split on the comma FIRST: without it `[^"]+` happily matches the `, ` between

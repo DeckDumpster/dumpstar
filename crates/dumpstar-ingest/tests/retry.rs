@@ -24,7 +24,7 @@ use std::time::{Duration, Instant};
 
 use dumpstar_ingest::retry::RetryPolicy;
 use dumpstar_ingest::tcgcsv::TcgcsvClient;
-use dumpstar_lake::{Dataset, DirStore, Manifest, RawLanding, Source};
+use dumpster_kit_lake::{Dataset, DirStore, Manifest, RawLanding, Source};
 use support::{FakeUpstream, Reply};
 
 const INGEST_DATE: &str = "2026-08-11";
@@ -49,7 +49,7 @@ fn manifest_of(
     source: Source,
     dataset: Dataset,
 ) -> Manifest {
-    let key = dumpstar_lake::keys::manifest_key(source, dataset, INGEST_DATE, landing.run_id());
+    let key = dumpster_kit_lake::keys::manifest_key(source, dataset, INGEST_DATE, landing.run_id());
     serde_json::from_slice(&std::fs::read(root.join(key)).expect("manifest on disk"))
         .expect("manifest parses")
 }
@@ -173,7 +173,7 @@ fn the_backoff_actually_waits() {
 
 /// A hiccup a retry recovered from must not mark the run incomplete.
 ///
-/// `dumpstar_lake::sink::finalize` computes `complete` from
+/// `dumpster_kit_lake::sink::finalize` computes `complete` from
 /// `failures.is_empty()`, so recording every attempt would make one 500 on
 /// one URL condemn a whole night's raw partition — and pd-up36's
 /// age-based alarming reads exactly that flag. What the manifest records is

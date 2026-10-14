@@ -1,4 +1,4 @@
-"""Reading the raw landing zone — the other half of ``crates/dumpstar-lake``.
+"""Reading the raw landing zone — the other half of ``dumpster-kit-lake``.
 
 That crate writes ``raw/`` and never reads it; this module reads it and never
 writes. The two halves share nothing but the key layout and the manifest
@@ -33,14 +33,14 @@ import pyarrow as pa
 from pyarrow import fs as pafs
 
 #: The root of the landing zone inside the bucket. Mirrors
-#: ``crates/dumpstar-lake/src/keys.rs``; a change here orphans every object
+#: ``dumpster-kit-lake/src/keys.rs``; a change here orphans every object
 #: already landed.
 RAW_ROOT = "raw"
 
 #: The manifest's file name, uncompressed and sitting beside its parts.
 MANIFEST_NAME = "_manifest.json"
 
-# The destination, named exactly as `crates/dumpstar-lake/src/config.rs` names
+# The destination, named exactly as `dumpster-kit-lake/src/config.rs` names
 # it. One `~/.config/dumpstar/lake.env` configures both the writer and this
 # reader, so the two must not invent separate spellings of the same fact.
 BUCKET_ENV = "DUMPSTAR_LAKE_S3_BUCKET"

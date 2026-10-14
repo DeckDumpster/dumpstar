@@ -75,7 +75,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 POLICY_DIR="${SCRIPT_DIR}/policies/tenant-zone"
 
-# The zone's prefix and its retention live in crates/dumpstar-lake/src/tenant.rs
+# The zone's prefix and its retention live in dumpster-kit-lake/src/tenant.rs
 # as well, because the shipper needs them at runtime. These two lines are the
 # other copy, and tests/lake/tenant_zone.sh §8 is what stops them drifting.
 TENANT_PREFIX="tenant/"
@@ -152,7 +152,7 @@ command -v python3 >/dev/null 2>&1 ||
 LAKE_ENV="${DUMPSTAR_LAKE_ENV:-${HOME}/.config/dumpstar/lake.env}"
 
 if [ -z "$BUCKET" ] && [ -f "$LAKE_ENV" ]; then
-	# The same dotenv subset crates/dumpstar-lake/src/config.rs parses.
+	# The same dotenv subset dumpster-kit-lake/src/config.rs parses.
 	# shellcheck disable=SC1090
 	BUCKET="$(set -a && . "$LAKE_ENV" && printf '%s' "${DUMPSTAR_LAKE_S3_BUCKET:-}")"
 fi

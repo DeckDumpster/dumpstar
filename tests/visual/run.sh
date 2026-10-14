@@ -32,16 +32,26 @@ REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 INSTANCE="visual"
 KEEP=false
+RECORDING=false
 PW_ARGS=()
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --instance) INSTANCE="$2"; shift 2 ;;
         --keep)     KEEP=true; shift ;;
-        --update)   PW_ARGS+=(--update-snapshots); shift ;;
+        --update)   PW_ARGS+=(--update-snapshots); RECORDING=true; shift ;;
         *)          PW_ARGS+=("$1"); shift ;;
     esac
 done
+
+# A recording stops early on a systemic failure: pages that never become ready
+# time out one by one at the full per-test timeout, and 28 of 32 doing so ran
+# the job to its cap and a CANCELLED verdict (sp-5mxl5s). Playwright exits 1
+# once the limit is hit, so the run ends FAILED within minutes.
+# DUMPSTAR_VISUAL_MAX_FAILURES overrides the limit.
+if [ "$RECORDING" = true ]; then
+    PW_ARGS+=("--max-failures=${DUMPSTAR_VISUAL_MAX_FAILURES:-3}")
+fi
 
 # An approval covers every viewport (pd-tf4h, pd-4tce). playwright.sh refuses it
 # too — it is the one place any harness here executes Playwright — but that is

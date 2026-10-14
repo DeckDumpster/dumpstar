@@ -712,8 +712,7 @@ mod tests {
         std::fs::write(symbols.join("sor.png"), &png).unwrap();
 
         // Images are not under /api so no token is needed.
-        let (encoding, body) =
-            get_encoding(&router, "/sym/sor.png", Some("gzip, br"), None).await;
+        let (encoding, body) = get_encoding(&router, "/sym/sor.png", Some("gzip, br"), None).await;
         assert_eq!(encoding, "");
         assert_eq!(body, png);
     }
@@ -1566,11 +1565,7 @@ mod tests {
                     "/api/collection/1/printing",
                     Some(r#"{"printing_id":"sor-1-normal"}"#),
                 ),
-                (
-                    "DELETE",
-                    "/api/collection/by-printing/sor-1-normal",
-                    None,
-                ),
+                ("DELETE", "/api/collection/by-printing/sor-1-normal", None),
                 ("DELETE", "/api/collection/1", None),
             ] {
                 let (s, out) = send(method, uri, &b, body).await;

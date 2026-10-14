@@ -460,10 +460,7 @@ fn catalog_cards() -> Vec<CardEntry> {
                 aspects: r#"["Vigilance","Heroism"]"#,
                 traits: r#"["Force","Rebel"]"#,
             },
-            vec![
-                normal(Some(900001), Some(4.60)),
-                foil(900001, Some(24.00)),
-            ],
+            vec![normal(Some(900001), Some(4.60)), foil(900001, Some(24.00))],
         ),
         (
             CardSpec {

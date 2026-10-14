@@ -781,10 +781,7 @@ mod tests {
 
         // Swapping to another variant of the same card succeeds.
         change_printing(&conn, id, "sor-1-holo").unwrap();
-        assert_eq!(
-            get(&conn, id).unwrap().unwrap().printing_id,
-            "sor-1-holo"
-        );
+        assert_eq!(get(&conn, id).unwrap().unwrap().printing_id, "sor-1-holo");
 
         // Swapping to a printing of a different card is rejected.
         let err = change_printing(&conn, id, "sor-2-normal").unwrap_err();

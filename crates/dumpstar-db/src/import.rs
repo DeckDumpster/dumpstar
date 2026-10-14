@@ -972,12 +972,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
 
         // resolve_set consults the alias table as a fallback.
         assert_eq!(
-            resolve_set(
-                &conn,
-                "OP Promos",
-                Some("OP Promos")
-            )
-            .unwrap(),
+            resolve_set(&conn, "OP Promos", Some("OP Promos")).unwrap(),
             Some("opp".to_string())
         );
 
@@ -1075,11 +1070,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         let (_d, conn) = misc_db();
         let report = resolve(
             &conn,
-            &[misc_row(
-                "Boba Fett (Prerelease Stamped)",
-                "072",
-                "holo",
-            )],
+            &[misc_row("Boba Fett (Prerelease Stamped)", "072", "holo")],
         )
         .unwrap();
         assert_eq!(report.matched.len(), 1, "{:?}", report.unmatched);

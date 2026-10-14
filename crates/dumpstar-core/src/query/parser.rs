@@ -338,7 +338,10 @@ mod tests {
 
     #[test]
     fn explicit_and_connector_is_noop() {
-        assert_eq!(parse_ok("t:vigilance and t:command"), parse_ok("t:vigilance t:command"));
+        assert_eq!(
+            parse_ok("t:vigilance and t:command"),
+            parse_ok("t:vigilance t:command")
+        );
     }
 
     #[test]

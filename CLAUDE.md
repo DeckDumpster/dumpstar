@@ -78,15 +78,13 @@ Run the CI tiers your change touches, before `work submit`:
 (declared in `.spira/testenv.toml`, mirroring `deploy/ci.sh`; with no `--suites` it runs `lint` and `rust`).
 Commit first: it tests the committed branch.
 
-## Names
+## Copy
 
-Nothing here may carry the identity this workspace was copied from (its
-environment prefix, its crate and unit prefix, its application name) or any of
-the removed Pokémon modules (variant model, pokemontcg and Japan catalogs,
-overrides, symbols, bundles, set discovery, standalone promos, the sub-type
-map) and the removed card model's column names (`deploy/banned-names.sh` lists
-them; only the catalog crate's legacy detector may). The script enforces it in CI (the `lint` tier) and
-`tests/ci/banned_names_test.sh` proves the gate fails when it should.
+Every string a user can read is written for Star Wars: Unlimited, from the
+game's own vocabulary and cards in the catalog (sets, leaders, bases, units,
+events, upgrades, aspects, arenas, Hyperspace and Showcase treatments, booster
+boxes and two-player starters). There is no deny-list check; write the copy
+right the first time.
 
 ## CI
 

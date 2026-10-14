@@ -186,7 +186,7 @@ pub const LEGACY_ONLY_OBJECTS: &[&str] = &[
 /// with this schema: tables, a view, a trigger, a virtual table, a few rows,
 /// `user_version = 2`. For tests of [`reset_if_legacy`] here and in the crates
 /// that call it; this file is the only place in the repository that names the
-/// legacy columns (`deploy/banned-names.sh` holds the rest to it).
+/// legacy columns.
 pub const LEGACY_SHAPE_DDL: &str = "
 CREATE TABLE sets (set_code TEXT PRIMARY KEY, ptcgo_code TEXT, name TEXT NOT NULL, series TEXT NOT NULL);
 CREATE TABLE cards (card_id TEXT PRIMARY KEY, set_code TEXT NOT NULL REFERENCES sets(set_code),

@@ -1085,7 +1085,7 @@
 				aria-expanded={acOpen}
 				aria-controls="search-ac"
 				autocomplete="off"
-				placeholder={allCards ? 'Search all cards… (t:fire hp>=200)' : 'Search… (t:fire hp>=200)'}
+				placeholder={allCards ? 'Search all cards… (t:unit a:vigilance cost<=3)' : 'Search… (t:unit a:vigilance cost<=3)'}
 				value={searchRaw}
 				oninput={(e) => onSearch(e.currentTarget.value)}
 				onkeydown={onSearchKeydown}

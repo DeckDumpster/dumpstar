@@ -81,6 +81,23 @@ for every file in it**. If you changed the collection page's card spacing and
 17 baselines moved, that is the finding. `--update` is not a way to make the
 suite quiet; it is a way to record a change you have already looked at.
 
+### Recording on the CI runner
+
+A host without podman and Playwright browsers cannot run `--update`. Dispatch
+the **Record visual baselines** workflow instead
+(`.github/workflows/record-baselines.yml`, `workflow_dispatch`, from the
+Actions tab or the workflow-dispatch API) with inputs `branch`, `bead` and
+optionally `route`.
+
+It checks out `branch`, runs `tests/visual/run.sh --update [-g <route>]` (so
+`approval-guard.sh` still refuses a viewport-narrowed approval), and pushes one
+commit to that branch with the moved PNGs; the message names `bead` and lists
+which baselines changed. `route` is a route id and moves both viewports. It
+refuses the default branch, and pushes nothing if no baseline moved. The
+workflow must exist on the default branch to be dispatchable. A push made with
+the workflow token does not start CI; re-run CI on the branch. Read that
+commit's diff as you would any approval.
+
 ### An approval covers every viewport
 
 Narrow an approval to a **route** and both viewports still move together:

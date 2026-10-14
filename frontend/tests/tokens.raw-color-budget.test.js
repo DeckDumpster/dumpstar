@@ -27,7 +27,11 @@ import { dirname, join, relative, sep } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 const frontendRoot = join(here, '..');
 const srcRoot = join(frontendRoot, 'src');
-const tokensPath = join(srcRoot, 'lib/styles/tokens.css');
+const kitDir = join(srcRoot, 'lib/kit');
+const tokensPath = join(kitDir, 'tokens.css');
+const themePath = join(srcRoot, 'lib/styles/theme.css');
+/** The token layer: the kit's vendored files and dumpstar's theme. */
+const isTokenLayer = (/** @type {string} */ f) => f === themePath || f.startsWith(kitDir + sep);
 const budgetPath = join(srcRoot, 'lib/styles/raw-color-budget.json');
 
 /** @type {{ total: number, files: Record<string, number> }} */
@@ -103,7 +107,7 @@ function walk(dir) {
 /** Actual counts, keyed the same way as the budget: src-relative, `/` separated. */
 const actual = new Map(
 	walk(srcRoot)
-		.filter((f) => f !== tokensPath && SCANNED.test(f))
+		.filter((f) => !isTokenLayer(f) && SCANNED.test(f))
 		.map((f) => /** @type {[string, string[]]} */ ([
 			relative(srcRoot, f).split(sep).join('/'),
 			rawColors(readFileSync(f, 'utf8'))
@@ -206,7 +210,7 @@ test('the reference layer is named nowhere outside tokens.css', () => {
 	/** @type {string[]} */
 	const offenders = [];
 	for (const file of walk(srcRoot)) {
-		if (file === tokensPath || !SCANNED.test(file)) continue;
+		if (isTokenLayer(file) || !SCANNED.test(file)) continue;
 		const text = decolour(readFileSync(file, 'utf8'));
 		for (const [i, line] of text.split('\n').entries()) {
 			if (line.includes('--pd-')) {

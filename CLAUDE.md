@@ -1,10 +1,7 @@
 # Dumpstar — instructions for agents
 
 Dumpstar is the Star Wars: Unlimited collection site (`star.dumpster.cards`): a
-multi-tenant Rust server and SvelteKit frontend, a sibling of deckdumpster and
-the Pokémon site. This repository began as a copy of that site's workspace with
-the Pokémon-specific modules removed (design row S1); the Star Wars: Unlimited
-catalog, tenancy and the shared kit arrive in later rows.
+multi-tenant Rust server and SvelteKit frontend.
 
 ## What is here, and what is not yet
 
@@ -24,9 +21,7 @@ catalog, tenancy and the shared kit arrive in later rows.
 **Not here yet** (each is its own bead of the dumpstar design): the SWU catalog
 seam and variant model (a derive builds no card rows today), authentication and
 tenant resolution under the dumpstar name, the shared `dumpster-kit`, and a
-Star Wars: Unlimited UI fixture. `dumpstar seed-fixture` and `tests/ui` still
-carry the Pokémon-flavoured test data they were copied with; it is test data
-only and is replaced with the catalog seam.
+Star Wars: Unlimited UI fixture.
 
 ## Build and test
 
@@ -64,15 +59,6 @@ Run the CI tiers your change touches, before `work submit`:
 (declared in `.spira/testenv.toml`, mirroring `deploy/ci.sh`; with no `--suites` it runs `lint` and `rust`).
 Commit first: it tests the committed branch.
 
-## Names
-
-Nothing here may carry the identity this workspace was copied from (its
-environment prefix, its crate and unit prefix, its application name) or any of
-the removed Pokémon modules (variant model, pokemontcg and Japan catalogs,
-overrides, symbols, bundles, set discovery, standalone promos, the sub-type
-map). `deploy/banned-names.sh` enforces it in CI (the `lint` tier) and
-`tests/ci/banned_names_test.sh` proves the gate fails when it should.
-
 ## CI
 
 `.github/workflows/ci.yml` provisions a throwaway VM through
@@ -80,4 +66,4 @@ map). `deploy/banned-names.sh` enforces it in CI (the `lint` tier) and
 '60'`), runs `deploy/ci.sh` on it, and tears it down with `if: always()`. There
 is deliberately **no `concurrency:` block** in that workflow: GitHub keeps one
 pending run per group and evicts the rest, so runs queue before the VM spill can
-act (deckdumpster sp-r4zvel). `tests/ci/workflow_test.sh` fails if one appears.
+act. `tests/ci/workflow_test.sh` fails if one appears.

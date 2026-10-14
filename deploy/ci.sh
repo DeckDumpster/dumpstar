@@ -25,6 +25,7 @@
 #                     tests/container/base_images_test.sh,
 #                     tests/visual/approval_test.sh,
 #                     tests/litestream/image_pin_test.sh,
+#                     tests/litestream/seeded_fault_test.sh,
 #                     tests/alarming/journal_summary_test.sh,
 #                     tests/alarming/alert_suppress_test.sh,
 #                     tests/ci/treewatch_test.sh and
@@ -779,6 +780,13 @@ if tier lint; then
     # depends on beside the version. See tests/litestream/image_pin_test.sh.
     step "Litestream image pin + log level (tests/litestream/image_pin_test.sh)"
     bash "$REPO_DIR/tests/litestream/image_pin_test.sh"
+
+    # The S4 acceptance claims (non-first restore addressing, a re-created handle
+    # with its control arm, a replica that stops advancing) run against the shipped
+    # tree and against copies with one fault seeded in each; every fault must be
+    # caught. Hermetic. See tests/litestream/seeded_fault_test.sh.
+    step "Backup claims are seen to fail (tests/litestream/seeded_fault_test.sh)"
+    bash "$REPO_DIR/tests/litestream/seeded_fault_test.sh"
 
     # Same tier, same shape of ratchet, one layer over from the pins: a gate
     # that builds an image at a per-checkout tag and never removes it. The tag

@@ -27,7 +27,7 @@
 # enumerate the whole matrix.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-SRC="$HERE/../../deploy/backup-check.sh"
+SRC="${BACKUP_CHECK_SRC:-$HERE/../../deploy/backup-check.sh}"
 [ -f "$SRC" ] || { echo "missing $SRC" >&2; exit 1; }
 
 for fn in judge_correspondence judge_no_position txid_lt txid_zero; do

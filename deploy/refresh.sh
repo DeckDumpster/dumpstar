@@ -157,7 +157,7 @@ fi
 if [ -z "${DUMPSTAR_LAKE_DIR:-}" ] &&
     { [ -z "${DUMPSTAR_LAKE_S3_BUCKET:-}" ] || [ -z "${DUMPSTAR_LAKE_S3_REGION:-}" ]; }; then
     echo "refresh: ${LAKE_ENV} does not set DUMPSTAR_LAKE_S3_BUCKET and DUMPSTAR_LAKE_S3_REGION." >&2
-    echo "  Those exact names are what crates/dumpstar-lake/src/config.rs reads. An earlier draft" >&2
+    echo "  Those exact names are what dumpster-kit-lake/src/config.rs reads. An earlier draft" >&2
     echo "  of that file used DUMPSTAR_LAKE_BUCKET / DUMPSTAR_LAKE_REGION, which nothing reads —" >&2
     echo "  'the lake is configured' and 'configured with the names the code reads' are not the" >&2
     echo "  same statement (pd-ub8n). See deploy/LAKE.md §3." >&2

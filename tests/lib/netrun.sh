@@ -77,6 +77,11 @@ _NETRUN_REPO_DIR="$(cd "${_NETRUN_LIB_DIR}/../.." && pwd)"
 # gates running.
 NETRUN_TIMEOUT=${NETRUN_TIMEOUT:-45}
 NETRUN_INTERVAL=${NETRUN_INTERVAL:-3}
+# An optional second bound on the same retry, in attempts rather than seconds.
+# Unset in production, where the clock is the budget. A test sets it (with
+# NETRUN_TIMEOUT large) so how many attempts happen is a fact of the script and
+# not of how fast the runner is.
+NETRUN_MAX_ATTEMPTS=${NETRUN_MAX_ATTEMPTS:-}
 
 # The signature of a container that never reached its peer. Deliberately narrow
 # — every alternative spelling here is a resolver saying it could not get an
@@ -89,6 +94,7 @@ NETRUN_UNRESOLVED_RE=${NETRUN_UNRESOLVED_RE:-'Temporary failure in name resoluti
 NETRUN_OUT=""
 NETRUN_STATUS=0
 NETRUN_TRIES=0
+NETRUN_GAVE_UP=0
 
 _netrun_unresolved() {
 	if grep -qE "$NETRUN_UNRESOLVED_RE" "$_NETRUN_ERR"; then return 0; fi
@@ -103,7 +109,13 @@ _netrun_attempt() {
 	NETRUN_OUT="$("${_NETRUN_CMD[@]}" 2>"$_NETRUN_ERR")" || NETRUN_STATUS=$?
 	NETRUN_TRIES=$((NETRUN_TRIES + 1))
 	if [[ "$NETRUN_STATUS" -eq 0 ]]; then return 0; fi
-	if _netrun_unresolved; then return 1; fi
+	if _netrun_unresolved; then
+		if [[ -n "$NETRUN_MAX_ATTEMPTS" && "$NETRUN_TRIES" -ge "$NETRUN_MAX_ATTEMPTS" ]]; then
+			NETRUN_GAVE_UP=1
+			return 0
+		fi
+		return 1
+	fi
 	return 0
 }
 
@@ -121,9 +133,11 @@ netrun() {
 	NETRUN_OUT=""
 	NETRUN_STATUS=0
 	NETRUN_TRIES=0
+	NETRUN_GAVE_UP=0
 
 	local resolved=0
-	if wait_until "$NETRUN_TIMEOUT" "$NETRUN_INTERVAL" _netrun_attempt; then
+	if wait_until "$NETRUN_TIMEOUT" "$NETRUN_INTERVAL" _netrun_attempt &&
+		[[ "$NETRUN_GAVE_UP" -eq 0 ]]; then
 		resolved=1
 	fi
 
@@ -134,7 +148,7 @@ netrun() {
 			if [[ "$resolved" -eq 1 ]]; then
 				echo "   outcome  : answered on attempt ${NETRUN_TRIES} (status ${NETRUN_STATUS})."
 			else
-				echo "   outcome  : still unresolved after ${NETRUN_TRIES} attempt(s) in ${NETRUN_TIMEOUT}s."
+				echo "   outcome  : still unresolved after ${NETRUN_TRIES} attempt(s) (budget ${NETRUN_TIMEOUT}s, max attempts ${NETRUN_MAX_ATTEMPTS:-unset})."
 				echo "              Failing with the command's own status (${NETRUN_STATUS}) and output,"
 				echo "              which follow. This is a network that is really broken, not the"
 				echo "              aardvark-dns reload window this retry exists for."

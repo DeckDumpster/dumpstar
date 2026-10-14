@@ -3,4 +3,4 @@
 /**
  * Editable wish fields. A `None` field is left unchanged.
  */
-export type WishEdit = { max_price: number | null, priority: number | null, notes: string | null, };
+export type WishEdit = { max_price: number | null, priority: number | null, notes: string | null, min_condition: string | null, quantity: number | null, };

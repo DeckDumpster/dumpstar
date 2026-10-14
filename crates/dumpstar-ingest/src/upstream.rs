@@ -28,7 +28,7 @@ pub const ENV_TCGCSV_BASE_URL: &str = "DUMPSTAR_TCGCSV_BASE_URL";
 /// `default`, unless `env` names somewhere else to look.
 ///
 /// A set-but-empty variable is not an origin, and taking it as one would build
-/// every request against `/79/groups` with no host. It is treated as unset.
+/// every request against `/tcgplayer/79/groups` with no host. It is treated as unset.
 pub fn base_url(env: &str, default: &str) -> String {
     match std::env::var(env) {
         Ok(v) if !v.trim().is_empty() => {

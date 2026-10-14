@@ -88,6 +88,17 @@ CREATE TABLE IF NOT EXISTS decks (
     updated_at        TEXT NOT NULL
 );
 
+-- A deck's card list: game cards (shared.printings.card_id, an app-layer FK),
+-- never printings, and never physical copies — owned/missing is computed
+-- against the collection, nothing is reserved.
+CREATE TABLE IF NOT EXISTS deck_cards (
+    deck_id   INTEGER NOT NULL REFERENCES decks(id) ON DELETE CASCADE,
+    card_id   TEXT NOT NULL,
+    zone      TEXT NOT NULL DEFAULT 'main' CHECK (zone IN ('main', 'sideboard')),
+    qty       INTEGER NOT NULL CHECK (qty > 0),
+    PRIMARY KEY (deck_id, card_id, zone)
+);
+
 -- ---------------------------------------------------------------------
 -- Orders and batches
 -- ---------------------------------------------------------------------
@@ -498,7 +509,10 @@ CREATE TABLE IF NOT EXISTS wishlist (
     notes         TEXT,
     added_at      TEXT NOT NULL,
     source        TEXT NOT NULL DEFAULT 'manual',
-    fulfilled_at  TEXT
+    fulfilled_at  TEXT,
+    min_condition TEXT,                        -- NULL = any condition; else a conditions.name
+    quantity      INTEGER NOT NULL DEFAULT 1 CHECK (quantity >= 1),
+    quantity_have INTEGER NOT NULL DEFAULT 0   -- matching copies added since the want was made
 );
 CREATE INDEX IF NOT EXISTS idx_wishlist_card ON wishlist(card_id);
 

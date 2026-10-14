@@ -223,7 +223,7 @@ fn an_exhausted_budget_records_one_failure_not_one_per_attempt() {
     assert_eq!(upstream.requests().len(), 3);
     assert_eq!(m.failures.len(), 1, "{:?}", m.failures);
     assert_eq!(m.failures[0].status, Some(503));
-    assert!(m.failures[0].url.ends_with("/79/groups"));
+    assert!(m.failures[0].url.ends_with("/tcgplayer/79/groups"));
     assert!(!m.complete);
     assert!(m.parts.is_empty());
 }

@@ -1184,6 +1184,7 @@ name = "dumpstar-catalog"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "dumpstar-core",
  "flate2",
  "hex",
  "reqwest",
@@ -1282,6 +1283,7 @@ dependencies = [
  "dumpstar-db",
  "dumpstar-ingest",
  "dumpstar-lake",
+ "dumpster-kit-tcgcsv",
  "flate2",
  "image",
  "reqwest",
@@ -1392,6 +1394,16 @@ dependencies = [
  "tempfile",
  "thiserror",
  "zeroize",
+]
+
+[[package]]
+name = "dumpster-kit-tcgcsv"
+version = "0.1.0"
+source = "git+https://github.com/DeckDumpster/dumpster-kit?rev=5987630bd14623f215f12b40cf399072f3fca7c7#5987630bd14623f215f12b40cf399072f3fca7c7"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

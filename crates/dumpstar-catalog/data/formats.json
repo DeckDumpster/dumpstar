@@ -1,0 +1,54 @@
+[
+  {
+    "format_id": "premier",
+    "name": "Premier",
+    "rules": {
+      "leaders": "1",
+      "bases": "1",
+      "min_deck_size": "50",
+      "max_copies": "3",
+      "sideboard_max": "10",
+      "leader_aspect_exclusion": "",
+      "source": "Comprehensive Rules v8.0 section 9.2 Premier & Eternal Formats, Deckbuilding"
+    }
+  },
+  {
+    "format_id": "eternal",
+    "name": "Eternal",
+    "rules": {
+      "leaders": "1",
+      "bases": "1",
+      "min_deck_size": "50",
+      "max_copies": "3",
+      "sideboard_max": "10",
+      "leader_aspect_exclusion": "",
+      "source": "Comprehensive Rules v8.0 section 9.2 Premier & Eternal Formats, Deckbuilding"
+    }
+  },
+  {
+    "format_id": "twin_suns",
+    "name": "Twin Suns",
+    "rules": {
+      "leaders": "2",
+      "bases": "1",
+      "min_deck_size": "80",
+      "max_copies": "1",
+      "sideboard_max": "0",
+      "leader_aspect_exclusion": "Heroism,Villainy",
+      "source": "Comprehensive Rules v8.0 section 12 Twin Suns, Deckbuilding"
+    }
+  },
+  {
+    "format_id": "limited",
+    "name": "Limited (Sealed and Draft)",
+    "rules": {
+      "leaders": "1",
+      "bases": "1",
+      "min_deck_size": "30",
+      "max_copies": "none",
+      "sideboard_max": "none",
+      "leader_aspect_exclusion": "",
+      "source": "Comprehensive Rules v8.0 section 10 Limited Formats, Deckbuilding"
+    }
+  }
+]

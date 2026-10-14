@@ -23,6 +23,9 @@ pub enum IngestError {
     #[error("lake: {0}")]
     Lake(#[from] dumpstar_lake::LakeError),
 
+    #[error("tcgcsv: {0}")]
+    Tcgcsv(#[from] dumpster_kit_tcgcsv::Error),
+
     #[error("unexpected upstream data: {0}")]
     BadResponse(String),
 }

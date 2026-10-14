@@ -7,6 +7,7 @@ use crate::error::{DbError, Result};
 
 const COLS: &str = "w.id, w.card_id, w.printing_id, w.max_price, w.priority, \
      w.notes, w.added_at, w.source, w.fulfilled_at, \
+     w.min_condition, w.quantity, w.quantity_have, \
      cd.set_code, s.name AS set_name, cd.number, cd.name, cd.rarity, cd.image_small";
 
 /// A wishlist entry joined to its card.
@@ -25,6 +26,13 @@ pub struct WishlistEntry {
     pub added_at: String,
     pub source: String,
     pub fulfilled_at: Option<String>,
+    /// Worst acceptable condition, or null for any.
+    pub min_condition: Option<String>,
+    #[ts(type = "number")]
+    pub quantity: i64,
+    /// Matching copies added so far; the want is fulfilled at `quantity`.
+    #[ts(type = "number")]
+    pub quantity_have: i64,
     pub set_code: String,
     pub set_name: String,
     pub number: String,
@@ -43,6 +51,9 @@ pub struct NewWish {
     #[ts(type = "number | null")]
     pub priority: Option<i64>,
     pub notes: Option<String>,
+    pub min_condition: Option<String>,
+    #[ts(type = "number | null")]
+    pub quantity: Option<i64>,
 }
 
 /// Editable wish fields. A `None` field is left unchanged.
@@ -53,6 +64,9 @@ pub struct WishEdit {
     #[ts(type = "number | null")]
     pub priority: Option<i64>,
     pub notes: Option<String>,
+    pub min_condition: Option<String>,
+    #[ts(type = "number | null")]
+    pub quantity: Option<i64>,
 }
 
 fn from_row(r: &rusqlite::Row) -> rusqlite::Result<WishlistEntry> {
@@ -66,12 +80,15 @@ fn from_row(r: &rusqlite::Row) -> rusqlite::Result<WishlistEntry> {
         added_at: r.get(6)?,
         source: r.get(7)?,
         fulfilled_at: r.get(8)?,
-        set_code: r.get(9)?,
-        set_name: r.get(10)?,
-        number: r.get(11)?,
-        name: r.get(12)?,
-        rarity: r.get(13)?,
-        image_small: r.get(14)?,
+        min_condition: r.get(9)?,
+        quantity: r.get(10)?,
+        quantity_have: r.get(11)?,
+        set_code: r.get(12)?,
+        set_name: r.get(13)?,
+        number: r.get(14)?,
+        name: r.get(15)?,
+        rarity: r.get(16)?,
+        image_small: r.get(17)?,
     })
 }
 
@@ -83,10 +100,23 @@ pub fn add(conn: &Connection, new: &NewWish) -> Result<i64> {
             new.card_id
         )));
     }
+    if let Some(pid) = &new.printing_id {
+        let owner = printing_card(conn, pid)?;
+        if owner.as_deref() != Some(new.card_id.as_str()) {
+            return Err(DbError::NotFound(format!(
+                "printing '{pid}' is not a printing of card '{}'",
+                new.card_id
+            )));
+        }
+    }
+    check_condition(conn, new.min_condition.as_deref())?;
+    let quantity = new.quantity.unwrap_or(1);
+    check_quantity(quantity)?;
     conn.execute(
         "INSERT INTO wishlist \
-           (card_id, printing_id, max_price, priority, notes, added_at, source) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'manual')",
+           (card_id, printing_id, max_price, priority, notes, added_at, source, \
+            min_condition, quantity) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'manual', ?7, ?8)",
         params![
             new.card_id,
             new.printing_id,
@@ -94,6 +124,8 @@ pub fn add(conn: &Connection, new: &NewWish) -> Result<i64> {
             new.priority.unwrap_or(0),
             new.notes,
             crate::clock::now_rfc3339(),
+            new.min_condition,
+            quantity,
         ],
     )?;
     Ok(conn.last_insert_rowid())
@@ -119,13 +151,26 @@ pub fn list(conn: &Connection, include_fulfilled: bool) -> Result<Vec<WishlistEn
 
 /// Update a wish's editable fields. Returns whether a row changed.
 pub fn update(conn: &Connection, id: i64, edit: &WishEdit) -> Result<bool> {
+    check_condition(conn, edit.min_condition.as_deref())?;
+    if let Some(q) = edit.quantity {
+        check_quantity(q)?;
+    }
     let n = conn.execute(
         "UPDATE wishlist SET \
-           max_price = COALESCE(?2, max_price), \
-           priority  = COALESCE(?3, priority), \
-           notes     = COALESCE(?4, notes) \
+           max_price     = COALESCE(?2, max_price), \
+           priority      = COALESCE(?3, priority), \
+           notes         = COALESCE(?4, notes), \
+           min_condition = COALESCE(?5, min_condition), \
+           quantity      = COALESCE(?6, quantity) \
          WHERE id = ?1",
-        params![id, edit.max_price, edit.priority, edit.notes],
+        params![
+            id,
+            edit.max_price,
+            edit.priority,
+            edit.notes,
+            edit.min_condition,
+            edit.quantity
+        ],
     )?;
     Ok(n > 0)
 }
@@ -143,6 +188,88 @@ pub fn set_fulfilled(conn: &Connection, id: i64, fulfilled: bool) -> Result<bool
 /// Delete a wish.
 pub fn delete(conn: &Connection, id: i64) -> Result<bool> {
     Ok(conn.execute("DELETE FROM wishlist WHERE id = ?1", [id])? > 0)
+}
+
+fn check_quantity(q: i64) -> Result<()> {
+    if q < 1 {
+        return Err(DbError::Invalid(
+            "a want's quantity must be at least 1".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn check_condition(conn: &Connection, name: Option<&str>) -> Result<()> {
+    let Some(name) = name else { return Ok(()) };
+    if !conn
+        .prepare("SELECT 1 FROM conditions WHERE name = ?1")?
+        .exists([name])?
+    {
+        return Err(DbError::Invalid(format!("unknown condition '{name}'")));
+    }
+    Ok(())
+}
+
+/// The card a printing belongs to, from the catalog or `user_printings`.
+fn printing_card(conn: &Connection, printing_id: &str) -> Result<Option<String>> {
+    Ok(conn
+        .query_row(
+            "SELECT card_id FROM printings WHERE printing_id = ?1 \
+             UNION ALL \
+             SELECT card_id FROM user_printings WHERE printing_id = ?1",
+            [printing_id],
+            |r| r.get(0),
+        )
+        .map(Some)
+        .or_else(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => Ok(None),
+            e => Err(e),
+        })?)
+}
+
+/// Credit a newly added copy to the active want it satisfies, if any.
+///
+/// A want matches when it names the copy's card and either no printing or
+/// exactly this printing, the copy's condition is at least the want's
+/// `min_condition`, and the copy's purchase price (when recorded) is within
+/// `max_price`. A copy counts toward one want only — the highest-priority,
+/// oldest — and a want reaching its `quantity` is marked fulfilled.
+/// Returns the id of the want credited.
+pub fn credit_copy(
+    conn: &Connection,
+    printing_id: &str,
+    condition: &str,
+    purchase_price: Option<f64>,
+) -> Result<Option<i64>> {
+    let Some(card_id) = printing_card(conn, printing_id)? else {
+        return Ok(None);
+    };
+    let id: Option<i64> = conn
+        .query_row(
+            "SELECT w.id FROM wishlist w \
+               LEFT JOIN conditions wc ON wc.name = w.min_condition \
+               LEFT JOIN conditions cc ON cc.name = ?3 \
+              WHERE w.fulfilled_at IS NULL AND w.card_id = ?1 \
+                AND (w.printing_id IS NULL OR w.printing_id = ?2) \
+                AND (w.min_condition IS NULL OR (cc.rank IS NOT NULL AND cc.rank <= wc.rank)) \
+                AND (w.max_price IS NULL OR ?4 IS NULL OR ?4 <= w.max_price) \
+              ORDER BY w.priority DESC, w.id ASC LIMIT 1",
+            params![card_id, printing_id, condition, purchase_price],
+            |r| r.get(0),
+        )
+        .map(Some)
+        .or_else(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => Ok(None),
+            e => Err(e),
+        })?;
+    let Some(id) = id else { return Ok(None) };
+    conn.execute(
+        "UPDATE wishlist SET quantity_have = quantity_have + 1, \
+           fulfilled_at = CASE WHEN quantity_have + 1 >= quantity THEN ?2 ELSE NULL END \
+         WHERE id = ?1",
+        params![id, crate::clock::now_rfc3339()],
+    )?;
+    Ok(Some(id))
 }
 
 /// Whether the card already has an (active) wish — used to avoid duplicates.
@@ -206,6 +333,147 @@ mod tests {
 
         assert!(delete(&conn, id).unwrap());
         assert_eq!(list(&conn, true).unwrap().len(), 0);
+    }
+
+    fn with_printings() -> (tempfile::TempDir, Connection) {
+        let (d, conn) = conn();
+        let shared = d.path().join("shared.sqlite");
+        let c = open_shared(&shared).unwrap();
+        for v in ["normal", "foil"] {
+            c.execute(
+                "INSERT INTO printings (printing_id, card_id, variant) \
+                 VALUES (?1, 'sv3pt5-6', ?2)",
+                params![format!("sv3pt5-6-{v}"), v],
+            )
+            .unwrap();
+        }
+        c.execute(
+            "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
+             VALUES ('sv3pt5-7', 'sv3pt5', '7', 7, 'Other')",
+            [],
+        )
+        .unwrap();
+        c.execute(
+            "INSERT INTO printings (printing_id, card_id, variant) \
+             VALUES ('sv3pt5-7-normal', 'sv3pt5-7', 'normal')",
+            [],
+        )
+        .unwrap();
+        drop(c);
+        (d, conn)
+    }
+
+    fn want(conn: &Connection, printing: Option<&str>) -> i64 {
+        add(
+            conn,
+            &NewWish {
+                card_id: "sv3pt5-6".into(),
+                printing_id: printing.map(String::from),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+    }
+
+    fn active(conn: &Connection) -> usize {
+        list(conn, false).unwrap().len()
+    }
+
+    #[test]
+    fn any_printing_want_is_fulfilled_by_any_matching_copy() {
+        let (_d, mut conn) = with_printings();
+        want(&conn, None);
+        crate::collection::add(
+            &mut conn,
+            &crate::collection::NewCopy {
+                printing_id: "sv3pt5-6-foil".into(),
+                source: "manual_id".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(active(&conn), 0);
+    }
+
+    #[test]
+    fn specific_printing_want_is_not_fulfilled_by_a_different_printing() {
+        let (_d, mut conn) = with_printings();
+        want(&conn, Some("sv3pt5-6-foil"));
+        let copy = |p: &str| crate::collection::NewCopy {
+            printing_id: p.into(),
+            source: "manual_id".into(),
+            ..Default::default()
+        };
+        crate::collection::add(&mut conn, &copy("sv3pt5-6-normal")).unwrap();
+        crate::collection::add(&mut conn, &copy("sv3pt5-7-normal")).unwrap();
+        assert_eq!(active(&conn), 1);
+        crate::collection::add(&mut conn, &copy("sv3pt5-6-foil")).unwrap();
+        assert_eq!(active(&conn), 0);
+    }
+
+    #[test]
+    fn condition_price_and_quantity_gate_fulfilment() {
+        let (_d, mut conn) = with_printings();
+        let id = add(
+            &conn,
+            &NewWish {
+                card_id: "sv3pt5-6".into(),
+                min_condition: Some("Lightly Played".into()),
+                max_price: Some(10.0),
+                quantity: Some(2),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let copy = |cond: &str, price: f64| crate::collection::NewCopy {
+            printing_id: "sv3pt5-6-normal".into(),
+            condition: Some(cond.into()),
+            purchase_price: Some(price),
+            source: "manual_id".into(),
+            ..Default::default()
+        };
+        // Too worn, too dear: neither counts.
+        crate::collection::add(&mut conn, &copy("Heavily Played", 5.0)).unwrap();
+        crate::collection::add(&mut conn, &copy("Near Mint", 50.0)).unwrap();
+        assert_eq!(list(&conn, false).unwrap()[0].quantity_have, 0);
+        // Two good ones: the first leaves it open, the second fulfils it.
+        crate::collection::add(&mut conn, &copy("Near Mint", 5.0)).unwrap();
+        assert_eq!(active(&conn), 1);
+        crate::collection::add(&mut conn, &copy("Lightly Played", 10.0)).unwrap();
+        assert_eq!(active(&conn), 0);
+        let all = list(&conn, true).unwrap();
+        assert_eq!((all[0].id, all[0].quantity_have), (id, 2));
+    }
+
+    #[test]
+    fn add_rejects_foreign_printing_bad_condition_and_zero_quantity() {
+        let (_d, conn) = with_printings();
+        let bad = |w: NewWish| add(&conn, &w).unwrap_err();
+        let base = || NewWish {
+            card_id: "sv3pt5-6".into(),
+            ..Default::default()
+        };
+        assert!(matches!(
+            bad(NewWish {
+                printing_id: Some("sv3pt5-7-normal".into()),
+                ..base()
+            }),
+            DbError::NotFound(_)
+        ));
+        assert!(matches!(
+            bad(NewWish {
+                min_condition: Some("Mint-ish".into()),
+                ..base()
+            }),
+            DbError::Invalid(_)
+        ));
+        assert!(matches!(
+            bad(NewWish {
+                quantity: Some(0),
+                ..base()
+            }),
+            DbError::Invalid(_)
+        ));
     }
 
     #[test]

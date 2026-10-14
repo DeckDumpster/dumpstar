@@ -1,5 +1,5 @@
 //! Repository for the sealed-product collection (PLAN.md §8): the user's
-//! booster boxes, ETBs, bundles, and tins, plus catalog search to add them.
+//! booster boxes, booster packs, starter decks, and prerelease boxes, plus catalog search to add them.
 
 use rusqlite::{Connection, OptionalExtension, params};
 

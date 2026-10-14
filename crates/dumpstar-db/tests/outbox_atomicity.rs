@@ -10,8 +10,11 @@
 //! it: an event lost in a crash is a holding the lakehouse never learns
 //! about, and nothing downstream can tell that it is missing.
 //!
-//! So: a child process writes batches of mutations in a loop, the parent
-//! SIGKILLs it at a delay that lands inside one of them, and the parent then
+//! So: a child process commits a chosen number of batches, then opens one more
+//! and stalls inside it, after writing the first source and before the next.
+//! It announces the stall by publishing a file; the parent SIGKILLs it on that
+//! signal, so every kill lands mid-transaction whatever the runner's speed (a
+//! kill on a timer lands before the first write on a loaded box). The parent then
 //! replays the outbox from seq 1 and compares the result to the holdings
 //! tables row for row. Every row. Every iteration.
 //!
@@ -34,13 +37,19 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use rusqlite::Connection;
 use serde_json::{Map, Value};
 
 /// Set on the child; holds the collection database it should write to.
 const DB_ENV: &str = "DUMPSTAR_OUTBOX_CRASH_DB";
+
+/// Set on the child; the file it publishes once it is stalled mid-transaction.
+const STALLED_ENV: &str = "DUMPSTAR_OUTBOX_CRASH_STALLED";
+
+/// Set on the child; how many batches it commits before the one it stalls in.
+const COMMIT_FIRST_ENV: &str = "DUMPSTAR_OUTBOX_CRASH_COMMIT_FIRST";
 
 /// How many kills to run. Each is an independent database.
 const ITERATIONS: usize = 16;
@@ -85,6 +94,7 @@ fn a_killed_writer_never_leaves_the_holdings_and_the_outbox_disagreeing() {
         let dir = tempfile::tempdir().unwrap();
         let db = dir.path().join("collection.sqlite");
         let marker = dir.path().join("in-flight");
+        let stalled = dir.path().join("stalled");
         // Create the database (and its triggers) before the child starts, so
         // the child's first act is a mutation rather than a schema apply.
         drop(dumpstar_db::open_user(&db).unwrap());
@@ -99,12 +109,28 @@ fn a_killed_writer_never_leaves_the_holdings_and_the_outbox_disagreeing() {
             ])
             .env(DB_ENV, &db)
             .env("DUMPSTAR_OUTBOX_CRASH_MARKER", &marker)
+            .env(STALLED_ENV, &stalled)
+            // Batches committed before the one that stalls: varies which op
+            // (acquire, sell, delete) the kill lands inside.
+            .env(COMMIT_FIRST_ENV, (iteration % 8).to_string())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
             .expect("spawn the child writer");
 
-        std::thread::sleep(Duration::from_millis(kill_delay_ms(iteration)));
+        // Wait for the child to say it is inside the transaction. The deadline
+        // is a hang guard, not a timing: the kill happens on the signal.
+        let deadline = Instant::now() + Duration::from_secs(300);
+        while !stalled.exists() {
+            if let Some(status) = child.try_wait().unwrap() {
+                panic!("iteration {iteration}: the child exited ({status}) before stalling");
+            }
+            assert!(
+                Instant::now() < deadline,
+                "iteration {iteration}: the child never reached its stall point"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
         // SIGKILL. Uncatchable — the child gets no chance to finish a
         // transaction, close a connection or flush anything.
         child.kill().expect("kill the child writer");
@@ -157,11 +183,11 @@ fn a_killed_writer_never_leaves_the_holdings_and_the_outbox_disagreeing() {
         "only {with_rows}/{ITERATIONS} kills left any rows behind — the child \
          is being killed before it writes, so nothing was proven"
     );
-    assert!(
-        torn > 0,
-        "no kill landed inside a transaction ({ITERATIONS} tried) — the \
-         invariant held, but only over completed batches, which proves \
-         nothing about atomicity. Widen `kill_delay_ms` or raise BATCH."
+    assert_eq!(
+        torn, ITERATIONS,
+        "every kill is delivered while the child is stalled inside a \
+         transaction, so every one must leave the on-disk state short of the \
+         batch's target"
     );
     // The claim is about the holdings, both halves of them. A run that only
     // ever wrote singles proves nothing about the sealed triggers, and would
@@ -177,18 +203,6 @@ fn a_killed_writer_never_leaves_the_holdings_and_the_outbox_disagreeing() {
         "{torn}/{ITERATIONS} kills landed inside a transaction; \
          surviving rows per source: {sources_seen:?}"
     );
-}
-
-/// A spread of kill delays, deterministic so a failure reproduces. Short
-/// enough to stay inside the child's run, long enough that some land after a
-/// batch has started.
-fn kill_delay_ms(iteration: usize) -> u64 {
-    // A small LCG over the iteration index — varied, and the same varied
-    // sequence every run.
-    let x = (iteration as u64)
-        .wrapping_mul(6364136223846793005)
-        .wrapping_add(1442695040888963407);
-    25 + (x >> 33) % 200
 }
 
 /// The lowest holding the two disagree about, described — or `None` if they
@@ -421,6 +435,8 @@ fn the_child_that_gets_killed() {
         return;
     };
     let marker = PathBuf::from(std::env::var("DUMPSTAR_OUTBOX_CRASH_MARKER").unwrap());
+    let stalled = PathBuf::from(std::env::var(STALLED_ENV).unwrap());
+    let mut commit_first: usize = std::env::var(COMMIT_FIRST_ENV).unwrap().parse().unwrap();
     let mut conn = dumpstar_db::open_user(Path::new(&db)).unwrap();
 
     loop {
@@ -475,7 +491,17 @@ fn the_child_that_gets_killed() {
         std::fs::rename(&staged, &marker).unwrap();
 
         let tx = conn.transaction().unwrap();
-        for table in sources() {
+        for (index, table) in sources().into_iter().enumerate() {
+            if index == 1 && commit_first == 0 {
+                // First source written, uncommitted; the second not begun.
+                // Tell the parent and wait to be killed.
+                let staged = stalled.with_extension("staging");
+                std::fs::write(&staged, "").unwrap();
+                std::fs::rename(&staged, &stalled).unwrap();
+                loop {
+                    std::thread::sleep(Duration::from_secs(3600));
+                }
+            }
             match op {
                 Op::Delete => {
                     tx.execute(
@@ -528,6 +554,7 @@ fn the_child_that_gets_killed() {
             }
         }
         tx.commit().unwrap();
+        commit_first -= 1;
 
         // Only once the batch is durable does the in-flight marker go. A
         // marker the parent finds after the kill means a batch was in

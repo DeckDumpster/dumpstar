@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! ┌────────────┬───────────┬───────────────────────────────┐
-//! │ "PKDTZ1\n" │ nonce(12) │ AES-256-GCM(parquet) ‖ tag(16)│
+//! │ "DSTZ01\n" │ nonce(12) │ AES-256-GCM(parquet) ‖ tag(16)│
 //! └────────────┴───────────┴───────────────────────────────┘
 //! ```
 //!
@@ -55,7 +55,7 @@ use crate::error::{Result, ShipError};
 /// The envelope's magic and version. A byte on the front so an operator with
 /// `head -c 7` can tell what they are looking at, and so a format change is a
 /// refusal rather than a wrong answer.
-pub const MAGIC: &[u8; 7] = b"PKDTZ1\n";
+pub const MAGIC: &[u8; 7] = b"DSTZ01\n";
 
 /// Domain separator for the nonce derivation. Versioned with the envelope.
 const NONCE_DOMAIN: &[u8] = b"dumpstar/tenant-zone/nonce/v1";
@@ -184,7 +184,7 @@ mod tests {
     #[test]
     fn the_sealed_bytes_are_not_the_plaintext() {
         let (_d, _g, a, _b) = keys();
-        let plaintext = br#"{"printing_id":"sv3pt5-1-normal"}"#;
+        let plaintext = br#"{"printing_id":"sor-1-normal"}"#;
         let sealed = seal(&a, KEY_A, plaintext).unwrap();
         assert!(
             !sealed

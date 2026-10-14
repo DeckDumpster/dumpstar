@@ -219,25 +219,25 @@ mod tests {
             let c = open_shared(&shared).unwrap();
             c.execute(
                 "INSERT INTO sets (set_code, ptcgo_code, name, series, printed_total, set_sort_order) \
-                 VALUES ('sv3pt5', 'SOR', 'Spark of Rebellion', 'SOR', 165, 1)",
+                 VALUES ('sor', 'SOR', 'Spark of Rebellion', 'SOR', 165, 1)",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO cards (card_id, set_code, number, number_sortable, name, rarity) \
-                 VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Luke Skywalker', 'Legendary')",
+                 VALUES ('sor-6', 'sor', '6', 6, 'Luke Skywalker', 'Legendary')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES ('sv3pt5-6-holo', 'sv3pt5-6', 'holo')",
+                 VALUES ('sor-6-holo', 'sor-6', 'holo')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO sealed_products (product_id, set_code, name, category, fetched_at) \
-                 VALUES (7001, 'sv3pt5', 'Spark of Rebellion Two-Player Starter', 'two_player_starter', '2026-02-28')",
+                 VALUES (7001, 'sor', 'Spark of Rebellion Two-Player Starter', 'two_player_starter', '2026-02-28')",
                 [],
             )
             .unwrap();
@@ -252,7 +252,7 @@ mod tests {
         crate::collection::add(
             &mut conn,
             &NewCopy {
-                printing_id: "sv3pt5-6-holo".into(),
+                printing_id: "sor-6-holo".into(),
                 condition: Some("Near Mint".into()),
                 purchase_price: Some(4.5),
                 acquired_at: Some("2026-04-14T00:00:00Z".into()),
@@ -306,7 +306,7 @@ mod tests {
         let id = crate::collection::add(
             &mut conn,
             &NewCopy {
-                printing_id: "sv3pt5-6-holo".into(),
+                printing_id: "sor-6-holo".into(),
                 source: "test".into(),
                 ..Default::default()
             },

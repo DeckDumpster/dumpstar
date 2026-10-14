@@ -204,10 +204,10 @@ pub struct CollectionRow {
     pub variant: String,
     pub card_id: String,
     pub set_code: String,
-    /// Full human-readable set name (e.g. "Surging Sparks", "Base Set") —
+    /// Full human-readable set name (e.g. "Spark of Rebellion") —
     /// preferred over `set_code` for any column or breadcrumb label.
     pub set_name: String,
-    /// The collector-facing 3-letter set code (e.g. "MEW", "PFL"), if known.
+    /// The collector-facing 3-letter set code (e.g. "SOR", "SHD"), if known.
     pub set_ptcgo_code: Option<String>,
     pub set_symbol_url: Option<String>,
     pub number: String,
@@ -215,13 +215,13 @@ pub struct CollectionRow {
     pub rarity: Option<String>,
     /// Artist credit, surfaced so the /collection search can filter by it.
     pub artist: Option<String>,
-    /// `Pokémon` | `Trainer` | `Energy`.
+    /// The card type, e.g. `Leader`, `Unit`, `Event`.
     pub supertype: Option<String>,
-    /// JSON array, e.g. `["Supporter"]` or `["Basic","ex"]`.
+    /// JSON array, e.g. `["Rebel","Vehicle"]`.
     pub subtypes: Option<String>,
-    /// JSON array of the card's energy types, e.g. `["Fire"]`.
+    /// JSON array of the card's aspects, e.g. `["Vigilance"]`.
     pub types: Option<String>,
-    /// JSON array of attacks, each with a `cost` energy list — the table
+    /// JSON array of attacks, each with a `cost` list — the table
     /// renders one pip line per attack.
     pub attacks: Option<String>,
     /// Latest TCGplayer market price for this exact printing (NULL when
@@ -564,7 +564,7 @@ mod tests {
     use super::*;
     use crate::{connect_user, open_shared};
 
-    /// A user connection whose catalog holds one printing, `sv3pt5-1-normal`.
+    /// A user connection whose catalog holds one printing, `sor-1-normal`.
     fn user_conn() -> (tempfile::TempDir, Connection) {
         let dir = tempfile::tempdir().unwrap();
         let shared = dir.path().join("shared.sqlite");
@@ -572,19 +572,19 @@ mod tests {
             let c = open_shared(&shared).unwrap();
             c.execute(
                 "INSERT INTO sets (set_code, name, series) \
-                 VALUES ('sv3pt5', '151', 'Scarlet & Violet')",
+                 VALUES ('sor', 'Spark of Rebellion', 'Star Wars: Unlimited')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('sv3pt5-1', 'sv3pt5', '1', 1, 'Bulbasaur')",
+                 VALUES ('sor-1', 'sor', '1', 1, 'Luke Skywalker')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES ('sv3pt5-1-normal', 'sv3pt5-1', 'normal')",
+                 VALUES ('sor-1-normal', 'sor-1', 'normal')",
                 [],
             )
             .unwrap();
@@ -595,7 +595,7 @@ mod tests {
 
     fn a_copy() -> NewCopy {
         NewCopy {
-            printing_id: "sv3pt5-1-normal".into(),
+            printing_id: "sor-1-normal".into(),
             source: "manual_id".into(),
             ..Default::default()
         }
@@ -607,7 +607,7 @@ mod tests {
         let id = add(&mut conn, &a_copy()).unwrap();
 
         let entry = get(&conn, id).unwrap().unwrap();
-        assert_eq!(entry.printing_id, "sv3pt5-1-normal");
+        assert_eq!(entry.printing_id, "sor-1-normal");
         assert_eq!(entry.condition, "Near Mint"); // default
         assert_eq!(entry.status, "owned"); // default
 
@@ -628,7 +628,7 @@ mod tests {
         let err = add(
             &mut conn,
             &NewCopy {
-                printing_id: "sv3pt5-1-mysteryfoil".into(),
+                printing_id: "sor-1-mysteryfoil".into(),
                 source: "manual_id".into(),
                 ..Default::default()
             },
@@ -744,22 +744,22 @@ mod tests {
         {
             let c = open_shared(&shared).unwrap();
             c.execute(
-                "INSERT INTO sets (set_code, name, series) VALUES ('sv3pt5', '151', 'SV')",
+                "INSERT INTO sets (set_code, name, series) VALUES ('sor', 'Spark of Rebellion', 'SWU')",
                 [],
             )
             .unwrap();
             for n in ["1", "2"] {
                 c.execute(
                     "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                     VALUES (?1, 'sv3pt5', ?2, ?3, 'Card')",
-                    rusqlite::params![format!("sv3pt5-{n}"), n, n.parse::<i64>().unwrap()],
+                     VALUES (?1, 'sor', ?2, ?3, 'Card')",
+                    rusqlite::params![format!("sor-{n}"), n, n.parse::<i64>().unwrap()],
                 )
                 .unwrap();
             }
             for (pid, card, variant) in [
-                ("sv3pt5-1-normal", "sv3pt5-1", "normal"),
-                ("sv3pt5-1-reverse_holo", "sv3pt5-1", "reverse_holo"),
-                ("sv3pt5-2-normal", "sv3pt5-2", "normal"),
+                ("sor-1-normal", "sor-1", "normal"),
+                ("sor-1-holo", "sor-1", "holo"),
+                ("sor-2-normal", "sor-2", "normal"),
             ] {
                 c.execute(
                     "INSERT INTO printings (printing_id, card_id, variant) VALUES (?1, ?2, ?3)",
@@ -772,7 +772,7 @@ mod tests {
         let id = add(
             &mut conn,
             &NewCopy {
-                printing_id: "sv3pt5-1-normal".into(),
+                printing_id: "sor-1-normal".into(),
                 source: "manual_id".into(),
                 ..Default::default()
             },
@@ -780,14 +780,14 @@ mod tests {
         .unwrap();
 
         // Swapping to another variant of the same card succeeds.
-        change_printing(&conn, id, "sv3pt5-1-reverse_holo").unwrap();
+        change_printing(&conn, id, "sor-1-holo").unwrap();
         assert_eq!(
             get(&conn, id).unwrap().unwrap().printing_id,
-            "sv3pt5-1-reverse_holo"
+            "sor-1-holo"
         );
 
         // Swapping to a printing of a different card is rejected.
-        let err = change_printing(&conn, id, "sv3pt5-2-normal").unwrap_err();
+        let err = change_printing(&conn, id, "sor-2-normal").unwrap_err();
         assert!(matches!(err, DbError::Conflict(_)));
     }
 }

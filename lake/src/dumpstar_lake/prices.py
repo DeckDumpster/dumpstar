@@ -89,10 +89,7 @@ DEFAULT_TABLE = "catalog.prices"
 #: module docs.
 SEALED_TABLE = "catalog.sealed_prices"
 
-#: The landing-zone coordinates it reads. Japanese groups (TCGCSV category
-#: 85) land under the same ``source``/``dataset`` as English ones, so both are
-#: picked up without a special case — which is also true of the SQLite
-#: importer this table is checked against.
+#: The landing-zone coordinates it reads.
 SOURCE = "tcgcsv"
 DATASET = "prices"
 
@@ -100,13 +97,6 @@ DATASET = "prices"
 #: of the same source, so the classification and the prices are the same
 #: night's bytes.
 PRODUCTS_DATASET = "products"
-
-#: TCGplayer's category for Pokémon Japan. It is the one category whose single
-#: cards are NOT discriminated by an extended-data ``Number`` — ~2.4k vintage
-#: Japanese products carry none — so ``japan.rs::is_card`` reads ``CardType``
-#: instead, and this must too or 450 groups' worth of Japanese singles are
-#: classified as sealed product.
-CATEGORY_POKEMON_JAPAN = 85
 
 #: A TCGCSV price object with no ``subTypeName``. The same default the SQLite
 #: importer applies (``tcgcsv.rs::import_prices``); the two must agree or the
@@ -234,46 +224,19 @@ def parse_envelope(body: bytes, observed_date: dt.date, *, key: str = "<part>") 
     return price_rows(results_of(body, key), observed_date)
 
 
-def is_sealed(product: dict, category_id: int) -> bool:
+def is_sealed(product: dict) -> bool:
     """Whether a landed TCGCSV product is sealed product rather than a card.
 
-    The transliteration of the two Rust importers, and it needs the category
-    because they do not agree on the discriminator:
-
-    * category 3 (English) — ``tcgcsv.rs::is_single_card``: a card is a product
-      with an extended-data ``Number``.
-    * category 85 (Japan) — ``japan.rs::is_card``: a card is a product with an
-      extended-data ``CardType``. ~40% of Japanese vintage products carry no
-      number at all, so the English rule would file every one of them as
-      sealed product.
-
-    A product that is not a card is sealed, in both. That is the same
-    disjunction ``import_sealed_products`` makes, so the set this produces is
-    ``shared.sealed_products`` without needing to open it.
+    The transliteration of the Rust importer's rule (``is_single_card``): a
+    card is a product with an extended-data ``Number``, matched
+    case-insensitively. A product that is not a card is sealed. That is the
+    same disjunction ``import_sealed_products`` makes, so the set this
+    produces is ``shared.sealed_products`` without needing to open it.
     """
-    field = "CardType" if category_id == CATEGORY_POKEMON_JAPAN else "Number"
     return not any(
-        isinstance(e, dict) and str(e.get("name", "")).lower() == field.lower()
+        isinstance(e, dict) and str(e.get("name", "")).lower() == "number"
         for e in product.get("extendedData") or ()
     )
-
-
-def category_of(url: str, key: str) -> int:
-    """The TCGplayer category a landed products URL was fetched from.
-
-    ``{base}/{category}/{group}/products`` — ``tcgcsv.rs::TcgcsvClient::get``
-    builds every URL that way, for both categories, and the manifest records
-    it. Read rather than guessed, because guessing wrong misclassifies a whole
-    category; refused rather than defaulted, because the default would be the
-    English rule silently applied to Japanese cards.
-    """
-    parts = url.split("?")[0].rstrip("/").split("/")
-    if len(parts) < 3 or parts[-1] != PRODUCTS_DATASET:
-        raise BuildError(f"{key}: {url!r} is not a TCGCSV products URL")
-    try:
-        return int(parts[-3])
-    except ValueError as exc:
-        raise BuildError(f"{key}: no TCGplayer category in {url!r}") from exc
 
 
 def sealed_product_ids(
@@ -298,9 +261,8 @@ def sealed_product_ids(
     for run in runs:
         for part in run.parts:
             parts += 1
-            category = category_of(part.url, part.key)
             for product in results_of(zone.payload(part), part.key):
-                if is_sealed(product, category):
+                if is_sealed(product):
                     ids.add(int(product["productId"]))
     if not parts:
         raise BuildError(

@@ -13,7 +13,7 @@ That is the failure this job exists to detect, and it is detected by the
 
 The build refuses a day that holds no *complete* run, and ``complete`` is
 conservative across datasets (``deploy/LAKE.md`` §1): one landing invocation
-carries one ``run=``, so a pokemontcg.io tail that died marks the *prices*
+carries one ``run=``, so a tail fetch that died marks the *prices*
 manifest incomplete even though every price fetch succeeded. On a flaky night —
 the normal night — that refusal fires while the price bytes are perfectly fine.
 

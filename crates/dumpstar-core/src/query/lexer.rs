@@ -3,7 +3,6 @@
 //! A regex tokenizer was deliberately avoided to keep `dumpstar-core`
 //! dependency-light; the grammar's context-sensitive bits (keyword-vs-word,
 //! `-`-as-negation-vs-hyphen-in-name) are handled directly by the scanner.
-//! See architecture/SEARCH_QUERY_LANGUAGE.md §2–3.
 
 use crate::query::ast::Op;
 use crate::query::error::QueryError;
@@ -83,7 +82,7 @@ pub(crate) fn tokenize(s: &str) -> Result<Vec<Token>, QueryError> {
             }
             '-' => {
                 // `-` negates only when it leads a keyword, word, or group;
-                // a `-` inside a bare word (ho-oh) is never seen here because
+                // a `-` inside a bare word (k-2so) is never seen here because
                 // bare words are read as a single run.
                 let next = char_at(s, i + 1);
                 if matches!(next, Some(ch) if ch.is_alphabetic() || ch == '(' || ch == '"') {

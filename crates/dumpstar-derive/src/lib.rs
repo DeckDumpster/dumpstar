@@ -37,9 +37,8 @@
 //!
 //! ## Where the catalog is
 //!
-//! The Pokemon catalog phases this crate was copied with are gone. The Star
-//! Wars: Unlimited catalog arrives with the catalog seam (design row S6); until
-//! then [`derive`] reconciles what the schema already seeds and refreshes the
+//! The Star Wars: Unlimited catalog arrives with the catalog seam (design
+//! row S6); until then [`derive`] reconciles what the schema already seeds and refreshes the
 //! materialised prices, and [`land`] fetches the TCGCSV Star Wars: Unlimited
 //! category into `raw/`.
 
@@ -134,9 +133,8 @@ pub fn derive(conn: &mut Connection, options: &Options<'_>) -> anyhow::Result<Re
     );
 
     // The derivation touches the SHARED catalog and nothing else — no tenant
-    // database is opened, let alone written. tests/refresh/tenant_bytes.sh is
-    // the gate: a refresh over a data directory with real tenant databases in
-    // it must leave every one of them byte-identical.
+    // database is opened, let alone written: a refresh over a data directory
+    // with real tenant databases in it must leave every one of them byte-identical.
     //
     // The WAL this run produced is given back by the CALLER, once its own last
     // write has landed — `dumpstar_db::reclaim_catalog_wal`. Not here:

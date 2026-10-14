@@ -47,7 +47,7 @@ pub enum Ast {
     Or(Vec<Ast>),
     /// `-` negation of a single atom.
     Not(Box<Ast>),
-    /// A `keyword<op>value` triple (`t:fire`, `hp>=200`).
+    /// A `keyword<op>value` triple (`t:vigilance`, `hp>=7`).
     Comparison {
         keyword: String,
         op: Op,
@@ -55,6 +55,6 @@ pub enum Ast {
     },
     /// Bare word(s) — an implicit card-name search.
     NameSearch(String),
-    /// `!"Charizard ex"` — exact-name match.
+    /// `!"Luke Skywalker"` — exact-name match.
     ExactName(String),
 }

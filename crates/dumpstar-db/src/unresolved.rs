@@ -372,25 +372,25 @@ mod tests {
             let c = open_shared(&shared).unwrap();
             c.execute(
                 "INSERT INTO sets (set_code, ptcgo_code, name, series) \
-                 VALUES ('sv3pt5', 'SOR', 'Spark of Rebellion', 'SOR')",
+                 VALUES ('sor', 'SOR', 'Spark of Rebellion', 'SOR')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Luke Skywalker')",
+                 VALUES ('sor-6', 'sor', '6', 6, 'Luke Skywalker')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES ('sv3pt5-6-normal', 'sv3pt5-6', 'normal')",
+                 VALUES ('sor-6-normal', 'sor-6', 'normal')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO sealed_products (product_id, set_code, name, category, fetched_at) \
-                 VALUES (7001, 'sv3pt5', 'Spark of Rebellion Two-Player Starter', 'two_player_starter', '2026-02-28')",
+                 VALUES (7001, 'sor', 'Spark of Rebellion Two-Player Starter', 'two_player_starter', '2026-02-28')",
                 [],
             )
             .unwrap();
@@ -458,8 +458,8 @@ mod tests {
 
         // Resolve to the real 'normal' printing — the replayed copy keeps the
         // parked condition/price/acquired/tags.
-        let created = resolve_single(&mut conn, open[0].id, "sv3pt5-6-normal").unwrap();
-        assert_eq!(created.printing_id, "sv3pt5-6-normal");
+        let created = resolve_single(&mut conn, open[0].id, "sor-6-normal").unwrap();
+        assert_eq!(created.printing_id, "sor-6-normal");
         assert_eq!(created.condition, "Lightly Played");
         assert_eq!(created.purchase_price, Some(4.25));
         assert_eq!(created.acquired_at, "2026-04-14T00:00:00Z");

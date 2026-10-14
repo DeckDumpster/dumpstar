@@ -441,7 +441,7 @@ mod tests {
         let mut holdings = ZoneHoldings::default();
         holdings.rows.insert(
             ("collection".into(), 1),
-            serde_json::json!({"id": 1, "printing_id": "base1-4-holo",
+            serde_json::json!({"id": 1, "printing_id": "sor-5-holo",
                                "acquired_at": "2026-08-01", "source": "zone"}),
         );
         holdings.rows.insert(
@@ -458,7 +458,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(printing, "base1-4-holo");
+        assert_eq!(printing, "sor-5-holo");
         let (product, quantity): (i64, i64) = conn
             .query_row(
                 &format!("SELECT product_id, quantity FROM {SEALED_HOLDINGS_TABLE}"),
@@ -556,7 +556,7 @@ mod tests {
             ("collection".into(), 1),
             serde_json::json!({
                 "id": 1,
-                "printing_id": "sv3pt5-1-normal",
+                "printing_id": "sor-1-normal",
                 "acquired_at": "2026-08-01T00:00:00Z",
                 "source": "zone",
                 "purchase_price": 12.5,

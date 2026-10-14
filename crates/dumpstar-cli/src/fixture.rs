@@ -1,4 +1,4 @@
-//! `dumpstar seed-fixture` — build the deterministic Pokémon test fixture for
+//! `dumpstar seed-fixture` — build the deterministic Star Wars: Unlimited test fixture for
 //! the intents UI-testing harness.
 //!
 //! Produces two SQLite files in `--out` (default `tests/ui/fixtures`):
@@ -11,8 +11,9 @@
 //! init runs and the running server can open them unchanged. The intents
 //! harness snapshots/restores these before each test.
 //!
-//! The data is small, deterministic, and Pokémon-authentic; intent YAML/hint
-//! files reference it by the stable names documented in
+//! The data is small, deterministic, and drawn from the catalog's Star Wars:
+//! Unlimited fake source (`crates/dumpstar-catalog/fake/swu-fake.json`);
+//! intent YAML/hint files reference it by the stable names documented in
 //! `tests/ui/fixtures/README.md`.
 
 use std::path::PathBuf;
@@ -189,48 +190,49 @@ fn catalog_counts(conn: &Connection) -> anyhow::Result<(i64, i64, i64, i64)> {
 // ---------------------------------------------------------------------------
 // Catalog (shared.sqlite)
 // ---------------------------------------------------------------------------
+//
+// The Star Wars: Unlimited cards, printings and prices below are the ones in
+// the catalog's fake source, `crates/dumpstar-catalog/fake/swu-fake.json`:
+// two sets, three cards, and their Standard / Hyperspace / Showcase / Promo
+// printings in the Normal and Foil finishes. Each distinct collector number
+// is one `cards` row; each finish is one `printings` row, the foil finish
+// under the `holo` variant code the importers map `Foil` to.
 
 /// A fixed observation date so prices are byte-for-byte reproducible.
 const OBSERVED_AT: &str = "2024-01-15";
 /// A fixed ingest timestamp for the catalog freshness markers.
 const FETCHED_AT: &str = "2024-01-15T00:00:00Z";
 
-/// Compact card spec: number, name, supertype, rarity, artist, hp.
+/// One collector-numbered card.
 struct CardSpec {
+    set_code: &'static str,
     number: &'static str,
     sortable: i64,
     name: &'static str,
-    supertype: &'static str,
+    card_type: &'static str,
     rarity: &'static str,
-    artist: &'static str,
+    artist: Option<&'static str>,
     hp: Option<i64>,
+    /// JSON array of aspects.
+    aspects: &'static str,
+    /// JSON array of traits.
+    traits: &'static str,
 }
 
-/// Variants to materialise for a card, with optional TCGplayer product link.
+/// One finish of a card, with its optional TCGplayer product link.
 struct PrintingSpec {
     variant: &'static str,
     sub_type: Option<&'static str>,
-    /// TCGplayer product id; `Some` means a `prices` row is written too.
     product_id: Option<i64>,
-    market_price: f64,
+    /// `Some` writes a `prices` row at [`OBSERVED_AT`].
+    market_price: Option<f64>,
 }
 
 /// A card paired with the printings to materialise for it.
 type CardEntry = (CardSpec, Vec<PrintingSpec>);
 
-/// A set row: set_code, ptcgo_code, name, series, series_sort, set_sort,
-/// total, printed_total, release_date.
-type SetRow = (
-    &'static str,
-    &'static str,
-    &'static str,
-    &'static str,
-    i64,
-    i64,
-    i64,
-    i64,
-    &'static str,
-);
+/// A set row: set_code, name, set_sort, release_date.
+type SetRow = (&'static str, &'static str, i64, &'static str);
 
 /// A sealed-product row: product_id, set_code, name, category, card_count,
 /// product_size, release_date.
@@ -255,113 +257,62 @@ type SealedPriceRow = (i64, f64, f64, f64, Option<f64>, Option<f64>);
 
 fn seed_catalog(conn: &Connection) -> anyhow::Result<()> {
     // --- Sets ----------------------------------------------------------
-    // (set_code, ptcgo_code, name, series, series_sort, set_sort,
-    //  total, printed_total, release_date)
-    let sets: [SetRow; 3] = [
-        (
-            "base1",
-            "BS",
-            "Base Set",
-            "Base",
-            1,
-            1,
-            102,
-            102,
-            "1999/01/09",
-        ),
-        (
-            "sv3pt5",
-            "MEW",
-            "151",
-            "Scarlet & Violet",
-            9,
-            35,
-            165,
-            207,
-            "2023/09/22",
-        ),
-        (
-            "sv8",
-            "SSP",
-            "Surging Sparks",
-            "Scarlet & Violet",
-            9,
-            42,
-            191,
-            252,
-            "2024/11/08",
-        ),
+    let sets: [SetRow; 2] = [
+        ("SOR", "Spark of Rebellion", 1, "2024-03-08"),
+        ("SHD", "Shadows of the Galaxy", 2, "2024-07-12"),
     ];
-    for (code, ptcgo, name, series, ss, sst, total, printed, release) in sets {
+    for (code, name, sort, release) in sets {
         conn.execute(
             "INSERT INTO sets \
-               (set_code, ptcgo_code, name, series, series_sort_order, \
-                set_sort_order, total, printed_total, release_date, \
-                logo_url, symbol_url, ptcgio_fetched_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-            rusqlite::params![
-                code,
-                ptcgo,
-                name,
-                series,
-                ss,
-                sst,
-                total,
-                printed,
-                release,
-                format!("https://images.pokemontcg.io/{code}/logo.png"),
-                format!("https://images.pokemontcg.io/{code}/symbol.png"),
-                FETCHED_AT,
-            ],
+               (set_code, ptcgo_code, name, series, set_sort_order, \
+                release_date, ptcgio_fetched_at) \
+             VALUES (?1, ?1, ?2, 'Star Wars: Unlimited', ?3, ?4, ?5)",
+            rusqlite::params![code, name, sort, release, FETCHED_AT],
         )?;
     }
 
     // --- Cards + printings + prices ------------------------------------
-    // Product ids are allocated deterministically per linked printing.
-    seed_set_cards(conn, "base1", &base_set_cards())?;
-    seed_set_cards(conn, "sv3pt5", &set_151_cards())?;
-    seed_set_cards(conn, "sv8", &surging_sparks_cards())?;
-    enrich_card_facets(conn)?;
+    seed_cards(conn, &catalog_cards())?;
 
     // --- Sealed products ----------------------------------------------
     // (product_id, set_code, name, category, card_count, product_size,
     //  release_date)
     let sealed: [SealedRow; 4] = [
         (
-            900001,
-            "base1",
+            910001,
+            "SOR",
             "Spark of Rebellion Booster Display",
             "booster_display",
-            Some(11),
-            Some(36),
-            "1999/01/09",
+            Some(16),
+            Some(24),
+            "2024-03-08",
         ),
         (
-            900002,
-            "sv3pt5",
+            910002,
+            "SOR",
             "Spark of Rebellion Two-Player Starter",
             "two_player_starter",
             Some(10),
             Some(9),
-            "2023/09/22",
+            "2024-03-08",
         ),
         (
-            900003,
-            "sv3pt5",
+            910003,
+            "SOR",
             "Spark of Rebellion Prerelease Kit",
             "prerelease_kit",
             Some(10),
             Some(6),
-            "2023/09/22",
+            "2024-03-08",
         ),
         (
-            900004,
-            "sv8",
+            910004,
+            "SHD",
             "Shadows of the Galaxy Booster Pack",
             "booster_pack",
-            Some(10),
+            Some(16),
             Some(1),
-            "2024/11/08",
+            "2024-07-12",
         ),
     ];
     for (pid, set, name, cat, cc, size, release) in sealed {
@@ -391,20 +342,10 @@ fn seed_catalog(conn: &Connection) -> anyhow::Result<()> {
     // the rendered sealed value goes through the whole rule rather than one
     // arm of it (pd-bbv7, sp-ysb):
     //
-    //   900002  a full quote, `market_price` set — the ordinary arm
-    //   900004  `market_price` NULL, mid alone — the `COALESCE` fallback
+    //   910002  a full quote, `market_price` set — the ordinary arm
+    //   910004  `market_price` NULL, mid alone — the `COALESCE` fallback
     //
-    // Before this the fixture seeded four sealed PRODUCTS and zero prices, so
-    // every sealed lot fell to "catalogued and never quoted": `/sealed`
-    // rendered an em dash in Market and Value, `/` read `sealed $0.00`, and
-    // the `dimension='sealed'` series on the value chart had nothing on it.
-    // That arm is real and is held by
-    // `value_history::tests::an_unpriced_sealed_lot_is_skipped_and_still_counted`
-    // — but it was the only arm anything reaching a screenshot could take, so
-    // the join through `sealed_products` by `product_id` and both halves of
-    // `sealed_market_price_expr_from!` were covered nowhere in the UI tier.
-    //
-    // 900001 and 900003 stay unquoted deliberately. Neither is held, so
+    // 910001 and 910003 stay unquoted deliberately. Neither is held, so
     // neither moves a number, and leaving them keeps the catalog carrying the
     // shape TCGCSV really produces: a sealed product with no price row at all.
     //
@@ -415,8 +356,8 @@ fn seed_catalog(conn: &Connection) -> anyhow::Result<()> {
     //
     // (product_id, low, mid, high, market, direct_low)
     let sealed_prices: [SealedPriceRow; 2] = [
-        (900002, 52.00, 58.75, 79.99, Some(59.42), Some(55.10)),
-        (900004, 4.10, 5.24, 8.99, None, None),
+        (910002, 52.00, 58.75, 79.99, Some(59.42), Some(55.10)),
+        (910004, 4.10, 5.24, 8.99, None, None),
     ];
     for (pid, low, mid, high, market, direct_low) in sealed_prices {
         conn.execute(
@@ -431,39 +372,31 @@ fn seed_catalog(conn: &Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Insert one set's cards, their printings, and a price row per linked
-/// printing. Product ids are deterministic: `set_base + card_index*10 +
-/// printing_index`.
-fn seed_set_cards(conn: &Connection, set_code: &str, cards: &[CardEntry]) -> anyhow::Result<()> {
-    for (ci, (card, printings)) in cards.iter().enumerate() {
-        let card_id = format!("{set_code}-{}", card.number);
+/// Insert the cards, their printings, and a price row per quoted printing.
+fn seed_cards(conn: &Connection, cards: &[CardEntry]) -> anyhow::Result<()> {
+    for (card, printings) in cards {
+        let card_id = format!("{}-{}", card.set_code, card.number);
         conn.execute(
             "INSERT INTO cards \
                (card_id, set_code, number, number_sortable, name, supertype, \
-                rarity, artist, hp, image_small, image_large) \
+                subtypes, types, rarity, artist, hp) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             rusqlite::params![
                 card_id,
-                set_code,
+                card.set_code,
                 card.number,
                 card.sortable,
                 card.name,
-                card.supertype,
+                card.card_type,
+                card.traits,
+                card.aspects,
                 card.rarity,
                 card.artist,
                 card.hp,
-                format!(
-                    "https://images.pokemontcg.io/{set_code}/{}.png",
-                    card.number
-                ),
-                format!(
-                    "https://images.pokemontcg.io/{set_code}/{}_hires.png",
-                    card.number
-                ),
             ],
         )?;
 
-        for (pi, p) in printings.iter().enumerate() {
+        for p in printings {
             let printing_id = format!("{card_id}-{}", p.variant);
             // sub_type_name links a printing to its prices row (the market_price
             // join in search.rs keys on it). Production ingest populates it; the
@@ -476,648 +409,121 @@ fn seed_set_cards(conn: &Connection, set_code: &str, cards: &[CardEntry]) -> any
                 rusqlite::params![printing_id, card_id, p.variant, p.product_id, p.sub_type],
             )?;
 
-            if let (Some(pid), Some(sub)) = (p.product_id, p.sub_type) {
+            if let (Some(pid), Some(sub), Some(price)) = (p.product_id, p.sub_type, p.market_price)
+            {
                 conn.execute(
                     "INSERT INTO prices \
                        (tcgplayer_product_id, sub_type_name, source, \
                         price_type, price, observed_at) \
                      VALUES (?1, ?2, 'tcgplayer', 'market', ?3, ?4)",
-                    rusqlite::params![pid, sub, p.market_price, OBSERVED_AT],
+                    rusqlite::params![pid, sub, price, OBSERVED_AT],
                 )?;
             }
-            let _ = (ci, pi);
         }
     }
     Ok(())
 }
 
-/// Backfill the Pokémon-specific facet columns the `card()` helper doesn't
-/// carry — energy `types` (the headline search facet), plus a little
-/// `subtypes`/`attacks` on flagship cards — keyed by name so the UI search
-/// tests (and `/collection` screenshots) can exercise `t:`, `sub:`, `dmg:`,
-/// `has:attack`, etc. against believable data.
-fn enrich_card_facets(conn: &Connection) -> anyhow::Result<()> {
-    // (name, energy type)
-    let types: &[(&str, &str)] = &[
-        ("Charizard", "Fire"),
-        ("Charizard ex", "Fire"),
-        ("Charmander", "Fire"),
-        ("Magmar", "Fire"),
-        ("Blastoise", "Water"),
-        ("Squirtle", "Water"),
-        ("Milotic ex", "Water"),
-        ("Venusaur", "Grass"),
-        ("Bulbasaur", "Grass"),
-        ("Exeggcute", "Grass"),
-        ("Alolan Exeggutor ex", "Grass"),
-        ("Pikachu", "Lightning"),
-        ("Pikachu ex", "Lightning"),
-        ("Raichu", "Lightning"),
-        ("Alakazam ex", "Psychic"),
-        ("Mew", "Psychic"),
-        ("Mew ex", "Psychic"),
-        ("Latias ex", "Psychic"),
-        ("Hitmonchan", "Fighting"),
-        ("Ditto", "Colorless"),
-        ("Snorlax", "Colorless"),
-    ];
-    for (name, ty) in types {
-        conn.execute(
-            "UPDATE cards SET types = ?1 WHERE name = ?2",
-            rusqlite::params![format!("[\"{ty}\"]"), name],
-        )?;
-    }
-
-    // Stage subtypes for the evolved Base Set holos, and Basic+ex for the ex
-    // cards — enough to demonstrate sub: queries.
-    for name in ["Charizard", "Blastoise", "Venusaur"] {
-        conn.execute(
-            "UPDATE cards SET subtypes = '[\"Stage 2\"]' WHERE name = ?1",
-            rusqlite::params![name],
-        )?;
-    }
-    conn.execute(
-        "UPDATE cards SET subtypes = '[\"Basic\",\"ex\"]' WHERE name LIKE '% ex'",
-        [],
-    )?;
-
-    // A couple of attacks so dmg:/has:attack/o: have something to match.
-    conn.execute(
-        "UPDATE cards SET attacks = '[{\"name\":\"Fire Spin\",\"damage\":\"100\",\
-            \"cost\":[\"Fire\",\"Fire\",\"Fire\",\"Fire\"],\"text\":\"Discard 2 Energy.\"}]' \
-         WHERE name = 'Charizard'",
-        [],
-    )?;
-    conn.execute(
-        "UPDATE cards SET attacks = '[{\"name\":\"Thunder Jolt\",\"damage\":\"30\",\
-            \"cost\":[\"Lightning\"],\"text\":\"Flip a coin.\"}]' \
-         WHERE name = 'Pikachu'",
-        [],
-    )?;
-
-    // National Pokédex numbers — drives the card-detail "Pokédex" row and the
-    // pokedex: facet. Mew + Mew ex share #151 so pokedex:151 returns two cards.
-    let dex: &[(&str, &str)] = &[
-        ("Bulbasaur", "[1]"),
-        ("Venusaur", "[3]"),
-        ("Charmander", "[4]"),
-        ("Charizard", "[6]"),
-        ("Charizard ex", "[6]"),
-        ("Squirtle", "[7]"),
-        ("Blastoise", "[9]"),
-        ("Pikachu", "[25]"),
-        ("Pikachu ex", "[25]"),
-        ("Raichu", "[26]"),
-        ("Alakazam ex", "[65]"),
-        ("Exeggcute", "[102]"),
-        ("Alolan Exeggutor ex", "[103]"),
-        ("Hitmonchan", "[107]"),
-        ("Magmar", "[126]"),
-        ("Ditto", "[132]"),
-        ("Snorlax", "[143]"),
-        ("Mew", "[151]"),
-        ("Mew ex", "[151]"),
-        ("Milotic ex", "[350]"),
-        ("Latias ex", "[380]"),
-    ];
-    for (name, nums) in dex {
-        conn.execute(
-            "UPDATE cards SET national_pokedex_numbers = ?1 WHERE name = ?2",
-            rusqlite::params![nums, name],
-        )?;
-    }
-
-    // Type weaknesses — drives the weakness: facet (cards sharing a weakness).
-    // All four Fire Pokémon take Water weakness, so weakness:Water returns them.
-    let weak: &[(&str, &str)] = &[
-        ("Charizard", "Water"),
-        ("Charizard ex", "Water"),
-        ("Charmander", "Water"),
-        ("Magmar", "Water"),
-        ("Blastoise", "Lightning"),
-        ("Squirtle", "Lightning"),
-        ("Milotic ex", "Lightning"),
-        ("Venusaur", "Fire"),
-        ("Bulbasaur", "Fire"),
-        ("Exeggcute", "Fire"),
-        ("Alolan Exeggutor ex", "Fire"),
-        ("Pikachu", "Fighting"),
-        ("Pikachu ex", "Fighting"),
-        ("Raichu", "Fighting"),
-        ("Snorlax", "Fighting"),
-        ("Ditto", "Fighting"),
-        ("Alakazam ex", "Psychic"),
-        ("Mew", "Psychic"),
-        ("Mew ex", "Psychic"),
-        ("Latias ex", "Psychic"),
-    ];
-    for (name, ty) in weak {
-        conn.execute(
-            "UPDATE cards SET weaknesses = ?1 WHERE name = ?2",
-            rusqlite::params![format!("[{{\"type\":\"{ty}\",\"value\":\"×2\"}}]"), name],
-        )?;
-    }
-
-    // Retreat costs (N colourless) — drives the retreat: facet (same cost
-    // count). Charizard + Blastoise both retreat for 3, so retreat:3 pairs them.
-    let retreat: &[(&str, usize)] = &[
-        ("Charizard", 3),
-        ("Blastoise", 3),
-        ("Snorlax", 4),
-        ("Charizard ex", 2),
-        ("Venusaur", 2),
-        ("Pikachu", 1),
-        ("Pikachu ex", 1),
-        ("Raichu", 1),
-        ("Charmander", 1),
-        ("Squirtle", 1),
-        ("Bulbasaur", 1),
-        ("Mew", 1),
-        ("Mew ex", 1),
-        ("Ditto", 1),
-    ];
-    for (name, n) in retreat {
-        let arr = format!("[{}]", vec!["\"Colorless\""; *n].join(","));
-        conn.execute(
-            "UPDATE cards SET retreat_cost = ?1 WHERE name = ?2",
-            rusqlite::params![arr, name],
-        )?;
-    }
-
-    // Abilities — drives the ability: facet. Classic Base Set powers.
-    conn.execute(
-        "UPDATE cards SET abilities = '[{\"name\":\"Rain Dance\",\"type\":\"Pokémon Power\",\
-            \"text\":\"As often as you like during your turn, you may attach 1 Water Energy \
-            card to 1 of your Water Pokémon.\"}]' WHERE name = 'Blastoise'",
-        [],
-    )?;
-    conn.execute(
-        "UPDATE cards SET abilities = '[{\"name\":\"Energy Trans\",\"type\":\"Pokémon Power\",\
-            \"text\":\"Move 1 Grass Energy card from 1 of your Pokémon to another.\"}]' \
-         WHERE name = 'Venusaur'",
-        [],
-    )?;
-
-    // Evolution chains — extracted from raw_json by the card-detail query, so
-    // set just the evolves keys. Pikachu ⇄ Raichu is fully present in the
-    // fixture, exercising the name: search both links resolve to.
-    conn.execute(
-        "UPDATE cards SET raw_json = '{\"evolvesTo\":[\"Raichu\"]}' WHERE name = 'Pikachu'",
-        [],
-    )?;
-    conn.execute(
-        "UPDATE cards SET raw_json = '{\"evolvesFrom\":\"Pikachu\"}' WHERE name = 'Raichu'",
-        [],
-    )?;
-    Ok(())
-}
-
-/// `normal` + `reverse_holo` for a common/uncommon. Two product ids.
-fn np_reverse(base: i64, normal: f64, reverse: f64) -> Vec<PrintingSpec> {
-    vec![
-        PrintingSpec {
-            variant: "normal",
-            sub_type: Some("Normal"),
-            product_id: Some(base),
-            market_price: normal,
-        },
-        PrintingSpec {
-            variant: "reverse_holo",
-            sub_type: Some("Reverse Holofoil"),
-            product_id: Some(base + 1),
-            market_price: reverse,
-        },
-    ]
-}
-
-/// A single `holo` printing — for rares with no non-foil version.
-fn holo_only(base: i64, price: f64) -> Vec<PrintingSpec> {
-    vec![PrintingSpec {
-        variant: "holo",
-        sub_type: Some("Holofoil"),
-        product_id: Some(base),
+/// The Normal finish of a product, quoted at `price` when `Some`.
+fn normal(product_id: Option<i64>, price: Option<f64>) -> PrintingSpec {
+    PrintingSpec {
+        variant: "normal",
+        sub_type: product_id.map(|_| "Normal"),
+        product_id,
         market_price: price,
-    }]
-}
-
-/// `holo` + `reverse_holo` — the common shape for a Base Set holo rare.
-fn holo_reverse(base: i64, holo: f64, reverse: f64) -> Vec<PrintingSpec> {
-    vec![
-        PrintingSpec {
-            variant: "holo",
-            sub_type: Some("Holofoil"),
-            product_id: Some(base),
-            market_price: holo,
-        },
-        PrintingSpec {
-            variant: "reverse_holo",
-            sub_type: Some("Reverse Holofoil"),
-            product_id: Some(base + 1),
-            market_price: reverse,
-        },
-    ]
-}
-
-fn card(
-    number: &'static str,
-    sortable: i64,
-    name: &'static str,
-    supertype: &'static str,
-    rarity: &'static str,
-    artist: &'static str,
-    hp: Option<i64>,
-) -> CardSpec {
-    CardSpec {
-        number,
-        sortable,
-        name,
-        supertype,
-        rarity,
-        artist,
-        hp,
     }
 }
 
-/// Base Set — 9 classic cards spanning Common → Rare Holo.
-fn base_set_cards() -> Vec<CardEntry> {
-    vec![
-        (
-            card(
-                "4",
-                4,
-                "Charizard",
-                "Pokémon",
-                "Rare Holo",
-                "Mitsuhiro Arita",
-                Some(120),
-            ),
-            holo_only(100040, 320.00),
-        ),
-        (
-            card(
-                "2",
-                2,
-                "Blastoise",
-                "Pokémon",
-                "Rare Holo",
-                "Ken Sugimori",
-                Some(100),
-            ),
-            holo_only(100020, 140.00),
-        ),
-        (
-            card(
-                "15",
-                15,
-                "Venusaur",
-                "Pokémon",
-                "Rare Holo",
-                "Mitsuhiro Arita",
-                Some(100),
-            ),
-            holo_only(100150, 110.00),
-        ),
-        (
-            card(
-                "58",
-                58,
-                "Pikachu",
-                "Pokémon",
-                "Common",
-                "Mitsuhiro Arita",
-                Some(40),
-            ),
-            np_reverse(100580, 6.50, 12.00),
-        ),
-        (
-            card(
-                "24",
-                24,
-                "Raichu",
-                "Pokémon",
-                "Rare",
-                "Ken Sugimori",
-                Some(80),
-            ),
-            holo_only(100240, 18.00),
-        ),
-        (
-            card(
-                "46",
-                46,
-                "Bulbasaur",
-                "Pokémon",
-                "Common",
-                "Mitsuhiro Arita",
-                Some(40),
-            ),
-            np_reverse(100460, 3.50, 7.00),
-        ),
-        (
-            card(
-                "7",
-                7,
-                "Hitmonchan",
-                "Pokémon",
-                "Rare Holo",
-                "Ken Sugimori",
-                Some(70),
-            ),
-            holo_only(100070, 22.00),
-        ),
-        (
-            card(
-                "88",
-                88,
-                "Energy Removal",
-                "Trainer",
-                "Common",
-                "Keiji Kinebuchi",
-                None,
-            ),
-            np_reverse(100880, 0.75, 2.00),
-        ),
-        (
-            card(
-                "98",
-                98,
-                "Fire Energy",
-                "Energy",
-                "Common",
-                "Keiji Kinebuchi",
-                None,
-            ),
-            np_reverse(100980, 0.25, 1.00),
-        ),
-    ]
+/// The Foil finish of a product, quoted at `price` when `Some`.
+fn foil(product_id: i64, price: Option<f64>) -> PrintingSpec {
+    PrintingSpec {
+        variant: "holo",
+        sub_type: Some("Foil"),
+        product_id: Some(product_id),
+        market_price: price,
+    }
 }
 
-/// 151 (sv3pt5) — 13 cards, including a secret rare numbered above the
-/// printed total of 165.
-fn set_151_cards() -> Vec<CardEntry> {
+/// The fake source's cards, one row per collector number.
+fn catalog_cards() -> Vec<CardEntry> {
     vec![
         (
-            card(
-                "1",
-                1,
-                "Bulbasaur",
-                "Pokémon",
-                "Common",
-                "Narumi Sato",
-                Some(70),
-            ),
-            np_reverse(200010, 0.50, 1.25),
+            CardSpec {
+                set_code: "SOR",
+                number: "5",
+                sortable: 5,
+                name: "Luke Skywalker - Faithful Friend",
+                card_type: "Leader",
+                rarity: "Special",
+                artist: Some("Borja Pindado"),
+                hp: Some(7),
+                aspects: r#"["Vigilance","Heroism"]"#,
+                traits: r#"["Force","Rebel"]"#,
+            },
+            vec![
+                normal(Some(900001), Some(4.60)),
+                foil(900001, Some(24.00)),
+            ],
         ),
         (
-            card(
-                "4",
-                4,
-                "Charmander",
-                "Pokémon",
-                "Common",
-                "Tefoll",
-                Some(60),
-            ),
-            np_reverse(200040, 1.00, 2.50),
+            CardSpec {
+                set_code: "SOR",
+                number: "262",
+                sortable: 262,
+                name: "Luke Skywalker - Faithful Friend (Hyperspace)",
+                card_type: "Leader",
+                rarity: "Special",
+                artist: Some("Borja Pindado"),
+                hp: Some(7),
+                aspects: r#"["Vigilance","Heroism"]"#,
+                traits: r#"["Force","Rebel"]"#,
+            },
+            vec![normal(Some(900002), None), foil(900002, None)],
         ),
         (
-            card(
-                "6",
-                6,
-                "Charizard ex",
-                "Pokémon",
-                "Double Rare",
-                "5ban Graphics",
-                Some(330),
-            ),
-            holo_only(200060, 24.00),
+            CardSpec {
+                set_code: "SOR",
+                number: "193",
+                sortable: 193,
+                name: "Millennium Falcon - Piece of Junk",
+                card_type: "Unit",
+                rarity: "Rare",
+                artist: Some("Matt Ferguson"),
+                hp: Some(4),
+                aspects: r#"["Cunning"]"#,
+                traits: r#"["Vehicle","Transport"]"#,
+            },
+            vec![normal(Some(900003), None)],
         ),
         (
-            card("7", 7, "Squirtle", "Pokémon", "Common", "Sekio", Some(60)),
-            np_reverse(200070, 0.50, 1.25),
+            CardSpec {
+                set_code: "SHD",
+                number: "500",
+                sortable: 500,
+                name: "Millennium Falcon - Piece of Junk (Showcase)",
+                card_type: "Unit",
+                rarity: "Legendary",
+                artist: Some("Kuroimori"),
+                hp: Some(4),
+                aspects: r#"["Cunning"]"#,
+                traits: r#"["Vehicle","Transport"]"#,
+            },
+            vec![normal(Some(900004), Some(75.00))],
         ),
         (
-            card(
-                "25",
-                25,
-                "Pikachu",
-                "Pokémon",
-                "Common",
-                "Saboteri",
-                Some(60),
-            ),
-            np_reverse(200250, 1.50, 4.00),
-        ),
-        (
-            card(
-                "65",
-                65,
-                "Alakazam ex",
-                "Pokémon",
-                "Double Rare",
-                "5ban Graphics",
-                Some(310),
-            ),
-            holo_only(200650, 9.00),
-        ),
-        (
-            card(
-                "131",
-                131,
-                "Mew",
-                "Pokémon",
-                "Rare",
-                "Sanosuke Sakuma",
-                Some(70),
-            ),
-            holo_reverse(201310, 3.00, 5.00),
-        ),
-        (
-            card(
-                "105",
-                105,
-                "Ditto",
-                "Pokémon",
-                "Uncommon",
-                "Ryuta Fuse",
-                Some(60),
-            ),
-            np_reverse(201050, 0.40, 1.10),
-        ),
-        (
-            card(
-                "151",
-                151,
-                "Snorlax",
-                "Pokémon",
-                "Uncommon",
-                "Kagemaru Himeno",
-                Some(140),
-            ),
-            np_reverse(201510, 0.60, 1.50),
-        ),
-        (
-            card(
-                "166",
-                166,
-                "Bulbasaur",
-                "Pokémon",
-                "Illustration Rare",
-                "Saboteri",
-                Some(70),
-            ),
-            holo_only(201660, 8.50),
-        ),
-        (
-            card(
-                "199",
-                199,
-                "Charizard ex",
-                "Pokémon",
-                "Special Illustration Rare",
-                "Akira Egawa",
-                Some(330),
-            ),
-            holo_only(201990, 280.00),
-        ),
-        (
-            card(
-                "201",
-                201,
-                "Mew ex",
-                "Pokémon",
-                "Hyper Rare",
-                "aky CG Works",
-                Some(260),
-            ),
-            holo_only(202010, 95.00),
-        ),
-        (
-            card(
-                "165",
-                165,
-                "Professor's Research",
-                "Trainer",
-                "Illustration Rare",
-                "Yuu Nishida",
-                None,
-            ),
-            holo_only(201650, 14.00),
-        ),
-    ]
-}
-
-/// Surging Sparks (sv8) — 9 cards, modern rarities + a secret rare above the
-/// printed total of 191.
-fn surging_sparks_cards() -> Vec<CardEntry> {
-    vec![
-        (
-            card(
-                "3",
-                3,
-                "Exeggcute",
-                "Pokémon",
-                "Common",
-                "Shibuzoh.",
-                Some(50),
-            ),
-            np_reverse(300030, 0.20, 0.90),
-        ),
-        (
-            card(
-                "32",
-                32,
-                "Magmar",
-                "Pokémon",
-                "Common",
-                "Naoki Saito",
-                Some(80),
-            ),
-            np_reverse(300320, 0.25, 1.00),
-        ),
-        (
-            card(
-                "57",
-                57,
-                "Pikachu ex",
-                "Pokémon",
-                "Double Rare",
-                "PLANETA Igarashi",
-                Some(200),
-            ),
-            holo_only(300570, 12.00),
-        ),
-        (
-            card(
-                "89",
-                89,
-                "Milotic ex",
-                "Pokémon",
-                "Double Rare",
-                "5ban Graphics",
-                Some(310),
-            ),
-            holo_only(300890, 6.50),
-        ),
-        (
-            card(
-                "120",
-                120,
-                "Boss's Orders",
-                "Trainer",
-                "Uncommon",
-                "Yusuke Ishikawa",
-                None,
-            ),
-            np_reverse(301200, 0.75, 2.25),
-        ),
-        (
-            card(
-                "160",
-                160,
-                "Latias ex",
-                "Pokémon",
-                "Illustration Rare",
-                "Teradon",
-                Some(220),
-            ),
-            holo_only(301600, 18.00),
-        ),
-        (
-            card(
-                "191",
-                191,
-                "Alolan Exeggutor ex",
-                "Pokémon",
-                "Illustration Rare",
-                "PLANETA Mochizuki",
-                Some(280),
-            ),
-            holo_only(301910, 11.00),
-        ),
-        (
-            card(
-                "238",
-                238,
-                "Pikachu ex",
-                "Pokémon",
-                "Special Illustration Rare",
-                "PLANETA Mochizuki",
-                Some(200),
-            ),
-            holo_only(302380, 130.00),
-        ),
-        (
-            card(
-                "252",
-                252,
-                "Iono",
-                "Trainer",
-                "Special Illustration Rare",
-                "Saji",
-                None,
-            ),
-            holo_only(302520, 40.00),
+            CardSpec {
+                set_code: "SOR",
+                number: "P01",
+                sortable: 900_001,
+                name: "Vanquish",
+                card_type: "Event",
+                rarity: "Common",
+                artist: None,
+                hp: None,
+                aspects: r#"["Command"]"#,
+                traits: "[]",
+            },
+            vec![normal(None, None)],
         ),
     ]
 }
@@ -1142,8 +548,8 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
     let masters = binders::create(
         conn,
         &NewBinder {
-            name: "Master Set: 151".into(),
-            description: Some("Working toward a complete 151 master set.".into()),
+            name: "Master Set: Spark of Rebellion".into(),
+            description: Some("Working toward a complete Spark of Rebellion master set.".into()),
             color: "blue".into_some(),
             binder_type: "set".into_some(),
             pocket_size: Some(12),
@@ -1153,8 +559,8 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
     let vault = binders::create(
         conn,
         &NewBinder {
-            name: "Vintage Vault".into(),
-            description: Some("High-value vintage holos.".into()),
+            name: "Showcase Vault".into(),
+            description: Some("High-value Showcase and Hyperspace printings.".into()),
             color: "gold".into_some(),
             binder_type: "showcase".into_some(),
             pocket_size: Some(9),
@@ -1163,12 +569,12 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
     )?;
 
     // --- Decks (idea / ready / built) ----------------------------------
-    let charizard_deck = decks::create(
+    let luke_deck = decks::create(
         conn,
         &NewDeck {
-            name: "Charizard ex Control".into(),
-            description: Some("Fire-type control built around Charizard ex.".into()),
-            format: "standard".into_some(),
+            name: "Luke Skywalker Vigilance".into(),
+            description: Some("Vigilance/Heroism control led by Luke Skywalker.".into()),
+            format: "premier".into_some(),
             owner: "Ryan".into_some(),
             state: "built".into_some(),
             sleeve_color: "black".into_some(),
@@ -1176,12 +582,12 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             notes: "Tournament-ready.".into_some(),
         },
     )?;
-    let _pikachu_deck = decks::create(
+    let _falcon_deck = decks::create(
         conn,
         &NewDeck {
-            name: "Pikachu ex Aggro".into(),
-            description: Some("Fast Lightning aggro.".into()),
-            format: "standard".into_some(),
+            name: "Millennium Falcon Cunning".into(),
+            description: Some("Fast Cunning aggro around the Falcon.".into()),
+            format: "premier".into_some(),
             owner: "Ryan".into_some(),
             state: "ready".into_some(),
             sleeve_color: "yellow".into_some(),
@@ -1189,17 +595,17 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             notes: None,
         },
     )?;
-    let _vintage_deck = decks::create(
+    let _twin_suns_deck = decks::create(
         conn,
         &NewDeck {
-            name: "Vintage Base Brawl".into(),
-            description: Some("A casual deck idea using Base Set classics.".into()),
-            format: "casual".into_some(),
+            name: "Twin Suns Brawl".into(),
+            description: Some("A casual Twin Suns deck idea.".into()),
+            format: "twin_suns".into_some(),
             owner: "Alice".into_some(),
             state: "idea".into_some(),
             sleeve_color: None,
             storage_location: None,
-            notes: "Needs more energy.".into_some(),
+            notes: "Needs more units.".into_some(),
         },
     )?;
 
@@ -1219,16 +625,16 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             total: Some(39.33),
             shipping_status: "delivered".into_some(),
             estimated_delivery: "2024-01-12".into_some(),
-            notes: "Singles for the Charizard deck.".into_some(),
+            notes: "Singles for the Luke deck.".into_some(),
         },
         &[
             OrderLine {
-                printing_id: "sv3pt5-6-holo".into(),
+                printing_id: "SOR-5-holo".into(),
                 quantity: 1,
                 purchase_price: Some(24.00),
             },
             OrderLine {
-                printing_id: "sv3pt5-4-normal".into(),
+                printing_id: "SOR-193-normal".into(),
                 quantity: 2,
                 purchase_price: Some(1.00),
             },
@@ -1241,20 +647,20 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
         &NewOrder {
             order_number: "EBAY-55012".into_some(),
             source: "ebay".into(),
-            seller_name: "vintage_pulls".into_some(),
+            seller_name: "outer_rim_cards".into_some(),
             order_date: "2024-01-14".into_some(),
-            subtotal: Some(320.00),
+            subtotal: Some(80.00),
             shipping: Some(0.00),
             tax: Some(0.00),
-            total: Some(320.00),
+            total: Some(80.00),
             shipping_status: "shipped".into_some(),
             estimated_delivery: "2024-01-22".into_some(),
-            notes: "Base Set Charizard — still in transit.".into_some(),
+            notes: "Showcase Millennium Falcon — still in transit.".into_some(),
         },
         &[OrderLine {
-            printing_id: "base1-4-holo".into(),
+            printing_id: "SHD-500-normal".into(),
             quantity: 1,
-            purchase_price: Some(320.00),
+            purchase_price: Some(80.00),
         }],
     )?;
 
@@ -1265,8 +671,8 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
         conn,
         &NewBatch {
             batch_type: "manual_id".into(),
-            name: "Vintage holo entry".into_some(),
-            notes: "Hand-entered Base Set holos.".into_some(),
+            name: "Showcase entry".into_some(),
+            notes: "Hand-entered Showcase and Hyperspace printings.".into_some(),
             order_id: None,
             binder_id: Some(vault),
         },
@@ -1275,7 +681,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
         conn,
         &NewBatch {
             batch_type: "binder_click".into(),
-            name: "151 binder page-through".into_some(),
+            name: "Spark of Rebellion binder page-through".into_some(),
             notes: "Registered via the binder-page browser.".into_some(),
             order_id: None,
             binder_id: Some(masters),
@@ -1307,9 +713,9 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
         notes: Option<&'static str>,
     }
     let copies = vec![
-        // Vintage holos — manual batch, Vintage Vault binder.
+        // Showcase and Hyperspace printings — manual batch, Showcase Vault binder.
         Copy {
-            printing_id: "base1-4-holo",
+            printing_id: "SHD-500-normal",
             condition: "Lightly Played",
             status: "owned",
             source: "manual_id",
@@ -1317,10 +723,10 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             deck: None,
             batch: Some(manual_batch),
             price: Some(280.00),
-            notes: Some("Childhood card — well loved."),
+            notes: Some("First Showcase pull — well loved."),
         },
         Copy {
-            printing_id: "base1-2-holo",
+            printing_id: "SOR-262-holo",
             condition: "Near Mint",
             status: "owned",
             source: "manual_id",
@@ -1331,7 +737,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             notes: None,
         },
         Copy {
-            printing_id: "base1-15-holo",
+            printing_id: "SOR-262-normal",
             condition: "Moderately Played",
             status: "owned",
             source: "manual_id",
@@ -1342,7 +748,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             notes: None,
         },
         Copy {
-            printing_id: "base1-7-holo",
+            printing_id: "SOR-5-holo",
             condition: "Near Mint",
             status: "owned",
             source: "manual_id",
@@ -1354,7 +760,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
         },
         // A graded card (set via direct UPDATE after insert).
         Copy {
-            printing_id: "base1-24-holo",
+            printing_id: "SOR-193-normal",
             condition: "Near Mint",
             status: "owned",
             source: "manual_id",
@@ -1364,9 +770,9 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             price: Some(60.00),
             notes: Some("PSA 8 slab."),
         },
-        // 151 binder-click registrations — Master Set binder.
+        // Spark of Rebellion binder-click registrations — Master Set binder.
         Copy {
-            printing_id: "sv3pt5-1-normal",
+            printing_id: "SOR-5-normal",
             condition: "Near Mint",
             status: "owned",
             source: "binder_click",
@@ -1377,7 +783,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             notes: None,
         },
         Copy {
-            printing_id: "sv3pt5-1-reverse_holo",
+            printing_id: "SOR-5-holo",
             condition: "Near Mint",
             status: "owned",
             source: "binder_click",
@@ -1388,7 +794,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             notes: None,
         },
         Copy {
-            printing_id: "sv3pt5-25-normal",
+            printing_id: "SOR-193-normal",
             condition: "Near Mint",
             status: "owned",
             source: "binder_click",
@@ -1399,7 +805,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             notes: None,
         },
         Copy {
-            printing_id: "sv3pt5-25-reverse_holo",
+            printing_id: "SOR-5-normal",
             condition: "Lightly Played",
             status: "owned",
             source: "binder_click",
@@ -1410,7 +816,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             notes: None,
         },
         Copy {
-            printing_id: "sv3pt5-131-holo",
+            printing_id: "SOR-P01-normal",
             condition: "Near Mint",
             status: "owned",
             source: "binder_click",
@@ -1421,7 +827,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             notes: None,
         },
         Copy {
-            printing_id: "sv3pt5-166-holo",
+            printing_id: "SOR-262-holo",
             condition: "Near Mint",
             status: "owned",
             source: "binder_click",
@@ -1429,10 +835,10 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             deck: None,
             batch: Some(click_batch),
             price: Some(8.50),
-            notes: Some("Bulbasaur illustration rare."),
+            notes: Some("Hyperspace Luke in foil."),
         },
         Copy {
-            printing_id: "sv3pt5-201-holo",
+            printing_id: "SOR-262-normal",
             condition: "Near Mint",
             status: "owned",
             source: "binder_click",
@@ -1440,11 +846,11 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             deck: None,
             batch: Some(click_batch),
             price: Some(95.00),
-            notes: Some("Mew ex hyper rare — chase card."),
+            notes: Some("Hyperspace Luke — chase card."),
         },
         // ManaBox CSV import — Trade Binder.
         Copy {
-            printing_id: "sv8-3-normal",
+            printing_id: "SOR-193-normal",
             condition: "Near Mint",
             status: "owned",
             source: "csv_manabox",
@@ -1455,7 +861,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             notes: None,
         },
         Copy {
-            printing_id: "sv8-32-normal",
+            printing_id: "SOR-P01-normal",
             condition: "Near Mint",
             status: "owned",
             source: "csv_manabox",
@@ -1466,7 +872,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             notes: None,
         },
         Copy {
-            printing_id: "sv8-120-normal",
+            printing_id: "SOR-5-normal",
             condition: "Lightly Played",
             status: "owned",
             source: "csv_manabox",
@@ -1477,7 +883,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             notes: None,
         },
         Copy {
-            printing_id: "sv8-160-holo",
+            printing_id: "SHD-500-normal",
             condition: "Near Mint",
             status: "listed",
             source: "csv_manabox",
@@ -1485,45 +891,45 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             deck: None,
             batch: Some(csv_batch),
             price: Some(18.00),
-            notes: Some("Listed for trade — Latias ex."),
+            notes: Some("Listed for trade — Showcase Falcon."),
         },
-        // Cards built into the Charizard ex Control deck.
+        // Cards built into the Luke Skywalker Vigilance deck.
         Copy {
-            printing_id: "sv3pt5-6-holo",
+            printing_id: "SOR-5-holo",
             condition: "Near Mint",
             status: "owned",
             source: "manual_id",
             binder: None,
-            deck: Some(charizard_deck),
+            deck: Some(luke_deck),
             batch: None,
             price: Some(24.00),
             notes: Some("Deck centrepiece."),
         },
         Copy {
-            printing_id: "sv3pt5-4-normal",
+            printing_id: "SOR-193-normal",
             condition: "Near Mint",
             status: "owned",
             source: "manual_id",
             binder: None,
-            deck: Some(charizard_deck),
+            deck: Some(luke_deck),
             batch: None,
             price: Some(1.00),
             notes: None,
         },
         Copy {
-            printing_id: "sv3pt5-7-normal",
+            printing_id: "SOR-P01-normal",
             condition: "Near Mint",
             status: "owned",
             source: "manual_id",
             binder: None,
-            deck: Some(charizard_deck),
+            deck: Some(luke_deck),
             batch: None,
             price: None,
             notes: None,
         },
         // Loose owned copies — unassigned.
         Copy {
-            printing_id: "sv8-57-holo",
+            printing_id: "SOR-5-holo",
             condition: "Near Mint",
             status: "owned",
             source: "manual_id",
@@ -1531,10 +937,10 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             deck: None,
             batch: None,
             price: Some(12.00),
-            notes: Some("Pikachu ex — undecided home."),
+            notes: Some("Foil Luke — undecided home."),
         },
         Copy {
-            printing_id: "sv3pt5-105-normal",
+            printing_id: "SOR-193-normal",
             condition: "Heavily Played",
             status: "owned",
             source: "manual_id",
@@ -1546,7 +952,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
         },
         // A sold copy — exercises the disposed-status path.
         Copy {
-            printing_id: "sv3pt5-65-holo",
+            printing_id: "SOR-262-holo",
             condition: "Near Mint",
             status: "sold",
             source: "manual_id",
@@ -1575,8 +981,8 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
                 batch_id: c.batch,
             },
         )?;
-        // `NewCopy` has no grading fields — apply the one graded card here.
-        if c.printing_id == "base1-24-holo" {
+        // `NewCopy` has no grading fields — grade the one slabbed copy here.
+        if c.notes == Some("PSA 8 slab.") {
             conn.execute(
                 "UPDATE collection SET graded = 1, grade_company = 'PSA', \
                    grade_value = 8.0, grade_cert = '12345678' WHERE id = ?1",
@@ -1589,11 +995,11 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
     sealed::add(
         conn,
         &NewSealed {
-            product_id: 900002,
+            product_id: 910002,
             quantity: Some(1),
             condition: "Near Mint".into_some(),
             purchase_price: Some(49.99),
-            purchase_date: "2023-09-22".into_some(),
+            purchase_date: "2024-03-08".into_some(),
             source: "lgs".into_some(),
             seller_name: "Local Game Store".into_some(),
             notes: "Sealed Two-Player Starter — keeping factory sealed.".into_some(),
@@ -1602,7 +1008,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
     sealed::add(
         conn,
         &NewSealed {
-            product_id: 900004,
+            product_id: 910004,
             quantity: Some(6),
             condition: "Near Mint".into_some(),
             purchase_price: Some(4.49),
@@ -1617,30 +1023,30 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
     wishlist::add(
         conn,
         &NewWish {
-            card_id: "sv3pt5-199".into(),
-            printing_id: "sv3pt5-199-holo".into_some(),
+            card_id: "SOR-262".into(),
+            printing_id: "SOR-262-holo".into_some(),
             max_price: Some(250.00),
             priority: Some(3),
-            notes: "Charizard ex SIR — top of the want list.".into_some(),
+            notes: "Hyperspace foil Luke — top of the want list.".into_some(),
             ..Default::default()
         },
     )?;
     wishlist::add(
         conn,
         &NewWish {
-            card_id: "sv8-238".into(),
+            card_id: "SOR-193".into(),
             printing_id: None,
             max_price: Some(120.00),
             priority: Some(2),
-            notes: "Pikachu ex SIR from Surging Sparks.".into_some(),
+            notes: "Millennium Falcon for the Cunning deck.".into_some(),
             ..Default::default()
         },
     )?;
     wishlist::add(
         conn,
         &NewWish {
-            card_id: "base1-4".into(),
-            printing_id: "base1-4-holo".into_some(),
+            card_id: "SHD-500".into(),
+            printing_id: "SHD-500-normal".into_some(),
             max_price: Some(300.00),
             priority: Some(1),
             notes: "Already ordered — kept as a price watch.".into_some(),

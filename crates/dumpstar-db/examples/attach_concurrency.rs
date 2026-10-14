@@ -86,7 +86,7 @@ impl Default for Config {
         Config {
             work: PathBuf::from("/var/tmp/pd-attach-concurrency"),
             // ~200 sets x ~220 cards averages ~44k cards, the order of the
-            // real catalog once the Japanese half is counted.
+            // real catalog with headroom to spare.
             sets: 200,
             cards_per_set: 220,
             owned_per_tenant: 3000,
@@ -332,7 +332,7 @@ fn build_catalog(path: &Path, cfg: &Config) {
                         c.to_string(),
                         c as i64,
                         format!("Card {c} of {set_code}"),
-                        "Pokémon",
+                        "Unit",
                         RARITIES[rng.upto(RARITIES.len())],
                         "Harness Artist",
                         format!("https://example.invalid/{card_id}/small.png"),

@@ -108,19 +108,19 @@ mod tests {
         {
             let c = open_shared(&shared).unwrap();
             c.execute(
-                "INSERT INTO sets (set_code, name, series) VALUES ('sv3pt5', '151', 'SV')",
+                "INSERT INTO sets (set_code, name, series) VALUES ('sor', 'Spark of Rebellion', 'SWU')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO cards (card_id, set_code, number, number_sortable, name, rarity) \
-                 VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Charizard ex', 'Double Rare')",
+                 VALUES ('sor-6', 'sor', '6', 6, 'Darth Vader', 'Legendary')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES ('sv3pt5-6-normal', 'sv3pt5-6', 'normal')",
+                 VALUES ('sor-6-normal', 'sor-6', 'normal')",
                 [],
             )
             .unwrap();
@@ -129,7 +129,7 @@ mod tests {
         collection::add(
             &mut conn,
             &NewCopy {
-                printing_id: "sv3pt5-6-normal".into(),
+                printing_id: "sor-6-normal".into(),
                 source: "manual_id".into(),
                 purchase_price: Some(12.5),
                 ..Default::default()
@@ -141,7 +141,7 @@ mod tests {
         let lines: Vec<&str> = csv.lines().collect();
         assert_eq!(lines.len(), 2); // header + one copy
         assert!(lines[0].starts_with("Set code,Set name,Collector number,Foil"));
-        assert!(lines[1].contains("sv3pt5"));
+        assert!(lines[1].contains("sor"));
         assert!(lines[1].contains("12.50"));
         assert!(lines[1].contains("USD"));
 

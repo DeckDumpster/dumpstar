@@ -6,12 +6,12 @@
 //! constructs its own, so nothing outside this crate could point a whole
 //! refresh anywhere.
 //!
-//! That gap is why `tests/refresh/tenant_bytes.sh` could not exist. The claim
-//! it makes — a catalog refresh writes the shared catalog and NOT one byte of
-//! any tenant database — is only worth anything if the refresh *runs to the
-//! end*, and a refresh that dies at the first fetch proves nothing. Reaching
-//! the real tcgcsv.com to get there would make a gate that is slow, flaky, and
-//! quietly dependent on somebody else's uptime.
+//! That gap matters to any whole-refresh gate. Its claim — a catalog refresh
+//! writes the shared catalog and NOT one byte of any tenant database — is
+//! only worth anything if the refresh *runs to the end*, and a refresh that
+//! dies at the first fetch proves nothing. Reaching the real tcgcsv.com to get
+//! there would make a gate that is slow, flaky, and quietly dependent on
+//! somebody else's uptime.
 //!
 //! So the origin is read from the environment, in one place, by the two
 //! constructors every client path goes through.

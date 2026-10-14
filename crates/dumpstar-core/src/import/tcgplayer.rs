@@ -118,12 +118,10 @@ pub fn parse(input: &str) -> Result<Vec<ParsedRow>> {
 /// TCGplayer `Printing` value → Dumpstar variant code.
 fn map_variant(printing: &str) -> String {
     match printing.trim().to_lowercase().as_str() {
-        "holofoil" | "holo" => "holo",
-        "reverse holofoil" | "reverse holo" => "reverse_holo",
-        "1st edition holofoil" => "first_ed_holo",
-        "1st edition" | "1st edition normal" => "first_ed_normal",
-        "unlimited holofoil" => "unlimited_holo",
-        // "normal", "unlimited", "" and anything unrecognised.
+        // Star Wars: Unlimited prints in two finishes, Normal and Foil. The foil
+        // finish is stored under the catalog's `holo` variant code.
+        "foil" => "holo",
+        // "normal", "" and anything unrecognised.
         _ => "normal",
     }
     .to_string()
@@ -135,31 +133,31 @@ mod tests {
 
     const SAMPLE: &str = "\
 Quantity,Name,Set,Card Number,Set Code,Printing,Condition,Language,Price
-3,Pikachu,Base Set,58,BS,Holofoil,Near Mint,English,$12.50
-1,Squirtle,Base Set,63,BS,Reverse Holofoil,Lightly Played Foil,English,";
+3,Luke Skywalker - Faithful Friend,Spark of Rebellion,5,SOR,Foil,Near Mint,English,$12.50
+1,Millennium Falcon - Piece of Junk,Spark of Rebellion,193,SOR,Normal,Lightly Played Foil,English,";
 
     #[test]
     fn parses_printing_price_and_quantity() {
         let rows = parse(SAMPLE).unwrap();
         assert_eq!(rows.len(), 4); // 3 + 1
 
-        let pika = &rows[0];
-        assert_eq!(pika.set_hint, "BS");
-        assert_eq!(pika.set_name.as_deref(), Some("Base Set"));
-        assert_eq!(pika.number, "58");
-        assert_eq!(pika.variant, "holo");
-        assert_eq!(pika.condition, "Near Mint");
-        assert_eq!(pika.purchase_price, Some(12.50));
+        let luke = &rows[0];
+        assert_eq!(luke.set_hint, "SOR");
+        assert_eq!(luke.set_name.as_deref(), Some("Spark of Rebellion"));
+        assert_eq!(luke.number, "5");
+        assert_eq!(luke.variant, "holo");
+        assert_eq!(luke.condition, "Near Mint");
+        assert_eq!(luke.purchase_price, Some(12.50));
 
-        let squirtle = &rows[3];
-        assert_eq!(squirtle.variant, "reverse_holo");
-        assert_eq!(squirtle.condition, "Lightly Played"); // ' Foil' suffix stripped
-        assert_eq!(squirtle.purchase_price, None);
+        let falcon = &rows[3];
+        assert_eq!(falcon.variant, "normal");
+        assert_eq!(falcon.condition, "Lightly Played"); // ' Foil' suffix stripped
+        assert_eq!(falcon.purchase_price, None);
     }
 
     #[test]
     fn missing_card_number_column_is_an_error() {
-        let csv = "Quantity,Set\n1,Base Set";
+        let csv = "Quantity,Set\n1,Spark of Rebellion";
         assert!(matches!(parse(csv), Err(ImportError::MissingColumn(_))));
     }
 }

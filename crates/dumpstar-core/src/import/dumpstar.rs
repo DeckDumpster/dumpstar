@@ -1,11 +1,11 @@
 //! Dumpstar-native CSV import.
 //!
-//! The shape the pkmn.gg Tampermonkey export userscript writes. Optimised
-//! for Pokémon: a `variant` column carrying the Dumpstar variant code
-//! directly (so the long-tail treatments survive a round-trip the way the
-//! ManaBox `Foil` column can't), a `ptcgo_code` column as a backup when
-//! `set_code` is unknown, and a `source` column so the import batch records
-//! where the rows came from.
+//! Dumpstar's own interchange shape: a `variant` column carrying the
+//! Dumpstar variant code directly (so every variant survives a round-trip the
+//! way the ManaBox `Foil` column can't), a `ptcgo_code` column (the printed
+//! set abbreviation, e.g. `SOR`) as a backup when `set_code` is unknown,
+//! and a `source` column so the import batch records where the rows came
+//! from.
 //!
 //! Columns (case-insensitive, order-tolerant):
 //!
@@ -149,39 +149,39 @@ mod tests {
 
     const SAMPLE: &str = "\
 set_code,ptcgo_code,number,variant,condition,language,quantity,purchase_price
-sv3pt5,MEW,6,normal,Near Mint,en,2,1.50
-sv3pt5,MEW,199,reverse_holo,Lightly Played,en,1,42.00
-,SSP,57,holo,,en,,";
+SOR,SOR,193,normal,Near Mint,en,2,1.50
+SOR,SOR,5,holo,Lightly Played,en,1,42.00
+,SHD,500,normal,,en,,";
 
     #[test]
     fn expands_quantity_one_row_per_copy() {
         let rows = parse(SAMPLE).unwrap();
         assert_eq!(rows.len(), 4); // 2 + 1 + 1 default
 
-        assert_eq!(rows[0].set_hint, "sv3pt5"); // set_code wins when present
-        assert_eq!(rows[0].number, "6");
+        assert_eq!(rows[0].set_hint, "SOR"); // set_code wins when present
+        assert_eq!(rows[0].number, "193");
         assert_eq!(rows[0].variant, "normal");
         assert_eq!(rows[0].condition, "Near Mint");
         assert_eq!(rows[0].purchase_price, Some(1.50));
         assert_eq!(rows[1], rows[0]); // second copy identical
 
-        assert_eq!(rows[2].variant, "reverse_holo");
+        assert_eq!(rows[2].variant, "holo");
         assert_eq!(rows[2].condition, "Lightly Played");
 
         // ptcgo_code fallback, missing quantity → 1, blank price → None.
-        assert_eq!(rows[3].set_hint, "SSP");
+        assert_eq!(rows[3].set_hint, "SHD");
         assert_eq!(rows[3].purchase_price, None);
     }
 
     #[test]
     fn missing_variant_column_is_an_error() {
-        let csv = "set_code,number\nsv3pt5,6";
+        let csv = "set_code,number\nSOR,193";
         assert!(matches!(parse(csv), Err(ImportError::MissingColumn(_))));
     }
 
     #[test]
     fn missing_set_columns_is_an_error() {
-        let csv = "number,variant\n6,normal";
+        let csv = "number,variant\n193,normal";
         assert!(matches!(parse(csv), Err(ImportError::MissingColumn(_))));
     }
 }

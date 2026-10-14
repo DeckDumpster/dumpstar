@@ -127,12 +127,12 @@ pub fn parse(input: &str) -> Result<Vec<ParsedRow>> {
 /// round-trips every variant, not just the three ManaBox knows.
 ///
 /// Shared with the Collectr importer, whose `Variance` column speaks the
-/// same foil vocabulary (`Holofoil`, `Normal`, `Reverse Holofoil`).
+/// same finish vocabulary (`Normal`, `Foil`). Star Wars: Unlimited prints in
+/// those two finishes; the foil one is stored under the `holo` variant code.
 pub(crate) fn map_variant(foil: &str) -> String {
     match foil.trim().to_lowercase().as_str() {
         "" | "non-foil" | "nonfoil" => "normal".to_string(),
-        "foil" | "holofoil" | "etched" => "holo".to_string(),
-        "reverseholofoil" | "reverse holofoil" | "reverse holo" => "reverse_holo".to_string(),
+        "foil" => "holo".to_string(),
         other => other.to_string(),
     }
 }
@@ -143,8 +143,8 @@ mod tests {
 
     const SAMPLE: &str = "\
 Set code,Set name,Collector number,Foil,Rarity,Quantity,ManaBox ID,Scryfall ID,Purchase price,Misprint,Altered,Condition,Language,Purchase price currency
-SV3PT5,151,6,normal,Common,2,m1,s1,0.25,false,false,near_mint,en,USD
-SV3PT5,151,199,reverseHolofoil,Illustration Rare,1,m2,s2,42.00,true,false,lightly_played,en,USD";
+SOR,Spark of Rebellion,193,normal,Rare,2,m1,s1,0.25,false,false,near_mint,en,USD
+SOR,Spark of Rebellion,5,foil,Special,1,m2,s2,42.00,true,false,lightly_played,en,USD";
 
     #[test]
     fn expands_quantity_one_row_per_copy() {
@@ -152,9 +152,9 @@ SV3PT5,151,199,reverseHolofoil,Illustration Rare,1,m2,s2,42.00,true,false,lightl
         assert_eq!(rows.len(), 3); // 2 + 1
 
         let first = &rows[0];
-        assert_eq!(first.set_hint, "SV3PT5");
-        assert_eq!(first.set_name.as_deref(), Some("151"));
-        assert_eq!(first.number, "6");
+        assert_eq!(first.set_hint, "SOR");
+        assert_eq!(first.set_name.as_deref(), Some("Spark of Rebellion"));
+        assert_eq!(first.number, "193");
         assert_eq!(first.variant, "normal");
         assert_eq!(first.condition, "Near Mint");
         assert_eq!(first.language, "English");
@@ -164,7 +164,7 @@ SV3PT5,151,199,reverseHolofoil,Illustration Rare,1,m2,s2,42.00,true,false,lightl
         assert_eq!(rows[1], *first); // the second copy is identical
 
         let rare = &rows[2];
-        assert_eq!(rare.variant, "reverse_holo");
+        assert_eq!(rare.variant, "holo");
         assert_eq!(rare.condition, "Lightly Played");
         assert_eq!(rare.tags, vec!["misprint".to_string()]);
         assert_eq!(rare.source_line, 3);
@@ -172,7 +172,7 @@ SV3PT5,151,199,reverseHolofoil,Illustration Rare,1,m2,s2,42.00,true,false,lightl
 
     #[test]
     fn missing_quantity_defaults_to_one() {
-        let csv = "Set code,Collector number,Foil\nSV1,1,foil";
+        let csv = "Set code,Collector number,Foil\nSOR,1,foil";
         let rows = parse(csv).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].variant, "holo");
@@ -180,13 +180,13 @@ SV3PT5,151,199,reverseHolofoil,Illustration Rare,1,m2,s2,42.00,true,false,lightl
 
     #[test]
     fn missing_required_column_is_an_error() {
-        let csv = "Set code,Foil\nSV1,foil";
+        let csv = "Set code,Foil\nSOR,foil";
         assert!(matches!(parse(csv), Err(ImportError::MissingColumn(_))));
     }
 
     #[test]
     fn non_numeric_quantity_is_a_bad_row() {
-        let csv = "Set code,Collector number,Quantity\nSV1,1,lots";
+        let csv = "Set code,Collector number,Quantity\nSOR,1,lots";
         match parse(csv) {
             Err(ImportError::BadRow { line, .. }) => assert_eq!(line, 2),
             other => panic!("expected BadRow, got {other:?}"),

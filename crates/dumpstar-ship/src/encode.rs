@@ -220,7 +220,7 @@ mod tests {
                 op: if seq % 3 == 0 { "delete" } else { "insert" }.into(),
                 row_id: seq * 7,
                 payload: format!(
-                    r#"{{"id":{},"printing_id":"sv3pt5-{seq}-normal"}}"#,
+                    r#"{{"id":{},"printing_id":"sor-{seq}-normal"}}"#,
                     seq * 7
                 ),
                 source: if seq % 5 == 0 { "backfill" } else { "trigger" }.into(),

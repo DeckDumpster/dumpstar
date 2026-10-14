@@ -1,8 +1,7 @@
 //! `dumpstar-core` — domain types and pure logic for Dumpstar.
 //!
 //! No IO lives here. The collection search query language's parser lives in
-//! `query` (the SQL compiler that consumes its AST is in `dumpstar-db`); see
-//! architecture/SEARCH_QUERY_LANGUAGE.md.
+//! `query` (the SQL compiler that consumes its AST is in `dumpstar-db`).
 
 pub mod card;
 pub mod deck;

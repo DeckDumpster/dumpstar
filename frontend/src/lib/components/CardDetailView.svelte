@@ -3,10 +3,10 @@
 	import { api } from '$lib/api';
 	import { facetHref } from '$lib/facets';
 	import { breadcrumbs } from '$lib/breadcrumbs.svelte';
-	import { variantLabel, variantSortCmp, variantProvenance } from '$lib/variants.svelte';
+	import { variantSortCmp } from '$lib/variants.svelte';
 	import { CONDITIONS } from '$lib/conditions';
 	import { conditionMultiplier } from '$lib/conditions.svelte';
-	import { money as price } from '$lib/format';
+	import { money as price, printingLabel, jsonList } from '$lib/format';
 	import type { CardDetail } from '$lib/types/CardDetail';
 	import type { Binder } from '$lib/types/Binder';
 	import type { Deck } from '$lib/types/Deck';
@@ -14,7 +14,7 @@
 	import PriceChart from './PriceChart.svelte';
 	import ManualPriceModal from './ManualPriceModal.svelte';
 	import MissingVariantModal from './MissingVariantModal.svelte';
-	import { Button, EmptyState, SectionHeader } from '$lib/components/ui';
+	import { Badge, Button, EmptyState, SectionHeader } from '$lib/components/ui';
 
 	// The card-detail body, shared by the /card/[set]/[number] route and the
 	// collection-page modal. Self-contained: it fetches its own data.
@@ -44,7 +44,7 @@
 	let priceSeries = $state<PriceSeries[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
-	// Per-control in-flight keys (e.g. "123:condition", "add:<printing_id>").
+	// Per-control in-flight keys (e.g. "123:condition", "add:sor-5-foil").
 	// Only the control being saved is disabled, so edits to different copies
 	// or fields run concurrently instead of serializing behind one another's
 	// save + reload (dumpstar-gxug).
@@ -81,9 +81,9 @@
 
 	// Upgrade the breadcrumb labels once card data resolves — the route
 	// page seeded a synchronous placeholder using URL params, this swaps
-	// the bare set_code for "Spark of Rebellion" and "#5" for "Luke Skywalker #5". $effect.pre
+	// the bare set_code for the set's name and "#4" for "Luke Skywalker #4". $effect.pre
 	// runs before the DOM updates so the upgrade lands in the same frame
-	// as the data; no visible "sor → Spark of Rebellion" / "#5 → Luke Skywalker #5" flash.
+	// as the data; no visible placeholder-to-label flash.
 	// No unmount cleanup needed — the breadcrumbs store is path-keyed
 	// and auto-discards overrides when the URL changes.
 	$effect.pre(() => {
@@ -232,16 +232,18 @@
 	// user owns no priced variant, fall back to showing all so the chart isn't
 	// empty.
 	let showAllPrices = $state(false);
-	// The single source of truth for which variants are "real" to the user:
-	// non-deprecated, or deprecated but owned. The add-list, the per-copy
-	// Variant dropdown, and the price chart all key off this so a deprecated
-	// phantom (a variant that shares a
-	// tcgplayer_product_id with another printing) never appears anywhere it can't be
-	// acted on (dumpstar-3b4, dumpstar-9em). A copy's own printing
-	// always has owned_count > 0, so it's never filtered out from under the
-	// select.
+	// Every printing of the card, ordered by variant then finish (Normal
+	// before Foil). The add-list, the per-copy Variant dropdown and the price
+	// chart all key off this.
 	const visiblePrintings = $derived(
-		(detail?.printings ?? []).filter((p) => !p.deprecated || p.owned_count > 0)
+		(detail?.printings ?? [])
+			.slice()
+			.sort(
+				(a, b) =>
+					variantSortCmp(a.variant, b.variant) ||
+					Number(a.finish === 'Foil') - Number(b.finish === 'Foil') ||
+					a.set_code.localeCompare(b.set_code)
+			)
 	);
 	const visiblePrintingIds = $derived(new Set(visiblePrintings.map((p) => p.printing_id)));
 	const ownedPrintingIds = $derived(
@@ -252,6 +254,11 @@
 	const chartSeries = $derived(showAllPrices || ownedSeries.length === 0 ? allSeries : ownedSeries);
 	// Show the toggle only when there's something hidden to reveal.
 	const hasHiddenSeries = $derived(ownedSeries.length > 0 && allSeries.length > ownedSeries.length);
+
+	/** A printing as one line: `SOR #5 · Hyperspace Foil`. */
+	function printingTitle(p: { set_code: string; number: string; variant: string; finish: string }) {
+		return `${p.set_code.toUpperCase()} #${p.number} · ${printingLabel(p.variant, p.finish)}`;
+	}
 </script>
 
 <svelte:head>
@@ -267,24 +274,16 @@
 
 	<div class="detail">
 		<div class="art">
-			{#if card.image_large}
-				<img src={card.image_large} alt={card.name} />
+			{#if card.image_url}
+				<img src={card.image_url} alt={card.name} />
 			{:else}
 				<div class="noart">No image</div>
 			{/if}
 		</div>
 		<div class="info">
 			<h1>{card.name}</h1>
+			{#if card.subtitle}<p class="subtitle">{card.subtitle}</p>{/if}
 			<p class="sub">
-				{#if card.set_symbol_url}
-					<a
-						class="facet binderlink"
-						href="/browse/{card.set_code}"
-						title="Open {card.set_name} binder"
-					>
-						<img class="setsym" src={card.set_symbol_url} alt={card.set_code} />
-					</a>
-				{/if}
 				<a
 					class="facet"
 					href={facetHref('set', card.set_code)}
@@ -297,15 +296,45 @@
 					<a class="facet" href={facetHref('rarity', card.rarity)} title="Find all {card.rarity} cards">
 						{card.rarity}
 					</a>{/if}
+				· <a class="facet binderlink" href="/browse/{card.set_code}" title="Open {card.set_name} binder">{card.set_name}</a>
 			</p>
 			<dl>
+				{#if card.card_type}<dt>Type</dt><dd>
+						<a class="facet" href={facetHref('type', card.card_type)}>{card.card_type}</a>
+					</dd>{/if}
+				{#if card.cost != null}<dt>Cost</dt><dd>{card.cost}</dd>{/if}
+				{#if card.power != null}<dt>Power</dt><dd>{card.power}</dd>{/if}
 				{#if card.hp != null}<dt>HP</dt><dd>{card.hp}</dd>{/if}
+				{#if jsonList(card.aspects).length}
+					<dt>Aspects</dt>
+					<dd>
+						{#each jsonList(card.aspects) as a (a)}
+							<a class="facet chip" href={facetHref('aspect', a)} title="Find all {a} cards">{a}</a>
+						{/each}
+					</dd>
+				{/if}
+				{#if jsonList(card.traits).length}
+					<dt>Traits</dt>
+					<dd>
+						{#each jsonList(card.traits) as t (t)}
+							<a class="facet chip" href={facetHref('trait', t)} title="Find all {t} cards">{t}</a>
+						{/each}
+					</dd>
+				{/if}
+				{#if jsonList(card.arenas).length}
+					<dt>Arena</dt>
+					<dd>
+						{#each jsonList(card.arenas) as a (a)}
+							<a class="facet chip" href={facetHref('arena', a)} title="Find all {a} cards">{a}</a>
+						{/each}
+					</dd>
+				{/if}
 				{#if card.artist}<dt>Artist</dt><dd>
 						<a class="facet" href={facetHref('artist', card.artist)} title="Find all cards by {card.artist}">{card.artist}</a>
 					</dd>{/if}
 			</dl>
 
-			{#if card.flavor_text}<p class="flavor">{card.flavor_text}</p>{/if}
+			{#if card.rules_text}<p class="cardText">{card.rules_text}</p>{/if}
 		</div>
 	</div>
 
@@ -323,10 +352,8 @@
 			{/snippet}
 		</SectionHeader>
 		<ul class="printings">
-			{#each visiblePrintings
-				.slice()
-				.sort((a, b) => variantSortCmp(a.variant, b.variant)) as p (p.printing_id)}
-				<li class:dim={p.deprecated} class:user-added={p.is_user_added}>
+			{#each visiblePrintings as p (p.printing_id)}
+				<li class:user-added={p.is_user_added}>
 					<div class="vlabel">
 						<div class="vline">
 							{#if p.is_user_added}
@@ -336,14 +363,12 @@
 									aria-label="User-added variant"
 								></span>
 							{/if}
-							<a class="facet variant" href={facetHref('variant', p.variant)} title="Find all {variantLabel(p.variant)} printings">
-								{variantLabel(p.variant)}
+							<a class="facet variant" href={facetHref('variant', p.variant)} title="Find all {p.variant} printings">
+								{printingTitle(p)}
 							</a>
 						</div>
 						{#if p.is_user_added && p.description}
 							<span class="provenance">{p.description}</span>
-						{:else if variantProvenance(p.variant)}
-							<span class="provenance">{variantProvenance(p.variant)}</span>
 						{/if}
 					</div>
 					<span class="market">{price(p.market_price)}</span>
@@ -359,20 +384,19 @@
 						<span class="tcgp-spacer"></span>
 					{/if}
 					<!-- Only a printing this user invented can carry a manual price.
-					     A catalog printing the feed does not price is a catalog gap,
-					     patched once for every tenant in
-					     data/overrides/catalog_prices.json — the API refuses the write
-					     with a 400, so offering the button here would be an affordance
-					     that cannot succeed (pd-m4gw). -->
+					     The price of a catalog printing is the catalog's, the same for
+					     every tenant — the API refuses the write with a 400, so
+					     offering the button here would be an affordance that cannot
+					     succeed (pd-m4gw). -->
 					{#if p.is_user_added}
 						<button
 							class="manual-price"
 							onclick={() => (priceModalFor = {
 								printing_id: p.printing_id,
-								label: `${card.name} #${card.number} — ${variantLabel(p.variant)}`
+								label: `${card.name} — ${printingTitle(p)}`
 							})}
 							title="Record a manual price"
-							aria-label="Record a manual price for {variantLabel(p.variant)}"
+							aria-label="Record a manual price for {printingTitle(p)}"
 						>$</button>
 					{:else}
 						<span class="manual-price-spacer"></span>
@@ -382,14 +406,14 @@
 							class="step"
 							disabled={isSaving(`remove:${p.printing_id}`) || p.owned_count <= 0}
 							onclick={() => removeCopy(p.printing_id)}
-							aria-label="Remove one {variantLabel(p.variant)}"
+							aria-label="Remove one {printingTitle(p)}"
 						>−</button>
 						<span class="count" class:has={p.owned_count > 0}>{p.owned_count}</span>
 						<button
 							class="step"
-							disabled={isSaving(`add:${p.printing_id}`) || p.deprecated}
+							disabled={isSaving(`add:${p.printing_id}`)}
 							onclick={() => addCopy(p.printing_id)}
-							aria-label="Add one {variantLabel(p.variant)}"
+							aria-label="Add one {printingTitle(p)}"
 						>+</button>
 					</div>
 				</li>
@@ -403,7 +427,7 @@
 				{#if hasHiddenSeries}
 					<label class="showall">
 						<input type="checkbox" bind:checked={showAllPrices} />
-						Show all variants
+						Show all printings
 					</label>
 				{/if}
 			{/snippet}
@@ -511,10 +535,8 @@
 									disabled={isSaving(`${copy.id}:variant`)}
 									onchange={(e) => changeVariant(copy.id, e.currentTarget.value)}
 								>
-									{#each visiblePrintings
-										.slice()
-										.sort((a, b) => variantSortCmp(a.variant, b.variant)) as p (p.printing_id)}
-										<option value={p.printing_id}>{variantLabel(p.variant)}</option>
+									{#each visiblePrintings as p (p.printing_id)}
+										<option value={p.printing_id}>{printingTitle(p)}</option>
 									{/each}
 								</select>
 								{@render savedTick(`${copy.id}:variant`)}
@@ -563,7 +585,7 @@
 									type="text"
 									value={copy.notes ?? ''}
 									disabled={isSaving(`${copy.id}:notes`)}
-									placeholder="Notes — e.g. corner wear on the back, a crease near the border"
+									placeholder="Notes — e.g. creased corner, two visible bumps"
 									title="Condition notes for this copy"
 									onchange={(e) => changeNotes(copy.id, e.currentTarget.value)}
 								/>
@@ -665,12 +687,6 @@
 		gap: 0.35rem;
 		flex-wrap: wrap;
 	}
-	.sub .setsym {
-		width: 22px;
-		height: 22px;
-		object-fit: contain;
-		vertical-align: middle;
-	}
 	dl {
 		display: grid;
 		grid-template-columns: auto 1fr;
@@ -693,21 +709,30 @@
 		border-radius: var(--radius-sm);
 		padding: 1px 3px;
 	}
+	.chip {
+		display: inline-block;
+		margin-right: var(--space-1);
+		border: 1px solid var(--color-border);
+	}
+	.subtitle {
+		margin: var(--space-0) var(--space-0) var(--space-1);
+		color: var(--color-text-subtle);
+	}
 	.facet:hover {
 		background: var(--color-surface-selected);
 		color: var(--color-text);
 	}
-	.facet:hover .setsym {
-		filter: brightness(1.2);
-	}
-	.flavor {
-		font-style: italic;
-		color: var(--color-text-subtle);
-		margin: var(--space-6) var(--space-0) var(--space-0);
-	}
-	section {
+		section {
 		margin-top: var(--space-8);
 	}
+
+	.cardText {
+		margin: 0.25rem 0 0;
+		color: var(--color-text-muted);
+		font-size: 0.88rem;
+		line-height: 1.4;
+	}
+
 
 	/* Printings list — one row per variant with [- N +] stepper, mirroring
 	   the browse-page VariantModal so the same muscle memory works here. */
@@ -746,9 +771,6 @@
 	.manual-price-spacer {
 		display: inline-block;
 		width: 28px;
-	}
-	.printings li.dim {
-		opacity: 0.5;
 	}
 	.printings .variant {
 		color: var(--color-text);

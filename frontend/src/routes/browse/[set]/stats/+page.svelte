@@ -44,7 +44,7 @@
 	// API rows, read off the shared catalog's `rarities` table. This page
 	// used to carry its own RARITY_ORDER map and a canonicalRarity()
 	// normaliser — a second copy of a typology the catalog already owns,
-	// and one that only knew eleven of the fifty-four tiers (pd-xzea).
+	// and one that only knew a handful of the catalog's tiers (pd-xzea).
 	// `stats.rarities` is pre-sorted by rank; render it as it comes.
 
 	// Duplicates summary — owned_copies counts every physical card,
@@ -89,7 +89,7 @@
 	<header>
 		<div>
 			<h1>{stats.name}</h1>
-			<p class="series">{stats.series}</p>
+			{#if stats.release_date}<p class="series">Released {stats.release_date}</p>{/if}
 		</div>
 		<a class="binderlink" href="/browse/{stats.set_code}">Binder view →</a>
 	</header>
@@ -108,8 +108,7 @@
 						max={total}
 					/>
 				{/snippet}
-				{@render bar('Base set', stats.base_owned_cards, stats.base_total_cards)}
-				{@render bar('Numbered set', stats.owned_cards, stats.total_cards)}
+				{@render bar('Cards', stats.owned_cards, stats.total_cards)}
 				{@render bar('Master set', stats.owned_printings, stats.total_printings)}
 			</div>
 		</section>
@@ -339,7 +338,7 @@
 		gap: var(--space-2);
 	}
 	/* The row's bar takes the slack the percentage doesn't. It carries no
-	   caption — the rarity is already in the first column — but keeps
+	   caption — the rarity is already two columns to the left — but keeps
 	   the tier as its accessible name via `labelHidden`. */
 	.pcell :global(.rbar) {
 		flex: 1;
@@ -397,6 +396,9 @@
 	}
 	.histo-col.g-promo {
 		background: var(--color-rarity-promo);
+	}
+	.histo-col.g-legendary {
+		background: var(--color-rarity-ultra);
 	}
 	.histo-col.g-special {
 		background: var(--color-rarity-special);

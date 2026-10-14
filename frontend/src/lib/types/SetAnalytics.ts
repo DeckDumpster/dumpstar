@@ -3,23 +3,18 @@ import type { CardCopyCount } from "./CardCopyCount";
 import type { RarityCount } from "./RarityCount";
 
 /**
- * Analytical breakdown of a single set: completion against both the
- * numbered set and the master (every printing) set, the rarity split,
- * and value — the full set's market value and the value owned.
+ * Analytical breakdown of a single set: completion by card and by printing
+ * (the master set), the rarity split, and value — the full set's market
+ * value and the value owned.
  */
-export type SetAnalytics = { set_code: string, name: string, series: string, 
+export type SetAnalytics = { set_code: string, name: string, release_date: string | null, 
 /**
- * Base-set cards only (number ≤ printed_total — excludes secret
- * rares, subset sections, promos), and how many the user owns
- * (any variant counts).
- */
-base_total_cards: number, base_owned_cards: number, 
-/**
- * Numbered cards in the set, and how many the user owns.
+ * Distinct cards printed in the set, and how many the user owns (any
+ * printing counts).
  */
 total_cards: number, owned_cards: number, 
 /**
- * Non-deprecated printings (the master set), and how many are owned.
+ * Printings in the set (the master set), and how many are owned.
  */
 total_printings: number, owned_printings: number, 
 /**
@@ -27,8 +22,8 @@ total_printings: number, owned_printings: number,
  */
 owned_copies: number, 
 /**
- * Market value: one of every printing in the set, one of every
- * printing the user owns, and the all-physical-copies sum (counts
+ * Market value: the cheapest printing of every card in the set, one of
+ * every printing the user owns, and the all-physical-copies sum (counts
  * duplicates).
  */
 market_value: number, owned_value_unique: number, owned_value: number, rarities: Array<RarityCount>, 

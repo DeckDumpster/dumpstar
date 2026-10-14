@@ -8,7 +8,7 @@ use crate::error::{DbError, Result};
 const COLS: &str = "w.id, w.card_id, w.printing_id, w.max_price, w.priority, \
      w.notes, w.added_at, w.source, w.fulfilled_at, \
      w.min_condition, w.quantity, w.quantity_have, \
-     cd.set_code, s.name AS set_name, cd.number, cd.name, cd.rarity, cd.image_small";
+     lp.set_code, s.name AS set_name, lp.number, cd.name, cd.subtitle, lp.rarity, lp.image_url";
 
 /// A wishlist entry joined to its card.
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
@@ -37,8 +37,9 @@ pub struct WishlistEntry {
     pub set_name: String,
     pub number: String,
     pub name: String,
+    pub subtitle: Option<String>,
     pub rarity: Option<String>,
-    pub image_small: Option<String>,
+    pub image_url: Option<String>,
 }
 
 /// Fields for adding a wish.
@@ -87,8 +88,9 @@ fn from_row(r: &rusqlite::Row) -> rusqlite::Result<WishlistEntry> {
         set_name: r.get(13)?,
         number: r.get(14)?,
         name: r.get(15)?,
-        rarity: r.get(16)?,
-        image_small: r.get(17)?,
+        subtitle: r.get(16)?,
+        rarity: r.get(17)?,
+        image_url: r.get(18)?,
     })
 }
 
@@ -139,10 +141,14 @@ pub fn list(conn: &Connection, include_fulfilled: bool) -> Result<Vec<WishlistEn
     } else {
         "WHERE w.fulfilled_at IS NULL "
     };
+    let lead = crate::lead_printing_id!("cd.card_id");
     let mut stmt = conn.prepare(&format!(
         "SELECT {COLS} FROM wishlist w \
            JOIN cards cd ON w.card_id = cd.card_id \
-           JOIN sets s ON cd.set_code = s.set_code \
+           JOIN printings lp ON lp.printing_id = COALESCE( \
+                (SELECT printing_id FROM printings WHERE printing_id = w.printing_id), \
+                {lead}) \
+           JOIN sets s ON lp.set_code = s.set_code \
          {filter}ORDER BY w.priority DESC, w.id DESC"
     ))?;
     let rows = stmt.query_map([], from_row)?;
@@ -289,17 +295,8 @@ mod tests {
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series) VALUES ('sor', 'Spark of Rebellion', 'SWU')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('sor-6', 'sor', '6', 6, 'Darth Vader')",
-                [],
-            )
-            .unwrap();
+            // A card is listed through its lead printing, so it needs one.
+            crate::testkit::simple(&c, "SOR", "6", "Luke Skywalker");
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         (dir, conn)
@@ -311,7 +308,7 @@ mod tests {
         let id = add(
             &conn,
             &NewWish {
-                card_id: "sor-6".into(),
+                card_id: "SOR-6".into(),
                 priority: Some(5),
                 max_price: Some(200.0),
                 ..Default::default()
@@ -321,15 +318,15 @@ mod tests {
 
         let active = list(&conn, false).unwrap();
         assert_eq!(active.len(), 1);
-        assert_eq!(active[0].name, "Darth Vader");
+        assert_eq!(active[0].name, "Luke Skywalker");
         assert_eq!(active[0].priority, 5);
-        assert!(exists_for_card(&conn, "sor-6").unwrap());
+        assert!(exists_for_card(&conn, "SOR-6").unwrap());
 
         // Fulfilled wishes drop out of the active list.
         assert!(set_fulfilled(&conn, id, true).unwrap());
         assert_eq!(list(&conn, false).unwrap().len(), 0);
         assert_eq!(list(&conn, true).unwrap().len(), 1);
-        assert!(!exists_for_card(&conn, "sor-6").unwrap());
+        assert!(!exists_for_card(&conn, "SOR-6").unwrap());
 
         assert!(delete(&conn, id).unwrap());
         assert_eq!(list(&conn, true).unwrap().len(), 0);
@@ -339,26 +336,8 @@ mod tests {
         let (d, conn) = conn();
         let shared = d.path().join("shared.sqlite");
         let c = open_shared(&shared).unwrap();
-        for v in ["normal", "foil"] {
-            c.execute(
-                "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES (?1, 'sor-6', ?2)",
-                params![format!("sor-6-{v}"), v],
-            )
-            .unwrap();
-        }
-        c.execute(
-            "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-             VALUES ('sor-7', 'sor', '7', 7, 'Other')",
-            [],
-        )
-        .unwrap();
-        c.execute(
-            "INSERT INTO printings (printing_id, card_id, variant) \
-             VALUES ('sor-7-normal', 'sor-7', 'normal')",
-            [],
-        )
-        .unwrap();
+        crate::testkit::foil_of(&c, "SOR", "6");
+        crate::testkit::simple(&c, "SOR", "7", "Other");
         drop(c);
         (d, conn)
     }
@@ -367,7 +346,7 @@ mod tests {
         add(
             conn,
             &NewWish {
-                card_id: "sor-6".into(),
+                card_id: "SOR-6".into(),
                 printing_id: printing.map(String::from),
                 ..Default::default()
             },
@@ -386,7 +365,7 @@ mod tests {
         crate::collection::add(
             &mut conn,
             &crate::collection::NewCopy {
-                printing_id: "sor-6-foil".into(),
+                printing_id: "SOR-6-foil".into(),
                 source: "manual_id".into(),
                 ..Default::default()
             },
@@ -398,16 +377,16 @@ mod tests {
     #[test]
     fn specific_printing_want_is_not_fulfilled_by_a_different_printing() {
         let (_d, mut conn) = with_printings();
-        want(&conn, Some("sor-6-foil"));
+        want(&conn, Some("SOR-6-foil"));
         let copy = |p: &str| crate::collection::NewCopy {
             printing_id: p.into(),
             source: "manual_id".into(),
             ..Default::default()
         };
-        crate::collection::add(&mut conn, &copy("sor-6-normal")).unwrap();
-        crate::collection::add(&mut conn, &copy("sor-7-normal")).unwrap();
+        crate::collection::add(&mut conn, &copy("SOR-6-normal")).unwrap();
+        crate::collection::add(&mut conn, &copy("SOR-7-normal")).unwrap();
         assert_eq!(active(&conn), 1);
-        crate::collection::add(&mut conn, &copy("sor-6-foil")).unwrap();
+        crate::collection::add(&mut conn, &copy("SOR-6-foil")).unwrap();
         assert_eq!(active(&conn), 0);
     }
 
@@ -417,7 +396,7 @@ mod tests {
         let id = add(
             &conn,
             &NewWish {
-                card_id: "sor-6".into(),
+                card_id: "SOR-6".into(),
                 min_condition: Some("Lightly Played".into()),
                 max_price: Some(10.0),
                 quantity: Some(2),
@@ -426,7 +405,7 @@ mod tests {
         )
         .unwrap();
         let copy = |cond: &str, price: f64| crate::collection::NewCopy {
-            printing_id: "sor-6-normal".into(),
+            printing_id: "SOR-6-normal".into(),
             condition: Some(cond.into()),
             purchase_price: Some(price),
             source: "manual_id".into(),
@@ -450,12 +429,12 @@ mod tests {
         let (_d, conn) = with_printings();
         let bad = |w: NewWish| add(&conn, &w).unwrap_err();
         let base = || NewWish {
-            card_id: "sor-6".into(),
+            card_id: "SOR-6".into(),
             ..Default::default()
         };
         assert!(matches!(
             bad(NewWish {
-                printing_id: Some("sor-7-normal".into()),
+                printing_id: Some("SOR-7-normal".into()),
                 ..base()
             }),
             DbError::NotFound(_)

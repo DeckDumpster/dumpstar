@@ -19,10 +19,8 @@ use rusqlite::{Connection, params};
 use crate::error::Result;
 
 pub(crate) const KEYWORDS_SEED: &str = include_str!("../../../data/search_keywords.json");
-// `rarities.json` ranks both catalogs. The Japanese tiers TCGCSV ships
-// (Holo Rare, Art Rare, Special Art Rare, Character Rare, …) are ranked
-// against their nearest English equivalent so `r>=` / `r<` span English
-// and Japanese cards alike.
+// `rarities.json` ranks the Star Wars: Unlimited tiers (Common through
+// Legendary, Special, and Promo) so `r>=` / `r<` compare by rank.
 pub(crate) const RARITIES_SEED: &str = include_str!("../../../data/rarities.json");
 pub(crate) const FLAGS_SEED: &str = include_str!("../../../data/search_flags.json");
 
@@ -41,7 +39,7 @@ pub struct Rarity {
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct SearchFlag {
     pub flag: String,
-    /// `variant_match` (match `match_str` against variant code/label) or
+    /// `variant_match` (match `match_str` against the printing's variant), `finish` (match it against the finish) or
     /// `computed` (a named predicate the compiler implements).
     pub kind: String,
     #[serde(rename = "match", default)]
@@ -198,9 +196,9 @@ pub fn load_rarities(conn: &Connection) -> Result<Vec<Rarity>> {
 
 /// Resolve raw catalog rarity strings against the `rarities` table.
 ///
-/// Upstream is inconsistent about spelling: pokemontcg.io ships
-/// `"Special Illustration Rare"` while some TCGCSV tiers arrive as
-/// `"MEGA_ATTACK_RARE"`. Both name the same tier, so the lookup key is a
+/// Upstream is inconsistent about spelling: the official API ships
+/// `"Legendary"` while TCGCSV tiers can arrive as `"LEGENDARY"`. Both name
+/// the same tier, so the lookup key is a
 /// normalised form (lowercased, underscores as spaces, whitespace
 /// collapsed) and the table's own `name` is the canonical spelling to
 /// display.
@@ -242,7 +240,7 @@ impl RarityLookup {
         self.get(raw).map_or(UNRANKED_RARITY, |r| r.rank)
     }
 
-    /// Group alias (`common`, `ultra`, `secret`…) — the key the stats page
+    /// Group alias (`common`, `rare`, `legendary`…) — the key the stats page
     /// colours its histogram by.
     pub fn grp(&self, raw: &str) -> Option<String> {
         self.get(raw).and_then(|r| r.grp.clone())
@@ -294,7 +292,7 @@ mod tests {
         // The embedded JSON must parse, and no alias may map to two keywords
         // (a HashMap would silently clobber the duplicate).
         let keywords: Vec<KeywordDef> = serde_json::from_str(KEYWORDS_SEED).unwrap();
-        assert!(keywords.len() >= 40, "expected the full keyword map");
+        assert!(keywords.len() >= 35, "expected the full keyword map");
         let mut seen: std::collections::HashMap<String, String> = std::collections::HashMap::new();
         for k in &keywords {
             for a in std::iter::once(&k.canonical).chain(k.aliases.iter()) {
@@ -334,12 +332,17 @@ mod tests {
         reconcile(&mut conn).unwrap();
         let reg = load_registry(&conn).unwrap();
         assert!(!reg.is_empty());
-        assert_eq!(reg.resolve("t"), Some("energy_type"));
-        assert_eq!(reg.resolve("TYPE"), Some("energy_type"));
+        assert_eq!(reg.resolve("t"), Some("card_type"));
+        assert_eq!(reg.resolve("TYPE"), Some("card_type"));
+        assert_eq!(reg.resolve("a"), Some("aspect"));
+        assert_eq!(reg.resolve("c"), Some("cost"));
         assert_eq!(reg.resolve("s"), Some("set"));
         assert_eq!(reg.resolve("is"), Some("is_flag"));
         assert_eq!(reg.resolve("qty"), Some("qty"));
         assert_eq!(reg.resolve("bogus"), None);
+        // The removed vocabulary is gone, not merely unused.
+        assert_eq!(reg.resolve("dex"), None);
+        assert_eq!(reg.resolve("energy"), None);
     }
 
     #[test]
@@ -348,15 +351,17 @@ mod tests {
         reconcile(&mut conn).unwrap();
         let rs = load_rarities(&conn).unwrap();
         let rank = |name: &str| rs.iter().find(|r| r.name == name).map(|r| r.rank);
-        assert!(rank("Common").unwrap() < rank("Rare Holo").unwrap());
-        assert!(rank("Rare Holo").unwrap() < rank("Hyper Rare").unwrap());
+        assert!(rank("Common").unwrap() < rank("Uncommon").unwrap());
+        assert!(rank("Uncommon").unwrap() < rank("Rare").unwrap());
+        assert!(rank("Rare").unwrap() < rank("Legendary").unwrap());
+        assert!(rank("Legendary").unwrap() < rank("Special").unwrap());
         assert_eq!(
             rs.iter()
-                .find(|r| r.name == "Hyper Rare")
+                .find(|r| r.name == "Legendary")
                 .unwrap()
                 .grp
                 .as_deref(),
-            Some("secret")
+            Some("legendary")
         );
     }
 
@@ -366,20 +371,20 @@ mod tests {
         reconcile(&mut conn).unwrap();
         let tiers = RarityLookup::load(&conn).unwrap();
 
-        // TCGCSV's SCREAMING_SNAKE and pokemontcg.io's title case name the
+        // The official API's title case and TCGCSV's SCREAMING_SNAKE name the
         // same tier; both resolve to the seed's spelling.
-        for raw in ["Mega Attack Rare", "MEGA_ATTACK_RARE", "mega  attack rare"] {
-            assert_eq!(tiers.display(raw), "Mega Attack Rare", "raw = {raw}");
-            assert_eq!(tiers.grp(raw).as_deref(), Some("special"), "raw = {raw}");
+        for raw in ["Legendary", "LEGENDARY", "legendary", "  legendary "] {
+            assert_eq!(tiers.display(raw), "Legendary", "raw = {raw}");
+            assert_eq!(tiers.grp(raw).as_deref(), Some("legendary"), "raw = {raw}");
         }
-        assert_eq!(tiers.grp("Hyper Rare").as_deref(), Some("secret"));
-        assert!(tiers.rank("Common") < tiers.rank("Hyper Rare"));
+        assert_eq!(tiers.grp("Special").as_deref(), Some("special"));
+        assert!(tiers.rank("Common") < tiers.rank("Legendary"));
 
         // A tier the seed does not carry keeps its string and sorts last.
         assert_eq!(tiers.display("Blorbo Rare"), "Blorbo Rare");
         assert_eq!(tiers.rank("Blorbo Rare"), UNRANKED_RARITY);
         assert_eq!(tiers.grp("Blorbo Rare"), None);
-        assert!(tiers.rank("Blorbo Rare") > tiers.rank("Hyper Rare"));
+        assert!(tiers.rank("Blorbo Rare") > tiers.rank("Special"));
     }
 
     #[test]
@@ -390,8 +395,11 @@ mod tests {
         let missing = flags.iter().find(|f| f.flag == "missing").unwrap();
         assert_eq!(missing.kind, "computed");
         assert_eq!(missing.predicate.as_deref(), Some("missing"));
-        let holo = flags.iter().find(|f| f.flag == "holo").unwrap();
-        assert_eq!(holo.kind, "variant_match");
-        assert_eq!(holo.match_str.as_deref(), Some("holo"));
+        let hyperspace = flags.iter().find(|f| f.flag == "hyperspace").unwrap();
+        assert_eq!(hyperspace.kind, "variant_match");
+        assert_eq!(hyperspace.match_str.as_deref(), Some("Hyperspace"));
+        let foil = flags.iter().find(|f| f.flag == "foil").unwrap();
+        assert_eq!(foil.kind, "finish");
+        assert_eq!(foil.match_str.as_deref(), Some("Foil"));
     }
 }

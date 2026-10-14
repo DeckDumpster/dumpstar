@@ -177,17 +177,17 @@ mod tests {
     use super::*;
     use crate::query::registry::KeywordDef;
 
-    /// A representative Star Wars: Unlimited keyword registry for parser tests. The real
+    /// A representative SWU keyword registry for parser tests. The real
     /// definitions are data (task idf.6); the parser only needs alias
     /// resolution, so this covers enough keywords to exercise it.
     fn registry() -> KeywordRegistry {
         KeywordRegistry::new(vec![
-            KeywordDef::new("aspect", &["t", "type"]),
+            KeywordDef::new("card_type", &["t", "type"]),
             KeywordDef::new("hp", &["hp"]),
             KeywordDef::new("rarity", &["r", "rarity"]),
             KeywordDef::new("set", &["s", "set", "e"]),
-            KeywordDef::new("supertype", &["super", "supertype"]),
-            KeywordDef::new("subtype", &["sub", "subtype"]),
+            KeywordDef::new("aspect", &["a", "aspect"]),
+            KeywordDef::new("trait", &["trait"]),
             KeywordDef::new("status", &["status"]),
             KeywordDef::new("is_flag", &["is"]),
             KeywordDef::new("price", &["price"]),
@@ -236,11 +236,11 @@ mod tests {
     #[test]
     fn colon_comparison() {
         assert_eq!(
-            parse_ok("t:vigilance"),
+            parse_ok("t:unit"),
             Ast::Comparison {
-                keyword: "aspect".into(),
+                keyword: "card_type".into(),
                 op: Op::Contains,
-                value: "vigilance".into(),
+                value: "unit".into(),
             }
         );
     }
@@ -283,8 +283,8 @@ mod tests {
     #[test]
     fn aliases_resolve_to_canonical() {
         for alias in ["t", "type", "TYPE"] {
-            match parse_ok(&format!("{alias}:command")) {
-                Ast::Comparison { keyword, .. } => assert_eq!(keyword, "aspect"),
+            match parse_ok(&format!("{alias}:unit")) {
+                Ast::Comparison { keyword, .. } => assert_eq!(keyword, "card_type"),
                 other => panic!("unexpected {other:?}"),
             }
         }
@@ -312,7 +312,7 @@ mod tests {
 
     #[test]
     fn implicit_and() {
-        match parse_ok("t:vigilance hp>=100") {
+        match parse_ok("t:unit hp>=100") {
             Ast::And(children) => assert_eq!(children.len(), 2),
             other => panic!("expected And, got {other:?}"),
         }
@@ -320,7 +320,7 @@ mod tests {
 
     #[test]
     fn explicit_or_case_insensitive() {
-        for q in ["t:vigilance or t:command", "t:vigilance OR t:command"] {
+        for q in ["t:unit or t:event", "t:unit OR t:event"] {
             match parse_ok(q) {
                 Ast::Or(children) => assert_eq!(children.len(), 2, "{q:?}"),
                 other => panic!("expected Or for {q:?}, got {other:?}"),
@@ -330,7 +330,7 @@ mod tests {
 
     #[test]
     fn or_flattens() {
-        match parse_ok("t:vigilance or t:command or t:cunning") {
+        match parse_ok("t:unit or t:event or t:upgrade") {
             Ast::Or(children) => assert_eq!(children.len(), 3),
             other => panic!("expected flattened Or, got {other:?}"),
         }
@@ -338,15 +338,12 @@ mod tests {
 
     #[test]
     fn explicit_and_connector_is_noop() {
-        assert_eq!(
-            parse_ok("t:vigilance and t:command"),
-            parse_ok("t:vigilance t:command")
-        );
+        assert_eq!(parse_ok("t:unit and t:event"), parse_ok("t:unit t:event"));
     }
 
     #[test]
     fn negation_of_comparison() {
-        match parse_ok("-t:vigilance") {
+        match parse_ok("-t:unit") {
             Ast::Not(inner) => assert!(matches!(*inner, Ast::Comparison { .. })),
             other => panic!("expected Not, got {other:?}"),
         }
@@ -362,7 +359,7 @@ mod tests {
 
     #[test]
     fn negation_combines_with_and() {
-        match parse_ok("-is:graded t:vigilance") {
+        match parse_ok("-is:graded t:unit") {
             Ast::And(children) => {
                 assert!(matches!(children[0], Ast::Not(_)));
                 assert!(matches!(children[1], Ast::Comparison { .. }));
@@ -373,7 +370,7 @@ mod tests {
 
     #[test]
     fn parentheses_group() {
-        match parse_ok("(t:vigilance or t:command) hp>=100") {
+        match parse_ok("(t:unit or t:event) hp>=100") {
             Ast::And(children) => {
                 assert!(matches!(children[0], Ast::Or(_)));
                 assert!(matches!(children[1], Ast::Comparison { .. }));
@@ -385,14 +382,14 @@ mod tests {
     #[test]
     fn nested_parentheses() {
         assert!(matches!(
-            parse_ok("((t:vigilance or t:command) hp>=100)"),
+            parse_ok("((t:unit or t:event) hp>=100)"),
             Ast::And(_)
         ));
     }
 
     #[test]
     fn negated_group() {
-        match parse_ok("-(t:vigilance or t:command)") {
+        match parse_ok("-(t:unit or t:event)") {
             Ast::Not(inner) => assert!(matches!(*inner, Ast::Or(_))),
             other => panic!("expected Not(Or), got {other:?}"),
         }
@@ -400,7 +397,7 @@ mod tests {
 
     #[test]
     fn complex_query() {
-        match parse_ok("s:sor t:vigilance rarity>=rare -is:graded") {
+        match parse_ok("s:sor t:unit rarity>=rare -is:graded") {
             Ast::And(children) => assert_eq!(children.len(), 4),
             other => panic!("expected And of 4, got {other:?}"),
         }
@@ -427,8 +424,8 @@ mod tests {
 
     #[test]
     fn unknown_keyword_position_points_at_keyword() {
-        let err = parse("t:vigilance bogus:1", &registry()).unwrap_err();
-        assert_eq!(err.position, 12); // index of 'bogus'
+        let err = parse("t:unit bogus:1", &registry()).unwrap_err();
+        assert_eq!(err.position, 7); // index of 'bogus'
     }
 
     #[test]
@@ -439,7 +436,7 @@ mod tests {
 
     #[test]
     fn missing_close_paren_errors() {
-        let err = parse("(t:vigilance", &registry()).unwrap_err();
+        let err = parse("(t:unit", &registry()).unwrap_err();
         assert!(err.message.to_lowercase().contains("paren"));
     }
 }

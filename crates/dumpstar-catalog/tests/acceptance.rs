@@ -309,7 +309,14 @@ fn no_request_handler_opens_the_catalog_for_writing() {
             if p.is_dir() {
                 stack.push(p);
             } else if p.extension().is_some_and(|x| x == "rs") {
-                let src = fs::read_to_string(&p).unwrap();
+                // Production code only: a test legitimately builds the catalog
+                // it serves from (as `dumpstar-server/tests/no_catalog_writer.rs`
+                // also allows).
+                let text = fs::read_to_string(&p).unwrap();
+                let src = match text.find("#[cfg(test)]") {
+                    Some(i) => &text[..i],
+                    None => &text,
+                };
                 if src.contains("dumpstar_catalog")
                     && ["open_writer", "apply", "run_once", "job::"]
                         .iter()

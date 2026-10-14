@@ -15,8 +15,7 @@ history, ever, and nothing errored — the run looked perfectly successful
 
 That step is now deleted rather than fixed in place (pd-hkbc), which makes this
 job the **only** thing that records today's value for anybody. The refresh no
-longer opens a tenant database at all — ``tests/refresh/tenant_bytes.sh`` holds
-it to that — so a day this job does not run is a gap in every tenant's chart.
+longer opens a tenant database at all, so a day this job does not run is a gap in every tenant's chart.
 It is recoverable (``--date`` reconstructs any day still in the lake) but it is
 not self-healing, which is the argument for putting this on a timer rather than
 running it by hand.

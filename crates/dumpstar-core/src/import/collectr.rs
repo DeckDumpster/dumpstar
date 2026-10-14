@@ -2,7 +2,7 @@
 //! single file mixing single cards and sealed products across multiple
 //! game categories. This parser splits that file along the garden wall:
 //! singles become [`ParsedRow`]s, sealed products become
-//! [`ParsedSealedRow`]s, and everything else (rows from other games) is reported
+//! [`ParsedSealedRow`]s, and everything else (other games' rows) is reported
 //! as skipped rather than silently dropped.
 //!
 //! Collectr columns: `Portfolio Name, Category, Set, Product Name,
@@ -84,7 +84,8 @@ pub fn parse(input: &str) -> Result<CollectrParsed> {
         let name = get(Some(col_name)).to_string();
         let set = get(Some(col_set));
 
-        // Dumpstar tracks Star Wars: Unlimited — drop other games, but say so.
+        // Dumpstar is a Star Wars: Unlimited tracker — drop other games, but
+        // say so.
         if !is_swu_category(&category) {
             out.skipped.push(SkippedRow {
                 source_line: line,
@@ -137,7 +138,7 @@ pub fn parse(input: &str) -> Result<CollectrParsed> {
             continue;
         }
 
-        let variant = manabox::map_variant(get(col_variance));
+        let finish = manabox::map_finish(get(col_variance));
         let acquired_at = (!date_added.is_empty()).then(|| to_rfc3339(date_added));
         let single = ParsedRow {
             source_line: line,
@@ -145,7 +146,7 @@ pub fn parse(input: &str) -> Result<CollectrParsed> {
             set_name: Some(set.to_string()),
             name: (!name.is_empty()).then(|| name.clone()),
             number: normalize_number(number_raw),
-            variant,
+            finish,
             condition,
             language: map_language(""), // Collectr carries no language column.
             purchase_price,
@@ -160,23 +161,23 @@ pub fn parse(input: &str) -> Result<CollectrParsed> {
     Ok(out)
 }
 
-/// Collectr writes collector numbers as `number/total` (`221/217`),
-/// occasionally with a set-abbrev prefix (`P 176`), and zero-padded to
-/// three digits (`090/086`). Reduce to the bare, unpadded collector number
-/// the catalog stores.
+/// Collectr's category name for the game. Written `Star Wars Unlimited`;
+/// tolerate the colon and the abbreviation.
+fn is_swu_category(category: &str) -> bool {
+    let c: String = category
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    c == "starwarsunlimited" || c == "swu"
+}
+
+/// Collectr writes collector numbers as `number/total` (`221/252`) and
+/// zero-pads them to three digits (`090/252`). Reduce to the bare, unpadded
+/// collector number the catalog stores.
 fn normalize_number(raw: &str) -> String {
     let s = raw.trim();
     let s = s.split('/').next().unwrap_or(s).trim();
-    // "P 176" → "176": drop an alphabetic prefix before a numeric tail.
-    let s = if let Some((prefix, tail)) = s.rsplit_once(' ')
-        && !tail.is_empty()
-        && tail.chars().all(|c| c.is_ascii_digit())
-        && prefix.chars().any(|c| c.is_ascii_alphabetic())
-    {
-        tail
-    } else {
-        s
-    };
     // "090" → "90": strip zero-padding, but only on all-digit tokens.
     super::normalize_collector_number(s)
 }
@@ -213,32 +214,21 @@ fn clean_notes(raw: &str) -> Option<String> {
     (!s.is_empty()).then(|| s.to_string())
 }
 
-/// Collectr's category cell for Star Wars: Unlimited, tolerant of punctuation
-/// and case ("Star Wars Unlimited", "Star Wars: Unlimited").
-fn is_swu_category(category: &str) -> bool {
-    let key: String = category
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric())
-        .map(|c| c.to_ascii_lowercase())
-        .collect();
-    key == "starwarsunlimited"
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // A representative slice of a real Collectr export: a Lorcana row (must
-    // be skipped), singles with slashed/prefixed numbers and both variances,
-    // and sealed products with quantities.
+    // A representative slice of a Collectr export: a Lorcana row (must be
+    // skipped), singles with slashed/padded numbers and both variances, and
+    // sealed products with quantities.
     const SAMPLE: &str = "\
 Portfolio Name,Category,Set,Product Name,Card Number,Rarity,Variance,Grade,Card Condition,Average Cost Paid,Quantity,Market Price (As of 2026-07-17),Price Override,Watchlist,Date Added,Notes
-Main,Lorcana,Disney Lorcana Promo Cards,Elsa - The Fifth Spirit,6,Promo,Holofoil,Ungraded,Near Mint,0.0000,1,7.12,0,false,2026-01-24,
-Main,Star Wars Unlimited,Spark of Rebellion,Luke Skywalker - Jedi Knight,005/252,Legendary,Foil,Ungraded,Near Mint,0,1,7.19,0,false,2026-04-14,
-Main,Star Wars Unlimited,Prerelease Promos,Darth Vader - Dark Lord of the Sith,P 176,Promo,Foil,Ungraded,Near Mint,0,2,41.43,0,false,2026-03-30,
-Main,Star Wars Unlimited,Spark of Rebellion,Boba Fett - Disintegrator,026,Rare,Normal,Ungraded,Near Mint,0,1,14.69,0,false,2026-04-02,
-Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebellion Two-Player Starter,,,Normal,Ungraded,Near Mint,75.0000,1,135.35,0,false,2026-02-28,
-Sealed Star Wars Unlimited,Star Wars Unlimited,Twilight of the Republic,Twilight of the Republic Booster Display,,,Normal,Ungraded,Near Mint,200.0000,2,200.26,0,false,2026-03-23,; ";
+Main,Lorcana,Disney Lorcana Promo Cards,Elsa - The Fifth Spirit,6,Promo,Foil,Ungraded,Near Mint,0.0000,1,7.12,0,false,2026-01-24,
+Main,Star Wars Unlimited,Spark of Rebellion,Luke Skywalker - Faithful Friend,005/252,Special,Foil,Ungraded,Near Mint,0,1,7.19,0,false,2026-04-14,
+Main,Star Wars Unlimited,Spark of Rebellion,Millennium Falcon - Piece of Junk,262/252,Rare,Hyperspace Foil,Ungraded,Near Mint,0,2,41.43,0,false,2026-03-30,
+Main,Star Wars Unlimited,Shadows of the Galaxy,Vanquish,026,Common,Normal,Ungraded,Near Mint,0,1,14.69,0,false,2026-04-02,
+Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebellion Booster Box,,,Normal,Ungraded,Near Mint,75.0000,1,135.35,0,false,2026-02-28,
+Sealed Star Wars Unlimited,Star Wars Unlimited,Shadows of the Galaxy,Shadows of the Galaxy Carbonite Box,,,Normal,Ungraded,Near Mint,200.0000,2,200.26,0,false,2026-03-23,; ";
 
     #[test]
     fn splits_singles_sealed_and_skips_other_games() {
@@ -248,53 +238,58 @@ Sealed Star Wars Unlimited,Star Wars Unlimited,Twilight of the Republic,Twilight
         assert_eq!(out.skipped.len(), 1);
         assert_eq!(out.skipped[0].category, "Lorcana");
 
-        // Singles: Luke(x1) + Vader(x2, expanded) + Boba(x1) = 4 copies.
+        // Singles: Luke(x1) + Falcon(x2, expanded) + Vanquish(x1) = 4 copies.
         assert_eq!(out.singles.len(), 4);
         // Sealed: 2 distinct products (quantities kept, not expanded).
         assert_eq!(out.sealed.len(), 2);
     }
 
     #[test]
-    fn normalizes_numbers_and_variants() {
+    fn normalizes_numbers_and_finishes() {
         let out = parse(SAMPLE).unwrap();
         let luke = &out.singles[0];
         assert_eq!(luke.number, "5"); // 005/252 → 5
-        assert_eq!(luke.variant, "holo"); // Foil → holo
+        assert_eq!(luke.finish, "Foil");
         assert_eq!(luke.set_hint, "Spark of Rebellion");
         assert_eq!(luke.acquired_at.as_deref(), Some("2026-04-14T00:00:00Z"));
 
-        let vader = &out.singles[1];
-        assert_eq!(vader.number, "176"); // P 176 → 176
+        let falcon = &out.singles[1];
+        assert_eq!(falcon.number, "262"); // 262/252 → 262
+        assert_eq!(falcon.finish, "Foil"); // Hyperspace Foil
         assert_eq!(out.singles[1], out.singles[2]); // both expanded copies identical
 
-        let boba = &out.singles[3];
-        assert_eq!(boba.number, "26"); // 026 → 26 (zero-padding stripped)
-        assert_eq!(boba.variant, "normal"); // Variance Normal → normal
+        let vanquish = &out.singles[3];
+        assert_eq!(vanquish.number, "26"); // 026 → 26 (zero-padding stripped)
+        assert_eq!(vanquish.finish, "Normal");
     }
 
     #[test]
     fn strips_zero_padding_but_not_alphanumeric() {
-        // Collectr zero-pads to three digits; the catalog stores unpadded.
-        assert_eq!(normalize_number("090/086"), "90");
+        assert_eq!(normalize_number("090/252"), "90");
         assert_eq!(normalize_number("009"), "9");
-        assert_eq!(normalize_number("P 176"), "176");
         // Alphanumeric collector numbers must survive untouched.
-        assert_eq!(normalize_number("X01"), "X01");
-        assert_eq!(normalize_number("ABC123"), "ABC123");
-        assert_eq!(normalize_number("X01/X30"), "X01");
+        assert_eq!(normalize_number("P01"), "P01");
+        assert_eq!(normalize_number("T02/T03"), "T02");
+    }
+
+    #[test]
+    fn category_spellings() {
+        assert!(is_swu_category("Star Wars Unlimited"));
+        assert!(is_swu_category("Star Wars: Unlimited"));
+        assert!(!is_swu_category("Lorcana"));
     }
 
     #[test]
     fn sealed_keeps_quantity_and_cleans_notes() {
         let out = parse(SAMPLE).unwrap();
-        let starter = &out.sealed[0];
-        assert_eq!(starter.name, "Spark of Rebellion Two-Player Starter");
-        assert_eq!(starter.quantity, 1);
-        assert_eq!(starter.purchase_price, Some(75.0));
-        assert_eq!(starter.purchase_date.as_deref(), Some("2026-02-28"));
+        let boxed = &out.sealed[0];
+        assert_eq!(boxed.name, "Spark of Rebellion Booster Box");
+        assert_eq!(boxed.quantity, 1);
+        assert_eq!(boxed.purchase_price, Some(75.0));
+        assert_eq!(boxed.purchase_date.as_deref(), Some("2026-02-28"));
 
-        let box_ = &out.sealed[1];
-        assert_eq!(box_.quantity, 2); // not expanded
-        assert_eq!(box_.notes, None); // stray "; " stripped away
+        let carbonite = &out.sealed[1];
+        assert_eq!(carbonite.quantity, 2); // not expanded
+        assert_eq!(carbonite.notes, None); // stray "; " stripped away
     }
 }

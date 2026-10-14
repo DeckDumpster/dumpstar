@@ -7,7 +7,7 @@ import type { BinderSlot } from "./BinderSlot";
  */
 export type BinderPage = { set: BinderSetInfo, layout: number, page: number, total_pages: number, 
 /**
- * Numbered-set card count, and how many of those the user owns.
+ * Standard-variant slot count, and how many of those the user owns.
  */
 base_total: number, base_owned: number, 
 /**

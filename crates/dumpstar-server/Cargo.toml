@@ -22,6 +22,8 @@ jsonwebtoken.workspace = true
 reqwest.workspace = true
 
 [dev-dependencies]
+dumpstar-catalog.workspace = true
+chrono.workspace = true
 tempfile.workspace = true
 serde_json.workspace = true
 # Decoders for the compression tests — the assertion that matters is that a

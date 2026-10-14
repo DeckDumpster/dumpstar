@@ -5,7 +5,7 @@
  * catalogued card in the set, in collector-number order; `copies` is
  * the total physical count across every variant.
  */
-export type CardCopyCount = { number: string, number_sortable: number, 
+export type CardCopyCount = { number: string, sort_key: number, 
 /**
  * Canonical spelling from the `rarities` table where the tier is
  * known, else the raw catalog string.

@@ -6,17 +6,17 @@
 //! a catalog printing the feed cannot price is missing for *every* tenant, so
 //! each one had to rediscover the same gap by hand; and pricing a catalog row
 //! from the tenant forced `ORDER BY price` to `COALESCE` across the `ATTACH`
-//! boundary, which no index can satisfy. Catalog gaps are now patched in the
-//! catalog — see [`crate::catalog_prices`].
+//! boundary, which no index can satisfy. A catalog printing's price is the
+//! catalog's, never the tenant's.
 //!
 //! What is left here is the one case the catalog genuinely cannot know about:
 //! a printing that is not in the catalog *because a user added it by hand*.
 //! [`insert`] refuses anything else rather than accepting a row nothing would
 //! ever read.
 //!
-//! **Effective-price rule.** Defined once, in [`crate::prices`]: TCGplayer
-//! market wins, then the curated catalog override, then — for a user-created
-//! printing only — the newest row here. Time-series visualisation still
+//! **Effective-price rule.** Defined once, in [`crate::prices`]: the feed's
+//! newest market quote wins, and — for a user-created printing only — the
+//! newest row here is the price. Time-series visualisation still
 //! surfaces every source, so a manual entry stays visible alongside the
 //! TCGplayer line.
 
@@ -61,12 +61,11 @@ fn from_row(r: &rusqlite::Row) -> rusqlite::Result<ManualPrice> {
 
 const COLS: &str = "id, printing_id, price, observed_at, note, created_at";
 
-/// Why a catalog printing is refused, quoted back to the operator. The
-/// message names the file to edit, because "the catalog is wrong" is only
-/// actionable if you know where the catalog is authored.
-pub const CATALOG_PRINTING_RULE: &str = "a manual price belongs to a user-created printing; a catalog printing \
-     that TCGplayer does not price is a catalog gap, patched for every tenant \
-     in data/overrides/catalog_prices.json";
+/// Why a catalog printing is refused, quoted back to the user: its price is
+/// the catalog's, the same for every tenant, not something one tenant sets.
+pub const CATALOG_PRINTING_RULE: &str = "a manual price belongs to a user-created printing; the price of a catalog \
+     printing is the catalog's, the same for every tenant, and not something a \
+     tenant can set";
 
 /// Insert a manual price; returns its id.
 ///
@@ -134,38 +133,22 @@ mod tests {
     use super::*;
     use crate::{connect_user, open_shared};
 
-    /// A catalog holding `basep-14-normal`, plus a tenant that has invented
-    /// `basep-14-user-1` of its own. `PRINTING` is the one these tests may
+    /// A catalog holding `SOR-14-normal`, plus a tenant that has invented
+    /// `SOR-14-user-1` of its own. `PRINTING` is the one these tests may
     /// price; the catalog printing is here to prove it is refused.
-    const PRINTING: &str = "basep-14-user-1";
+    const PRINTING: &str = "SOR-14-user-1";
 
     fn conn() -> (tempfile::TempDir, Connection) {
         let dir = tempfile::tempdir().unwrap();
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series) VALUES ('basep', 'Promos', 'Base')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('basep-14', 'basep', '14', 14, 'Mewtwo')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES ('basep-14-normal', 'basep-14', 'normal')",
-                [],
-            )
-            .unwrap();
+            crate::testkit::simple(&c, "SOR", "14", "Darth Vader");
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         conn.execute(
             "INSERT INTO user_printings (printing_id, card_id, variant, created_at) \
-             VALUES (?1, 'basep-14', 'missing_variant', '2026-08-10')",
+             VALUES (?1, 'SOR-14', 'missing_variant', '2026-08-10')",
             [PRINTING],
         )
         .unwrap();
@@ -249,12 +232,12 @@ mod tests {
     /// this change the insert succeeded and the row then priced the printing
     /// for this tenant alone.
     #[test]
-    fn insert_refuses_a_catalog_printing_and_says_where_the_price_belongs() {
+    fn insert_refuses_a_catalog_printing_and_says_the_price_is_the_catalogs() {
         let (_d, conn) = conn();
         let err = insert(
             &conn,
             &NewManualPrice {
-                printing_id: "basep-14-normal".into(),
+                printing_id: "SOR-14-normal".into(),
                 price: 29.0,
                 observed_at: None,
                 note: None,
@@ -265,11 +248,11 @@ mod tests {
         assert!(matches!(err, DbError::Invalid(_)), "{err:?}");
         assert!(
             err.to_string()
-                .contains("data/overrides/catalog_prices.json"),
-            "the refusal must name the file to edit: {err}"
+                .contains("the price of a catalog printing is the catalog's"),
+            "the refusal must say a catalog printing's price is the catalog's: {err}"
         );
         assert!(
-            list_for_printing(&conn, "basep-14-normal")
+            list_for_printing(&conn, "SOR-14-normal")
                 .unwrap()
                 .is_empty()
         );

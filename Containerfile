@@ -15,8 +15,8 @@ FROM docker.io/library/rust:1.94-slim-bookworm AS builder
 
 WORKDIR /app
 
-# Workspace manifests, sources, and the embedded override data
-# (data/overrides/*.json is pulled in at compile time via include_str!).
+# Workspace manifests, sources, and the embedded seed data
+# (data/*.json is pulled in at compile time via include_str!).
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates/ crates/
 COPY data/ data/

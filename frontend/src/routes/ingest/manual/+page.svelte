@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { api } from '$lib/api';
-	import { variantLabel } from '$lib/variants.svelte';
+	import { printingLabel } from '$lib/format';
 	import { CONDITIONS } from '$lib/conditions';
 	import type { CardDetail } from '$lib/types/CardDetail';
 
@@ -31,14 +31,14 @@
 		}
 	}
 
-	async function add(printingId: string, variant: string) {
+	async function add(printingId: string, label: string) {
 		if (!card) return;
 		busy = true;
 		error = null;
 		const name = card.card.name;
 		try {
 			await api.addCopy({ printing_id: printingId, source: 'manual_id', condition });
-			log = [`Added ${name} · ${variantLabel(variant)} · ${condition}`, ...log];
+			log = [`Added ${name} · ${label} · ${condition}`, ...log];
 			// Refresh owned counts.
 			card = await api.card(card.card.set_code, card.card.number);
 		} catch (e) {
@@ -63,7 +63,7 @@
 >
 	<label>
 		Set code
-		<input type="text" placeholder="sor" bind:value={setCode} />
+		<input type="text" placeholder="SOR" bind:value={setCode} />
 	</label>
 	<label>
 		Number
@@ -84,7 +84,7 @@
 	{@const c = card.card}
 	<section class="resolved">
 		<div class="cardhead">
-			{#if c.image_small}<img src={c.image_small} alt={c.name} />{/if}
+			{#if c.image_url}<img src={c.image_url} alt={c.name} />{/if}
 			<div>
 				<h2><a href="/card/{c.set_code}/{c.number}">{c.name}</a></h2>
 				<p class="muted">{c.set_code} · #{c.number}{#if c.rarity} · {c.rarity}{/if}</p>
@@ -94,11 +94,11 @@
 			<thead><tr><th>Variant</th><th>Owned</th><th></th></tr></thead>
 			<tbody>
 				{#each card.printings as p (p.printing_id)}
-					<tr class:dim={p.deprecated}>
-						<td>{variantLabel(p.variant)}</td>
+					<tr>
+						<td>{printingLabel(p.variant, p.finish)}</td>
 						<td>{p.owned_count}</td>
 						<td>
-							<button disabled={busy} onclick={() => add(p.printing_id, p.variant)}>
+							<button disabled={busy} onclick={() => add(p.printing_id, printingLabel(p.variant, p.finish))}>
 								+ Add
 							</button>
 						</td>
@@ -198,9 +198,6 @@
 	td {
 		padding: 0.4rem 0.6rem;
 		border-bottom: 1px solid var(--color-border);
-	}
-	tr.dim {
-		opacity: 0.5;
 	}
 	section {
 		margin-top: 2rem;

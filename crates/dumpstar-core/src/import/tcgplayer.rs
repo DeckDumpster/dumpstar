@@ -92,7 +92,7 @@ pub fn parse(input: &str) -> Result<Vec<ParsedRow>> {
             }
         };
 
-        let variant = map_variant(get(col_printing));
+        let finish = super::manabox::map_finish(get(col_printing));
         let condition = map_condition(get(col_condition));
         let language = map_language(get(col_language));
 
@@ -103,7 +103,7 @@ pub fn parse(input: &str) -> Result<Vec<ParsedRow>> {
                 set_name: (!set_name.is_empty()).then(|| set_name.to_string()),
                 name: None,
                 number: number.clone(),
-                variant: variant.clone(),
+                finish: finish.clone(),
                 condition: condition.clone(),
                 language: language.clone(),
                 purchase_price,
@@ -115,26 +115,14 @@ pub fn parse(input: &str) -> Result<Vec<ParsedRow>> {
     Ok(rows)
 }
 
-/// TCGplayer `Printing` value → Dumpstar variant code.
-fn map_variant(printing: &str) -> String {
-    match printing.trim().to_lowercase().as_str() {
-        // Star Wars: Unlimited prints in two finishes, Normal and Foil. The foil
-        // finish is stored under the catalog's `holo` variant code.
-        "foil" => "holo",
-        // "normal", "" and anything unrecognised.
-        _ => "normal",
-    }
-    .to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     const SAMPLE: &str = "\
 Quantity,Name,Set,Card Number,Set Code,Printing,Condition,Language,Price
-3,Luke Skywalker - Faithful Friend,Spark of Rebellion,5,SOR,Foil,Near Mint,English,$12.50
-1,Millennium Falcon - Piece of Junk,Spark of Rebellion,193,SOR,Normal,Lightly Played Foil,English,";
+3,Luke Skywalker,Spark of Rebellion,5,SOR,Foil,Near Mint,English,$12.50
+1,Vanquish,Spark of Rebellion,63,SOR,Normal,Lightly Played Foil,English,";
 
     #[test]
     fn parses_printing_price_and_quantity() {
@@ -145,14 +133,14 @@ Quantity,Name,Set,Card Number,Set Code,Printing,Condition,Language,Price
         assert_eq!(luke.set_hint, "SOR");
         assert_eq!(luke.set_name.as_deref(), Some("Spark of Rebellion"));
         assert_eq!(luke.number, "5");
-        assert_eq!(luke.variant, "holo");
+        assert_eq!(luke.finish, "Foil");
         assert_eq!(luke.condition, "Near Mint");
         assert_eq!(luke.purchase_price, Some(12.50));
 
-        let falcon = &rows[3];
-        assert_eq!(falcon.variant, "normal");
-        assert_eq!(falcon.condition, "Lightly Played"); // ' Foil' suffix stripped
-        assert_eq!(falcon.purchase_price, None);
+        let vanquish = &rows[3];
+        assert_eq!(vanquish.finish, "Normal");
+        assert_eq!(vanquish.condition, "Lightly Played"); // ' Foil' suffix stripped
+        assert_eq!(vanquish.purchase_price, None);
     }
 
     #[test]

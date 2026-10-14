@@ -91,7 +91,7 @@ pub fn parse(input: &str) -> Result<Vec<ParsedRow>> {
             }
         };
 
-        let variant = map_variant(get(col_foil));
+        let finish = map_finish(get(col_foil));
         let condition = map_condition(get(col_condition));
         let language = map_language(get(col_language));
         let mut tags = Vec::new();
@@ -109,7 +109,7 @@ pub fn parse(input: &str) -> Result<Vec<ParsedRow>> {
                 set_name: (!set_name.is_empty()).then(|| set_name.to_string()),
                 name: None,
                 number: number.clone(),
-                variant: variant.clone(),
+                finish: finish.clone(),
                 condition: condition.clone(),
                 language: language.clone(),
                 purchase_price,
@@ -121,19 +121,18 @@ pub fn parse(input: &str) -> Result<Vec<ParsedRow>> {
     Ok(rows)
 }
 
-/// ManaBox `Foil` value → Dumpstar variant code. ManaBox's own
-/// vocabulary is translated; any other value passes through verbatim, so
-/// Dumpstar's own CSV export (which writes variant codes directly)
-/// round-trips every variant, not just the three ManaBox knows.
+/// A foil column's value → `Normal` or `Foil`. ManaBox writes `foil` and
+/// `normal`; Collectr's `Variance` and TCGplayer's `Printing`
+/// say `Foil`, `Hyperspace Foil`, `Normal`, … Anything naming a foil is
+/// `Foil`; everything else, including blank, is `Normal`.
 ///
-/// Shared with the Collectr importer, whose `Variance` column speaks the
-/// same finish vocabulary (`Normal`, `Foil`). Star Wars: Unlimited prints in
-/// those two finishes; the foil one is stored under the `holo` variant code.
-pub(crate) fn map_variant(foil: &str) -> String {
-    match foil.trim().to_lowercase().as_str() {
-        "" | "non-foil" | "nonfoil" => "normal".to_string(),
-        "foil" => "holo".to_string(),
-        other => other.to_string(),
+/// Shared with the Collectr and TCGplayer importers.
+pub(crate) fn map_finish(foil: &str) -> String {
+    let v = foil.trim().to_lowercase();
+    if v.contains("foil") && !v.contains("non-foil") && !v.contains("nonfoil") {
+        "Foil".to_string()
+    } else {
+        "Normal".to_string()
     }
 }
 
@@ -143,8 +142,8 @@ mod tests {
 
     const SAMPLE: &str = "\
 Set code,Set name,Collector number,Foil,Rarity,Quantity,ManaBox ID,Scryfall ID,Purchase price,Misprint,Altered,Condition,Language,Purchase price currency
-SOR,Spark of Rebellion,193,normal,Rare,2,m1,s1,0.25,false,false,near_mint,en,USD
-SOR,Spark of Rebellion,5,foil,Special,1,m2,s2,42.00,true,false,lightly_played,en,USD";
+SOR,Spark of Rebellion,6,normal,Common,2,m1,s1,0.25,false,false,near_mint,en,USD
+SOR,Spark of Rebellion,262,foil,Legendary,1,m2,s2,42.00,true,false,lightly_played,en,USD";
 
     #[test]
     fn expands_quantity_one_row_per_copy() {
@@ -154,8 +153,8 @@ SOR,Spark of Rebellion,5,foil,Special,1,m2,s2,42.00,true,false,lightly_played,en
         let first = &rows[0];
         assert_eq!(first.set_hint, "SOR");
         assert_eq!(first.set_name.as_deref(), Some("Spark of Rebellion"));
-        assert_eq!(first.number, "193");
-        assert_eq!(first.variant, "normal");
+        assert_eq!(first.number, "6");
+        assert_eq!(first.finish, "Normal");
         assert_eq!(first.condition, "Near Mint");
         assert_eq!(first.language, "English");
         assert_eq!(first.purchase_price, Some(0.25));
@@ -164,7 +163,7 @@ SOR,Spark of Rebellion,5,foil,Special,1,m2,s2,42.00,true,false,lightly_played,en
         assert_eq!(rows[1], *first); // the second copy is identical
 
         let rare = &rows[2];
-        assert_eq!(rare.variant, "holo");
+        assert_eq!(rare.finish, "Foil");
         assert_eq!(rare.condition, "Lightly Played");
         assert_eq!(rare.tags, vec!["misprint".to_string()]);
         assert_eq!(rare.source_line, 3);
@@ -175,7 +174,7 @@ SOR,Spark of Rebellion,5,foil,Special,1,m2,s2,42.00,true,false,lightly_played,en
         let csv = "Set code,Collector number,Foil\nSOR,1,foil";
         let rows = parse(csv).unwrap();
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].variant, "holo");
+        assert_eq!(rows[0].finish, "Foil");
     }
 
     #[test]

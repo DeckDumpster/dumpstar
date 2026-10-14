@@ -11,7 +11,7 @@ export type Crumb = { label: string; href?: string };
 // `crumbs` from a different URL returns null — the override "expires" the
 // moment SvelteKit's router moves to a new page, so stale crumbs from
 // the previously-mounted page can't leak into the next render. This is
-// what eliminates the "Card › sor › 5" → "Browse › Spark of Rebellion › …" flash
+// what eliminates the "Card › SOR › 5" → "Browse › Spark of Rebellion › …" flash
 // the URL-derived fallback used to produce while async data loaded.
 function createBreadcrumbs() {
 	let entry = $state<{ path: string; crumbs: Crumb[] } | null>(null);

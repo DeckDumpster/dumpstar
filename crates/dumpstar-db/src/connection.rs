@@ -30,7 +30,9 @@ use crate::schema_version::{self, Database};
 /// the connection's busy handler for its own, shorter wait.
 pub const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
-pub(crate) const SCHEMA_SHARED: &str = include_str!("schema_shared.sql");
+/// The catalog's own schema (the one card model) and what this crate layers
+/// on it, applied in that order.
+pub(crate) const SCHEMA_OVERLAY: &str = include_str!("schema_shared.sql");
 const SCHEMA_USER: &str = include_str!("schema_user.sql");
 const SCHEMA_REGISTRY: &str = include_str!("schema_registry.sql");
 
@@ -71,9 +73,8 @@ const SERVING_PATIENCE: Duration = Duration::from_secs(90);
 /// full expansion pass. Without these, throughput collapses ~3× once
 /// the table exceeds the default ~2MB cache (dumpstar-rqr).
 ///
-/// After schema init, reconciles every shipped seed file (set-name aliases,
-/// catalog price overrides and the search query metadata) so a freshly-opened
-/// DB is always ready for FK-referencing inserts. Cheap and idempotent on the
+/// After schema init, backfills the sealed products and reconciles the search
+/// query metadata seed files, so a freshly-opened DB is always ready. Cheap and idempotent on the
 /// existing prod DB. See dumpstar-luo.
 ///
 /// Cheap is not free, though, and it is never a no-op:
@@ -108,6 +109,17 @@ pub fn open_shared_with_patience(path: &Path, patience: Duration) -> Result<Conn
     // Before a single statement of schema runs: a catalog written by a newer
     // build is refused, not migrated backwards into.
     schema_version::gate(&conn, Database::Shared)?;
+    // A catalog written by an earlier card schema is emptied, not migrated: it is derived data (sp-r7w5xi).
+    if dumpstar_catalog::reset_if_legacy(&conn).map_err(|e| match e {
+        dumpstar_catalog::CatalogError::Sqlite(e) => crate::DbError::Sqlite(e),
+        other => crate::DbError::Conflict(other.to_string()),
+    })? {
+        println!(
+            "dumpstar: {} held another card model; emptied it for the Star Wars: Unlimited \
+             catalog (rebuilt by `dumpstar catalog-apply`)",
+            path.display()
+        );
+    }
     converge(&mut conn)?;
     Ok(conn)
 }
@@ -120,13 +132,9 @@ pub fn open_shared_with_patience(path: &Path, patience: Duration) -> Result<Conn
 /// fingerprint can lie, and the two being adjacent is what makes the drift
 /// gate a thing somebody is likely to run into.
 fn converge(conn: &mut Connection) -> Result<()> {
-    conn.execute_batch(SCHEMA_SHARED)?;
-    add_missing_columns(conn)?;
-    // The two seeds whose rows FK into rows the INGEST creates, grouped so a catalog
-    // builder can run exactly this set again at the END of its run and be a fixed point
-    // (pd-zg7o). They write nothing on an open that predates the catalog, which is why
-    // an open-time reconcile alone left a first-run set unseeded until the NEXT open.
-    reconcile_ingest_dependent_seeds(conn)?;
+    conn.execute_batch(dumpstar_catalog::SCHEMA)?;
+    conn.execute_batch(SCHEMA_OVERLAY)?;
+    backfill_sealed(conn)?;
     // The search query language's metadata (keywords, rarity ranks,
     // `is:`-flag definitions). It used to be reconciled by each caller
     // instead — `dumpstar setup`, the derive, `dumpstar serve`, the fixture
@@ -191,48 +199,21 @@ pub fn open_shared_for_serving(path: &Path) -> Result<Connection> {
     open_shared_with_patience(path, SERVING_PATIENCE)
 }
 
-/// How many rows each ingest-dependent seed wrote. Counts only — the callers
-/// print them, because a derivation is minutes of progress lines and a seed
-/// that quietly wrote nothing is the thing this type exists to make visible.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct IngestSeeds {
-    /// Rows written to `set_aliases` (FK: `sets`).
-    pub set_aliases: usize,
-    /// Rows written to `catalog_price_overrides` (FK: `printings`).
-    pub catalog_prices: usize,
-}
-
-/// Reconcile the shipped seeds whose rows **FK into rows the ingest creates**.
-///
-/// The rest of the seed layer is self-contained — it references nothing an
-/// upstream produces, so an open reconciles it completely whatever state the
-/// catalog is in. These two do not: `set_aliases` points at `sets` and
-/// `catalog_price_overrides` at `printings`, and both skip a row whose target
-/// this catalog does not carry rather than tripping the FK.
-///
-/// So on the run that first creates a set, an open-time reconcile writes
-/// nothing for it and the seed lands on the NEXT open — which made a first
-/// derive of a brand-new set differ from the second one, in `set_aliases` and
-/// no other table (pd-zg7o). One step of convergence is not wrong, but it is a
-/// thing every reader of the catalog has to know, and "the alias for the set
-/// that listed today resolves tomorrow" is a real answer to a real import.
-///
-/// The fix is not to make the skip cleverer — a seed row whose target is
-/// genuinely absent must still be skipped, which is what lets a minimal test
-/// catalog carry none of the promo sets nor most of the real sets. It is to run this
-/// group **again at the end of a build**, once the ingest has created
-/// everything it is going to. `dumpstar_derive::derive` and `dumpstar setup` both
-/// end with it, so a single run reaches the fixed point.
-///
-/// Grouping them is the durable half. A third FK-dependent seed added beside
-/// these two joins one function and reaches both builders; added as its own
-/// call in `open_shared` it would silently reintroduce the whole bug, and
-/// nothing about a catalog in that state looks broken.
-pub fn reconcile_ingest_dependent_seeds(conn: &mut Connection) -> Result<IngestSeeds> {
-    Ok(IngestSeeds {
-        set_aliases: crate::set_aliases::reconcile(conn)?,
-        catalog_prices: crate::catalog_prices::reconcile(conn)?,
-    })
+/// Fold the catalog's sealed products (tcgcsv products with no collector
+/// number) into `sealed_products`, where the application reads them. Insert if
+/// absent: a name or group the catalog later changes is not chased, and a
+/// product a tenant already holds never changes id.
+fn backfill_sealed(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "INSERT OR IGNORE INTO sealed_products (product_id, set_code, name, category, fetched_at) \
+         SELECT t.product_id, \
+                (SELECT s.set_code FROM sets s WHERE s.set_code = g.abbreviation), \
+                t.name, 'sealed', '' \
+           FROM tcgcsv_products t \
+           JOIN tcgcsv_groups g ON g.group_id = t.group_id \
+          WHERE t.number IS NULL",
+    )?;
+    Ok(())
 }
 
 /// Open the shared catalog **read-only**.
@@ -266,41 +247,6 @@ pub fn open_shared_readonly(path: &Path) -> Result<Connection> {
     schema_version::gate(&conn, Database::Shared)?;
     Ok(conn)
 }
-
-/// Columns added to `schema_shared.sql` after the prod database was
-/// built. `CREATE TABLE IF NOT EXISTS` is a no-op against an existing
-/// table, so a new column reaches an existing catalog only through
-/// `ALTER TABLE`. This keeps that convergence in the same place as the
-/// schema instead of in a runbook step: the declaration in
-/// `schema_shared.sql` stays the single description of the shape, and a
-/// catalog built before the column simply grows it on the next open.
-///
-/// Nullable, defaultless columns only — anything needing a backfill is a
-/// real migration and belongs in a one-off command. `ptcgio_covered` is the
-/// one exception and it earns it the way `USER_ADDED_COLUMNS`' do: the
-/// default is a *statement* about the rows that predate the column rather
-/// than a placeholder in them, and the catalog's own nightly import is what
-/// converges the rows it is wrong about.
-///
-/// `DEFAULT 1` says "pokemontcg.io publishes this set's catalog", which is
-/// true of every English set — i.e. of all but the 450 `jp-` rows. Those are
-/// re-upserted by `japan::import_groups` on every derive, which writes the 0,
-/// so the correction arrives with the next nightly catalog build and needs no
-/// operator step. Until it does they read exactly as they read before the
-/// column existed: badged. The gap's failure mode is today's behaviour, which
-/// is the direction an additive default has to be wrong in.
-pub(crate) const ADDED_COLUMNS: &[(&str, &str, &str)] = &[
-    (
-        "sets",
-        "discovered_from_group_id",
-        "ALTER TABLE sets ADD COLUMN discovered_from_group_id INTEGER",
-    ),
-    (
-        "sets",
-        "ptcgio_covered",
-        "ALTER TABLE sets ADD COLUMN ptcgio_covered INTEGER NOT NULL DEFAULT 1",
-    ),
-];
 
 /// The same convergence for `schema_user.sql`. A collection created between
 /// pd-5m54 and pd-385w already carries `ownership_outbox`, so the amended
@@ -358,10 +304,6 @@ const USER_ADDED_COLUMNS: &[(&str, &str, &str)] = &[
         "ALTER TABLE wishlist ADD COLUMN quantity_have INTEGER NOT NULL DEFAULT 0",
     ),
 ];
-
-fn add_missing_columns(conn: &Connection) -> Result<()> {
-    add_columns(conn, ADDED_COLUMNS)
-}
 
 fn add_missing_user_columns(conn: &Connection) -> Result<()> {
     add_columns(conn, USER_ADDED_COLUMNS)
@@ -748,76 +690,6 @@ mod tests {
     use super::*;
     use crate::catalog;
 
-    /// The seeds that FK into ingested rows must land in the run that CREATES
-    /// those rows, not on the next open (pd-zg7o).
-    ///
-    /// Stated over the group rather than over either seed: what goes wrong is
-    /// a seed reconciled only at open time, and the group is the one place a
-    /// builder calls. Both halves are here because they fail independently —
-    /// `set_aliases` was the one that was missing, and asserting only it would
-    /// let a future edit drop `catalog_prices` out of the group unnoticed.
-    #[test]
-    fn the_ingest_dependent_seeds_land_in_the_run_that_creates_their_targets() {
-        let dir = tempfile::tempdir().unwrap();
-        let mut conn = open_shared(&dir.path().join("shared.sqlite")).unwrap();
-
-        // An open against a catalog with no ingest in it writes neither: every
-        // seed row's FK target is absent, and skipping is correct there.
-        assert_eq!(
-            count(&conn, "set_aliases") + count(&conn, "catalog_price_overrides"),
-            0,
-            "a catalog with no sets and no printings carries no FK-dependent seed"
-        );
-
-        // Now ingest the rows the seeds point at — what a derivation does
-        // between `open_shared` and its own last phase.
-        conn.execute_batch(
-            "INSERT INTO sets (set_code, name, series) \
-               VALUES ('swp', 'Star Wars: Unlimited Promos', 'SWU'), \
-                      ('basep', 'Wizards Black Star Promos', 'Base'); \
-             INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-               VALUES ('basep-10', 'basep', '10', 10, 'Meowth'); \
-             INSERT INTO printings (printing_id, card_id, variant) \
-               VALUES ('basep-10-normal', 'basep-10', 'normal');",
-        )
-        .unwrap();
-
-        let seeds = IngestSeeds {
-            set_aliases: crate::set_aliases::reconcile_from(
-                &mut conn,
-                crate::set_aliases::tests::TEST_SEED,
-            )
-            .unwrap(),
-            catalog_prices: crate::catalog_prices::reconcile_from(
-                &mut conn,
-                crate::catalog_prices::tests::TEST_SEED,
-            )
-            .unwrap(),
-        };
-        assert_eq!(seeds.set_aliases, 1, "the alias for the set just created");
-        assert_eq!(seeds.catalog_prices, 1, "the override for the printing");
-        assert_eq!(count(&conn, "set_aliases"), 1);
-        assert_eq!(count(&conn, "catalog_price_overrides"), 1);
-
-        // …and the same group run again moves nothing: this is the end of a
-        // build, so it has to be a fixed point rather than the first of two.
-        let again = IngestSeeds {
-            set_aliases: crate::set_aliases::reconcile_from(
-                &mut conn,
-                crate::set_aliases::tests::TEST_SEED,
-            )
-            .unwrap(),
-            catalog_prices: crate::catalog_prices::reconcile_from(
-                &mut conn,
-                crate::catalog_prices::tests::TEST_SEED,
-            )
-            .unwrap(),
-        };
-        assert_eq!(count(&conn, "set_aliases"), 1);
-        assert_eq!(count(&conn, "catalog_price_overrides"), 1);
-        assert_eq!(again, seeds, "an idempotent upsert rewrites the same rows");
-    }
-
     fn count(conn: &Connection, table: &str) -> i64 {
         conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))
             .unwrap()
@@ -825,17 +697,8 @@ mod tests {
 
     fn seed_shared(path: &Path) {
         let conn = open_shared(path).unwrap();
-        conn.execute(
-            "INSERT INTO sets (set_code, name, series) VALUES ('sor', 'Spark of Rebellion', 'Star Wars: Unlimited')",
-            [],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-             VALUES ('sor-1', 'sor', '1', 1, 'Luke Skywalker')",
-            [],
-        )
-        .unwrap();
+        crate::testkit::set(&conn, "SOR", "Spark of Rebellion");
+        crate::testkit::card(&conn, "SOR-1", "Luke Skywalker");
     }
 
     #[test]
@@ -878,20 +741,20 @@ mod tests {
 
         // Catalog tables are reachable unqualified via the temp views.
         let name: String = user
-            .query_row("SELECT name FROM sets WHERE set_code = 'sor'", [], |r| {
+            .query_row("SELECT name FROM sets WHERE set_code = 'SOR'", [], |r| {
                 r.get(0)
             })
             .unwrap();
         assert_eq!(name, "Spark of Rebellion");
 
         // FK-existence helpers see the attached catalog.
-        assert!(catalog::card_exists(&user, "sor-1").unwrap());
-        assert!(!catalog::card_exists(&user, "sor-999").unwrap());
-        assert!(!catalog::printing_exists(&user, "sor-1-normal").unwrap());
+        assert!(catalog::card_exists(&user, "SOR-1").unwrap());
+        assert!(!catalog::card_exists(&user, "SOR-999").unwrap());
+        assert!(!catalog::printing_exists(&user, "SOR-1-normal").unwrap());
 
         // The attachment is read-only: writing to the catalog fails.
         let write = user.execute(
-            "INSERT INTO shared.sets (set_code, name, series) VALUES ('x', 'y', 'z')",
+            "INSERT INTO shared.sets (set_code, name) VALUES ('x', 'y')",
             [],
         );
         assert!(write.is_err(), "shared catalog must be read-only");
@@ -913,32 +776,28 @@ mod tests {
             .execute_batch(
                 "PRAGMA journal_mode = WAL; \
                  CREATE TABLE t (name TEXT PRIMARY KEY, copies INTEGER); \
-                 INSERT INTO t VALUES ('Blastoise', 1);",
+                 INSERT INTO t VALUES ('Luke', 1);",
             )
             .unwrap();
 
-        // Snapshot the clean state (Blastoise = 1).
+        // Snapshot the clean state (Luke = 1).
         let bak = dir.path().join("collection.sqlite.bak");
         snapshot_db(&live, &bak).unwrap();
 
         // A test mutates through the live connection — the write lands in the
         // WAL, not (yet) the main database file.
         server
-            .execute("UPDATE t SET copies = 2 WHERE name = 'Blastoise'", [])
+            .execute("UPDATE t SET copies = 2 WHERE name = 'Luke'", [])
             .unwrap();
         let mutated: i64 = server
-            .query_row("SELECT copies FROM t WHERE name = 'Blastoise'", [], |r| {
-                r.get(0)
-            })
+            .query_row("SELECT copies FROM t WHERE name = 'Luke'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(mutated, 2);
 
         // Restore, then read back through the *same* live connection.
         restore_db(&bak, &live).unwrap();
         let restored: i64 = server
-            .query_row("SELECT copies FROM t WHERE name = 'Blastoise'", [], |r| {
-                r.get(0)
-            })
+            .query_row("SELECT copies FROM t WHERE name = 'Luke'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(
             restored, 1,
@@ -965,7 +824,7 @@ mod tests {
         .unwrap();
         conn.execute(
             "INSERT INTO collection (printing_id, acquired_at, source, binder_id) \
-             VALUES ('sor-1-normal', '2026-08-08', 'manual_id', 1)",
+             VALUES ('SOR-1-normal', '2026-08-08', 'manual_id', 1)",
             [],
         )
         .unwrap();
@@ -1044,7 +903,7 @@ mod tests {
         assert_eq!(file_user_version(&path), 0);
 
         let conn = open_shared(&path).unwrap();
-        assert!(crate::catalog::card_exists(&conn, "sor-1").unwrap());
+        assert!(crate::catalog::card_exists(&conn, "SOR-1").unwrap());
         drop(conn);
         assert_eq!(file_user_version(&path), Database::Shared.version() as u32);
     }
@@ -1320,20 +1179,25 @@ mod tests {
         );
     }
 
-    /// The catalog carries its own copy. It is dropped by `open_shared` —
-    /// `dumpstar setup`, the offline derive, the server's own startup — because
-    /// those are the paths that hold it read-write. A connection that merely
-    /// attaches it, or `open_shared_readonly`, cannot.
+    /// The catalog carried its own copy, in the files the earlier card
+    /// schema wrote. Those files are emptied outright by `open_shared`
+    /// (`dumpstar setup`, the offline derive, the server's own startup — the
+    /// paths that hold it read-write), so the table goes with everything else
+    /// and the schema no longer needs a `DROP` for it: the Star Wars: Unlimited
+    /// schema never had one. A connection that merely attaches the catalog, or
+    /// `open_shared_readonly`, cannot do this.
     #[test]
-    fn a_legacy_refinery_table_is_dropped_from_the_catalog_on_open() {
+    fn a_legacy_refinery_table_does_not_survive_the_catalog_rebuild() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("shared.sqlite");
-        seed_shared(&path);
+        legacy_catalog(&path);
         add_legacy_refinery_table(&path);
 
         let conn = open_shared(&path).unwrap();
         assert!(!has_table(&conn, "refinery_schema_history"));
-        assert!(crate::catalog::card_exists(&conn, "sor-1").unwrap());
+        crate::testkit::set(&conn, "SOR", "Spark of Rebellion");
+        crate::testkit::card(&conn, "SOR-1", "Luke Skywalker");
+        assert!(crate::catalog::card_exists(&conn, "SOR-1").unwrap());
     }
 
     /// The drop is a statement in the schema, which is re-applied on every
@@ -1377,7 +1241,7 @@ mod tests {
             .unwrap();
         conn.execute(
             "INSERT INTO collection (printing_id, acquired_at, source, condition) \
-             VALUES ('sor-1-normal', '2026-08-08', 'manual_id', 'Lightly Played')",
+             VALUES ('SOR-1-normal', '2026-08-08', 'manual_id', 'Lightly Played')",
             [],
         )
         .unwrap();
@@ -1410,59 +1274,20 @@ mod tests {
         assert_eq!(file_user_version(&path), Database::User.version() as u32);
     }
 
-    /// pd-mt57. `CREATE TABLE IF NOT EXISTS` is a no-op against prod's
-    /// existing `sets`, so the column reaches it only through
-    /// `ADDED_COLUMNS` — and it has to arrive on open rather than as a
-    /// runbook step, or the badge fix is inert on the one catalog that
-    /// has the bug. The rows that predate it take the `DEFAULT 1`, which
-    /// is what leaves them reading exactly as they read before.
+    /// The catalog sheds its copy on the one path that holds it read-write:
+    /// the rebuild of a legacy-shaped file takes every table with it.
     #[test]
-    fn a_catalog_built_before_ptcgio_covered_grows_it_on_open() {
+    fn the_catalogs_conditions_table_does_not_survive_the_catalog_rebuild() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("shared.sqlite");
-        {
-            // `sets` as it stood before the column, written out rather than
-            // dropped off the current one: SQLite's `DROP COLUMN` rewrites
-            // the stored CREATE statement and cannot reparse this schema's
-            // comments.
-            let conn = Connection::open(&path).unwrap();
-            conn.execute_batch(
-                "CREATE TABLE sets ( \
-                     set_code TEXT PRIMARY KEY, ptcgo_code TEXT, name TEXT NOT NULL, \
-                     series TEXT NOT NULL, series_sort_order INTEGER, \
-                     set_sort_order INTEGER, total INTEGER, printed_total INTEGER, \
-                     release_date TEXT, logo_url TEXT, symbol_url TEXT, \
-                     ptcgio_fetched_at TEXT, is_subset INTEGER NOT NULL DEFAULT 0, \
-                     parent_set_code TEXT REFERENCES sets(set_code), \
-                     symbol_source_url TEXT, discovered_from_group_id INTEGER); \
-                 INSERT INTO sets (set_code, name, series) \
-                   VALUES ('jp-24711', 'M5: Abyss Eye', 'Pokémon JP');",
-            )
-            .unwrap();
-        }
-
-        let conn = open_shared(&path).unwrap();
-        let covered: i64 = conn
-            .query_row(
-                "SELECT ptcgio_covered FROM sets WHERE set_code = 'jp-24711'",
-                [],
-                |r| r.get(0),
-            )
-            .unwrap();
-        assert_eq!(covered, 1, "a pre-column row keeps today's behaviour");
-    }
-
-    /// The catalog sheds its copy on the one path that holds it read-write.
-    #[test]
-    fn the_catalogs_conditions_table_is_dropped_on_open() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("shared.sqlite");
-        seed_shared(&path);
+        legacy_catalog(&path);
         add_stale_catalog_conditions(&path);
 
         let conn = open_shared(&path).unwrap();
         assert!(!has_table(&conn, "conditions"));
-        assert!(catalog::card_exists(&conn, "sor-1").unwrap());
+        crate::testkit::set(&conn, "SOR", "Spark of Rebellion");
+        crate::testkit::card(&conn, "SOR-1", "Luke Skywalker");
+        assert!(catalog::card_exists(&conn, "SOR-1").unwrap());
     }
 
     /// A catalog built before the move, still physically carrying the table.
@@ -1517,7 +1342,7 @@ mod tests {
         seed_shared(&shared_path);
 
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared_path).unwrap();
-        assert!(catalog::card_exists(&conn, "sor-1").unwrap());
+        assert!(catalog::card_exists(&conn, "SOR-1").unwrap());
     }
 
     #[test]
@@ -1543,7 +1368,7 @@ mod tests {
         // A card may sit in a binder OR a deck.
         conn.execute(
             "INSERT INTO collection (printing_id, acquired_at, source, binder_id) \
-             VALUES ('sor-1-normal', '2026-05-18', 'manual_id', 1)",
+             VALUES ('SOR-1-normal', '2026-05-18', 'manual_id', 1)",
             [],
         )
         .unwrap();
@@ -1551,12 +1376,174 @@ mod tests {
         // ...but not both — the exclusivity CHECK rejects it.
         let both = conn.execute(
             "INSERT INTO collection (printing_id, acquired_at, source, binder_id, deck_id) \
-             VALUES ('sor-1-holo', '2026-05-18', 'manual_id', 1, 1)",
+             VALUES ('SOR-1-foil', '2026-05-18', 'manual_id', 1, 1)",
             [],
         );
         assert!(
             both.is_err(),
             "a card cannot be in a binder and a deck at once"
         );
+    }
+
+    fn legacy_catalog(path: &Path) {
+        let conn = Connection::open(path).unwrap();
+        conn.execute_batch("PRAGMA journal_mode = WAL;").unwrap();
+        conn.execute_batch(dumpstar_catalog::LEGACY_SHAPE_DDL)
+            .unwrap();
+        conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)")
+            .unwrap();
+    }
+
+    /// sp-r7w5xi: a `shared.sqlite` left by the earlier schema is derived
+    /// data; opening it read-write empties it and builds the one card model on
+    /// top, rather than failing on a column that is not there.
+    #[test]
+    fn open_shared_over_a_legacy_shaped_file_empties_and_rebuilds_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shared.sqlite");
+        legacy_catalog(&path);
+        assert_eq!(file_user_version(&path), 2);
+
+        let conn = open_shared(&path).unwrap();
+        for gone in dumpstar_catalog::LEGACY_ONLY_OBJECTS {
+            assert!(!has_table(&conn, gone), "{gone} survived the rebuild");
+        }
+        let cols: Vec<String> = conn
+            .prepare("SELECT name FROM pragma_table_info('cards')")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        assert!(
+            cols.contains(&"aspects".to_string()),
+            "not the SWU cards table"
+        );
+        assert!(
+            !dumpstar_catalog::is_legacy(&conn).unwrap(),
+            "a legacy column survived"
+        );
+        assert_eq!(count(&conn, "sets"), 0, "the legacy rows are emptied");
+        assert_eq!(count(&conn, "cards"), 0);
+        assert!(
+            has_table(&conn, "sealed_products"),
+            "the overlay is applied"
+        );
+        assert!(
+            crate::convergence::is_converged(&conn),
+            "the rebuilt file records this build's fingerprint"
+        );
+        drop(conn);
+        assert_eq!(file_user_version(&path), 3);
+        assert_eq!(file_user_version(&path), Database::Shared.version() as u32);
+    }
+
+    /// The rebuild happens once: the file it leaves is SWU-shaped, so the next
+    /// open keeps whatever the catalog apply has put in since.
+    #[test]
+    fn a_second_open_shared_keeps_rows_written_after_the_rebuild() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shared.sqlite");
+        legacy_catalog(&path);
+
+        let conn = open_shared(&path).unwrap();
+        crate::testkit::simple(&conn, "SOR", "1", "Luke Skywalker");
+        crate::testkit::price(&conn, "SOR-1-normal", "2026-10-01", 1.5);
+        drop(conn);
+
+        let conn = open_shared(&path).unwrap();
+        assert_eq!(count(&conn, "sets"), 1);
+        assert_eq!(count(&conn, "cards"), 1);
+        assert_eq!(count(&conn, "printings"), 1);
+        assert_eq!(count(&conn, "prices"), 1);
+    }
+
+    /// `backfill_sealed` folds tcgcsv products with no collector number into
+    /// `sealed_products`, once: a second pass (every open runs one) adds
+    /// nothing and does not chase a changed name.
+    #[test]
+    fn backfill_sealed_copies_numberless_tcgcsv_products_exactly_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shared.sqlite");
+        let conn = open_shared(&path).unwrap();
+        crate::testkit::set(&conn, "SOR", "Spark of Rebellion");
+        conn.execute_batch(
+            "INSERT INTO tcgcsv_groups (group_id, name, abbreviation) \
+               VALUES (23405, 'Spark of Rebellion', 'SOR'); \
+             INSERT INTO tcgcsv_products (product_id, group_id, name, number) VALUES \
+               (1001, 23405, 'Spark of Rebellion Booster Box', NULL), \
+               (1002, 23405, 'Spark of Rebellion Booster Pack', NULL), \
+               (1003, 23405, 'Luke Skywalker', '005');",
+        )
+        .unwrap();
+        assert_eq!(count(&conn, "sealed_products"), 0);
+
+        backfill_sealed(&conn).unwrap();
+        assert_eq!(
+            count(&conn, "sealed_products"),
+            2,
+            "only the numberless products"
+        );
+        let (set_code, category): (Option<String>, String) = conn
+            .query_row(
+                "SELECT set_code, category FROM sealed_products WHERE product_id = 1001",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(set_code.as_deref(), Some("SOR"));
+        assert_eq!(category, "sealed");
+
+        // Again, with the catalog's name having moved: nothing is added and
+        // nothing is rewritten.
+        conn.execute(
+            "UPDATE tcgcsv_products SET name = 'Renamed' WHERE product_id = 1001",
+            [],
+        )
+        .unwrap();
+        backfill_sealed(&conn).unwrap();
+        assert_eq!(count(&conn, "sealed_products"), 2);
+        let name: String = conn
+            .query_row(
+                "SELECT name FROM sealed_products WHERE product_id = 1001",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(name, "Spark of Rebellion Booster Box");
+        drop(conn);
+
+        // An ordinary open runs it too, with the same outcome.
+        let conn = open_shared(&path).unwrap();
+        assert_eq!(count(&conn, "sealed_products"), 2);
+    }
+
+    /// An ordinary restart of the server asks one read-only question and is
+    /// done: no write lock, no write to the file (pd-dzu5).
+    #[test]
+    fn open_shared_for_serving_on_a_converged_file_takes_the_read_only_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shared.sqlite");
+        let keep_shm = open_shared(&path).unwrap();
+        keep_shm
+            .execute_batch("PRAGMA wal_checkpoint(TRUNCATE)")
+            .unwrap();
+        let before = file_change_counter(&path);
+
+        let conn = open_shared_for_serving(&path).unwrap();
+        assert!(
+            conn.is_readonly(rusqlite::DatabaseName::Main).unwrap(),
+            "a converged catalog is served from a read-only handle"
+        );
+        assert!(conn.execute("DELETE FROM sets", []).is_err());
+        assert_eq!(file_change_counter(&path), before, "nothing was written");
+
+        // A file that is not converged falls through to the read-write open.
+        let stale = dir.path().join("stale.sqlite");
+        let c = open_shared(&stale).unwrap();
+        c.execute_batch("DELETE FROM catalog_convergence").unwrap();
+        let conn = open_shared_for_serving(&stale).unwrap();
+        assert!(!conn.is_readonly(rusqlite::DatabaseName::Main).unwrap());
+        assert!(crate::convergence::is_converged(&conn));
     }
 }

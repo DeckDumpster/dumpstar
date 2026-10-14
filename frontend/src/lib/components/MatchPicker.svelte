@@ -6,7 +6,8 @@
 	// Shared by the CSV preview's Unmatched tables and the /ingest/unresolved page.
 	import { untrack } from 'svelte';
 	import { api } from '$lib/api';
-	import { variantTag, variantColor, variantLabel } from '$lib/variants.svelte';
+	import { variantColor } from '$lib/variants.svelte';
+	import { printingLabel } from '$lib/format';
 	import { EmptyState } from '$lib/components/ui';
 	import type { SearchRow } from '$lib/types/SearchRow';
 	import type { SealedProduct } from '$lib/types/SealedProduct';
@@ -95,7 +96,7 @@
 				size="sm"
 				title={q.trim() ? 'No matching printings.' : 'Type to search.'}
 				description={q.trim()
-					? 'Search the card name; add its number to narrow a reprint (“Luke Skywalker 5”).'
+					? 'Search the card name; add its number to narrow a reprint (“Darth Vader 3”).'
 					: 'The whole catalog is searchable here, not just what you own.'}
 			/>
 		{:else}
@@ -109,9 +110,9 @@
 								style="border-color: {variantColor(row.variant)}; color: {variantColor(
 									row.variant
 								)}"
-								title={variantLabel(row.variant)}
+								title={printingLabel(row.variant, row.finish)}
 							>
-								{variantTag(row.variant)}
+								{printingLabel(row.variant, row.finish)}
 							</span>
 							<span class="meta">
 								{row.set_code} · #{row.number}
@@ -127,7 +128,7 @@
 			size="sm"
 			title={q.trim() ? 'No matching products.' : 'Type to search.'}
 			description={q.trim()
-				? 'Search the product name as TCGplayer lists it — “Spark of Rebellion Booster Display”.'
+				? 'Search the product name as TCGplayer lists it — “Spark of Rebellion Booster Box”.'
 				: 'Every sealed product in the catalog is searchable here.'}
 		/>
 	{:else}

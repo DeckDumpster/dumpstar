@@ -4,18 +4,14 @@
 	import { goto } from '$app/navigation';
 	import { api, SearchQueryError } from '$lib/api';
 	import { facetHref } from '$lib/facets';
-	import { variantLabel, variantTag, variants } from '$lib/variants.svelte';
-	import { CONDITIONS } from '$lib/conditions';
+		import { CONDITIONS } from '$lib/conditions';
 	import { conditionMultiplier } from '$lib/conditions.svelte';
-	import { money, count } from '$lib/format';
+	import { money, count, printingLabel, jsonList } from '$lib/format';
 	import { stackOffsets, windowOf } from '$lib/virtual';
 
-	// Foil shimmer treatment for Foil / Hyperspace Foil /
-	// cosmos_holo variants — ranks 1..3 in the variants table. Stamps
-	// (rank 4) and normals (rank 0) are matte.
-	function isFoilVariant(code: string): boolean {
-		const rank = variants.map[code]?.rank ?? 0;
-		return rank >= 1 && rank <= 3;
+	// Foil shimmer treatment for Foil-finish printings.
+	function isFoil(finish: string): boolean {
+		return finish === 'Foil';
 	}
 	import CardModal from '$lib/components/CardModal.svelte';
 	import ValueHistoryModal from '$lib/components/ValueHistoryModal.svelte';
@@ -72,19 +68,10 @@
 
 	// One rendered row per owned copy. Deliberately NOT CollectionRow: the
 	// search payload carries only the fields the list draws (pd-lk8v), so
-	// claiming that shape here would promise fields the server no longer
-	// sends. Anchored to CollectionRow by Omit so a field added there still
-	// has to be answered for here.
-	type ListRow = Omit<
-		CollectionRow,
-		| 'artist'
-		| 'attacks'
-		| 'variant_description'
-		| 'set_ptcgo_code'
-		| 'supertype'
-		| 'subtypes'
-		| 'types'
-	>;
+	// claiming that shape here would promise `artist` the server
+	// no longer sends. Anchored to CollectionRow by Omit so a field added
+	// there still has to be answered for here.
+	type ListRow = Omit<CollectionRow, 'artist' | 'variant_description'>;
 
 	const rows = $derived<ListRow[]>(
 		searchRows.flatMap((sr) =>
@@ -103,21 +90,28 @@
 				binder_id: cp.binder_id,
 				deck_id: cp.deck_id,
 				variant: sr.variant,
+				finish: sr.finish,
 				card_id: sr.card_id,
 				set_code: sr.set_code,
 				set_name: sr.set_name,
-				set_symbol_url: sr.set_symbol_url,
 				number: sr.number,
 				name: sr.name,
+				subtitle: sr.subtitle,
 				rarity: sr.rarity,
+				card_type: sr.card_type,
+				cost: sr.cost,
+				power: sr.power,
+				hp: sr.hp,
+				aspects: sr.aspects,
+				arenas: sr.arenas,
 				market_price: sr.market_price,
-				image_small: sr.image_small
+				image_url: sr.image_url
 			}))
 		)
 	);
 
 	// Debounced search. Initial value comes from ?q= so clickable facets
-	// on the card-detail page (artist, set, rarity, …) can
+	// on the card-detail page (artist, set, aspect, rarity, …) can
 	// land here with the filter pre-applied.
 	const initialQuery =
 		typeof window !== 'undefined' ? (page.url.searchParams.get('q') ?? '') : '';
@@ -127,10 +121,11 @@
 	let debounce: ReturnType<typeof setTimeout>;
 	let searchInput = $state<HTMLInputElement | undefined>();
 
-	// --- Autocomplete: keyword aliases for a bare token, is: values
+	// --- Autocomplete: keyword aliases for a bare token, is:/has: values
 	//     after the colon. Vocabulary comes from the data-driven registry
 	//     (api.searchKeywords); nothing here is hardcoded. (dumpstar-cx1) ---
 	type AcItem = { insert: string; label: string; hint: string };
+	const HAS_VALUES = ['text', 'subtitle', 'artist'];
 	let vocab = $state.raw<SearchVocabulary | null>(null);
 	let acFocused = $state(false);
 	let acDismissed = $state(false);
@@ -155,8 +150,10 @@
 		if (colon >= 0) {
 			const kw = bare.slice(0, colon).toLowerCase();
 			const partial = bare.slice(colon + 1).toLowerCase();
-			if (kw !== 'is') return [];
-			const pool = v.flags.map((f) => ({ v: f.flag, h: f.help ?? '' }));
+			let pool: { v: string; h: string }[] = [];
+			if (kw === 'is') pool = v.flags.map((f) => ({ v: f.flag, h: f.help ?? '' }));
+			else if (kw === 'has') pool = HAS_VALUES.map((x) => ({ v: x, h: '' }));
+			else return [];
 			return pool
 				.filter((x) => x.v.toLowerCase().startsWith(partial))
 				.slice(0, 8)
@@ -389,7 +386,19 @@
 	// by name, so this list and its arms have to agree — which is also why a
 	// stored `collection.sortKey` outside it falls back to `name` below rather
 	// than being sent.
-	const SORT_KEYS = ['name', 'rarity', 'set', 'number', 'price', 'qty'];
+	const SORT_KEYS = [
+		'name',
+		'number',
+		'set',
+		'rarity',
+		'type',
+		'cost',
+		'power',
+		'hp',
+		'price',
+		'qty',
+		'added'
+	];
 	function readStoredSort(): { key: string; dir: 'asc' | 'desc' } {
 		if (typeof window === 'undefined') return { key: 'name', dir: 'asc' };
 		const k = localStorage.getItem('collection.sortKey');
@@ -479,14 +488,22 @@
 		card_id: string;
 		set_code: string;
 		set_name: string;
-		set_symbol_url: string | null;
 		number: string;
 		name: string;
+		subtitle: string | null;
 		rarity: string | null;
+		card_type: string | null;
+		/** Resource cost, power and hit points (null where the card has none). */
+		cost: number | null;
+		power: number | null;
+		hp: number | null;
+		/** JSON array string, e.g. `["Vigilance","Heroism"]`. */
+		aspects: string | null;
 		variant: string;
+		finish: string;
 		condition: string;
 		status: string;
-		image_small: string | null;
+		image_url: string | null;
 	};
 
 	function aggregate(input: ListRow[]): AggRow[] {
@@ -518,18 +535,34 @@
 					card_id: r.card_id,
 					set_code: r.set_code,
 					set_name: r.set_name,
-					set_symbol_url: r.set_symbol_url,
 					number: r.number,
 					name: r.name,
+					subtitle: r.subtitle,
 					rarity: r.rarity,
+					card_type: r.card_type,
+					cost: r.cost,
+					power: r.power,
+					hp: r.hp,
+					aspects: r.aspects,
 					variant: r.variant,
+					finish: r.finish,
 					condition: r.condition,
 					status: r.status,
-					image_small: r.image_small
+					image_url: r.image_url
 				});
 			}
 		}
 		return [...map.values()];
+	}
+
+	/** "Vigilance · Heroism" — the aspects column's text. */
+	function aspectText(a: AggRow): string {
+		return jsonList(a.aspects).join(' · ');
+	}
+	/** "3/4" — power over hit points; either may be absent (Events, Bases). */
+	function powerHp(a: AggRow): string {
+		if (a.power == null && a.hp == null) return '';
+		return `${a.power ?? '–'}/${a.hp ?? '–'}`;
 	}
 
 	// Unowned printings become qty-0 AggRows so owned and unowned draw the same
@@ -547,14 +580,20 @@
 			card_id: sr.card_id,
 			set_code: sr.set_code,
 			set_name: sr.set_name,
-			set_symbol_url: sr.set_symbol_url,
 			number: sr.number,
 			name: sr.name,
+			subtitle: sr.subtitle,
 			rarity: sr.rarity,
+			card_type: sr.card_type,
+			cost: sr.cost,
+			power: sr.power,
+			hp: sr.hp,
+			aspects: sr.aspects,
 			variant: sr.variant,
+			finish: sr.finish,
 			condition: '',
 			status: 'unowned',
-			image_small: sr.image_small
+			image_url: sr.image_url
 		};
 	}
 
@@ -593,8 +632,8 @@
 	// Bigger art costs scroll, and scroll is only worth paying for if what
 	// you scroll through is organised. So the grid cuts itself into labelled
 	// sections along whatever the active sort already orders on, whenever
-	// that field is a category a person browses by — set, rarity,
-	// or a name's initial. The continuous fields (#, NM) group
+	// that field is a category a person browses by — set, rarity, class,
+	// card type, or a name's initial. The continuous fields (#, NM) group
 	// into nothing useful, so they stay one flat run.
 	//
 	// Every label is read straight off the row's own fields. No new
@@ -610,6 +649,10 @@
 				return a.set_name;
 			case 'rarity':
 				return a.rarity ?? 'No rarity';
+			case 'type':
+				return a.card_type ?? 'Other';
+			case 'cost':
+				return a.cost == null ? 'No cost' : `Cost ${a.cost}`;
 			default:
 				return null;
 		}
@@ -717,7 +760,7 @@
 	const tableWindow = $derived(windowOf(tableOffsets, 0, winTop, winBottom));
 	const tableVisible = $derived(displayRows.slice(tableWindow.start, tableWindow.end));
 	/** Columns a spacer row has to span. */
-	const tableCols = $derived(selectMode ? 8 : 7);
+	const tableCols = $derived(selectMode ? 12 : 11);
 
 	/** Read the geometry the window arithmetic needs out of the rendered DOM. */
 	function measure() {
@@ -1042,7 +1085,7 @@
 				aria-expanded={acOpen}
 				aria-controls="search-ac"
 				autocomplete="off"
-				placeholder={allCards ? 'Search all cards… (hp>=5)' : 'Search… (hp>=5)'}
+				placeholder={allCards ? 'Search all cards… (t:fire hp>=200)' : 'Search… (t:fire hp>=200)'}
 				value={searchRaw}
 				oninput={(e) => onSearch(e.currentTarget.value)}
 				onkeydown={onSearchKeydown}
@@ -1125,7 +1168,7 @@
 				>⋯</button>
 				{#if menuOpen}
 					<div class="menu" role="menu">
-						<a class="menuItem" href="/api/export/csv" download onclick={closeMenu}>Export CSV</a>
+						<a class="menuItem" href="/api/export/csv" download onclick={closeMenu}>Export CSV (ManaBox)</a>
 						<a class="menuItem" href="/api/export/collectr/singles.csv" download onclick={closeMenu}>Export cards (Collectr)</a>
 						<a class="menuItem" href="/api/export/collectr/sealed.csv" download onclick={closeMenu}>Export sealed (Collectr)</a>
 						<a class="menuItem" href="/api/export/json" download onclick={closeMenu}>Export JSON (full backup)</a>
@@ -1283,6 +1326,8 @@
 				</button>
 			{/snippet}
 			{@render sortBtn('name', 'Name')}
+			{@render sortBtn('type', 'Type')}
+			{@render sortBtn('cost', 'Cost')}
 			{@render sortBtn('rarity', 'Rarity')}
 			{@render sortBtn('set', 'Set')}
 			{@render sortBtn('number', '#')}
@@ -1319,8 +1364,8 @@
 								title="{a.name} · {a.set_code.toUpperCase()} #{a.number} · click to add"
 								onclick={() => (selectedCard = { set: a.set_code, number: a.number })}
 							>
-								{#if a.image_small}
-									<img src={a.image_small} alt={a.name} loading="lazy" />
+								{#if a.image_url}
+									<img src={a.image_url} alt={a.name} loading="lazy" />
 								{:else}
 									<div class="tilenoart">{a.name}</div>
 								{/if}
@@ -1329,12 +1374,12 @@
 							<button
 								class="cardtile"
 								class:picked={selectMode && groupChecked(a.ids)}
-								class:foil={isFoilVariant(a.variant)}
-								title="{a.name} · {variantLabel(a.variant)}{a.qty > 1 ? ` ×${a.qty}` : ''}"
+								class:foil={isFoil(a.finish)}
+								title="{a.name} · {printingLabel(a.variant, a.finish)}{a.qty > 1 ? ` ×${a.qty}` : ''}"
 								onclick={() => openGroup(a)}
 							>
-								{#if a.image_small}
-									<img src={a.image_small} alt={a.name} loading="lazy" />
+								{#if a.image_url}
+									<img src={a.image_url} alt={a.name} loading="lazy" />
 								{:else}
 									<div class="tilenoart">{a.name}</div>
 								{/if}
@@ -1374,6 +1419,10 @@
 				{#if selectMode}<col class="c-sel" />{/if}
 				<col class="c-qty" />
 				<col class="c-name" />
+				<col class="c-class" />
+				<col class="c-etype" />
+				<col class="c-cost" />
+				<col class="c-stats" />
 				<col class="c-rarity" />
 				<col class="c-set" />
 				<col class="c-number" />
@@ -1389,6 +1438,10 @@
 					{/if}
 					{@render sortable('qty', 'Qty', 'num qty')}
 					{@render sortable('name', 'Name', '')}
+					{@render sortable('type', 'Type', '')}
+					<th>Aspects</th>
+					{@render sortable('cost', 'Cost', 'num')}
+					<th class="center" title="Power / HP">Pwr/HP</th>
 					{@render sortable('rarity', 'Rarity', 'center')}
 					{@render sortable('set', 'Set', 'center')}
 					{@render sortable('number', '#', 'num')}
@@ -1426,28 +1479,19 @@
 								     to one line, and a row that skipped it was 3px taller
 								     than its neighbours (pd-7z4o). -->
 								<div class="namecell">
-									{#if a.image_small}
-										<img class="cardthumb" src={a.image_small} alt="" loading="lazy" />
+									{#if a.image_url}
+										<img class="cardthumb" src={a.image_url} alt="" loading="lazy" />
 									{/if}
 									<span class="namebody"><span class="cardname">{a.name}</span></span>
 								</div>
 							</td>
-							<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}>
-								<span class="raritytext" title={a.rarity ?? ''}>{a.rarity ?? ''}</span>
-							</td>
+							<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}>{a.card_type ?? ''}</td>
+							<td class="fac" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', jsonList(a.aspects)[0])}>{aspectText(a)}</td>
+							<td class="num">{a.cost ?? ''}</td>
+							<td class="center">{powerHp(a)}</td>
+							<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}>{a.rarity ?? ''}</td>
 							<td class="center fac" title="Find all cards in this set" onclick={(e) => facetCell(e, 'set', a.set_code)}>
-								{#if a.set_symbol_url}
-									<img
-										class="setsym"
-										src={a.set_symbol_url}
-										alt={a.set_code.toUpperCase()}
-										title={a.set_code.toUpperCase()}
-									/>
-								{:else}
-									<span title={a.set_code}>
-										{a.set_code.toUpperCase()}
-									</span>
-								{/if}
+								<span title={a.set_name}>{a.set_code.toUpperCase()}</span>
 							</td>
 							<td class="num">{a.number}</td>
 							<td class="num">
@@ -1479,15 +1523,15 @@
 						<td class="num qty">{a.qty}</td>
 						<td class="namecol" title="Open card" onclick={(e) => openCardCell(e, a)}>
 							<div class="namecell">
-								{#if a.image_small}
-									<span class="thumbwrap" class:foil={isFoilVariant(a.variant)}>
-										<img class="cardthumb" src={a.image_small} alt="" loading="lazy" />
+								{#if a.image_url}
+									<span class="thumbwrap" class:foil={isFoil(a.finish)}>
+										<img class="cardthumb" src={a.image_url} alt="" loading="lazy" />
 									</span>
 								{/if}
 								<span class="namebody"
-									><span class="cardname">{a.name}</span>{#if a.variant !== 'normal'}<span
+									><span class="cardname">{a.name}</span>{#if a.variant !== 'Standard' || a.finish === 'Foil'}<span
 											class="tag vtag"
-											title={variantLabel(a.variant)}>{variantTag(a.variant)}</span
+											title={printingLabel(a.variant, a.finish)}>{printingLabel(a.variant, a.finish)}</span
 										>{/if}{#if statusBadge(a.status)}<span
 											class="tag stag t-{a.status}"
 											title={a.status}>{statusBadge(a.status)}</span
@@ -1495,22 +1539,13 @@
 								>
 							</div>
 						</td>
-						<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}>
-							<span class="raritytext" title={a.rarity ?? ''}>{a.rarity ?? ''}</span>
-						</td>
+						<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}>{a.card_type ?? ''}</td>
+						<td class="fac" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', jsonList(a.aspects)[0])}>{aspectText(a)}</td>
+						<td class="num">{a.cost ?? ''}</td>
+						<td class="center">{powerHp(a)}</td>
+						<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}>{a.rarity ?? ''}</td>
 						<td class="center fac" title="Find all cards in this set" onclick={(e) => facetCell(e, 'set', a.set_code)}>
-							{#if a.set_symbol_url}
-								<img
-									class="setsym"
-									src={a.set_symbol_url}
-									alt={a.set_code.toUpperCase()}
-									title={a.set_code.toUpperCase()}
-								/>
-							{:else}
-								<span title={a.set_code}>
-									{a.set_code.toUpperCase()}
-								</span>
-							{/if}
+							<span title={a.set_name}>{a.set_code.toUpperCase()}</span>
 						</td>
 						<td class="num">{a.number}</td>
 						<td class="num">
@@ -1892,7 +1927,7 @@
 	/* The active pill is a wash and an edge, not a slab. Solid crimson next
 	   to card art read as the loudest element on a page whose whole job is
 	   to show the art; the accent still marks the pill, at a weight that
-	   loses to a Luke Skywalker. */
+	   loses to the art. */
 	.sortbtn.active {
 		background: var(--color-surface-selected);
 		border-color: var(--color-border-accent);
@@ -1967,8 +2002,8 @@
 	.cardtile.missing {
 		opacity: 0.82;
 	}
-	/* Foil treatment for Foil / Hyperspace Foil / cosmos
-	   variants. Two pseudo-elements stacked over the card image:
+	/* Foil treatment for Foil-finish
+	   printings. Two pseudo-elements stacked over the card image:
 	   ::before paints a rainbow tint via mix-blend-mode, ::after
 	   animates a diagonal sheen across the surface. Pointer-events
 	   none so clicks still hit the underlying button. The .cardtile
@@ -2110,12 +2145,19 @@
 		   `min-width` below — declared in one place so the two can never
 		   disagree. The figures are what `table-layout: auto` settled each
 		   column on across a whole 50k-row catalog, rounded up a step. Where a
-		   column can want more than its share — Name, the one that carries
-		   prose — the cell ellipsises; it already did that before, at a width
-		   that moved. */
+		   column can want more than its share — Name and Class, the two that
+		   carry prose — the cell ellipsises; both of them already did that
+		   before, at a width that moved. */
 		--col-sel: 2.25rem;
 		--col-qty: 2.5rem;
-		--col-rarity: 6rem;
+		/* Card type ("Leader", "Upgrade"), the aspects text ("Vigilance ·
+		   Heroism" is the longest common pair; a third aspect ellipsises),
+		   resource cost, and power/HP. */
+		--col-class: 5.5rem;
+		--col-etype: 9rem;
+		--col-cost: 3.5rem;
+		--col-stats: 4.5rem;
+		--col-rarity: 5.5rem;
 		--col-set: 4.25rem;
 		--col-number: 5.75rem;
 		--col-price: 6.75rem;
@@ -2139,8 +2181,9 @@
 		   except that it now happens at ONE width instead of a width that
 		   changed with whichever rows were rendered. */
 		min-width: calc(
-			var(--col-sel-used) + var(--col-qty) + var(--col-name-min) + var(--col-rarity) +
-				var(--col-set) + var(--col-number) + var(--col-price) * 2
+			var(--col-sel-used) + var(--col-qty) + var(--col-name-min) + var(--col-class) +
+				var(--col-etype) + var(--col-cost) + var(--col-stats) + var(--col-rarity) + var(--col-set) +
+				var(--col-number) + var(--col-price) * 2
 		);
 		/* The point of the exercise: widths come from the declarations above,
 		   not from the handful of rows the virtual scroller happens to have in
@@ -2166,6 +2209,18 @@
 	col.c-name {
 		width: auto;
 	}
+	col.c-class {
+		width: var(--col-class);
+	}
+	col.c-etype {
+		width: var(--col-etype);
+	}
+	col.c-cost {
+		width: var(--col-cost);
+	}
+	col.c-stats {
+		width: var(--col-stats);
+	}
 	col.c-rarity {
 		width: var(--col-rarity);
 	}
@@ -2188,7 +2243,8 @@
 	   arithmetic over a single one (pd-7z4o) — a row 3px out of step is a
 	   scrollbar 3px × 56,635 rows out of step. The thumbnail is what sets the
 	   height, so `--row-content` is the thumbnail, and nothing in a cell may
-	   grow past it. */
+	   grow past it: a long aspects list is clipped, exactly as the name
+	   cell next to it ellipsises. */
 	table.dd {
 		--row-content: 36px;
 	}
@@ -2327,7 +2383,8 @@
 	   56,635 rows is a scrollbar that lies about where you are. Every other
 	   cell already fits inside the thumbnail's height — this was the only one
 	   that could outgrow it. The column flexes to all leftover width, so an
-	   ellipsis is a narrow-viewport event. */
+	   ellipsis is a narrow-viewport event, and the type cell either side of it
+	   ellipsises on the same reasoning. */
 	.namebody {
 		min-width: 0;
 		line-height: 1.25;
@@ -2335,6 +2392,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
+
 	/* Inline tags (variant, non-owned status) — DD card-tag pattern.
 	   inline-block + vertical-align lets the pill keep its shape while
 	   flowing as inline content inside .namebody, so a wrapped card
@@ -2386,24 +2444,7 @@
 		border-color: var(--color-danger-border);
 	}
 
-	/* Set cell: just the symbol; alt/title carries the set code. */
-	.setsym {
-		height: 22px;
-		width: auto;
-		max-width: 36px;
-		object-fit: contain;
-		vertical-align: middle;
-	}
 
-	/* Rarity cell: the rarity name as text, ellipsised to the column. */
-	.raritytext {
-		display: block;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		color: var(--color-text-muted);
-		font-size: var(--text-xs);
-	}
 
 	/* On a phone the table is just a denser version of itself — no row
 	   reflow yet (it would clash with click-to-sort headers). */
@@ -2422,7 +2463,11 @@
 			   drops with it. */
 			--col-sel: 1.75rem;
 			--col-qty: 2rem;
-			--col-rarity: 4.5rem;
+			--col-class: 4.5rem;
+			--col-etype: 6.5rem;
+			--col-cost: 2.75rem;
+			--col-stats: 3.5rem;
+			--col-rarity: 4.25rem;
 			--col-set: 3.25rem;
 			--col-number: 4.5rem;
 			--col-price: 5.5rem;

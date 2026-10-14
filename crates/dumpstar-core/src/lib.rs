@@ -8,7 +8,7 @@ pub mod deck;
 pub mod import;
 pub mod query;
 
-pub use card::number_sortable;
+pub use card::number_sort_key;
 
 /// Crate version string, surfaced by the CLI and server.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

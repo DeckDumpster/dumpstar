@@ -7,7 +7,7 @@
 //!   "format": "dumpstar-collection",
 //!   "version": 1,
 //!   "exported_at": "2026-07-31T04:18:44Z",
-//!   "collection": [ { "id": 1, "printing_id": "sor-6-normal", ... } ],
+//!   "collection": [ { "id": 1, "printing_id": "SOR-6-normal", ... } ],
 //!   "binders": [ ... ]
 //! }
 //! ```
@@ -413,23 +413,17 @@ mod tests {
     /// A shared catalog with one card, enough for `connect_user` to attach.
     fn seed_shared(path: &Path) {
         let conn = open_shared(path).unwrap();
-        conn.execute(
-            "INSERT INTO sets (set_code, name, series) VALUES ('sor', 'Spark of Rebellion', 'Star Wars: Unlimited')",
-            [],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO cards (card_id, set_code, number, number_sortable, name, rarity) \
-             VALUES ('sor-6', 'sor', '6', 6, 'Darth Vader', 'Legendary')",
-            [],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO printings (printing_id, card_id, variant) \
-             VALUES ('sor-6-normal', 'sor-6', 'normal')",
-            [],
-        )
-        .unwrap();
+        crate::testkit::set(&conn, "SOR", "Spark of Rebellion");
+        crate::testkit::card(&conn, "SOR-6", "Darth Vader");
+        crate::testkit::printing(
+            &conn,
+            "SOR-6-normal",
+            "SOR-6",
+            "SOR",
+            "6",
+            "Standard",
+            "Normal",
+        );
     }
 
     /// Populate *every* user table, so the round-trip test actually covers
@@ -437,7 +431,7 @@ mod tests {
     /// is added to `schema_user.sql` without a row here.
     fn seed_user(conn: &Connection) {
         conn.execute_batch(
-            "INSERT INTO settings (key, value) VALUES ('theme', 'dark'), ('unicode', 'Grogu ⚡');
+            "INSERT INTO settings (key, value) VALUES ('theme', 'dark'), ('unicode', 'Grogu ✨');
 
              INSERT INTO binders (id, name, description, color, binder_type, pocket_size,
                                   storage_location, created_at, updated_at)
@@ -464,10 +458,10 @@ mod tests {
                                      sale_price, acquired_at, source, notes, tags, graded,
                                      grade_company, grade_value, grade_cert, status, order_id,
                                      binder_id, deck_id, batch_id)
-             VALUES (1, 'sor-6-normal', 'Near Mint', 'English', 12.5, NULL,
+             VALUES (1, 'SOR-6-normal', 'Near Mint', 'English', 12.5, NULL,
                      '2026-07-01T00:00:00+00:00', 'order_import', 'first one',
                      '[\"misprint\"]', 1, 'PSA', 9.5, 'CERT-1', 'owned', 1, 1, NULL, 1),
-                    (2, 'sor-6-normal', 'Lightly Played', 'French', NULL, 3.0,
+                    (2, 'SOR-6-normal', 'Lightly Played', 'French', NULL, 3.0,
                      '2026-07-02T00:00:00+00:00', 'manual_id', NULL, NULL, 0,
                      NULL, NULL, NULL, 'sold', NULL, NULL, 1, NULL);
 
@@ -480,7 +474,7 @@ mod tests {
 
              INSERT INTO wishlist (id, card_id, printing_id, max_price, priority, notes,
                                    added_at, source, fulfilled_at)
-             VALUES (1, 'sor-6', NULL, 100.0, 2, 'want a clean one',
+             VALUES (1, 'SOR-6', NULL, 100.0, 2, 'want a clean one',
                      '2026-07-01T00:00:00+00:00', 'manual', NULL);
 
              INSERT INTO sealed_collection (id, product_id, quantity, condition, purchase_price,
@@ -490,11 +484,11 @@ mod tests {
                      NULL, 'owned', '2026-07-01T00:00:00+00:00');
 
              INSERT INTO manual_prices (id, printing_id, price, observed_at, note, created_at)
-             VALUES (1, 'sor-6-normal', 42.0, '2026-07-01T00:00:00+00:00', NULL,
+             VALUES (1, 'SOR-6-normal', 42.0, '2026-07-01T00:00:00+00:00', NULL,
                      '2026-07-01T00:00:00+00:00');
 
              INSERT INTO user_printings (printing_id, card_id, variant, description, created_at)
-             VALUES ('sor-6-missing_variant', 'sor-6', 'missing_variant', 'stamped promo',
+             VALUES ('SOR-6-missing_variant', 'SOR-6', 'missing_variant', 'stamped promo',
                      '2026-07-01T00:00:00+00:00');
 
              INSERT INTO import_unresolved (id, kind, source, batch_id, source_line, raw,
@@ -509,7 +503,7 @@ mod tests {
              INSERT INTO collection_value_snapshot (date, dimension, bucket, market_value,
                                                      cost_basis, card_count)
              VALUES ('2026-07-01', 'all', NULL, 123.45, 100.0, 2),
-                    ('2026-07-01', 'set', 'sor', 123.45, 100.0, 2);
+                    ('2026-07-01', 'set', 'SOR', 123.45, 100.0, 2);
 
              INSERT INTO collection_value_snapshot_run (date, artefact, lake_ref, rows,
                                                         written_at)
@@ -625,7 +619,7 @@ mod tests {
         assert_eq!(row["sale_price"], Value::from(3.0));
         assert_eq!(row["graded"], Value::from(0));
         assert_eq!(row["language"], Value::from("French"));
-        assert_eq!(envelope["settings"][1]["value"], Value::from("Grogu ⚡"));
+        assert_eq!(envelope["settings"][1]["value"], Value::from("Grogu ✨"));
         assert_eq!(envelope[KEY_FORMAT], Value::from(FORMAT));
         assert_eq!(envelope[KEY_VERSION], Value::from(VERSION));
     }
@@ -672,7 +666,7 @@ mod tests {
         target
             .execute(
                 "INSERT INTO collection (id, printing_id, acquired_at, source) \
-                 VALUES (99, 'sor-6-normal', '2026-01-01T00:00:00+00:00', 'manual_id')",
+                 VALUES (99, 'SOR-6-normal', '2026-01-01T00:00:00+00:00', 'manual_id')",
                 [],
             )
             .unwrap();
@@ -731,7 +725,7 @@ mod tests {
         let mut conn = fx.user("target.sqlite");
 
         for bad in [
-            r#"{"format":"scryfall-dump","version":1}"#,
+            r#"{"format":"other-dump","version":1}"#,
             r#"{"version":1}"#,
             r#"{"format":"dumpstar-collection"}"#,
             r#"{"format":"dumpstar-collection","version":99}"#,

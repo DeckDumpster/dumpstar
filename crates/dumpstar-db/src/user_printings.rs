@@ -14,10 +14,10 @@
 //!   see them.
 //! - `binder::get_binder_page` UNION ALLs them too, so a card owned only
 //!   through a custom variant still highlights as owned in the binder and
-//!   the variant shows as its own slot pip (was catalog-only until a user
-//!   hit the gap on card/base2/9).
-//! - `manual_prices::insert` accepts a user_printing as a valid parent
-//!   so price entry plugs into the same gap-fill rule.
+//!   the variant shows as its own slot pip.
+//! - `manual_prices::insert` accepts a user_printing as a valid parent;
+//!   a user printing is priced from the tenant's newest manual price
+//!   (`crate::prices`), since no feed prices it.
 
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -152,17 +152,7 @@ mod tests {
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series) VALUES ('jungle', 'Jungle', 'Base')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('jungle-4', 'jungle', '4', 4, 'Jolteon')",
-                [],
-            )
-            .unwrap();
+            crate::testkit::simple(&c, "SOR", "4", "Rebel Pilot");
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         (dir, conn)
@@ -174,7 +164,7 @@ mod tests {
         let a = insert(
             &conn,
             &NewUserPrinting {
-                card_id: "jungle-4".into(),
+                card_id: "SOR-4".into(),
                 description: Some("no set stamp misprint".into()),
             },
         )
@@ -182,13 +172,13 @@ mod tests {
         let b = insert(
             &conn,
             &NewUserPrinting {
-                card_id: "jungle-4".into(),
+                card_id: "SOR-4".into(),
                 description: Some("another oddity".into()),
             },
         )
         .unwrap();
-        assert_eq!(a.printing_id, "jungle-4-user-1");
-        assert_eq!(b.printing_id, "jungle-4-user-2");
+        assert_eq!(a.printing_id, "SOR-4-user-1");
+        assert_eq!(b.printing_id, "SOR-4-user-2");
         assert_eq!(a.variant, "missing_variant");
         assert_eq!(a.description.as_deref(), Some("no set stamp misprint"));
     }
@@ -213,12 +203,12 @@ mod tests {
         insert(
             &conn,
             &NewUserPrinting {
-                card_id: "jungle-4".into(),
+                card_id: "SOR-4".into(),
                 description: Some("misprint".into()),
             },
         )
         .unwrap();
-        let rows = list_for_card(&conn, "jungle-4").unwrap();
+        let rows = list_for_card(&conn, "SOR-4").unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].description.as_deref(), Some("misprint"));
     }
@@ -229,7 +219,7 @@ mod tests {
         let row = insert(
             &conn,
             &NewUserPrinting {
-                card_id: "jungle-4".into(),
+                card_id: "SOR-4".into(),
                 description: None,
             },
         )
@@ -244,7 +234,7 @@ mod tests {
         let row = insert(
             &conn,
             &NewUserPrinting {
-                card_id: "jungle-4".into(),
+                card_id: "SOR-4".into(),
                 description: None,
             },
         )
@@ -268,7 +258,7 @@ mod tests {
         let row = insert(
             &conn,
             &NewUserPrinting {
-                card_id: "jungle-4".into(),
+                card_id: "SOR-4".into(),
                 description: None,
             },
         )

@@ -806,18 +806,8 @@ mod tests {
     /// tenant without the second one failing on the catalog's primary key.
     fn seed_catalog() {
         let conn = open_shared(&shared_db_path().unwrap()).unwrap();
-        conn.execute(
-            "INSERT OR IGNORE INTO sets (set_code, name, series) \
-             VALUES ('sor', 'Spark of Rebellion', 'Star Wars: Unlimited')",
-            [],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT OR IGNORE INTO cards (card_id, set_code, number, number_sortable, name) \
-             VALUES ('sor-1', 'sor', '1', 1, 'Luke Skywalker')",
-            [],
-        )
-        .unwrap();
+        crate::testkit::set(&conn, "SOR", "Spark of Rebellion");
+        crate::testkit::card(&conn, "SOR-1", "Luke Skywalker");
     }
 
     /// Handles of the live users, in registry order.
@@ -1098,8 +1088,8 @@ mod tests {
             let b = connect_user(&bob.path, &shared).unwrap();
 
             // Both see the catalog, unqualified, through the temp views.
-            assert!(catalog::card_exists(&a, "sor-1").unwrap());
-            assert!(catalog::card_exists(&b, "sor-1").unwrap());
+            assert!(catalog::card_exists(&a, "SOR-1").unwrap());
+            assert!(catalog::card_exists(&b, "SOR-1").unwrap());
 
             // And both resolved `shared` to the same file on disk.
             let a_file: String = a
@@ -1166,7 +1156,7 @@ mod tests {
                 let conn = connect_user(&legacy, &shared).unwrap();
                 conn.execute(
                     "INSERT INTO collection (printing_id, acquired_at, source) \
-                     VALUES ('sor-1-normal', '2026-08-07', 'manual_id')",
+                     VALUES ('SOR-1-normal', '2026-08-07', 'manual_id')",
                     [],
                 )
                 .unwrap();
@@ -1194,7 +1184,7 @@ mod tests {
                     .query_row("SELECT count(*) FROM collection", [], |r| r.get(0))
                     .unwrap();
                 assert_eq!(n, 1);
-                assert!(catalog::card_exists(&conn, "sor-1").unwrap());
+                assert!(catalog::card_exists(&conn, "SOR-1").unwrap());
             }
 
             // Rollback: back to exactly where it started.
@@ -1448,7 +1438,7 @@ mod tests {
         let conn = connect_user(&path, &shared_db_path().unwrap()).unwrap();
         conn.execute(
             "INSERT INTO collection (printing_id, acquired_at, source) \
-             VALUES ('sor-1-normal', '2026-08-07', 'manual_id')",
+             VALUES ('SOR-1-normal', '2026-08-07', 'manual_id')",
             [],
         )
         .unwrap();
@@ -1615,7 +1605,7 @@ mod tests {
             reader
                 .execute(
                     "INSERT INTO collection (printing_id, acquired_at, source) \
-                     VALUES ('sor-1-holofoil', '2026-08-08', 'manual_id')",
+                     VALUES ('SOR-1-foil', '2026-08-08', 'manual_id')",
                     [],
                 )
                 .unwrap();

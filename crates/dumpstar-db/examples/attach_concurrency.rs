@@ -261,65 +261,53 @@ fn build_catalog(path: &Path, cfg: &Config) {
     }
     let mut conn = dumpstar_db::open_shared(path).expect("opening the catalog");
 
-    // Variant codes come from the seeded `variants` table rather than a
-    // literal list: `printings.variant` is a foreign key into it, and the
-    // seed file is free to change.
-    let variants: Vec<String> = conn
-        .prepare("SELECT code FROM variants ORDER BY rank, code LIMIT 6")
-        .unwrap()
-        .query_map([], |r| r.get(0))
-        .unwrap()
-        .collect::<rusqlite::Result<_>>()
-        .unwrap();
-    assert!(!variants.is_empty(), "the variants table is empty");
+    // What a card's printings look like: its Standard Normal first, then a
+    // Standard Foil and a Hyperspace, which is roughly what a modern set holds.
+    const PRINTING_KINDS: [(&str, &str); 3] = [
+        ("Standard", "Normal"),
+        ("Standard", "Foil"),
+        ("Hyperspace", "Normal"),
+    ];
 
     let filler = "x".repeat(cfg.card_filler);
     let mut rng = Lcg(0x5eed_1234);
-    let mut product_id: i64 = 100_000;
 
     let tx = conn.transaction().unwrap();
     {
         let mut set_stmt = tx
             .prepare(
-                "INSERT INTO sets (set_code, name, series, total, printed_total, \
-                 release_date, ptcgio_fetched_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                "INSERT INTO sets (set_code, name, release_date, sort_order) \
+                 VALUES (?1, ?2, ?3, ?4)",
             )
             .unwrap();
         let mut card_stmt = tx
             .prepare(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name, \
-                 supertype, rarity, artist, image_small, image_large, raw_json) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                "INSERT INTO cards (card_id, name, card_type, cost, power, hp, rules_text) \
+                 VALUES (?1, ?2, 'Unit', ?3, ?4, ?5, ?6)",
             )
             .unwrap();
         let mut printing_stmt = tx
             .prepare(
-                "INSERT INTO printings (printing_id, card_id, variant, language, \
-                 tcgplayer_product_id, sub_type_name) VALUES (?1, ?2, ?3, 'en', ?4, ?5)",
+                "INSERT INTO printings (printing_id, card_id, set_code, number, variant, \
+                 finish, rarity, artist, image_url) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'Harness Artist', ?8)",
             )
             .unwrap();
         let mut price_stmt = tx
             .prepare(
-                "INSERT INTO latest_prices (tcgplayer_product_id, sub_type_name, source, \
-                 price_type, price, observed_at) \
-                 VALUES (?1, ?2, 'tcgcsv', 'market', ?3, '2026-08-01')",
+                "INSERT INTO prices (printing_id, source, observed_on, market) \
+                 VALUES (?1, 'tcgcsv', '2026-08-01', ?2)",
             )
             .unwrap();
 
         for (i, set_code) in set_codes(cfg).iter().enumerate() {
             let n = cards_in_set(i, cfg);
-            // printed_total below total, so the harness exercises the
-            // secret/promo sectioning the real page does.
-            let printed_total = (n * 9 / 10).max(1);
             set_stmt
                 .execute(rusqlite::params![
                     set_code,
                     format!("Harness Set {i}"),
-                    format!("Harness Series {}", i / 12),
-                    n as i64,
-                    printed_total as i64,
                     "2024-01-01",
-                    "2026-08-01",
+                    i as i64,
                 ])
                 .unwrap();
 
@@ -328,38 +316,33 @@ fn build_catalog(path: &Path, cfg: &Config) {
                 card_stmt
                     .execute(rusqlite::params![
                         card_id,
-                        set_code,
-                        c.to_string(),
-                        c as i64,
                         format!("Card {c} of {set_code}"),
-                        "Unit",
-                        RARITIES[rng.upto(RARITIES.len())],
-                        "Harness Artist",
-                        format!("https://example.invalid/{card_id}/small.png"),
-                        format!("https://example.invalid/{card_id}/large.png"),
+                        rng.upto(8) as i64,
+                        rng.upto(6) as i64,
+                        1 + rng.upto(8) as i64,
                         filler,
                     ])
                     .unwrap();
 
-                // 1–3 printings per card, which is roughly what variant
-                // expansion produces across a modern set.
-                for v in 0..(1 + rng.upto(3)) {
-                    product_id += 1;
-                    let variant = &variants[v % variants.len()];
-                    let sub_type = if v == 0 { "Normal" } else { "Holofoil" };
+                for (v, (variant, finish)) in
+                    PRINTING_KINDS.iter().take(1 + rng.upto(3)).enumerate()
+                {
+                    let printing_id = format!("{card_id}-{variant}-{finish}");
                     printing_stmt
                         .execute(rusqlite::params![
-                            format!("{card_id}-{variant}-en"),
+                            printing_id,
                             card_id,
+                            set_code,
+                            c.to_string(),
                             variant,
-                            product_id,
-                            sub_type,
+                            finish,
+                            RARITIES[rng.upto(RARITIES.len())],
+                            format!("https://example.invalid/{card_id}/{v}.png"),
                         ])
                         .unwrap();
                     price_stmt
                         .execute(rusqlite::params![
-                            product_id,
-                            sub_type,
+                            printing_id,
                             (rng.upto(50_000) as f64) / 100.0,
                         ])
                         .unwrap();
@@ -372,16 +355,7 @@ fn build_catalog(path: &Path, cfg: &Config) {
         .unwrap();
 }
 
-const RARITIES: &[&str] = &[
-    "Common",
-    "Uncommon",
-    "Rare",
-    "Rare Holo",
-    "Double Rare",
-    "Illustration Rare",
-    "Special Illustration Rare",
-    "Hyper Rare",
-];
+const RARITIES: &[&str] = &["Common", "Uncommon", "Rare", "Legendary", "Special"];
 
 /// One collection database per reader slot, provisioned through the real
 /// `dumpstar tenant create` path so the layout under test is the shipped one.
@@ -719,16 +693,29 @@ fn refresh_writer(catalog: &Path, stop: &AtomicBool, barrier: &Barrier, commits:
     conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;")
         .unwrap();
     let rows: i64 = conn
-        .query_row("SELECT max(rowid) FROM latest_prices", [], |r| r.get(0))
+        .query_row("SELECT count(*) FROM printings", [], |r| r.get(0))
         .unwrap();
     barrier.wait();
     let mut seed = Lcg(0xfeed);
+    // Unique across scenarios, repetitions and runs against a reused catalog.
+    let run = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let mut refresh: u64 = 0;
     while !stop.load(Ordering::Relaxed) {
-        // A price refresh is exactly this: rewrite `latest_prices` rows.
+        // A price refresh is exactly this: APPEND quotes (`prices` forbids
+        // UPDATE and DELETE). Each commit is a new source so its keys never
+        // collide with an earlier one's.
+        refresh += 1;
         conn.execute(
-            "UPDATE latest_prices SET price = price + 0.01, observed_at = '2026-08-07' \
-             WHERE rowid BETWEEN ?1 AND ?1 + 500",
-            [seed.upto(rows as usize) as i64],
+            "INSERT INTO prices (printing_id, source, observed_on, market) \
+             SELECT printing_id, ?1, '2026-08-07', 1.0 FROM printings \
+              ORDER BY printing_id LIMIT 500 OFFSET ?2",
+            rusqlite::params![
+                format!("refresh-{run}-{refresh}"),
+                seed.upto(rows as usize) as i64
+            ],
         )
         .expect("the refresh writer could not commit");
         commits.fetch_add(1, Ordering::Relaxed);

@@ -236,13 +236,6 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
         .nest("/api", authenticated_api)
         .nest("/api", public_api)
         .nest_service("/_app", ServeDir::new(static_dir.join("_app")))
-        // Static-asset directories carried in by adapter-static. Each needs
-        // an explicit nest_service so they don't fall through to the SPA
-        // fallback (which would return index.html and the browser would
-        // render the icon as a broken HTML "image").
-        .nest_service("/rarity", ServeDir::new(static_dir.join("rarity")))
-        .nest_service("/energy", ServeDir::new(static_dir.join("energy")))
-        .nest_service("/sets", ServeDir::new(static_dir.join("sets")))
         // Trimmed-and-resized set symbol glyphs written by the ingest
         // pipeline's symbols phase. Lives on the data volume so it
         // rebuilds from upstream alongside shared.sqlite, not in the
@@ -330,28 +323,19 @@ mod tests {
     use axum::http::{Request, header};
     use tower::ServiceExt;
 
-    /// A catalog holding one printing (`sor-1-normal`), plus the static
+    /// A catalog holding one printing (`SOR-1-normal`), plus the static
     /// dir the router serves the SPA shell from.
     fn seed(dir: &std::path::Path) -> PathBuf {
         let shared = dir.join("shared.sqlite");
         let mut c = dumpstar_db::open_shared(&shared).unwrap();
         dumpstar_db::search_meta::reconcile(&mut c).unwrap();
-        c.execute(
-            "INSERT INTO sets (set_code, ptcgo_code, name, series) \
-             VALUES ('sor', 'SOR', 'Spark of Rebellion', 'Star Wars: Unlimited')",
-            [],
-        )
-        .unwrap();
-        c.execute(
-            "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-             VALUES ('sor-1', 'sor', '1', 1, 'Luke Skywalker')",
-            [],
-        )
-        .unwrap();
-        c.execute(
-            "INSERT INTO printings (printing_id, card_id, variant) \
-             VALUES ('sor-1-normal', 'sor-1', 'normal')",
-            [],
+        c.execute_batch(
+            "INSERT INTO sets (set_code, name, release_date, sort_order) \
+               VALUES ('SOR', 'Spark of Rebellion', '2024-03-08', 1); \
+             INSERT INTO cards (card_id, name, card_type, cost, aspects) \
+               VALUES ('SOR-1', 'Luke Skywalker', 'Unit', 3, '[\"Vigilance\"]'); \
+             INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
+               VALUES ('SOR-1-normal', 'SOR-1', 'SOR', '1', 'Standard', 'Normal');",
         )
         .unwrap();
 
@@ -401,12 +385,23 @@ mod tests {
     async fn multi_tenant_app(
         handles: &[&str],
     ) -> (tempfile::TempDir, Router, PathBuf, TestAccessFixture) {
-        let fx = TestAccessFixture::new().await;
         let dir = tempfile::tempdir().unwrap();
         let shared = seed(dir.path());
-        let tenants_dir = dir.path().join("tenants");
+        let (router, tenants_dir, fx) = serve_over(dir.path(), &shared, handles).await;
+        (dir, router, tenants_dir, fx)
+    }
+
+    /// The router for a data directory whose catalog already exists at
+    /// `shared`, with `handles` provisioned.
+    async fn serve_over(
+        dir: &std::path::Path,
+        shared: &std::path::Path,
+        handles: &[&str],
+    ) -> (Router, PathBuf, TestAccessFixture) {
+        let fx = TestAccessFixture::new().await;
+        let tenants_dir = dir.join("tenants");
         std::fs::create_dir_all(&tenants_dir).unwrap();
-        let registry_db = dir.path().join("registry.sqlite");
+        let registry_db = dir.join("registry.sqlite");
         let registry = dumpstar_db::open_registry(&registry_db).unwrap();
         for handle in handles {
             let user = dumpstar_db::registry::insert(&registry, handle).unwrap();
@@ -424,12 +419,12 @@ mod tests {
             .unwrap();
         }
         let router = router_for(
-            dir.path(),
-            &shared,
-            Tenants::new(tenants_dir.clone(), shared.clone(), &registry_db).unwrap(),
+            dir,
+            shared,
+            Tenants::new(tenants_dir.clone(), shared.to_path_buf(), &registry_db).unwrap(),
             fx.access.clone(),
         );
-        (dir, router, tenants_dir, fx)
+        (router, tenants_dir, fx)
     }
 
     /// Build a request, optionally injecting a JWT and a body.
@@ -447,7 +442,7 @@ mod tests {
         }
     }
 
-    const ADD_CARD: &str = r#"{"printing_id":"sor-1-normal","source":"manual_id"}"#;
+    const ADD_CARD: &str = r#"{"printing_id":"SOR-1-normal","source":"manual_id"}"#;
 
     async fn body_string(resp: Response) -> String {
         let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
@@ -515,7 +510,7 @@ mod tests {
         let unauthenticated_routes = [
             "GET /api/collection",
             "GET /api/sets",
-            "GET /api/card/sor/1",
+            "GET /api/card/SOR/1",
             "GET /api/binders",
             "GET /api/decks",
             "GET /api/wishlist",
@@ -709,10 +704,10 @@ mod tests {
         let symbols = dir.path().join("symbols");
         std::fs::create_dir_all(&symbols).unwrap();
         let png = vec![b'P'; 8 * 1024];
-        std::fs::write(symbols.join("sor.png"), &png).unwrap();
+        std::fs::write(symbols.join("SOR.png"), &png).unwrap();
 
         // Images are not under /api so no token is needed.
-        let (encoding, body) = get_encoding(&router, "/sym/sor.png", Some("gzip, br"), None).await;
+        let (encoding, body) = get_encoding(&router, "/sym/SOR.png", Some("gzip, br"), None).await;
         assert_eq!(encoding, "");
         assert_eq!(body, png);
     }
@@ -728,7 +723,7 @@ mod tests {
                 "POST",
                 "/api/collection",
                 Some(&tok),
-                Some(r#"{"printing_id":"sor-1-normal","source":"manual_id"}"#),
+                Some(r#"{"printing_id":"SOR-1-normal","source":"manual_id"}"#),
             ))
             .await
             .unwrap();
@@ -740,7 +735,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(listed.status(), StatusCode::OK);
-        assert!(body_string(listed).await.contains("sor-1-normal"));
+        assert!(body_string(listed).await.contains("SOR-1-normal"));
 
         let bad = router
             .clone()
@@ -748,7 +743,7 @@ mod tests {
                 "POST",
                 "/api/collection",
                 Some(&tok),
-                Some(r#"{"printing_id":"sor-1-nope","source":"manual_id"}"#),
+                Some(r#"{"printing_id":"SOR-1-nope","source":"manual_id"}"#),
             ))
             .await
             .unwrap();
@@ -772,7 +767,7 @@ mod tests {
                 "POST",
                 "/api/manual-prices",
                 Some(&tok),
-                Some(r#"{"printing_id":"sor-1-normal","price":29.0}"#),
+                Some(r#"{"printing_id":"SOR-1-normal","price":29.0}"#),
             ))
             .await
             .unwrap();
@@ -780,7 +775,7 @@ mod tests {
         assert!(
             body_string(refused)
                 .await
-                .contains("data/overrides/catalog_prices.json")
+                .contains("the price of a catalog printing is the catalog's")
         );
 
         let unknown = router
@@ -802,14 +797,14 @@ mod tests {
 
         let found = router
             .clone()
-            .oneshot(request("GET", "/api/card/sor/1", Some(&tok), None))
+            .oneshot(request("GET", "/api/card/SOR/1", Some(&tok), None))
             .await
             .unwrap();
         assert_eq!(found.status(), StatusCode::OK);
         assert!(body_string(found).await.contains("Luke Skywalker"));
 
         let missing = router
-            .oneshot(request("GET", "/api/card/sor/999", Some(&tok), None))
+            .oneshot(request("GET", "/api/card/SOR/999", Some(&tok), None))
             .await
             .unwrap();
         assert_eq!(missing.status(), StatusCode::NOT_FOUND);
@@ -826,7 +821,7 @@ mod tests {
                 "POST",
                 "/api/collection",
                 Some(&tok),
-                Some(r#"{"printing_id":"sor-1-normal","source":"manual_id"}"#),
+                Some(r#"{"printing_id":"SOR-1-normal","source":"manual_id"}"#),
             ))
             .await
             .unwrap();
@@ -838,7 +833,7 @@ mod tests {
             .unwrap();
         assert_eq!(owned.status(), StatusCode::OK);
         let body = body_string(owned).await;
-        assert!(body.contains("sor-1-normal"), "owned search: {body}");
+        assert!(body.contains("SOR-1-normal"), "owned search: {body}");
         assert!(body.contains("\"owned\":true"), "owned flag: {body}");
 
         let none = router
@@ -924,8 +919,8 @@ mod tests {
         {
             let c = dumpstar_db::open_shared(&dir.path().join("shared.sqlite")).unwrap();
             c.execute(
-                "INSERT INTO catalog_price_overrides (printing_id, price, observed_at) \
-                 VALUES ('sor-1-normal', 12.5, '2025-01-01')",
+                "INSERT INTO prices (printing_id, source, observed_on, market) \
+                 VALUES ('SOR-1-normal', 'tcgcsv', '2025-01-01', 12.5)",
                 [],
             )
             .unwrap();
@@ -1083,8 +1078,55 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         let body = body_string(resp).await;
-        assert!(body.contains("energy_type"), "keywords: {body}");
-        assert!(body.contains("holo"), "flags: {body}");
+        assert!(body.contains("card_type"), "keywords: {body}");
+        assert!(body.contains("hyperspace"), "flags: {body}");
+    }
+
+    /// sp-r7w5xi acceptance: a catalog written by `catalog-apply --fake` is the
+    /// catalog the server serves — through the very open the server makes at
+    /// startup — and a search by aspect finds a fake SWU card. The same file,
+    /// first written by an earlier card schema,
+    /// is rebuilt rather than failed on.
+    #[tokio::test]
+    async fn a_fake_applied_catalog_is_served_and_searchable_by_aspect() {
+        for legacy in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let shared = dir.path().join("shared.sqlite");
+            if legacy {
+                rusqlite::Connection::open(&shared)
+                    .unwrap()
+                    .execute_batch(dumpstar_catalog::LEGACY_SHAPE_DDL)
+                    .unwrap();
+            }
+            dumpstar_catalog::job::run_once(
+                &dumpstar_catalog::FakeSource,
+                &dir.path().join("raw"),
+                &shared,
+                chrono::Utc::now(),
+            )
+            .unwrap();
+            // What `serve` does before it builds its search registry.
+            drop(dumpstar_db::open_shared_for_serving(&shared).unwrap());
+
+            let (router, _tenants, fx) = serve_over(dir.path(), &shared, &["u"]).await;
+            let tok = fx.valid_token("u@example.com");
+            let resp = router
+                .oneshot(request(
+                    "GET",
+                    "/api/collection/search?q=aspect%3Avigilance&include_unowned=1",
+                    Some(&tok),
+                    None,
+                ))
+                .await
+                .unwrap();
+            assert_eq!(resp.status(), StatusCode::OK, "legacy={legacy}");
+            let body = body_string(resp).await;
+            assert!(
+                body.contains("Luke Skywalker"),
+                "legacy={legacy}: search by aspect found nothing: {body}"
+            );
+            assert!(!body.contains("Millennium Falcon"), "{body}");
+        }
     }
 
     #[tokio::test]
@@ -1166,7 +1208,7 @@ mod tests {
                 .oneshot(request("GET", "/api/collection", Some(&alice_tok), None))
                 .await
                 .unwrap();
-            assert!(body_string(alices).await.contains("sor-1-normal"));
+            assert!(body_string(alices).await.contains("SOR-1-normal"));
         }
 
         /// An unbound email is a 403 and does not create a database.
@@ -1276,7 +1318,7 @@ mod tests {
             dumpstar_db::registry::reattach(&reg, &alice.database_id).unwrap();
             let resp = get().await.unwrap();
             assert_eq!(resp.status(), StatusCode::OK);
-            assert!(body_string(resp).await.contains("sor-1-normal"));
+            assert!(body_string(resp).await.contains("SOR-1-normal"));
         }
 
         /// A leftover `x-dumpstar-tenant` header cannot be used to reach another
@@ -1318,7 +1360,7 @@ mod tests {
             assert_eq!(resp.status(), StatusCode::OK);
             let body = body_string(resp).await;
             assert!(
-                body.contains("sor-1-normal"),
+                body.contains("SOR-1-normal"),
                 "alice's header claim resolved to the wrong collection: {body}"
             );
         }
@@ -1384,7 +1426,7 @@ mod tests {
 
             for (uri, body) in [
                 ("/api/collection", ADD_CARD),
-                ("/api/wishlist", r#"{"card_id":"sor-1"}"#),
+                ("/api/wishlist", r#"{"card_id":"SOR-1"}"#),
                 ("/api/binders", r#"{"name":"alice-binder"}"#),
                 ("/api/decks", r#"{"name":"alice-deck"}"#),
             ] {
@@ -1428,8 +1470,8 @@ mod tests {
 
             // ...and everything is still there, unchanged, for A.
             for (uri, needle) in [
-                ("/api/collection", "sor-1-normal"),
-                ("/api/wishlist", "sor-1"),
+                ("/api/collection", "SOR-1-normal"),
+                ("/api/wishlist", "SOR-1"),
                 ("/api/binders", "alice-binder"),
                 ("/api/decks", "alice-deck"),
             ] {
@@ -1563,9 +1605,9 @@ mod tests {
                 (
                     "PUT",
                     "/api/collection/1/printing",
-                    Some(r#"{"printing_id":"sor-1-normal"}"#),
+                    Some(r#"{"printing_id":"SOR-1-normal"}"#),
                 ),
-                ("DELETE", "/api/collection/by-printing/sor-1-normal", None),
+                ("DELETE", "/api/collection/by-printing/SOR-1-normal", None),
                 ("DELETE", "/api/collection/1", None),
             ] {
                 let (s, out) = send(method, uri, &b, body).await;
@@ -1598,7 +1640,7 @@ mod tests {
                     );
                 } else {
                     assert!(
-                        !out.contains("sor-1-normal"),
+                        !out.contains("SOR-1-normal"),
                         "bob reads alice's copy through {uri}: {out}"
                     );
                 }
@@ -1606,7 +1648,7 @@ mod tests {
 
             let (s, out) = send("GET", "/api/collection/1", &a, None).await;
             assert_eq!(s, StatusCode::OK, "alice lost her copy: {out}");
-            assert!(out.contains("sor-1-normal"), "{out}");
+            assert!(out.contains("SOR-1-normal"), "{out}");
             assert!(!out.contains("pwned") && !out.contains("sold"), "{out}");
         }
 
@@ -1619,13 +1661,13 @@ mod tests {
             {
                 let c = dumpstar_db::open_shared(&d.path().join("shared.sqlite")).unwrap();
                 c.execute_batch(
-                    "INSERT INTO sets (set_code, name, series) VALUES ('empty', 'Empty', 'S'); \
-                     INSERT INTO sets (set_code, name, series) VALUES ('two', 'Two', 'S'); \
-                     INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                       VALUES ('two-1', 'two', '1', 1, 'A'), ('two-2', 'two', '2', 2, 'B'); \
-                     INSERT INTO printings (printing_id, card_id, variant) \
-                       VALUES ('two-1-normal', 'two-1', 'normal'), ('two-1-foil', 'two-1', 'foil'), \
-                              ('two-2-normal', 'two-2', 'normal');",
+                    "INSERT INTO sets (set_code, name) VALUES ('empty', 'Empty'); \
+                     INSERT INTO sets (set_code, name) VALUES ('two', 'Two'); \
+                     INSERT INTO cards (card_id, name) VALUES ('two-1', 'A'), ('two-2', 'B'); \
+                     INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
+                       VALUES ('two-1-normal', 'two-1', 'two', '1', 'Standard', 'Normal'), \
+                              ('two-1-foil', 'two-1', 'two', '1', 'Standard', 'Foil'), \
+                              ('two-2-normal', 'two-2', 'two', '2', 'Standard', 'Normal');",
                 )
                 .unwrap();
             }
@@ -1664,7 +1706,7 @@ mod tests {
                 let (s, sets) = get(tok, "/api/sets".into()).await;
                 assert_eq!(s, StatusCode::OK);
                 let rows = sets.as_array().unwrap();
-                for code in ["sor", "empty", "two"] {
+                for code in ["SOR", "empty", "two"] {
                     let row = rows.iter().find(|r| r["set_code"] == code);
                     let row = row.unwrap_or_else(|| panic!("{who}: set {code} missing"));
                     let (s, page) = get(tok, format!("/api/sets/{code}/binder")).await;
@@ -1722,7 +1764,7 @@ mod tests {
                 conn.execute_batch(&format!(
                     "INSERT INTO collection (printing_id, acquired_at, source)
                      WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < {N})
-                     SELECT 'sor-1-normal', '2026-01-01', 'manual_id' FROM n;"
+                     SELECT 'SOR-1-normal', '2026-01-01', 'manual_id' FROM n;"
                 ))
                 .unwrap();
             }

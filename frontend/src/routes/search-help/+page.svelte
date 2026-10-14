@@ -26,15 +26,33 @@
 	];
 
 	const examples: { q: string; what: string }[] = [
-		{ q: 'luke is:foil', what: 'Foil Luke Skywalkers in your collection' },
+		{ q: 't:unit a:vigilance cost<=3', what: 'Vigilance units that cost 3 or less, that you own' },
 		{ q: 's:sor rarity>=rare', what: 'Spark of Rebellion cards, rare or better' },
-		{ q: 'is:missing s:sor', what: "Spark of Rebellion cards you're still missing" },
-		{ q: 'vader -is:foil', what: 'Non-foil Vaders in your collection' },
+		{ q: 'is:missing s:sor t:leader', what: "Spark of Rebellion leaders you're still missing" },
+		{ q: 'is:hyperspace is:foil', what: 'Hyperspace foils in your collection' },
+		{ q: 'trait:rebel power>=4 arena:ground', what: 'Rebel ground units with 4+ power' },
+		{ q: 'o:ambush', what: 'Cards whose rules text mentions Ambush' },
 		{ q: 'price>20 added>=2026-01-01', what: 'Recent pickups worth over $20' },
-		{ q: 'trooper qty>=2', what: 'Printings you own 2 or more copies of' },
-		{ q: 'yoda or obi-wan -is:graded', what: 'Yodas and Obi-Wans, excluding graded copies' },
+		{ q: 'luke qty>=2', what: 'Luke printings you own 2 or more copies of' },
+		{ q: 'a:cunning or a:aggression -is:graded', what: 'Cunning or Aggression, excluding graded copies' },
 		{ q: 'order:price direction:desc', what: 'Everything, most valuable first' }
 	];
+
+	/** What `order:` accepts — the collection page's sort keys. */
+	const sortKeys = [
+		'name',
+		'number',
+		'set',
+		'rarity',
+		'type',
+		'cost',
+		'power',
+		'hp',
+		'price',
+		'qty',
+		'added'
+	];
+	const hasValues = ['text', 'subtitle', 'artist'];
 
 	function aliasList(aliases: string[]): string {
 		return aliases.join(', ');
@@ -73,6 +91,27 @@
 				{#each examples as ex (ex.q)}
 					<tr><td class="mono">{ex.q}</td><td>{ex.what}</td></tr>
 				{/each}
+			</tbody>
+		</table>
+	</section>
+
+	<section>
+		<h2><code>order:</code> and <code>has:</code></h2>
+		<table>
+			<tbody>
+				<tr>
+					<td class="mono">order:</td>
+					<td>
+						Sort key: {#each sortKeys as k, i (k)}{#if i > 0}, {/if}<code>{k}</code>{/each}.
+						Add <code>direction:desc</code> to reverse it.
+					</td>
+				</tr>
+				<tr>
+					<td class="mono">has:</td>
+					<td>
+						Presence: {#each hasValues as h, i (h)}{#if i > 0}, {/if}<code>has:{h}</code>{/each}.
+					</td>
+				</tr>
 			</tbody>
 		</table>
 	</section>

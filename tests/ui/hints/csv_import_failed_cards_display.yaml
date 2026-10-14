@@ -1,16 +1,16 @@
 start_page: /ingest/csv
 involves:
-  - "Format select (ManaBox / TCGplayer)"
+  - "Format select (TCGplayer / Dumpstar / Collectr)"
   - "…or paste CSV text textarea"
   - "Preview button"
   - "preview summary line with matched and unmatched counts"
   - "Unmatched rows table (Line, Set, #, Variant, Reason)"
   - "Matched rows table (Line, Card, Set, #, Variant, Condition)"
 fixture_data:
-  format: "ManaBox"
-  csv: "a ManaBox export mixing a bogus row (set zzz, #9999) with valid fixture rows"
+  format: "TCGplayer"
+  csv: "a TCGplayer export mixing a bogus row (set zzz, #9999) with valid fixture rows"
 notes: >
-  Navigate to /ingest/csv. Select "ManaBox". Paste a ManaBox CSV that mixes
+  Navigate to /ingest/csv. Select "TCGplayer". Paste a TCGplayer CSV that mixes
   one unresolvable row with valid rows. Click "Preview". Verify the summary
   shows "{n} matched · {n} unmatched". Verify the Unmatched rows table
   renders above the Matched rows table and lists the failed row's reason.

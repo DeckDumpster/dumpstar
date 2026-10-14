@@ -5,7 +5,6 @@
 #   pull_requests: []
 
 description: >
-  I can open the add-sealed modal and type "151" into the search input to
-  see the 151 sealed products. Typing a more specific term like "Booster
-  Bundle" narrows the results to a single product, and clearing the input
+  I can open the add-sealed modal and type "Spark" into the search input to
+  see the Spark of Rebellion sealed products. Typing a more specific term like "Prerelease Kit" narrows the results to a single product, and clearing the input
   back below two characters empties the result list.

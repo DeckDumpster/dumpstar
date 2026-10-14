@@ -1,13 +1,13 @@
-start_page: /card/sv8/57
+start_page: /card/SOR/005
 involves:
   - '"Want" control on the card detail page'
   - 'clicking it adds the card to the wishlist and switches it to "Wanted"'
   - 'clicking again removes the card from the wishlist and reverts to "Want"'
 fixture_data:
-  card_name: "Pikachu ex"
+  card_name: "Luke Skywalker - Faithful Friend"
 notes: >
-  sv8/57 (Pikachu ex, Double Rare) is not on the wishlist in the fixture —
-  the wishlist holds sv3pt5-199, sv8-238, and base1-4. 1. Navigate to
-  /card/sv8/57. 2. Wait for the card detail to load. 3. Click the "Want"
+  SOR/005 (Luke Skywalker - Faithful Friend, Special) is not on the wishlist in the fixture —
+  the wishlist holds SOR-262:Foil, SOR-193, and SOR-521:Normal. 1. Navigate to
+  /card/SOR/005. 2. Wait for the card detail to load. 3. Click the "Want"
   control. 4. It switches to the "Wanted" state. 5. Click it again.
   6. It reverts to "Want".

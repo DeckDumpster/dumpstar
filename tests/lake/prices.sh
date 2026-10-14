@@ -306,13 +306,10 @@ SEALED_RUNS=$(printf '%s\n' "$RUNS" | tail -1)
 	die "the two price tables name different raw runs: '${CARD_RUNS}' vs '${SEALED_RUNS}'"
 echo "    ok   both tables built from run(s) ${CARD_RUNS}"
 
-# Three: the classifier itself, over BOTH TCGplayer categories. The fixture is
-# category 3 only, and the Japanese rule (`japan.rs::is_card` — a card carries
-# `CardType`, because ~40% of vintage Japanese products carry no `Number` at
-# all) would therefore never be exercised by the data above. Applying the
-# English rule to category 85 files 450 groups of Japanese SINGLES as sealed
-# product, which is a wrong number nothing else here would notice. So the pure
-# functions are driven directly, in the shipped job image, in both directions.
+# Three: the classifier itself, driven directly in the shipped job image. The
+# fixture's products exercise only the common shapes, so the edges — a field
+# name in another case, a product with no extendedData at all — are asserted
+# here, in both directions.
 #
 # CAPTURED, not piped into `grep -q`. Under `pipefail` a `grep -q` that exits on
 # its first match SIGPIPEs the job behind it, so the pipeline reports 141 exactly
@@ -320,42 +317,21 @@ echo "    ok   both tables built from run(s) ${CARD_RUNS}"
 # enough to fill a pipe buffer. stderr is deliberately left on the console, so a
 # traceback is still read where it happens.
 CLASSIFIER_OUT="$(run_job python -c "
-from dumpstar_lake.prices import CATEGORY_POKEMON_JAPAN, category_of, is_sealed
+from dumpstar_lake.prices import is_sealed
 
 def card(**kw): return {'extendedData': [{'name': k, 'value': v} for k, v in kw.items()]}
 
-# Category 3: a Number makes it a card; nothing makes it sealed.
-assert not is_sealed(card(Number='4/102'), 3), 'an English single was called sealed'
-assert is_sealed({'extendedData': []}, 3), 'an English sealed product was called a card'
-assert is_sealed({}, 3), 'a product with no extendedData at all must be sealed'
-# Case-insensitively, the way both Rust importers compare the field name.
-assert not is_sealed(card(number='4/102'), 3), 'the field name is matched case-sensitively'
-
-# Category 85: CardType makes it a card, and a Japanese vintage card with NO
-# number must NOT be filed as sealed product.
-jp = CATEGORY_POKEMON_JAPAN
-assert not is_sealed(card(CardType='Pokemon'), jp), 'a Japanese single was called sealed'
-assert is_sealed(card(Number='001/102'), jp), 'a Japanese product without CardType is sealed'
-assert is_sealed({'extendedData': []}, jp), 'a Japanese sealed product was called a card'
-
-# And the category is READ, not assumed: the same product classifies both ways.
-vintage = card(CardType='Trainer')
-assert is_sealed(vintage, 3) and not is_sealed(vintage, jp),     'the rule does not vary by category — one of the two importers is being ignored'
-
-# The category comes off the part URL the manifest recorded.
-assert category_of('https://tcgcsv.com/tcgplayer/85/1234/products', 'k') == 85
-assert category_of('http://127.0.0.1:8080/3/1/products', 'k') == 3
-for bad in ('https://tcgcsv.com/tcgplayer/3/1/prices', 'https://x/products', 'https://x/a/b/products'):
-    try:
-        category_of(bad, 'k')
-    except Exception:
-        continue
-    raise AssertionError(f'{bad!r} was accepted as a products URL')
+# A Number makes it a card; nothing makes it sealed.
+assert not is_sealed(card(Number='005/252')), 'a single was called sealed'
+assert is_sealed({'extendedData': []}), 'a sealed product was called a card'
+assert is_sealed({}), 'a product with no extendedData at all must be sealed'
+# Case-insensitively, the way the Rust importer compares the field name.
+assert not is_sealed(card(number='005/252')), 'the field name is matched case-sensitively'
 print('CLASSIFIER OK')
 ")" || true
 grep -q 'CLASSIFIER OK' <<<"$CLASSIFIER_OUT" ||
-	die "the sealed classifier does not follow the two Rust importers — see dumpstar_lake.prices.is_sealed"
-echo "    ok   the classifier matches is_single_card (cat 3) and japan::is_card (cat 85)"
+	die "the sealed classifier does not follow the Rust importer — see dumpstar_lake.prices.is_sealed"
+echo "    ok   the classifier matches is_single_card"
 
 echo "==> §6  Re-running the build is idempotent"
 # Same input, same table STATE. The Nessie commit is new either way — a build

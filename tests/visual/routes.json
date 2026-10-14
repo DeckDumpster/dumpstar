@@ -28,33 +28,28 @@
 		},
 		{
 			"id": "browse-set",
-			"path": "/browse/sv3pt5",
-			"about": "Binder-page grid for 151 — the headline feature"
+			"path": "/browse/SOR",
+			"about": "Binder-page grid — the headline feature"
 		},
 		{
-			"id": "browse-set-vintage",
-			"path": "/browse/base1",
-			"about": "Binder page for a 1999 set — different rarity mix and pip states"
-		},
-		{
-			"id": "browse-set-japanese",
-			"path": "/browse/jp-23723",
-			"about": "Binder page for the Japanese set — the render a NULL printed_total and TCGCSV-only art produce: every card filed as base rather than as a secret rare, two print runs per slot, and one slot with no art at all (pd-zonm)"
+			"id": "browse-set-shd",
+			"path": "/browse/SHD",
+			"about": "Binder page for the second set — a single-card page"
 		},
 		{
 			"id": "browse-set-stats",
-			"path": "/browse/sv3pt5/stats",
+			"path": "/browse/SOR/stats",
 			"about": "Master-set completion stats — charts and progress meters"
 		},
 		{
 			"id": "card-detail",
-			"path": "/card/sv3pt5/6",
-			"about": "Charizard ex — card detail with variants, prices and copies"
+			"path": "/card/SOR/005",
+			"about": "Card detail with variants, prices and copies"
 		},
 		{
-			"id": "card-detail-owned-vintage",
-			"path": "/card/base1/4",
-			"about": "Base Set Charizard — a card with an ordered copy in flight"
+			"id": "card-detail-ordered",
+			"path": "/card/SOR/521",
+			"about": "A card with an ordered copy in flight"
 		},
 		{
 			"id": "collection",
@@ -67,11 +62,11 @@
 		{ "id": "wishlist", "path": "/wishlist", "about": "Wishlist with priorities and max prices" },
 		{ "id": "recent", "path": "/recent", "about": "Recently added copies" },
 		{ "id": "binders", "path": "/binders", "about": "Binder list" },
-		{ "id": "binder-detail", "path": "/binders/2", "about": "Master Set: 151 — a populated 12-pocket binder" },
+		{ "id": "binder-detail", "path": "/binders/2", "about": "A populated 12-pocket binder" },
 		{ "id": "decks", "path": "/decks", "about": "Deck list across all three lifecycle states" },
-		{ "id": "deck-detail", "path": "/decks/1", "about": "Charizard ex Control — a built deck" },
+		{ "id": "deck-detail", "path": "/decks/1", "about": "A built deck" },
 		{ "id": "batches", "path": "/batches", "about": "Batch list with the type filter bar" },
-		{ "id": "batch-detail", "path": "/batches/4", "about": "151 binder page-through — a binder_click batch" },
+		{ "id": "batch-detail", "path": "/batches/4", "about": "A binder_click batch" },
 		{ "id": "orders", "path": "/orders", "about": "Order list — one received, one open" },
 		{ "id": "order-detail", "path": "/orders/1", "about": "TCG-100001 — a received order" },
 		{ "id": "ingest-manual", "path": "/ingest/manual", "about": "Manual entry form" },

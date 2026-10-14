@@ -6,10 +6,10 @@ fixture_data:
   batch_card_counts:
     "TCG-100001": 3
     "EBAY-55012": 1
-    "151 binder page-through": 8
-    "ManaBox export 2024-01": 4
+    "Spark of Rebellion binder page-through": 7
+    "Showcase entry": 5
+    "CSV export 2025-06": 4
 notes: >
   1. Navigate to /recent. 2. Wait for ul.timeline. 3. For each batch
-  row, read its "{n} cards" count. 4. Verify the "151 binder
-  page-through" batch reads "8 cards" and the "TCG-100001" batch reads
+  row, read its "{n} cards" count. 4. Verify the "Spark of Rebellion binder page-through" batch reads "7 cards" and the "TCG-100001" batch reads
   "3 cards", matching the fixture data.

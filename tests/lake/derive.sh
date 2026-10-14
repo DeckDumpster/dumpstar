@@ -120,8 +120,6 @@ derive() { # derive <ingest-date> [extra args...]
 		-e DUMPSTAR_LAKE_DIR=/raw \
 		-e DUMPSTAR_LAKE_ENV=/nonexistent/lake.env \
 		-e DUMPSTAR_TCGCSV_BASE_URL="$ORIGIN" \
-		-e DUMPSTAR_POKEMONTCG_BASE_URL="$ORIGIN" \
-		-e DUMPSTAR_POKEMON_TCG_DATA_BASE_URL="$ORIGIN" \
 		--entrypoint dumpstar-lake-derive "$IMAGE" \
 		shared --ingest-date "$date" \
 		--db /fixture/derived.sqlite --data-dir /fixture "$@"

@@ -1,19 +1,18 @@
-start_page: /browse/sv3pt5/stats
+start_page: /browse/SOR/stats
 involves:
   - "lib/components/ui/ProgressBar.svelte renders div.track[role=progressbar] with aria-valuenow/min/max + aria-label"
   - "Completion card: three ProgressBar size=md tone=complete inside div.metrics, label='Base set'|'Numbered set'|'Master set', hint='{owned} / {total} · {pct}%'"
   - "Rarity split: one ProgressBar tone=complete labelHidden per row, label={r.rarity}, inside div.pcell as :global(.rbar)"
   - "tone=complete resolves the fill to --color-progress-fill (green), NOT the primitive's default accent (crimson)"
 fixture_data:
-  set: "151 (sv3pt5)"
+  set: "Spark of Rebellion (SOR)"
   collection: >
-    8 sv3pt5 copies registered to Master Set: 151 via binder_click. Analytics
-    reports base 10/13, numbered 10/13, master 12/20, and seven rarity rows
-    (Common, Uncommon, Rare, Double Rare, Illustration Rare, Special
-    Illustration Rare, Hyper Rare).
+    Every SOR printing is owned. Analytics reports base 0/0 (the set has no
+    printed total), numbered 4/4, master 6/6, and three rarity rows
+    (Common, Rare, Special).
 notes: >
-  1. Navigate to /browse/sv3pt5/stats and wait for the Completion card. 2.
-  Assert [role=progressbar] resolves to 10 elements — three completion meters
+  1. Navigate to /browse/SOR/stats and wait for the Completion card. 2.
+  Assert [role=progressbar] resolves to 6 elements — three completion meters
   plus one per rarity row. Before pd-ifhu this page hand-rolled
   `<div class="bar"><span style="width:%">` and the count was ZERO, so a count
   assertion is the regression guard. 3. For the three completion meters,

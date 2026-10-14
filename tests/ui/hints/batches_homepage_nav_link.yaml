@@ -4,7 +4,7 @@ involves:
   - "muted subtitle line 'Every ingestion run — manual entry, binder clicks, imports, orders.'"
   - "batches table with columns Type, Name, Cards, When"
 fixture_data:
-  demo_batches: "5 batches — Vintage holo entry, 151 binder page-through, ManaBox export 2024-01, TCG-100001, EBAY-55012"
+  demo_batches: "5 batches — Showcase entry, Spark of Rebellion binder page-through, CSV export 2025-06, TCG-100001, EBAY-55012"
 notes: >
   Note: Dumpstar's homepage nav uses an "Import" link to
   /ingest/csv; the Batches page is reached directly by URL.

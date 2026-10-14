@@ -286,6 +286,12 @@ const USER_ADDED_COLUMNS: &[(&str, &str, &str)] = &[
         "sealed_rows",
         "ALTER TABLE zone_holdings_run ADD COLUMN sealed_rows INTEGER NOT NULL DEFAULT 0",
     ),
+    // sp-005jev. The kit's zone reader records rows per source table.
+    (
+        "zone_holdings_run",
+        "per_source",
+        "ALTER TABLE zone_holdings_run ADD COLUMN per_source TEXT NOT NULL DEFAULT '{}'",
+    ),
     // sp-eocx2y. A want gains a minimum condition and a quantity. Existing
     // wants were each for one copy of any condition, which is what the
     // defaults say; no `user_version` bump, an older binary ignores them.

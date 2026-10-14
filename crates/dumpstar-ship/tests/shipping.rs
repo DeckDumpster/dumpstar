@@ -1034,16 +1034,16 @@ fn the_zone_read_back_materialises_the_sealed_lots_too() {
         "and the singles are still themselves — the two reductions did not mix"
     );
 
-    let (cards, sealed): (i64, i64) = conn
+    let per_source: String = conn
         .query_row(
-            "SELECT rows, sealed_rows FROM zone_holdings_run WHERE dataset = 'holdings'",
+            "SELECT per_source FROM zone_holdings_run WHERE dataset = 'holdings'",
             [],
-            |r| Ok((r.get(0)?, r.get(1)?)),
+            |r| r.get(0),
         )
         .unwrap();
     assert_eq!(
-        (cards, sealed),
-        (3, 3),
+        serde_json::from_str::<serde_json::Value>(&per_source).unwrap(),
+        serde_json::json!({"collection": 3, "sealed_collection": 3}),
         "the run row counts both halves: three singles, three sealed lots \
          (four added, one deleted)"
     );

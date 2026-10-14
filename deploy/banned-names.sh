@@ -51,7 +51,7 @@ data_files='(^|/)(tcgcsv_sub_type_variants|variant_augmentations|tcgcsv_set_brid
 module_decl='^[[:space:]]*(pub(\([a-z]+\))? )?mod (japan|overrides|symbols|bundles|set_discovery|standalone_promos|sub_type_map|variants|variant|pokemontcg|pokemon_tcg_data);'
 
 # Product names with no SWU meaning: refused everywhere.
-domain_product="Elite ""Trainer|\\b""ETB\\b|Booster ""Bundle|Obsidian ""Flames|Journey ""Together"
+domain_product="Elite ""Trainer|\\b""ETBs?\\b|Booster ""Bundle|Obsidian ""Flames|Journey ""Together"
 # Wider Pokémon vocabulary: refused in the user-visible paths below.
 domain_wide="Pok""[eé]mon|Pi""kachu|Chari""zard|Pok""[eé]dex|reverse[ -]holo|energy[ -]type"
 user_visible='^(frontend/src/(routes|lib/[^/]+\.(ts|svelte))|frontend/src/lib/components/|crates/dumpstar-server/|crates/dumpstar-cli/src/main\.rs$|crates/dumpstar-core/src/import/collectr\.rs$|crates/dumpstar-db/src/(sealed|sealed_import|import|unresolved|collectr_export|outbox)\.rs$)'

@@ -103,15 +103,40 @@ log "3. Every APPROVAL in the tree arrives through the guard"
 # not exist anywhere is a scripted path that WRITES baselines without passing
 # through the guard first. tests/visual/playwright.sh is the sanctioned one; it
 # is exempt because it is the thing that calls the guard.
-invocations=$(grep -rn --include='*.sh' --include='*.json' --include='*.yml' --include='*.md' \
-	-e 'playwright test' -e 'npx playwright' \
-	"$REPO_DIR/tests" "$REPO_DIR/deploy" "$REPO_DIR/.github" 2>/dev/null |
-	grep -v '/node_modules/' |
-	grep -v "^${REPO_DIR}/tests/visual/playwright.sh:" |
-	grep -v "^${REPO_DIR}/tests/visual/approval_test.sh:" |
-	grep -v 'playwright install' |
-	grep -e '--update-snapshots' -e ' -u ' || true)
+#
+# scan_direct_approvals <dir>... is a function so 3b can aim it at a fixture.
+scan_direct_approvals() {
+	grep -rn --include='*.sh' --include='*.json' --include='*.yml' --include='*.md' \
+		-e 'playwright test' -e 'npx playwright' \
+		"$@" 2>/dev/null |
+		grep -v '/node_modules/' |
+		grep -v "^${REPO_DIR}/tests/visual/playwright.sh:" |
+		grep -v "^${REPO_DIR}/tests/visual/approval_test.sh:" |
+		grep -v 'playwright install' |
+		grep -e '--update-snapshots' -e ' -u ' || true
+}
+invocations=$(scan_direct_approvals "$REPO_DIR/tests" "$REPO_DIR/deploy" "$REPO_DIR/.github")
 none "no approval reaches Playwright except through playwright.sh" "$invocations"
+
+# 3b. The scan must be seen to fail: a fixture workflow that calls Playwright's
+# --update directly is what record-baselines.yml must never become.
+fixture=$(mktemp -d)
+trap 'rm -rf "$fixture"' EXIT
+mkdir -p "$fixture/.github/workflows"
+printf 'jobs:\n  j:\n    steps:\n      - run: npx playwright test --update-snapshots\n' \
+	>"$fixture/.github/workflows/bypass.yml"
+if [ -n "$(scan_direct_approvals "$fixture/.github")" ]; then
+	ok "a fixture workflow calling playwright --update directly is caught"
+else
+	bad "a fixture workflow calling playwright --update directly is caught" "scan found nothing"
+fi
+
+rec="$REPO_DIR/.github/workflows/record-baselines.yml"
+if [ -f "$rec" ] && grep -q 'tests/visual/run.sh --update' "$rec"; then
+	ok "record-baselines.yml records through run.sh --update"
+else
+	bad "record-baselines.yml records through run.sh --update"
+fi
 
 # And the entry point that used to: `npm run approve` was `playwright test
 # --update-snapshots`, undocumented, reachable from the same directory, and

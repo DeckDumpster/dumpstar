@@ -1,8 +1,8 @@
 /*
- * Dumpstar design tokens.
+ * dumpster-kit design tokens.
  *
  * Imported exactly once, from src/routes/+layout.svelte. This is the only
- * file in frontend/src that may contain a raw colour literal.
+ * file that may contain a raw colour literal; dumpster_kit_ui::lint enforces it.
  *
  * ---------------------------------------------------------------------------
  * TWO LAYERS. This split is load-bearing; do not collapse it.
@@ -28,7 +28,7 @@
  * ---------------------------------------------------------------------------
  *
  * Every foreground/background pairing this file intends to ship is declared in
- * `contrast-pairs.json` beside it, and `frontend/tests/tokens.contrast.test.js`
+ * `contrast-pairs.json` beside it, and `dumpster_kit_ui::contrast`
  * fails below WCAG AA (4.5:1 normal text, 3:1 large text and non-text UI).
  * Adding a role that will be painted on a surface means adding its pairing.
  *

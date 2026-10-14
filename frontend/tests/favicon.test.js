@@ -22,7 +22,7 @@ import { dirname, join } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 const frontendRoot = join(here, '..');
 const faviconPath = join(frontendRoot, 'static/favicon.svg');
-const tokensPath = join(frontendRoot, 'src/lib/styles/tokens.css');
+const tokensPath = join(frontendRoot, 'src/lib/styles/theme.css');
 
 const favicon = readFileSync(faviconPath, 'utf8');
 
@@ -43,26 +43,26 @@ test('the favicon is the Dumpstar mark, not the scaffold logo', () => {
 	);
 });
 
-test('the favicon is painted in the brand crimson', () => {
+test('the favicon is painted in the brand gold', () => {
 	// It cannot spend a token, so it spells the reference step out. What this
 	// asserts is that the two stay the same colour: a re-skin that edits the
 	// reference block and forgets the tab icon fails here rather than shipping
 	// a favicon in the old brand.
-	const crimson = readFileSync(tokensPath, 'utf8').match(
-		/--pd-crimson-500:\s*(#[0-9a-fA-F]{3,8})\s*;/
+	const gold = readFileSync(tokensPath, 'utf8').match(
+		/--pd-gold-500:\s*(#[0-9a-fA-F]{3,8})\s*;/
 	);
-	assert.ok(crimson, 'tokens.css no longer declares --pd-crimson-500');
+	assert.ok(gold, 'theme.css no longer declares --pd-gold-500');
 	assert.ok(
-		favicon.toLowerCase().includes(crimson[1].toLowerCase()),
-		`static/favicon.svg does not carry ${crimson[1]}, the crimson-500 reference step. ` +
+		favicon.toLowerCase().includes(gold[1].toLowerCase()),
+		`static/favicon.svg does not carry ${gold[1]}, the gold-500 reference step. ` +
 			'A favicon cannot resolve var(), so re-skinning the brand means editing ' +
-			'this hex alongside the reference block in tokens.css.'
+			'this hex alongside the reference block in theme.css.'
 	);
 });
 
 test('the favicon is well-formed XML', () => {
 	// Served as image/svg+xml, so it is parsed as XML, not HTML. XML forbids
-	// `--` inside a comment — and a token name like `--pd-crimson-500` in an
+	// `--` inside a comment — and a token name like `--pd-gold-500` in an
 	// explanatory comment is exactly how that gets in. The browser then drops
 	// the whole image with no console error, which is unfalsifiable by eye if
 	// the old icon is still cached. Caught for real while writing this file.

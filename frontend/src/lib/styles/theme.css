@@ -1,0 +1,35 @@
+/*
+ * Dumpstar's theme: the only visual decision this site makes on top of
+ * dumpster-kit. src/lib/kit/tokens.css (pinned by kit.lock) declares every
+ * role; this file adds a gold reference ramp and re-points the brand roles
+ * (accent, link, focus, selection) at it, where the kit default is crimson.
+ * Like tokens.css it may hold raw colour literals and nothing else may, and
+ * semantic roles stay pure aliases of the reference layer. It loads after the
+ * kit's tokens, so equal-specificity declarations here win.
+ *
+ * Contrast is audited on the pair of files together (tests/tokens.contrast.test.js).
+ */
+
+:root,
+:root[data-theme='dark'] {
+	--pd-gold-900: #3a2e0c;
+	--pd-gold-600: #d9a920;
+	--pd-gold-500: #f5c542;
+	--pd-gold-400: #f8d062;
+	--pd-gold-300: #fbdc84;
+	--pd-gold-200: #fde8ae;
+	--pd-alpha-gold-08: rgba(245, 197, 66, 0.08);
+	--pd-alpha-gold-14: rgba(245, 197, 66, 0.14);
+
+	--color-surface-selected: var(--pd-alpha-gold-14);
+	--color-surface-accent-wash: var(--pd-alpha-gold-08);
+	--color-border-accent: var(--pd-gold-500);
+	--color-border-focus: var(--pd-gold-300);
+	--color-text-accent: var(--pd-gold-300);
+	--color-link: var(--pd-gold-300);
+	--color-link-hover: var(--pd-gold-200);
+	--color-accent: var(--pd-gold-500);
+	--color-accent-hover: var(--pd-gold-400);
+	--color-accent-active: var(--pd-gold-600);
+	--color-accent-surface: var(--pd-gold-900);
+}

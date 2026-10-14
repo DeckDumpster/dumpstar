@@ -509,7 +509,10 @@ CREATE TABLE IF NOT EXISTS wishlist (
     notes         TEXT,
     added_at      TEXT NOT NULL,
     source        TEXT NOT NULL DEFAULT 'manual',
-    fulfilled_at  TEXT
+    fulfilled_at  TEXT,
+    min_condition TEXT,                        -- NULL = any condition; else a conditions.name
+    quantity      INTEGER NOT NULL DEFAULT 1 CHECK (quantity >= 1),
+    quantity_have INTEGER NOT NULL DEFAULT 0   -- matching copies added since the want was made
 );
 CREATE INDEX IF NOT EXISTS idx_wishlist_card ON wishlist(card_id);
 

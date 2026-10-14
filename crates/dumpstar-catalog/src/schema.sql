@@ -83,6 +83,20 @@ BEGIN SELECT RAISE(ABORT, 'prices is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS prices_no_delete BEFORE DELETE ON prices
 BEGIN SELECT RAISE(ABORT, 'prices is append-only'); END;
 
+-- Sealed products' own daily price series: tcgcsv products with no collector
+-- number, keyed by TCGplayer productId. Never mixed into `prices`, which is the
+-- card series. The first observation of a day stands.
+CREATE TABLE IF NOT EXISTS sealed_prices (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    tcgplayer_product_id  INTEGER NOT NULL,
+    low_price             REAL,
+    mid_price             REAL,
+    high_price            REAL,
+    market_price          REAL,
+    direct_low_price      REAL,
+    observed_at           TEXT NOT NULL,
+    UNIQUE(tcgplayer_product_id, observed_at)
+);
 CREATE TABLE IF NOT EXISTS formats (
     format_id        TEXT PRIMARY KEY,          -- 'premier'
     name             TEXT NOT NULL

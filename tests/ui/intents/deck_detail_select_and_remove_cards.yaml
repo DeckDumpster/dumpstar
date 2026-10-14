@@ -1,10 +1,10 @@
 # Scenario: Remove cards from a deck
 #
 # Prerequisites:
-#   Deck 1 "Charizard ex Control" has 3 cards built into it.
+#   Deck 1 "Luke Vigilance Midrange" has 3 cards built into it.
 
 description: >
-  When I navigate to deck 1 (Charizard ex Control) and click the
+  When I navigate to deck 1 (Luke Vigilance Midrange) and click the
   "Remove" link on each card row, the cards are un-assigned from the
   deck one by one. The copies stay in the collection. After all cards
   are removed, the card table shows the "No cards in this deck" empty

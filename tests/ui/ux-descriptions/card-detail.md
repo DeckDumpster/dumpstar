@@ -1,13 +1,13 @@
 # Card Detail Page UX Description
 
 **Source file:** `frontend/src/routes/card/[set]/[number]/+page.svelte`
-**URL pattern:** `/card/{set}/{number}` (e.g. `/card/sv3pt5/6`)
+**URL pattern:** `/card/{set}/{number}` (e.g. `/card/SOR/005`)
 
 ---
 
 ## 1. Page Purpose
 
-The Card Detail page is the canonical full view of a single Pokémon card
+The Card Detail page is the canonical full view of a single Star Wars: Unlimited card
 identified by its set code and collector number. It shows the card art and
 metadata, lists every printing/variant of that card with owned counts and
 market prices and an "Add" button per printing, and lists every copy the user
@@ -22,7 +22,7 @@ binder/deck assignment.
   - **Art (`.art`)** — the large card image, or a "No image" placeholder box.
   - **Info (`.info`)** — the card name (`<h1>`), a subtitle line of
     "{set_code} · #{number} · {rarity}", a definition list of optional fields
-    (Type/supertype, HP, Energy/types, Artist), and flavor text if present.
+    (HP, Artist), and flavor text if present.
 
 - **Printings section** — `<h2>` "Printings" and a table with columns
   Variant, Owned, Market, and an action cell holding a "+ Add" button per row.
@@ -80,6 +80,5 @@ There are no modals on this page.
 - **Location encoding** — the Location `<select>` encodes its value as
   `b:{id}` for a binder, `d:{id}` for a deck, or empty for unassigned;
   `assignCopy` decodes this into the appropriate `moveCopy` body.
-- **Optional metadata fields** — Type, HP, Energy, Artist, and flavor text
-  each render only when present on the card; `types` is parsed from a JSON
-  string list.
+- **Optional metadata fields** — HP, Artist, and flavor text
+  each render only when present on the card.

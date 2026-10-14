@@ -6,13 +6,13 @@ involves:
   - "bulk wishlist deduplicates by card_id — one wish per distinct card"
   - "page re-fetches via refresh() and clears the selection afterward"
 fixture_data:
-  search_term: "Charmander"
-  card_name: "Charmander"
-  copies: 2
+  search_term: "Vanquish"
+  card_name: "Vanquish"
+  copies: 3
 notes: >
-  Navigate to /collection. Search for "Charmander" — two Charmander
-  copies exist (from order TCG-100001), so two rows appear. Click
-  "Select" to enter multi-select mode. Check both Charmander rows.
+  Navigate to /collection. Search for "Vanquish" — three Vanquish
+  copies exist, so three rows appear. Click
+  "Select" to enter multi-select mode. Check two of the Vanquish rows.
   Click the bulk "Add to wishlist" button. Because wishlist adds
-  deduplicate by card_id, only one Charmander wish is created. The page
+  deduplicate by card_id, only one Vanquish wish is created. The page
   re-fetches and the selection clears.

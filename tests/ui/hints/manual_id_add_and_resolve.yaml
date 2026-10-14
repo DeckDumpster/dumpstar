@@ -7,12 +7,12 @@ involves:
   - "resolved-card section with thumbnail and heading"
   - "variants table with Variant / Owned / action columns"
 fixture_data:
-  set_code: "base1"
-  collector_number: "7"
-  card_name: "Hitmonchan"
+  set_code: "SOR"
+  collector_number: "5"
+  card_name: "Luke Skywalker - Faithful Friend"
   variant: "holo"
 notes: >
-  Navigate to /ingest/manual. Wait for the Set code input. Enter "base1" in
-  Set code and "7" in Number. Click "Look up". Wait for the resolved-card
-  section to appear with "Hitmonchan" in the heading and a variants table
+  Navigate to /ingest/manual. Wait for the Set code input. Enter "SOR" in
+  Set code and "5" in Number. Click "Look up". Wait for the resolved-card
+  section to appear with "Luke Skywalker - Faithful Friend" in the heading and a variants table
   listing the "holo" variant.

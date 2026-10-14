@@ -9,9 +9,9 @@ fixture_data:
   batch_names:
     - "TCG-100001 (order_tcgplayer)"
     - "EBAY-55012 (order_ebay)"
-    - "Vintage holo entry (manual_id)"
-    - "151 binder page-through (binder_click)"
-    - "ManaBox export 2024-01 (csv_manabox)"
+    - "Showcase entry (manual_id)"
+    - "Spark of Rebellion binder page-through (binder_click)"
+    - "CSV export 2025-06 (csv_manabox)"
 notes: >
   1. Navigate to /recent. 2. Wait for ul.timeline to render. 3. Verify
   the h1 reads "Recent activity". 4. Verify the muted instruction line

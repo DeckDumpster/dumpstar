@@ -6,96 +6,51 @@ use crate::error::Result;
 use crate::search_meta::RarityLookup;
 
 /// A set with its card count and how many of its cards the user owns —
-/// the shape the `/browse` set picker renders. Bundles project into the
-/// same type with `kind="bundle"` and synthesized series/null totals so
-/// the picker can render them through the same tile component.
+/// the shape the `/browse` set picker renders.
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
 #[ts(export)]
 pub struct SetSummary {
     pub set_code: String,
-    pub ptcgo_code: Option<String>,
     pub name: String,
-    pub series: String,
-    #[ts(type = "number | null")]
-    pub total: Option<i64>,
-    #[ts(type = "number | null")]
-    pub printed_total: Option<i64>,
     pub release_date: Option<String>,
-    pub logo_url: Option<String>,
-    pub symbol_url: Option<String>,
-    /// Cards catalogued in the set.
+    /// Distinct cards printed in the set.
     #[ts(type = "number")]
     pub total_cards: i64,
     /// Distinct cards in the set the user owns at least one copy of.
     #[ts(type = "number")]
     pub owned_cards: i64,
-    /// Base-set cards only — `number_sortable <= printed_total`. Excludes
-    /// secret rares, subset sections, and promos. `None` when the set has
-    /// no `printed_total` so the UI can hide the bar gracefully (avoids
-    /// rendering 0/0 = NaN%).
-    #[ts(type = "number | null")]
-    pub base_total_cards: Option<i64>,
-    #[ts(type = "number | null")]
-    pub base_owned_cards: Option<i64>,
-    /// `"set"` for real catalogued sets, `"bundle"` for TTBB-style
-    /// logical-set containers.
-    pub kind: String,
-    /// The set was built locally from TCGCSV — either a bridge entry or
-    /// TCGCSV set discovery (pd-558b1e4f) — because pokemontcg.io hasn't
-    /// published it yet. Its cards, art and totals are provisional. Goes
-    /// false on its own the refresh after upstream lands the real set.
-    ///
-    /// **A set upstream does not carry at all is not synthesized in this
-    /// sense** (pd-mt57). The Japanese catalog is TCGCSV-native forever —
-    /// pokemontcg.io has no Japanese data — so its rows have nothing to
-    /// wait for and this stays false for them. `sets.ptcgio_covered` is
-    /// what tells the two apart; "provisional" is a promise, and a badge
-    /// that makes one has to be able to keep it.
-    pub synthesized: bool,
+    /// Printings in the set (the master set), and how many are owned.
+    #[ts(type = "number")]
+    pub total_printings: i64,
+    #[ts(type = "number")]
+    pub owned_printings: i64,
 }
 
 /// List every set, newest first, with card and owned-card counts. Requires a
 /// user connection (the owned count joins the collection).
 pub fn list_sets(conn: &Connection) -> Result<Vec<SetSummary>> {
     let mut stmt = conn.prepare(
-        "SELECT s.set_code, s.ptcgo_code, s.name, s.series, s.total, \
-                s.printed_total, s.release_date, s.logo_url, s.symbol_url, \
-                (SELECT count(*) FROM cards WHERE set_code = s.set_code), \
-                (SELECT count(DISTINCT cd.card_id) FROM collection c \
+        "SELECT s.set_code, s.name, s.release_date, \
+                (SELECT count(DISTINCT p.card_id) FROM printings p WHERE p.set_code = s.set_code), \
+                (SELECT count(DISTINCT p.card_id) FROM collection c \
                    JOIN printings p ON c.printing_id = p.printing_id \
-                   JOIN cards cd ON p.card_id = cd.card_id \
-                 WHERE cd.set_code = s.set_code), \
-                CASE WHEN s.printed_total IS NULL THEN NULL ELSE ( \
-                  SELECT count(*) FROM cards \
-                   WHERE set_code = s.set_code \
-                     AND number_sortable <= s.printed_total) END, \
-                CASE WHEN s.printed_total IS NULL THEN NULL ELSE ( \
-                  SELECT count(DISTINCT cd.card_id) FROM collection co \
-                    JOIN printings p ON co.printing_id = p.printing_id \
-                    JOIN cards cd ON p.card_id = cd.card_id \
-                  WHERE cd.set_code = s.set_code \
-                    AND cd.number_sortable <= s.printed_total) END, \
-                s.ptcgio_fetched_at IS NULL AND s.ptcgio_covered = 1 \
+                  WHERE p.set_code = s.set_code), \
+                (SELECT count(*) FROM printings p WHERE p.set_code = s.set_code), \
+                (SELECT count(DISTINCT c.printing_id) FROM collection c \
+                   JOIN printings p ON c.printing_id = p.printing_id \
+                  WHERE p.set_code = s.set_code) \
          FROM sets s \
-         ORDER BY s.release_date DESC NULLS LAST, s.set_code",
+         ORDER BY s.release_date DESC NULLS LAST, s.sort_order DESC, s.set_code",
     )?;
     let rows = stmt.query_map([], |r| {
         Ok(SetSummary {
             set_code: r.get(0)?,
-            ptcgo_code: r.get(1)?,
-            name: r.get(2)?,
-            series: r.get(3)?,
-            total: r.get(4)?,
-            printed_total: r.get(5)?,
-            release_date: r.get(6)?,
-            logo_url: r.get(7)?,
-            symbol_url: r.get(8)?,
-            total_cards: r.get(9)?,
-            owned_cards: r.get(10)?,
-            base_total_cards: r.get(11)?,
-            base_owned_cards: r.get(12)?,
-            kind: "set".to_string(),
-            synthesized: r.get(13)?,
+            name: r.get(1)?,
+            release_date: r.get(2)?,
+            total_cards: r.get(3)?,
+            owned_cards: r.get(4)?,
+            total_printings: r.get(5)?,
+            owned_printings: r.get(6)?,
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
@@ -133,7 +88,7 @@ pub struct RarityCount {
 pub struct CardCopyCount {
     pub number: String,
     #[ts(type = "number")]
-    pub number_sortable: i64,
+    pub sort_key: i64,
     /// Canonical spelling from the `rarities` table where the tier is
     /// known, else the raw catalog string.
     pub rarity: Option<String>,
@@ -143,28 +98,22 @@ pub struct CardCopyCount {
     pub copies: i64,
 }
 
-/// Analytical breakdown of a single set: completion against both the
-/// numbered set and the master (every printing) set, the rarity split,
-/// and value — the full set's market value and the value owned.
+/// Analytical breakdown of a single set: completion by card and by printing
+/// (the master set), the rarity split, and value — the full set's market
+/// value and the value owned.
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
 #[ts(export)]
 pub struct SetAnalytics {
     pub set_code: String,
     pub name: String,
-    pub series: String,
-    /// Base-set cards only (number ≤ printed_total — excludes secret
-    /// rares, subset sections, promos), and how many the user owns
-    /// (any variant counts).
-    #[ts(type = "number")]
-    pub base_total_cards: i64,
-    #[ts(type = "number")]
-    pub base_owned_cards: i64,
-    /// Numbered cards in the set, and how many the user owns.
+    pub release_date: Option<String>,
+    /// Distinct cards printed in the set, and how many the user owns (any
+    /// printing counts).
     #[ts(type = "number")]
     pub total_cards: i64,
     #[ts(type = "number")]
     pub owned_cards: i64,
-    /// Non-deprecated printings (the master set), and how many are owned.
+    /// Printings in the set (the master set), and how many are owned.
     #[ts(type = "number")]
     pub total_printings: i64,
     #[ts(type = "number")]
@@ -172,8 +121,8 @@ pub struct SetAnalytics {
     /// Total physical copies of any card in the set — sums duplicates.
     #[ts(type = "number")]
     pub owned_copies: i64,
-    /// Market value: one of every printing in the set, one of every
-    /// printing the user owns, and the all-physical-copies sum (counts
+    /// Market value: the cheapest printing of every card in the set, one of
+    /// every printing the user owns, and the all-physical-copies sum (counts
     /// duplicates).
     pub market_value: f64,
     pub owned_value_unique: f64,
@@ -215,84 +164,39 @@ pub(crate) fn rank_rarities(
 
 /// Compute the analytical breakdown for one set. `None` if no such set.
 pub fn analytics(conn: &Connection, set_code: &str) -> Result<Option<SetAnalytics>> {
-    let header: Option<(String, String)> = conn
-        .prepare("SELECT name, series FROM sets WHERE set_code = ?1")?
+    let header: Option<(String, Option<String>)> = conn
+        .prepare("SELECT name, release_date FROM sets WHERE set_code = ?1")?
         .query_row([set_code], |r| Ok((r.get(0)?, r.get(1)?)))
         .optional()?;
-    let Some((name, series)) = header else {
+    let Some((name, release_date)) = header else {
         return Ok(None);
     };
 
-    let total_cards: i64 = conn.query_row(
-        "SELECT count(*) FROM cards WHERE set_code = ?1",
-        [set_code],
-        |r| r.get(0),
-    )?;
-    let owned_cards: i64 = conn.query_row(
-        "SELECT count(DISTINCT cd.card_id) FROM collection c \
-           JOIN printings p ON c.printing_id = p.printing_id \
-           JOIN cards cd ON p.card_id = cd.card_id \
-         WHERE cd.set_code = ?1",
-        [set_code],
-        |r| r.get(0),
-    )?;
-    // Base-set cards = number ≤ printed_total. Matches binder.rs
-    // section_of's "base" bucket — excludes secret rares + subsets.
-    let base_total_cards: i64 = conn.query_row(
-        "SELECT count(*) FROM cards c JOIN sets s ON s.set_code = c.set_code \
-         WHERE c.set_code = ?1 \
-           AND s.printed_total IS NOT NULL \
-           AND c.number_sortable <= s.printed_total",
-        [set_code],
-        |r| r.get(0),
-    )?;
-    let base_owned_cards: i64 = conn.query_row(
-        "SELECT count(DISTINCT cd.card_id) FROM collection co \
-           JOIN printings p ON co.printing_id = p.printing_id \
-           JOIN cards cd ON p.card_id = cd.card_id \
-           JOIN sets s ON s.set_code = cd.set_code \
-         WHERE cd.set_code = ?1 \
-           AND s.printed_total IS NOT NULL \
-           AND cd.number_sortable <= s.printed_total",
-        [set_code],
-        |r| r.get(0),
-    )?;
-    let total_printings: i64 = conn.query_row(
-        "SELECT count(*) FROM printings p JOIN cards c ON p.card_id = c.card_id \
-         WHERE c.set_code = ?1 AND p.deprecated_at IS NULL",
-        [set_code],
-        |r| r.get(0),
-    )?;
-    let owned_printings: i64 = conn.query_row(
-        "SELECT count(DISTINCT c.printing_id) FROM collection c \
-           JOIN printings p ON c.printing_id = p.printing_id \
-           JOIN cards cd ON p.card_id = cd.card_id \
-         WHERE cd.set_code = ?1 AND p.deprecated_at IS NULL",
-        [set_code],
-        |r| r.get(0),
-    )?;
+    let one = |sql: &str| -> Result<i64> { Ok(conn.query_row(sql, [set_code], |r| r.get(0))?) };
+    let total_cards = one("SELECT count(DISTINCT card_id) FROM printings WHERE set_code = ?1")?;
+    let owned_cards = one("SELECT count(DISTINCT p.card_id) FROM collection c \
+           JOIN printings p ON c.printing_id = p.printing_id WHERE p.set_code = ?1")?;
+    let total_printings = one("SELECT count(*) FROM printings WHERE set_code = ?1")?;
+    let owned_printings = one("SELECT count(DISTINCT c.printing_id) FROM collection c \
+           JOIN printings p ON c.printing_id = p.printing_id WHERE p.set_code = ?1")?;
+    // Total physical copies in the set (one row per copy in `collection`).
+    let owned_copies = one("SELECT count(*) FROM collection col \
+           JOIN printings p ON col.printing_id = p.printing_id WHERE p.set_code = ?1")?;
 
     // Effective market price for a printing `p` — one rule, defined once in
     // `crate::prices`. Everything this query sees is a *catalog* printing, so
-    // the gap-fill it relies on is the curated `catalog_price_overrides` row
-    // (e.g. the basep promos TCGplayer does not price), entirely inside
-    // `shared`. A tenant's own manual price cannot reach it (pd-m4gw).
+    // a tenant's own manual price cannot reach it (pd-m4gw).
     let price_expr = crate::prices::MARKET_PRICE_EXPR;
     // "Full set" market value = the minimum cost to own one of every card,
     // i.e. the CHEAPEST printing per card summed across cards — NOT the sum
-    // of every printing. WOTC sets print each card in three runs (1st
-    // Edition, Shadowless, Unlimited), and modern cards come in normal +
-    // reverse holo; summing all printings triple-counts each card and is
-    // dominated by the priciest run (a near-complete Base Set read as ~$28k
-    // off the 1st-Edition holos). Taking the per-card minimum collapses to
-    // the Unlimited run for WOTC and the base printing for modern sets —
-    // the run a set collector actually completes. (dumpstar)
+    // of every printing. A card prints as Standard, Hyperspace and Showcase,
+    // each in Normal and Foil; summing them all would be dominated by the
+    // priciest and say nothing about completing the set.
     let market_value: f64 = conn.query_row(
         &format!(
             "SELECT COALESCE(SUM(card_min), 0) FROM ( \
                SELECT MIN({price_expr}) AS card_min \
-               FROM printings p JOIN cards c ON p.card_id = c.card_id \
-               WHERE c.set_code = ?1 AND p.deprecated_at IS NULL \
+               FROM printings p WHERE p.set_code = ?1 \
                GROUP BY p.card_id \
              )"
         ),
@@ -303,82 +207,80 @@ pub fn analytics(conn: &Connection, set_code: &str) -> Result<Option<SetAnalytic
         &format!(
             "SELECT COALESCE(SUM({price_expr}), 0) \
              FROM collection col JOIN printings p ON col.printing_id = p.printing_id \
-             JOIN cards c ON p.card_id = c.card_id \
-             WHERE c.set_code = ?1"
+             WHERE p.set_code = ?1"
         ),
         [set_code],
         |r| r.get(0),
     )?;
     // One-of-each owned printing value — the "completion picture" sum
-    // that doesn't double-count duplicates. Drops deprecated printings
-    // for parity with owned_printings.
+    // that doesn't double-count duplicates.
     let owned_value_unique: f64 = conn.query_row(
         &format!(
             "SELECT COALESCE(SUM({price_expr}), 0) \
-             FROM printings p JOIN cards c ON p.card_id = c.card_id \
-             WHERE c.set_code = ?1 \
-               AND p.deprecated_at IS NULL \
+             FROM printings p \
+             WHERE p.set_code = ?1 \
                AND EXISTS (SELECT 1 FROM collection col WHERE col.printing_id = p.printing_id)"
         ),
         [set_code],
         |r| r.get(0),
     )?;
-    // Total physical copies in the set (one row per copy in `collection`).
-    let owned_copies: i64 = conn.query_row(
-        "SELECT count(*) FROM collection col \
-           JOIN printings p ON col.printing_id = p.printing_id \
-           JOIN cards c ON p.card_id = c.card_id \
-         WHERE c.set_code = ?1",
-        [set_code],
-        |r| r.get(0),
-    )?;
 
-    // Per-card copy counts in collector-number order. LEFT JOIN through
-    // printings/collection so cards owned 0 times still produce a row
-    // (copies = 0 because COUNT ignores NULLs).
-    // The rarity typology — canonical spelling, curated rank, group
-    // alias — comes from the shared catalog's `rarities` table, not from
-    // whatever string the upstream row happened to carry.
+    // The rarity typology — canonical spelling, curated rank, group alias —
+    // comes from the shared catalog's `rarities` table, not from whatever
+    // string the upstream row happened to carry.
     let tiers = RarityLookup::load(conn)?;
 
+    // Per-card copy counts in collector-number order, one row per card: the
+    // card's lead printing (Standard first) names its number and rarity.
+    // LEFT JOIN through collection so cards owned 0 times still produce a row.
     let copy_counts: Vec<CardCopyCount> = {
         let mut stmt = conn.prepare(
-            "SELECT c.number, c.number_sortable, c.rarity, \
-                    COUNT(col.id) AS copies \
-             FROM cards c \
-             LEFT JOIN printings p ON p.card_id = c.card_id \
-             LEFT JOIN collection col ON col.printing_id = p.printing_id \
-             WHERE c.set_code = ?1 \
-             GROUP BY c.card_id \
-             ORDER BY c.number_sortable",
+            "SELECT lead.number, lead.rarity, \
+                    (SELECT COUNT(col.id) FROM collection col \
+                       JOIN printings q ON q.printing_id = col.printing_id \
+                      WHERE q.card_id = lead.card_id AND q.set_code = ?1) AS copies \
+             FROM printings lead \
+             WHERE lead.set_code = ?1 \
+               AND lead.printing_id = (SELECT x.printing_id FROM printings x \
+                                        WHERE x.card_id = lead.card_id AND x.set_code = ?1 \
+                                        ORDER BY x.variant <> 'Standard', x.finish <> 'Normal', \
+                                                 x.printing_id LIMIT 1)",
         )?;
         let rows = stmt.query_map([set_code], |r| {
-            let raw: Option<String> = r.get(2)?;
+            let number: String = r.get(0)?;
+            let raw: Option<String> = r.get(1)?;
             Ok(CardCopyCount {
-                number: r.get(0)?,
-                number_sortable: r.get(1)?,
+                sort_key: dumpstar_core::number_sort_key(&number),
+                number,
                 rarity: raw.as_deref().map(|s| tiers.display(s)),
                 rarity_grp: raw.as_deref().and_then(|s| tiers.grp(s)),
-                copies: r.get(3)?,
+                copies: r.get(2)?,
             })
         })?;
-        rows.collect::<rusqlite::Result<_>>()?
+        let mut rows: Vec<CardCopyCount> = rows.collect::<rusqlite::Result<_>>()?;
+        rows.sort_by(|a, b| {
+            a.sort_key
+                .cmp(&b.sort_key)
+                .then_with(|| a.number.cmp(&b.number))
+        });
+        rows
     };
 
-    // Grouped on the RAW string in SQL, then folded onto the canonical
-    // spelling in Rust: a set carrying both "MEGA_ATTACK_RARE" and
-    // "Mega Attack Rare" is one tier in the split, not two.
+    // Tally the lead printings' raw rarity strings, then fold them onto the
+    // canonical spelling in Rust.
     let rarities = {
         let mut stmt = conn.prepare(
-            "SELECT COALESCE(c.rarity, 'Unknown') AS rarity, \
+            "SELECT COALESCE(lead.rarity, 'Unknown') AS rarity, \
                     count(*) AS total_cards, \
-                    count(DISTINCT owned.card_id) AS owned_cards \
-             FROM cards c \
-             LEFT JOIN (SELECT DISTINCT cd.card_id FROM collection col \
-                          JOIN printings p ON col.printing_id = p.printing_id \
-                          JOIN cards cd ON p.card_id = cd.card_id \
-                        WHERE cd.set_code = ?1) owned ON owned.card_id = c.card_id \
-             WHERE c.set_code = ?1 \
+                    sum(EXISTS (SELECT 1 FROM collection col \
+                                  JOIN printings q ON q.printing_id = col.printing_id \
+                                 WHERE q.card_id = lead.card_id AND q.set_code = ?1)) \
+             FROM printings lead \
+             WHERE lead.set_code = ?1 \
+               AND lead.printing_id = (SELECT x.printing_id FROM printings x \
+                                        WHERE x.card_id = lead.card_id AND x.set_code = ?1 \
+                                        ORDER BY x.variant <> 'Standard', x.finish <> 'Normal', \
+                                                 x.printing_id LIMIT 1) \
              GROUP BY rarity",
         )?;
         let rows = stmt.query_map([set_code], |r| {
@@ -393,9 +295,7 @@ pub fn analytics(conn: &Connection, set_code: &str) -> Result<Option<SetAnalytic
     Ok(Some(SetAnalytics {
         set_code: set_code.to_string(),
         name,
-        series,
-        base_total_cards,
-        base_owned_cards,
+        release_date,
         total_cards,
         owned_cards,
         total_printings,
@@ -413,7 +313,30 @@ pub fn analytics(conn: &Connection, set_code: &str) -> Result<Option<SetAnalytic
 mod tests {
     use super::*;
     use crate::collection::{self, NewCopy};
+    use crate::testkit;
     use crate::{connect_user, open_shared};
+
+    fn rarity(c: &Connection, printing_id: &str, rarity: &str) {
+        c.execute(
+            "UPDATE printings SET rarity = ?2 WHERE printing_id = ?1",
+            rusqlite::params![printing_id, rarity],
+        )
+        .unwrap();
+    }
+
+    fn own(conn: &mut Connection, pids: &[&str]) {
+        for pid in pids {
+            collection::add(
+                conn,
+                &NewCopy {
+                    printing_id: (*pid).into(),
+                    source: "manual_id".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        }
+    }
 
     #[test]
     fn list_sets_reports_card_and_owned_counts() {
@@ -421,143 +344,43 @@ mod tests {
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series, release_date) \
-                 VALUES ('sv3pt5', '151', 'Scarlet & Violet', '2023/09/22')",
-                [],
-            )
-            .unwrap();
-            for n in ["1", "2"] {
-                c.execute(
-                    "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                     VALUES (?1, 'sv3pt5', ?2, ?3, 'Card')",
-                    rusqlite::params![format!("sv3pt5-{n}"), n, n.parse::<i64>().unwrap()],
-                )
-                .unwrap();
-            }
-            c.execute(
-                "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES ('sv3pt5-1-normal', 'sv3pt5-1', 'normal')",
-                [],
-            )
-            .unwrap();
+            testkit::set_on(&c, "SOR", "Spark of Rebellion", "2024-03-08");
+            testkit::simple(&c, "SOR", "1", "Luke Skywalker");
+            testkit::simple(&c, "SOR", "2", "Millennium Falcon");
+            // A second printing of card 1 is another printing, not another card.
+            testkit::foil_of(&c, "SOR", "1");
         }
         let mut conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-        collection::add(
-            &mut conn,
-            &NewCopy {
-                printing_id: "sv3pt5-1-normal".into(),
-                source: "manual_id".into(),
-                ..Default::default()
-            },
-        )
-        .unwrap();
+        own(&mut conn, &["SOR-1-normal"]);
 
         let sets = list_sets(&conn).unwrap();
         assert_eq!(sets.len(), 1);
-        assert_eq!(sets[0].set_code, "sv3pt5");
+        assert_eq!(sets[0].set_code, "SOR");
+        assert_eq!(sets[0].name, "Spark of Rebellion");
+        assert_eq!(sets[0].release_date.as_deref(), Some("2024-03-08"));
         assert_eq!(sets[0].total_cards, 2);
         assert_eq!(sets[0].owned_cards, 1);
-        // printed_total is NULL on this fixture, so base counts are None
-        // — UI should hide the base bar in that case.
-        assert_eq!(sets[0].base_total_cards, None);
-        assert_eq!(sets[0].base_owned_cards, None);
+        assert_eq!(sets[0].total_printings, 3);
+        assert_eq!(sets[0].owned_printings, 1);
     }
 
     #[test]
-    fn only_a_set_upstream_is_behind_on_reports_as_synthesized() {
-        // pd-mt57. Three rows that all have a NULL `ptcgio_fetched_at` or
-        // don't, crossed with whether pokemontcg.io carries the catalog at
-        // all. `synthesized` drives a "provisional, upstream will replace
-        // this" badge, so it may only be true where upstream can.
+    fn list_sets_orders_newest_release_first() {
         let dir = tempfile::tempdir().unwrap();
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            // Awaiting upstream: locally built, and pokemontcg.io does
-            // publish this catalog.
-            c.execute(
-                "INSERT INTO sets (set_code, name, series, release_date, ptcgio_covered) \
-                 VALUES ('mep', 'ME Black Star Promos', 'Mega Evolution', '2025/09/26', 1)",
-                [],
-            )
-            .unwrap();
-            // TCGCSV-native: pokemontcg.io has no Japanese catalog, so
-            // there is nothing for this row to be provisional about.
-            c.execute(
-                "INSERT INTO sets (set_code, name, series, release_date, ptcgio_covered) \
-                 VALUES ('jp-24711', 'M5: Abyss Eye', 'Pokémon JP — Mega Evolution Era', \
-                         '2026/05/22', 0)",
-                [],
-            )
-            .unwrap();
-            // Upstream-managed.
-            c.execute(
-                "INSERT INTO sets \
-                   (set_code, name, series, release_date, ptcgio_fetched_at, ptcgio_covered) \
-                 VALUES ('sv3pt5', '151', 'Scarlet & Violet', '2023/09/22', '2026-07-31', 1)",
-                [],
-            )
-            .unwrap();
+            testkit::set_on(&c, "SOR", "Spark of Rebellion", "2024-03-08");
+            testkit::set_on(&c, "SHD", "Shadows of the Galaxy", "2024-07-12");
+            testkit::set_on(&c, "TWI", "Twilight of the Republic", "2024-11-08");
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-        let by_code: std::collections::HashMap<String, bool> = list_sets(&conn)
+        let codes: Vec<String> = list_sets(&conn)
             .unwrap()
             .into_iter()
-            .map(|s| (s.set_code, s.synthesized))
+            .map(|s| s.set_code)
             .collect();
-        assert!(by_code["mep"], "upstream is behind — provisional");
-        assert!(!by_code["jp-24711"], "upstream never carries it");
-        assert!(!by_code["sv3pt5"], "upstream published it");
-    }
-
-    #[test]
-    fn list_sets_reports_base_counts_when_printed_total_known() {
-        // printed_total=2 → cards #1 and #2 are base; #3 is a secret rare
-        // outside the base count. Owning #1 (base) and #3 (secret) yields
-        // base_owned=1 / base_total=2 while owned_cards=2 / total_cards=3.
-        let dir = tempfile::tempdir().unwrap();
-        let shared = dir.path().join("shared.sqlite");
-        {
-            let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series, total, printed_total, release_date) \
-                 VALUES ('sv3pt5', '151', 'Scarlet & Violet', 3, 2, '2023/09/22')",
-                [],
-            )
-            .unwrap();
-            for n in ["1", "2", "3"] {
-                c.execute(
-                    "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                     VALUES (?1, 'sv3pt5', ?2, ?3, 'Card')",
-                    rusqlite::params![format!("sv3pt5-{n}"), n, n.parse::<i64>().unwrap()],
-                )
-                .unwrap();
-                c.execute(
-                    "INSERT INTO printings (printing_id, card_id, variant) \
-                     VALUES (?1, ?2, 'normal')",
-                    rusqlite::params![format!("sv3pt5-{n}-normal"), format!("sv3pt5-{n}")],
-                )
-                .unwrap();
-            }
-        }
-        let mut conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-        for n in ["1", "3"] {
-            collection::add(
-                &mut conn,
-                &NewCopy {
-                    printing_id: format!("sv3pt5-{n}-normal"),
-                    source: "manual_id".into(),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-        }
-        let sets = list_sets(&conn).unwrap();
-        assert_eq!(sets[0].total_cards, 3);
-        assert_eq!(sets[0].owned_cards, 2);
-        assert_eq!(sets[0].base_total_cards, Some(2));
-        assert_eq!(sets[0].base_owned_cards, Some(1));
+        assert_eq!(codes, ["TWI", "SHD", "SOR"]);
     }
 
     #[test]
@@ -570,54 +393,22 @@ mod tests {
             // the server reconciles it at startup, so a test that wants a
             // realistic split has to seed it too.
             crate::search_meta::reconcile(&mut c).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series) VALUES ('sv3pt5', '151', 'SV')",
-                [],
-            )
-            .unwrap();
-            // Three cards: two Common, one Rare.
-            for (n, rarity) in [("1", "Common"), ("2", "Common"), ("3", "Rare")] {
-                c.execute(
-                    "INSERT INTO cards (card_id, set_code, number, number_sortable, name, rarity) \
-                     VALUES (?1, 'sv3pt5', ?2, ?3, 'Card', ?4)",
-                    rusqlite::params![format!("sv3pt5-{n}"), n, n.parse::<i64>().unwrap(), rarity],
-                )
-                .unwrap();
+            // Three cards: two Common, one Rare, priced $1, $2, $3.
+            for (n, name, rarity_name, price) in [
+                ("1", "Luke Skywalker", "Common", 1.0),
+                ("2", "Millennium Falcon", "Common", 2.0),
+                ("3", "Vanquish", "Rare", 3.0),
+            ] {
+                let pid = testkit::simple(&c, "SOR", n, name);
+                rarity(&c, &pid, rarity_name);
+                testkit::price(&c, &pid, "2026-05-18", price);
             }
-            // Each card has one normal printing linked to a TCGplayer product.
-            for (n, product) in [("1", 101), ("2", 102), ("3", 103)] {
-                c.execute(
-                    "INSERT INTO printings \
-                       (printing_id, card_id, variant, tcgplayer_product_id, sub_type_name) \
-                     VALUES (?1, ?2, 'normal', ?3, 'Normal')",
-                    rusqlite::params![format!("sv3pt5-{n}-normal"), format!("sv3pt5-{n}"), product],
-                )
-                .unwrap();
-                c.execute(
-                    "INSERT INTO prices \
-                       (tcgplayer_product_id, sub_type_name, source, price_type, price, observed_at) \
-                     VALUES (?1, 'Normal', 'tcgplayer', 'market', ?2, '2026-05-18')",
-                    rusqlite::params![product, (product - 100) as f64],
-                )
-                .unwrap();
-            }
-            crate::latest_prices::refresh_latest_prices(&c).unwrap();
         }
         let mut conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         // Own card 1 ($1) twice and card 3 ($3) once.
-        for pid in ["sv3pt5-1-normal", "sv3pt5-1-normal", "sv3pt5-3-normal"] {
-            collection::add(
-                &mut conn,
-                &NewCopy {
-                    printing_id: pid.into(),
-                    source: "manual_id".into(),
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-        }
+        own(&mut conn, &["SOR-1-normal", "SOR-1-normal", "SOR-3-normal"]);
 
-        let a = analytics(&conn, "sv3pt5").unwrap().unwrap();
+        let a = analytics(&conn, "SOR").unwrap().unwrap();
         assert_eq!(a.total_cards, 3);
         assert_eq!(a.owned_cards, 2); // cards 1 and 3
         assert_eq!(a.total_printings, 3);
@@ -632,6 +423,7 @@ mod tests {
         // Per-card copy counts in collector-number order.
         assert_eq!(a.copy_counts.len(), 3);
         assert_eq!(a.copy_counts[0].number, "1");
+        assert_eq!(a.copy_counts[0].sort_key, 1);
         assert_eq!(a.copy_counts[0].copies, 2);
         assert_eq!(a.copy_counts[1].number, "2");
         assert_eq!(a.copy_counts[1].copies, 0);
@@ -667,41 +459,30 @@ mod tests {
 
     #[test]
     fn rarity_split_folds_upstream_spelling_onto_one_canonical_tier() {
-        // Upstream ships the same tier two ways — pokemontcg.io's
-        // "Mega Attack Rare" and TCGCSV's "MEGA_ATTACK_RARE". They are one
-        // rarity, and the split must say so: one row, both cards, the
-        // catalog's spelling. Before the `rarities` lookup they were two
-        // rows, and the stats page's own canonicalRarity() papered over it
-        // only for the label — the counts stayed split.
+        // Upstream ships the same tier two ways — "Legendary" from the
+        // official API and "LEGENDARY" from elsewhere. They are one rarity,
+        // and the split must say so: one row, both cards, the catalog's
+        // spelling.
         let dir = tempfile::tempdir().unwrap();
         let shared = dir.path().join("shared.sqlite");
         {
             let mut c = open_shared(&shared).unwrap();
             crate::search_meta::reconcile(&mut c).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series) VALUES ('me1', 'Mega Evolution', 'ME')",
-                [],
-            )
-            .unwrap();
-            for (n, rarity) in [("1", "Mega Attack Rare"), ("2", "MEGA_ATTACK_RARE")] {
-                c.execute(
-                    "INSERT INTO cards (card_id, set_code, number, number_sortable, name, rarity) \
-                     VALUES (?1, 'me1', ?2, ?3, 'Card', ?4)",
-                    rusqlite::params![format!("me1-{n}"), n, n.parse::<i64>().unwrap(), rarity],
-                )
-                .unwrap();
+            for (n, spelling) in [("1", "Legendary"), ("2", "LEGENDARY")] {
+                let pid = testkit::simple(&c, "SHD", n, "Card");
+                rarity(&c, &pid, spelling);
             }
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
 
-        let a = analytics(&conn, "me1").unwrap().unwrap();
+        let a = analytics(&conn, "SHD").unwrap().unwrap();
         assert_eq!(a.rarities.len(), 1, "one tier, not two spellings");
-        assert_eq!(a.rarities[0].rarity, "Mega Attack Rare");
+        assert_eq!(a.rarities[0].rarity, "Legendary");
         assert_eq!(a.rarities[0].total_cards, 2);
-        assert_eq!(a.rarities[0].grp.as_deref(), Some("special"));
+        assert_eq!(a.rarities[0].grp.as_deref(), Some("legendary"));
         // The histogram gets the canonical spelling on both columns too.
-        assert_eq!(a.copy_counts[1].rarity.as_deref(), Some("Mega Attack Rare"));
-        assert_eq!(a.copy_counts[1].rarity_grp.as_deref(), Some("special"));
+        assert_eq!(a.copy_counts[1].rarity.as_deref(), Some("Legendary"));
+        assert_eq!(a.copy_counts[1].rarity_grp.as_deref(), Some("legendary"));
     }
 
     #[test]
@@ -714,23 +495,14 @@ mod tests {
         {
             let mut c = open_shared(&shared).unwrap();
             crate::search_meta::reconcile(&mut c).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series) VALUES ('zz1', 'Zed', 'ZZ')",
-                [],
-            )
-            .unwrap();
-            for (n, rarity) in [("1", "Blorbo Rare"), ("2", "Common")] {
-                c.execute(
-                    "INSERT INTO cards (card_id, set_code, number, number_sortable, name, rarity) \
-                     VALUES (?1, 'zz1', ?2, ?3, 'Card', ?4)",
-                    rusqlite::params![format!("zz1-{n}"), n, n.parse::<i64>().unwrap(), rarity],
-                )
-                .unwrap();
+            for (n, r) in [("1", "Blorbo Rare"), ("2", "Common")] {
+                let pid = testkit::simple(&c, "ZZ1", n, "Card");
+                rarity(&c, &pid, r);
             }
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
 
-        let a = analytics(&conn, "zz1").unwrap().unwrap();
+        let a = analytics(&conn, "ZZ1").unwrap().unwrap();
         assert_eq!(
             a.rarities
                 .iter()
@@ -744,55 +516,80 @@ mod tests {
     }
 
     #[test]
-    fn market_value_takes_cheapest_printing_per_card_not_sum_of_runs() {
-        // A WOTC-style card with three print runs (Unlimited / Shadowless /
-        // 1st Edition) must contribute only its CHEAPEST run to the full-set
-        // value — not the sum of all three. Otherwise a set's "Full set"
-        // figure is dominated by 1st-Edition holos (Base Set read ~$28k).
+    fn rarity_and_number_come_from_the_standard_printing_of_each_card() {
+        // A card with a Hyperspace printing at its own collector number is
+        // still one card in the set: its histogram column is the Standard
+        // printing's number and rarity, and copies of every printing add up.
+        let dir = tempfile::tempdir().unwrap();
+        let shared = dir.path().join("shared.sqlite");
+        {
+            let mut c = open_shared(&shared).unwrap();
+            crate::search_meta::reconcile(&mut c).unwrap();
+            let pid = testkit::simple(&c, "SOR", "5", "Luke Skywalker");
+            rarity(&c, &pid, "Legendary");
+            testkit::printing(
+                &c,
+                "SOR-5-hyper",
+                "SOR-5",
+                "SOR",
+                "262",
+                "Hyperspace",
+                "Normal",
+            );
+            rarity(&c, "SOR-5-hyper", "Special");
+        }
+        let mut conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
+        own(&mut conn, &["SOR-5-normal", "SOR-5-hyper"]);
+
+        let a = analytics(&conn, "SOR").unwrap().unwrap();
+        assert_eq!(a.total_cards, 1);
+        assert_eq!(a.total_printings, 2);
+        assert_eq!(a.copy_counts.len(), 1);
+        assert_eq!(a.copy_counts[0].number, "5");
+        assert_eq!(a.copy_counts[0].copies, 2);
+        assert_eq!(a.rarities.len(), 1);
+        assert_eq!(a.rarities[0].rarity, "Legendary");
+        assert_eq!(a.rarities[0].owned_cards, 1);
+    }
+
+    #[test]
+    fn market_value_takes_cheapest_printing_per_card_not_sum_of_printings() {
+        // A card printed as Standard, Hyperspace and Showcase must contribute
+        // only its CHEAPEST printing to the full-set value — not the sum of
+        // all three. Otherwise a set's "Full set" figure is dominated by the
+        // Showcase.
         let dir = tempfile::tempdir().unwrap();
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series) VALUES ('base1', 'Base', 'Base')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name, rarity) \
-                 VALUES ('base1-4', 'base1', '4', 4, 'Charizard', 'Rare Holo')",
-                [],
-            )
-            .unwrap();
-            // Three print-run printings of the one card, priced 300 /
-            // 800 / 10000 (Unlimited / Shadowless / 1st Edition).
-            for (variant, product, price) in [
-                ("unlimited_holo", 401, 300.0),
-                ("shadowless_holo", 402, 800.0),
-                ("first_ed_holo", 403, 10000.0),
-            ] {
-                c.execute(
-                    "INSERT INTO printings \
-                       (printing_id, card_id, variant, tcgplayer_product_id, sub_type_name) \
-                     VALUES (?1, 'base1-4', ?2, ?3, 'Holofoil')",
-                    rusqlite::params![format!("base1-4-{variant}"), variant, product],
-                )
-                .unwrap();
-                c.execute(
-                    "INSERT INTO prices \
-                       (tcgplayer_product_id, sub_type_name, source, price_type, price, observed_at) \
-                     VALUES (?1, 'Holofoil', 'tcgplayer', 'market', ?2, '2026-06-01')",
-                    rusqlite::params![product, price],
-                )
-                .unwrap();
-            }
-            crate::latest_prices::refresh_latest_prices(&c).unwrap();
+            testkit::simple(&c, "SOR", "5", "Luke Skywalker");
+            testkit::printing(
+                &c,
+                "SOR-5-hyper",
+                "SOR-5",
+                "SOR",
+                "262",
+                "Hyperspace",
+                "Normal",
+            );
+            testkit::printing(
+                &c,
+                "SOR-5-show",
+                "SOR-5",
+                "SOR",
+                "500",
+                "Showcase",
+                "Normal",
+            );
+            testkit::price(&c, "SOR-5-normal", "2026-06-01", 3.0);
+            testkit::price(&c, "SOR-5-hyper", "2026-06-01", 8.0);
+            testkit::price(&c, "SOR-5-show", "2026-06-01", 100.0);
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
 
-        let a = analytics(&conn, "base1").unwrap().unwrap();
+        let a = analytics(&conn, "SOR").unwrap().unwrap();
         assert_eq!(a.total_printings, 3);
-        // Cheapest run only, not 300 + 800 + 10000 = 11100.
-        assert_eq!(a.market_value, 300.0);
+        // Cheapest printing only, not 3 + 8 + 100 = 111.
+        assert_eq!(a.market_value, 3.0);
     }
 }

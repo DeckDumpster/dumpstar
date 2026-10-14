@@ -7,7 +7,7 @@
 	const number = page.params.number ?? '';
 
 	// Set placeholder crumbs synchronously so first paint never shows the
-	// "Card › Base1 › 4" URL-derived fallback (Card and Base1 both 404).
+	// "Card › SOR › 5" URL-derived fallback (Card and SOR both 404).
 	// CardDetailView upgrades the middle and leaf labels to the full set
 	// + card name once the API call resolves.
 	if (setCode) {

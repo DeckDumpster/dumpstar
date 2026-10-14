@@ -89,8 +89,6 @@ impl Options<'_> {
 pub struct Report {
     /// Rows written to `printings`.
     pub printings: usize,
-    /// Rows materialised into `latest_prices`.
-    pub latest_prices: usize,
 }
 
 /// Derive the shared catalog.
@@ -101,7 +99,7 @@ pub struct Report {
 /// after that bracket is local derivation, and a failure there says nothing
 /// about whether the raw bytes arrived.
 pub fn derive(conn: &mut Connection, options: &Options<'_>) -> anyhow::Result<Report> {
-    let mut report = Report::default();
+    let report = Report::default();
 
     // The search query language metadata seeded from data/search_*.json. The
     // read-write open this connection came from reconciled it
@@ -117,21 +115,6 @@ pub fn derive(conn: &mut Connection, options: &Options<'_>) -> anyhow::Result<Re
         finalize_landing(landing, acquired.as_ref().err())?;
     }
     acquired?;
-
-    // Rebuild the materialized latest-prices table so the per-row
-    // market-price lookup on the collection/search/binder pages stays a
-    // point read rather than a GROUP BY over all of prices.
-    println!("Refreshing materialized latest_prices...");
-    report.latest_prices = dumpstar_db::latest_prices::refresh_latest_prices(conn)?;
-    println!("  {} latest-price rows materialized", report.latest_prices);
-
-    // The seeds whose rows FK into rows this run just created, so one derive is
-    // a fixed point rather than the first of two.
-    let seeds = dumpstar_db::reconcile_ingest_dependent_seeds(conn)?;
-    println!(
-        "  {} curated catalog price overrides, {} set aliases reconciled",
-        seeds.catalog_prices, seeds.set_aliases
-    );
 
     // The derivation touches the SHARED catalog and nothing else — no tenant
     // database is opened, let alone written. tests/refresh/tenant_bytes.sh is

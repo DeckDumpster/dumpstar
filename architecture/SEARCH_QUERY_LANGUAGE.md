@@ -3,7 +3,7 @@
 The design record for the Scryfall-style collection search query language
 (beads epic `dumpstar-idf`). Ported in spirit from DeckDumpster's MTG
 search (vendored at `_deckdumpster-src/mtg_collector/search/`), re-homed to
-this Rust/SQLite/Svelte workspace and adapted for Pokémon card data.
+this Rust/SQLite/Svelte workspace and adapted for Star Wars: Unlimited card data.
 
 Status: design ratified (decisions D1–D4 closed). Implementation tracked by
 `dumpstar-idf.5`–`.12`.
@@ -14,20 +14,20 @@ Status: design ratified (decisions D1–D4 closed). Implementation tracked by
 
 A single query bar on the collection page that accepts a composable,
 Scryfall-like language: boolean conditions over every card and collection
-attribute, attribute-specific keywords (`s:pfl`, `t:fire`, `hp>=200`,
-`rarity:"illustration rare"`), price/date/quantity filters, and — the
+attribute, attribute-specific keywords (`s:sor`, `a:vigilance`, `hp>=6`,
+`rarity:legendary`), price/date/quantity filters, and — the
 headline — clean operation over **owned and unowned cards alike** via
 `is:missing`.
 
 Example queries the language must support:
 
 ```
-charizard is:holo                      # holo Charizards I own
-s:pfl t:fire rarity>=rare              # Phantasmal Flames fire cards, rare+
-t:water hp>=200 -is:graded            # big Water cards, ungraded copies
-is:missing s:sv3pt5 sub:ex            # 151 'ex' cards I'm still missing
+luke is:foil                           # foil Lukes I own
+s:sor a:vigilance rarity>=rare         # Spark of Rebellion Vigilance cards, rare+
+t:unit hp>=6 -is:graded                # big units, ungraded copies
+is:missing s:sor is:hyperspace         # Hyperspace printings I'm still missing
 price>20 added>=2026-01-01 order:price direction:desc
-pikachu qty>=2                         # printings I own 2+ copies of
+falcon qty>=2                          # printings I own 2+ copies of
 ```
 
 ---
@@ -76,7 +76,7 @@ The grammar is context-sensitive in ways a clean CFG fights (DeckDumpster's
   `c : r` is not),
 - `or`/`and` are keywords *between* clauses but bare words elsewhere,
 - `-` is negation as a prefix but a literal hyphen inside names
-  (`-is:holo` vs `ho-oh`).
+  (`-is:foil` vs `cad-bane`).
 
 An ordered-regex tokenizer plus a small recursive-descent parser handles all
 three directly and keeps dependencies out of `dumpstar-core`.
@@ -140,20 +140,20 @@ flags (memory `data-model-is-the-product-...`). Here the registry is **data**.
 
 ```sql
 CREATE TABLE IF NOT EXISTS search_keywords (
-    canonical   TEXT PRIMARY KEY,   -- 'energy_type'
+    canonical   TEXT PRIMARY KEY,   -- 'card_type'
     aliases     TEXT NOT NULL,      -- JSON array: ["t","type"]
     operators   TEXT NOT NULL,      -- JSON array: [":","=","!="]
     kind        TEXT NOT NULL,      -- 'text'|'numeric'|'enum'|'date'|'json_contains'|'flag'|'modifier'|'collection'
-    target      TEXT,               -- column or JSON path, e.g. 'cards.types'
-    value_enum  TEXT,               -- optional ref to an enum set (energy types, conditions, …)
+    target      TEXT,               -- column or JSON path, e.g. 'cards.aspects'
+    value_enum  TEXT,               -- optional ref to an enum set (card types, conditions, …)
     semantics   TEXT,               -- 'superset'|'subset'|'exists'|… free-form tag the compiler reads
     help        TEXT                -- one-line description for the help page + autocomplete
 );
 
 CREATE TABLE IF NOT EXISTS rarities (
-    name   TEXT PRIMARY KEY,        -- 'Illustration Rare'
+    name   TEXT PRIMARY KEY,        -- 'Legendary'
     rank   INTEGER NOT NULL,        -- curated ordinal for r>= / r<
-    grp    TEXT                     -- group alias: 'secret','ultra','common',…
+    grp    TEXT                     -- group alias: 'legendary','common',…
 );
 ```
 
@@ -174,10 +174,10 @@ compiler arm.
 
 ---
 
-## 5. Pokémon keyword map
+## 5. Keyword map
 
 The canonical set for v1. All string matches are `COLLATE NOCASE`. JSON
-columns (`types`, `subtypes`, `attacks`, …) are matched with `LIKE` over the
+columns (`aspects`, `traits`, `arenas`) are matched with `LIKE` over the
 serialized array, mirroring the existing binder/collection queries.
 
 ### Card metadata (shared catalog)
@@ -186,34 +186,29 @@ serialized array, mirroring the existing binder/collection queries.
 |---|---|---|---|
 | *(bare words)* | `cards.name` | substring | `LIKE %term%` |
 | `!"…"` | card identity by exact name | `=` | every printing of every card with that exact name |
-| `s:` `set:` `e:` | `sets.ptcgo_code` / `set_code` / `name` | `:` `=` `!=` | **`s:pfl`** → Phantasmal Flames |
-| `r:` `rarity:` | `cards.rarity` | `:` `=` `!=` `<` `>` `<=` `>=` | ordinals via `rarities.rank` (D2); `:`/`=` exact/substring |
-| `t:` `type:` | `cards.types` (energy) | `:` `=` `!=` | the "color" analog: Fire/Water/Grass/Lightning/Psychic/Fighting/Darkness/Metal/Fairy/Dragon/Colorless |
-| `super:` `supertype:` | `cards.supertype` | `:` `=` | Pokémon / Trainer / Energy |
-| `sub:` `subtype:` | `cards.subtypes` | `:` `=` `!=` | Basic, Stage 1/2, ex, V, VMAX, VSTAR, GX, Supporter, Item, Stadium… |
+| `s:` `set:` `e:` | `sets.set_code` / `name` | `:` `=` `!=` | **`s:sor`** → Spark of Rebellion |
+| `r:` `rarity:` | `printings.rarity` | `:` `=` `!=` `<` `>` `<=` `>=` | ordinals via `rarities.rank` (D2); `:`/`=` exact or group |
+| `t:` `type:` | `cards.card_type` | `:` `=` `!=` | Leader / Unit / Event / Upgrade / Base / Token |
+| `a:` `aspect:` | `cards.aspects` | `:` `=` `!=` | Vigilance, Command, Aggression, Cunning, Heroism, Villainy |
+| `arena:` | `cards.arenas` | `:` `=` `!=` | Ground / Space |
+| `trait:` | `cards.traits` | `:` `=` `!=` | Rebel, Force, Vehicle, … |
+| `c:` `cost:` | `cards.cost` | numeric | |
+| `p:` `power:` | `cards.power` | numeric | |
 | `hp:` | `cards.hp` | numeric | |
-| `a:` `artist:` | `cards.artist` | substring | |
-| `ft:` `flavor:` | `cards.flavor_text` | substring | |
-| `o:` `text:` | `abilities` + `attacks` text | substring | the "rules text" analog |
-| `ability:` | `cards.abilities` (name+text) | substring | |
-| `atk:` `attack:` | `cards.attacks` (name+text) | substring | |
-| `dmg:` `damage:` | max attack damage | numeric | parsed from `attacks[].damage` |
-| `retreat:` `rc:` | `len(retreat_cost)` | numeric | |
-| `weak:` | `cards.weaknesses` type | `:` | |
-| `resist:` | `cards.resistances` type | `:` | |
-| `dex:` `pokedex:` | `national_pokedex_numbers` | numeric + range | any-element match |
-| `reg:` `regulation:` | `regulation_mark` | `:` `=` | F/G/H |
+| `artist:` | `printings.artist` | substring | |
+| `o:` `text:` | `cards.rules_text` | substring | |
 | `year:` | `sets.release_date` (year) | numeric | |
-| `legal:` `f:` `format:` / `banned:` | `cards.legalities` JSON | `:` | standard/expanded/unlimited |
-| `variant:` `v:` | `printings.variant` → `variants` code/label/short | substring | data-driven from the `variants` table |
+| `legal:` `format:` / `banned:` | `card_legality` | `:` | premier, twin_suns; a card with no row is legal (as in deck checking); an unknown format matches nothing |
+| `variant:` `v:` | `printings.variant` | substring | Standard, Hyperspace, Showcase, Promo, … |
+| `finish:` `f:` | `printings.finish` | `:` `=` `!=` | Normal / Foil |
 
 ### `is:` flags
 
 Defined in the seed (so they are data, not a `match` arm). Two families:
 
-- **Variant-derived**: `is:holo`, `is:reverse`, `is:firstedition`,
-  `is:pokeball`, `is:masterball`, `is:promo` — each expands to a set of
-  `variants.code` values (the mapping lives in the seed).
+- **Variant-derived**: `is:standard`, `is:hyperspace`, `is:showcase`,
+  `is:promo` — match `printings.variant`.
+- **Finish-derived**: `is:foil`, `is:nonfoil` — match `printings.finish`.
 - **Computed**: `is:graded`, `is:dupe` (owned_count ≥ 2), and the ownership
   trio **`is:missing` / `is:unowned` / `is:owned`** (see §7).
 
@@ -239,7 +234,7 @@ Defined in the seed (so they are data, not a `match` arm). Two families:
 
 ### Modifiers (extracted, not compiled to WHERE)
 
-`order:` (name, number, set, rarity, type, etype, hp, price, qty, added, dex)
+`order:` (name, number, set, rarity, type, cost, power, hp, price, qty, added)
 and `direction:`/`dir:` (asc/desc) are pulled out of the AST into
 `CompiledQuery.order_by`/`order_dir`, exactly as DeckDumpster's
 `_extract_modifiers` does.
@@ -258,10 +253,11 @@ where they are cheap; only the ordering is gone.
 
 ## 6. Rarity ordering (decision D2)
 
-Pokémon rarity is dozens of unordered, era-dependent strings with no natural
-total order, so `r>=rare` is meaningless out of the box. The `rarities` table
+Star Wars: Unlimited rarity is a short ladder (Common, Uncommon, Rare,
+Legendary, Special) with Promo beside it; the upstream spells it inconsistently
+enough that `r>=rare` needs a stated order. The `rarities` table
 supplies a **curated `rank`** (enabling `<`/`>`/`<=`/`>=` via a join) and a
-**group alias** so `rarity:secret` or `rarity:ultra` matches a family. Until a
+**group alias** so `rarity:legendary` matches a family. Until a
 rank exists for a value, only `:`/`=` (exact/substring) apply to it. The rank
 ordering and group taxonomy are authored in `data/rarities.json` as part of
 `dumpstar-idf.6`.
@@ -293,9 +289,9 @@ catalog-wide views under a single, consistent row unit and matches the binder
 #[derive(Serialize, ts_rs::TS)]
 struct SearchRow {
     // identity / display — always present
-    printing_id, card_id, set_code, set_name, set_ptcgo_code, set_symbol_url,
-    number, name, rarity, artist, supertype, subtypes, types, attacks,
-    market_price, image_small, variant, variant_description,
+    printing_id, card_id, set_code, set_name, number, name, subtitle, rarity,
+    card_type, cost, power, hp, aspects, arenas,
+    market_price, image_url, variant, finish,
     // ownership
     owned: bool,
     owned_count: i64,            // 0 = missing
@@ -319,7 +315,7 @@ The compiler chooses based on whether an ownership flag
 -- OWNED MODE (default): only printings with ≥1 owned copy
 FROM (printings ⋃ user_printings) p
   JOIN cards cd ON p.card_id = cd.card_id
-  JOIN sets s   ON cd.set_code = s.set_code
+  JOIN sets s   ON p.set_code = s.set_code
 WHERE EXISTS (SELECT 1 FROM collection c WHERE c.printing_id = p.printing_id
               AND <status default owned+ordered>)
   AND (<compiled WHERE>)
@@ -409,7 +405,7 @@ The response is an envelope, not a bare array:
 - **`limit`/`offset` are bound parameters**, like every user value (§5).
 - **The `ORDER BY` ends in `p.printing_id ASC`,** which makes it a total order.
   Without a unique final key, rows tied on the sort column (a card's normal and
-  reverse-holo printings share both `name` and `number_sortable`) can come back
+  a card's Normal and Foil printings share both `name` and the collector number) can come back
   in either order between statements, and an `OFFSET` walk then drops some rows
   and repeats others.
 - `search::search` remains unbounded for the differential oracle and tests;
@@ -433,7 +429,7 @@ Layered cheap→expensive, deterministic→probabilistic (DeckDumpster's exact
 shape, re-implemented in Rust).
 
 1. **Curated corpus** (`crates/dumpstar-db/tests/fixtures/search_corpus.json`,
-   ~150–200 Pokémon-flavored entries `{query, should_parse,
+   ~200 SWU-flavored entries `{query, should_parse,
    compiler_supported, category}`). Parametrized: should-parse parses;
    should-error raises `QueryError`; supported compiles **without the `1=0`
    sentinel** and executes against the seed-fixture DB.
@@ -450,15 +446,13 @@ shape, re-implemented in Rust).
    `DUMPSTAR_SEEDS` / `DUMPSTAR_SEED` mirror DeckDumpster's `--seeds`/`--seed`
    for volume and single-seed reproduction.
 
-4. **pokémontcg.io differential oracle** (opt-in, cached). A
-   `grammar → Lucene` translator for the **card-metadata subset**
-   (collection-only keywords are skipped, exactly as DeckDumpster skips its
-   extensions against Scryfall). A rate-limited client with a SQLite response
-   cache keyed by query hash; a comparator that dedupes both sides to card
-   identity, intersects the fixture's known universe, and classifies
-   disagreements (real-bug / coverage-gap / truncation) into a JSON report.
-   Report mode, `#[ignore]` by default. Plus a parse-agreement check: if
-   pokémontcg.io accepts a translatable query, we must not reject it.
+4. **Offline differential oracle** (always-on, `tests/search_oracle.rs`).
+   Evaluates the parsed query directly in Rust over a small SWU printing
+   table and compares the result with the compiled SQL, catalog-wide: every
+   supported card-metadata atom, then every pair combined with and / or /
+   negation / grouping. Collection and price keywords are checked to be
+   declined rather than guessed. (The fork's oracle diffed against a live
+   third-party API; SWU has no such search endpoint to diff against.)
 
 ### The `1=0` sentinel
 
@@ -488,7 +482,7 @@ idf.7  SQL compiler (dumpstar-db/src/search.rs)      — needs 5, 6
 idf.8  Corpus + unit tests (tiers 1–2)             — needs 5, 7
 idf.9  Generative fuzzer (tier 3)                  — needs 5, 7
 idf.10 Route + frontend (printing-centric page)    — needs 7
-idf.11 pokémontcg.io oracle (tier 4)               — needs 7, 8
+idf.11 differential oracle (tier 4)                 — needs 7, 8
 idf.12 QA finish (/qa-finish) + close-out
 ```
 

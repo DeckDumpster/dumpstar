@@ -201,14 +201,6 @@ echo "  $IMAGE"
 log "2. a data directory with real tenant databases in it"
 mkdir -p "$DATA" "$LAKE"
 cp "${FIXTURES}/shared.sqlite" "${DATA}/shared.sqlite"
-# The symbol glyphs are pre-normalized so the symbols phase has nothing to
-# fetch. It reaches images.pokemontcg.io, which is deliberately outside the
-# landing zone and outside this fixture; the http-prefix gate in
-# normalize_all_symbols skips a row that already points at /sym/<set>.png.
-# Nothing about the tenant claim depends on card art.
-sqlite3 "${DATA}/shared.sqlite" \
-	"UPDATE sets SET symbol_url = '/sym/' || set_code || '.png' WHERE symbol_url LIKE 'http%';"
-
 # Converge the fixture's schema, the way `dumpstar setup` or the nightly derive
 # would. `open_shared` re-applies schema_shared.sql on every read-WRITE open, so
 # any of those commands heals a catalog that predates a table.

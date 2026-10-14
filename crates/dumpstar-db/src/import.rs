@@ -18,7 +18,7 @@ use crate::sealed_import::{self, SealedCommitResult, SealedResolutionReport};
 pub enum ImportFormat {
     Manabox,
     Tcgplayer,
-    /// Dumpstar-native — what the pkmn.gg Tampermonkey export writes.
+    /// Dumpstar-native: set code, collector number, finish.
     Dumpstar,
     /// Collectr (getcollectr.com). Yields both singles and sealed products,
     /// so it goes through the combined path ([`preview_collectr`] /
@@ -28,13 +28,12 @@ pub enum ImportFormat {
 
 impl ImportFormat {
     /// Parse the wire name (`"manabox"`, `"tcgplayer"`, `"dumpstar"`,
-    /// `"collectr"`). `"pkmngg"` is accepted as an alias for `"dumpstar"`
-    /// since that is currently the only producer of the format.
+    /// `"collectr"`).
     pub fn parse(name: &str) -> Result<Self> {
         match name.trim().to_lowercase().as_str() {
             "manabox" => Ok(Self::Manabox),
             "tcgplayer" => Ok(Self::Tcgplayer),
-            "dumpstar" | "pkmngg" => Ok(Self::Dumpstar),
+            "dumpstar" => Ok(Self::Dumpstar),
             "collectr" => Ok(Self::Collectr),
             other => Err(DbError::Import(format!("unknown import format '{other}'"))),
         }
@@ -87,7 +86,10 @@ pub struct ResolvedRow {
     pub card_name: String,
     pub set_code: String,
     pub number: String,
+    /// The printing's variant (`Standard`, `Hyperspace`, …).
     pub variant: String,
+    /// `Normal` or `Foil`.
+    pub finish: String,
     pub condition: String,
     pub language: String,
     pub purchase_price: Option<f64>,
@@ -108,7 +110,7 @@ pub struct UnmatchedRow {
     pub source_line: u32,
     pub set_hint: String,
     pub number: String,
-    pub variant: String,
+    pub finish: String,
     pub reason: String,
 }
 
@@ -132,11 +134,8 @@ pub struct CommitResult {
     pub skipped: u32,
 }
 
-/// Resolve a set hint to a catalog `set_code`: exact code, then ptcgo code,
-/// then set name (the explicit name field, then the hint read as a name),
-/// and finally the external set-name alias table (`set_aliases`) so an
-/// import platform's own label (Collectr's "Scarlet & Violet Promo") lands
-/// on the catalog code ('svp'). Aliases are data — see [`crate::set_aliases`].
+/// Resolve a set hint to a catalog `set_code`: exact code, then set name (the
+/// explicit name field, then the hint read as a name).
 ///
 /// Shared with the sealed import pipeline ([`crate::sealed_import`]).
 pub(crate) fn resolve_set(
@@ -156,12 +155,6 @@ pub(crate) fn resolve_set(
     )? {
         return Ok(Some(c));
     }
-    if let Some(c) = by(
-        "SELECT set_code FROM sets WHERE ptcgo_code = ?1 COLLATE NOCASE",
-        hint,
-    )? {
-        return Ok(Some(c));
-    }
     if let Some(n) = name
         && let Some(c) = by(
             "SELECT set_code FROM sets WHERE name = ?1 COLLATE NOCASE",
@@ -170,29 +163,17 @@ pub(crate) fn resolve_set(
     {
         return Ok(Some(c));
     }
-    if let Some(c) = by(
+    by(
         "SELECT set_code FROM sets WHERE name = ?1 COLLATE NOCASE",
         hint,
-    )? {
-        return Ok(Some(c));
-    }
-    // Fallback: an external platform's set label, mapped by the alias table.
-    let alias_sql = "SELECT set_code FROM set_aliases WHERE alias = ?1";
-    if let Some(n) = name
-        && let Some(c) = by(alias_sql, n)?
-    {
-        return Ok(Some(c));
-    }
-    by(alias_sql, hint)
+    )
 }
 
 /// Strip trailing parenthetical/bracketed descriptor groups an import
 /// platform appends to a card name that the catalog name doesn't carry —
-/// "Great Tusk ex (Paldean Fates Stamped)" → "Great Tusk ex", "Ancient Mew
-/// [2000]" → "Ancient Mew". Only *trailing* groups are removed (repeatedly),
-/// so interior text is untouched; the catalog side is never stripped, so a
-/// genuinely distinct printing like "Ancient Mew (Japanese Exclusive Print)"
-/// stays its own card.
+/// "Luke Skywalker (Prerelease Promo)" → "Luke Skywalker". Only *trailing*
+/// groups are removed (repeatedly), so interior text is untouched; the catalog
+/// side is never stripped.
 fn strip_trailing_descriptors(name: &str) -> String {
     let mut s = name.trim();
     loop {
@@ -209,137 +190,65 @@ fn strip_trailing_descriptors(name: &str) -> String {
     s.to_string()
 }
 
-/// The outcome of the global (all-sets) card name+number fallback.
-enum CardMatch {
-    One {
-        card_id: String,
-        card_name: String,
-        set_code: String,
-    },
-    /// The name+number matches several catalog cards — the caller reports it
-    /// for manual resolution rather than guessing.
-    Ambiguous(Vec<String>),
-    None,
+/// One catalog printing as the resolver sees it.
+#[derive(Clone)]
+struct Candidate {
+    printing_id: String,
+    set_code: String,
+    /// The collector number, unpadded.
+    number: String,
+    variant: String,
+    finish: String,
+    /// `Name`, or `Name - Subtitle` for a card that has one.
+    display_name: String,
+    /// Both spellings an import platform may use, folded for comparison.
+    folded: [String; 2],
 }
 
-/// Search the whole card catalog by (folded name, normalized number) when a
-/// row's stated set didn't resolve or the card wasn't in it — Collectr's
-/// "Miscellaneous Cards & Products" catch-all, stamped promos, etc. The name
-/// is stripped of trailing descriptors and folded the same way sealed names
-/// are; the number is already leading-zero-normalized by the caller.
-fn global_card_fallback(conn: &Connection, want_name: &str, number: &str) -> Result<CardMatch> {
-    let want = crate::sealed_import::normalize_name(&strip_trailing_descriptors(want_name));
-    if want.is_empty() {
-        return Ok(CardMatch::None);
-    }
-    let mut stmt = conn.prepare("SELECT card_id, name, set_code FROM cards WHERE number = ?1")?;
-    let mut hits: Vec<(String, String, String)> = stmt
-        .query_map([number], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
-        .collect::<rusqlite::Result<Vec<(String, String, String)>>>()?
-        .into_iter()
-        .filter(|(_, name, _)| crate::sealed_import::normalize_name(name) == want)
-        .collect();
-
-    match hits.len() {
-        0 => Ok(CardMatch::None),
-        1 => {
-            let (card_id, card_name, set_code) = hits.pop().unwrap();
-            Ok(CardMatch::One {
-                card_id,
-                card_name,
-                set_code,
-            })
-        }
-        _ => Ok(CardMatch::Ambiguous(
-            hits.iter()
-                .map(|(_, _, sc)| format!("{sc} #{number}"))
-                .collect(),
-        )),
-    }
-}
-
-/// Reduce a collector number to a comparable "core" so the catalog's
-/// inconsistent promo numbering still matches. Some promo cards are stored
-/// with a redundant lowercase set-code prefix ("svp 176", "svp193") and
-/// others bare ("163") — upstream data we can't renumber without orphaning
-/// owned printings. Strip a leading copy of the set code (case-insensitive,
-/// optional following space), then unpad leading zeros on a purely-numeric
-/// result. Genuinely alphanumeric numbers like "GG01" are left intact.
-fn number_core(number: &str, set_code: &str) -> String {
-    let lower = number.trim().to_lowercase();
-    let sc = set_code.to_lowercase();
-    let tail = lower
-        .strip_prefix(&sc)
-        .map(str::trim_start)
-        .unwrap_or(&lower);
-    import::normalize_collector_number(tail)
-}
-
-/// A set resolved but its exact number lookup missed: retry against that set's
-/// cards on the number *core*, disambiguating by name when a core collides
-/// (bare vs prefixed forms, or shared-number artwork variants).
-fn set_scoped_number_match(
-    conn: &Connection,
-    set_code: &str,
-    lookup_number: &str,
-    want_name: Option<&str>,
-) -> Result<CardMatch> {
-    let want_core = number_core(lookup_number, set_code);
-    let mut stmt = conn.prepare("SELECT card_id, name, number FROM cards WHERE set_code = ?1")?;
-    let hits: Vec<(String, String)> = stmt
-        .query_map([set_code], |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
-            ))
-        })?
-        .collect::<rusqlite::Result<Vec<_>>>()?
-        .into_iter()
-        .filter(|(_, _, number)| number_core(number, set_code) == want_core)
-        .map(|(id, name, _)| (id, name))
-        .collect();
-
-    match hits.as_slice() {
-        [] => Ok(CardMatch::None),
-        [(card_id, card_name)] => Ok(CardMatch::One {
-            card_id: card_id.clone(),
-            card_name: card_name.clone(),
-            set_code: set_code.to_string(),
-        }),
-        many => {
-            // Number core collides — disambiguate by the row's card name.
-            if let Some(want) = want_name {
-                let want_n =
-                    crate::sealed_import::normalize_name(&strip_trailing_descriptors(want));
-                let named: Vec<&(String, String)> = many
-                    .iter()
-                    .filter(|(_, name)| crate::sealed_import::normalize_name(name) == want_n)
-                    .collect();
-                if let [(card_id, card_name)] = named.as_slice() {
-                    return Ok(CardMatch::One {
-                        card_id: card_id.clone(),
-                        card_name: card_name.clone(),
-                        set_code: set_code.to_string(),
-                    });
-                }
-            }
-            Ok(CardMatch::Ambiguous(
-                many.iter()
-                    .map(|(_, name)| format!("{name} #{want_core}"))
-                    .collect(),
-            ))
-        }
-    }
+fn candidates(conn: &Connection, set_code: Option<&str>) -> Result<Vec<Candidate>> {
+    let mut stmt = conn.prepare(
+        "SELECT p.printing_id, p.set_code, p.number, p.variant, p.finish, c.name, c.subtitle \
+           FROM printings p JOIN cards c ON c.card_id = p.card_id \
+          WHERE (?1 IS NULL OR p.set_code = ?1) \
+          ORDER BY p.printing_id",
+    )?;
+    let rows = stmt.query_map([set_code], |r| {
+        let name: String = r.get(5)?;
+        let subtitle: Option<String> = r.get(6)?;
+        let display_name = match &subtitle {
+            Some(s) if !s.is_empty() => format!("{name} - {s}"),
+            _ => name.clone(),
+        };
+        let fold = crate::sealed_import::normalize_name;
+        Ok(Candidate {
+            printing_id: r.get(0)?,
+            set_code: r.get(1)?,
+            number: import::normalize_collector_number(&r.get::<_, String>(2)?),
+            variant: r.get(3)?,
+            finish: r.get(4)?,
+            folded: [fold(&display_name), fold(&name)],
+            display_name,
+        })
+    })?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 /// Resolve parsed rows against the catalog, partitioning them into matched
 /// printings and unmatched rows with reasons.
+///
+/// A printing is named by (set, collector number, finish): Standard,
+/// Hyperspace and Showcase print under different numbers, so the number
+/// carries the variant. When the stated set does not resolve, or does not
+/// carry the number, a row that names its card is searched across every set
+/// by (folded name, number).
 pub fn resolve(conn: &Connection, rows: &[ParsedRow]) -> Result<ResolutionReport> {
     let mut matched = Vec::new();
     let mut unmatched = Vec::new();
-    // A CSV usually touches a handful of sets — cache the hint→code lookup.
+    // A CSV usually touches a handful of sets — cache the hint→code lookup
+    // and each set's printings.
     let mut set_cache: HashMap<(String, Option<String>), Option<String>> = HashMap::new();
+    let mut by_set: HashMap<String, Vec<Candidate>> = HashMap::new();
+    let mut everything: Option<Vec<Candidate>> = None;
 
     for row in rows {
         let line = row.source_line as u32;
@@ -347,7 +256,7 @@ pub fn resolve(conn: &Connection, rows: &[ParsedRow]) -> Result<ResolutionReport
             source_line: line,
             set_hint: row.set_hint.clone(),
             number: row.number.clone(),
-            variant: row.variant.clone(),
+            finish: row.finish.clone(),
             reason,
         };
 
@@ -362,112 +271,90 @@ pub fn resolve(conn: &Connection, rows: &[ParsedRow]) -> Result<ResolutionReport
         };
 
         // The catalog stores collector numbers unpadded ('90'); Collectr
-        // zero-pads them ('090'). Normalize both to the same canonical form
-        // so an exact `number =` lookup lands.
+        // zero-pads them ('090'). Normalize both to the same canonical form.
         let lookup_number = import::normalize_collector_number(&row.number);
 
-        // Direct set+number lookup when the set resolved.
-        let direct: Option<(String, String)> = match &set_code {
-            Some(sc) => conn
-                .prepare("SELECT card_id, name FROM cards WHERE set_code = ?1 AND number = ?2")?
-                .query_row((sc, &lookup_number), |r| Ok((r.get(0)?, r.get(1)?)))
-                .optional()?,
-            None => None,
-        };
-
-        // On a direct miss, fall back to a global name+number search across
-        // all sets (the "Miscellaneous Cards & Products" catch-all, stamped
-        // promos, and anything whose stated set didn't resolve). Only rows
-        // that carry a card name can use it.
-        // Set resolved but the exact number missed: retry within the set on
-        // the number core before going global — this rescues the catalog's
-        // inconsistent promo prefixes (e.g. svp 'Umbreon ex' stored as
-        // "svp 176" vs Collectr's "SVP 176").
-        let scoped = match (&direct, &set_code) {
-            (None, Some(sc)) => {
-                set_scoped_number_match(conn, sc, &lookup_number, row.name.as_deref())?
-            }
-            _ => CardMatch::None,
-        };
-
-        let (card_id, card_name, resolved_set) = match direct {
-            Some((id, name)) => (id, name, set_code.clone().expect("set_code present")),
-            None => match scoped {
-                CardMatch::One {
-                    card_id,
-                    card_name,
-                    set_code,
-                } => (card_id, card_name, set_code),
-                CardMatch::Ambiguous(cands) => {
-                    unmatched.push(unmatched_row(format!(
-                        "#{lookup_number} in {} is ambiguous: matches {}",
-                        set_code.as_deref().unwrap_or("?"),
-                        cands.join(", ")
-                    )));
-                    continue;
+        // The printings that carry this number: in the stated set when it
+        // resolved, else (for a row that names its card) in any set.
+        let mut pool: Vec<Candidate> = match &set_code {
+            Some(sc) => {
+                if !by_set.contains_key(sc) {
+                    by_set.insert(sc.clone(), candidates(conn, Some(sc))?);
                 }
-                CardMatch::None => match row.name.as_deref() {
-                    Some(want) => match global_card_fallback(conn, want, &lookup_number)? {
-                        CardMatch::One {
-                            card_id,
-                            card_name,
-                            set_code,
-                        } => (card_id, card_name, set_code),
-                        CardMatch::Ambiguous(cands) => {
-                            unmatched.push(unmatched_row(format!(
-                                "'{want}' #{lookup_number} is ambiguous: matches {}",
-                                cands.join(", ")
-                            )));
-                            continue;
-                        }
-                        CardMatch::None => {
-                            unmatched.push(unmatched_row(match &set_code {
-                                Some(sc) => format!(
-                                    "card #{lookup_number} not found in {sc}; \
-                                 no '{want}' #{lookup_number} in any set"
-                                ),
-                                None => format!(
-                                    "no card '{want}' #{lookup_number} in any set \
-                                 (set '{}' unknown)",
-                                    row.set_hint
-                                ),
-                            }));
-                            continue;
-                        }
-                    },
-                    None => {
-                        unmatched.push(unmatched_row(match &set_code {
-                            Some(sc) => format!("card #{lookup_number} not found in {sc}"),
-                            None => format!("unknown set '{}'", row.set_hint),
-                        }));
-                        continue;
-                    }
-                },
-            },
+                by_set[sc]
+                    .iter()
+                    .filter(|c| c.number == lookup_number)
+                    .cloned()
+                    .collect()
+            }
+            None => Vec::new(),
         };
+        let mut global = false;
+        if pool.is_empty()
+            && let Some(want) = row.name.as_deref()
+        {
+            let want = crate::sealed_import::normalize_name(&strip_trailing_descriptors(want));
+            if !want.is_empty() {
+                if everything.is_none() {
+                    everything = Some(candidates(conn, None)?);
+                }
+                pool = everything
+                    .as_ref()
+                    .expect("loaded above")
+                    .iter()
+                    .filter(|c| c.number == lookup_number && c.folded.contains(&want))
+                    .cloned()
+                    .collect();
+                global = true;
+            }
+        }
+        if pool.is_empty() {
+            unmatched.push(unmatched_row(match (&set_code, &row.name) {
+                (Some(sc), Some(want)) => format!(
+                    "card #{lookup_number} not found in {sc}; no '{want}' #{lookup_number} in any set"
+                ),
+                (Some(sc), None) => format!("card #{lookup_number} not found in {sc}"),
+                (None, Some(want)) => format!(
+                    "no card '{want}' #{lookup_number} in any set (set '{}' unknown)",
+                    row.set_hint
+                ),
+                (None, None) => format!("unknown set '{}'", row.set_hint),
+            }));
+            continue;
+        }
+        if global {
+            let mut sets: Vec<&str> = pool.iter().map(|c| c.set_code.as_str()).collect();
+            sets.sort_unstable();
+            sets.dedup();
+            if sets.len() > 1 {
+                unmatched.push(unmatched_row(format!(
+                    "'{}' #{lookup_number} is ambiguous: matches {}",
+                    row.name.as_deref().unwrap_or(""),
+                    sets.iter()
+                        .map(|sc| format!("{sc} #{lookup_number}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )));
+                continue;
+            }
+        }
 
-        let printing_id: Option<String> = conn
-            .prepare(
-                "SELECT printing_id FROM printings \
-                 WHERE card_id = ?1 AND variant = ?2 AND deprecated_at IS NULL",
-            )?
-            .query_row((&card_id, &row.variant), |r| r.get(0))
-            .optional()?;
-        let Some(printing_id) = printing_id else {
+        let Some(hit) = pool.iter().find(|c| c.finish == row.finish) else {
             unmatched.push(unmatched_row(format!(
-                "variant '{}' not available for {card_name}",
-                row.variant
+                "finish '{}' not available for {}",
+                row.finish, pool[0].display_name
             )));
             continue;
         };
 
         matched.push(ResolvedRow {
             source_line: line,
-            printing_id,
-            card_name,
-            set_code: resolved_set,
+            printing_id: hit.printing_id.clone(),
+            card_name: hit.display_name.clone(),
+            set_code: hit.set_code.clone(),
             number: lookup_number,
-            variant: row.variant.clone(),
+            variant: hit.variant.clone(),
+            finish: hit.finish.clone(),
             condition: row.condition.clone(),
             language: row.language.clone(),
             purchase_price: row.purchase_price,
@@ -687,7 +574,7 @@ fn commit_matched(
 
 // --- Collectr: the combined single + sealed import path (garden wall) ---
 
-/// A row skipped during a combined import (e.g. a Collectr row from another game).
+/// A row skipped during a combined import (e.g. another game's Collectr row).
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
 #[ts(export)]
 pub struct SkippedRow {
@@ -823,74 +710,91 @@ pub fn commit_collectr_selected(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testkit;
     use crate::{connect_user, open_shared};
 
     const CSV: &str = "\
 Set code,Set name,Collector number,Foil,Quantity,Condition,Language,Purchase price
-SOR,Spark of Rebellion,6,normal,2,near_mint,en,1.50
-SOR,Spark of Rebellion,6,foil,1,near_mint,en,5.00
+SOR,Spark of Rebellion,5,normal,2,near_mint,en,1.50
+SOR,Spark of Rebellion,5,foil,1,near_mint,en,5.00
 NOPE,Mystery,1,normal,1,near_mint,en,";
 
+    /// SOR #5 Luke Skywalker - Faithful Friend (Normal only) and SOR #90
+    /// Vanquish, the leading-zero regression fixture (Collectr writes '090').
     fn db() -> (tempfile::TempDir, Connection) {
         let dir = tempfile::tempdir().unwrap();
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, ptcgo_code, name, series) \
-                 VALUES ('sv3pt5', 'SOR', 'Spark of Rebellion', 'SOR')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Luke Skywalker')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES ('sv3pt5-6-normal', 'sv3pt5-6', 'normal')",
-                [],
-            )
-            .unwrap();
-            // A card stored at the unpadded number '90' — the leading-zero
-            // regression fixture (Collectr writes '090').
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('sv3pt5-90', 'sv3pt5', '90', 90, 'Simisage')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES ('sv3pt5-90-normal', 'sv3pt5-90', 'normal')",
-                [],
-            )
-            .unwrap();
+            testkit::set(&c, "SOR", "Spark of Rebellion");
+            testkit::card_full(
+                &c,
+                "SOR-5",
+                "Luke Skywalker",
+                Some("Faithful Friend"),
+                "Leader",
+                None,
+                Some(2),
+                Some(7),
+                "[\"Vigilance\",\"Heroism\"]",
+                "[]",
+                "[\"Ground\"]",
+                None,
+            );
+            testkit::printing(
+                &c,
+                "SOR-5-normal",
+                "SOR-5",
+                "SOR",
+                "5",
+                "Standard",
+                "Normal",
+            );
+            testkit::simple(&c, "SOR", "90", "Vanquish");
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         (dir, conn)
     }
 
+    fn row(set: &str, name: Option<&str>, number: &str, finish: &str) -> ParsedRow {
+        ParsedRow {
+            source_line: 2,
+            set_hint: set.into(),
+            set_name: Some(set.into()),
+            name: name.map(str::to_string),
+            number: number.into(),
+            finish: finish.into(),
+            condition: "Near Mint".into(),
+            language: "English".into(),
+            purchase_price: None,
+            acquired_at: None,
+            tags: Vec::new(),
+        }
+    }
+
     #[test]
-    fn resolves_by_ptcgo_code_and_reports_misses() {
+    fn resolves_by_set_code_and_reports_misses() {
         let (_d, conn) = db();
         let report = preview(&conn, ImportFormat::Manabox, CSV).unwrap();
 
-        // Two 'normal' copies of #6 resolve via the ptcgo code 'SOR'.
+        // Two 'normal' copies of #5 resolve via the set code 'SOR'.
         assert_eq!(report.matched.len(), 2);
-        assert_eq!(report.matched[0].set_code, "sv3pt5");
-        assert_eq!(report.matched[0].card_name, "Luke Skywalker");
+        assert_eq!(report.matched[0].set_code, "SOR");
+        assert_eq!(
+            report.matched[0].card_name,
+            "Luke Skywalker - Faithful Friend"
+        );
+        assert_eq!(report.matched[0].finish, "Normal");
+        assert_eq!(report.matched[0].variant, "Standard");
         assert_eq!(report.matched[0].purchase_price, Some(1.50));
 
-        // The 'foil' copy (no holo printing) and the unknown set both miss.
+        // The 'foil' copy (no Foil printing) and the unknown set both miss.
         assert_eq!(report.unmatched.len(), 2);
         assert!(
             report
                 .unmatched
                 .iter()
-                .any(|u| u.reason.contains("variant 'holo'"))
+                .any(|u| u.reason.contains("finish 'Foil'") && u.finish == "Foil")
         );
         assert!(
             report
@@ -898,6 +802,25 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
                 .iter()
                 .any(|u| u.reason.contains("unknown set 'NOPE'"))
         );
+    }
+
+    #[test]
+    fn foil_row_resolves_to_the_foil_printing() {
+        let (dir, _conn) = db();
+        {
+            let c = open_shared(&dir.path().join("shared.sqlite")).unwrap();
+            testkit::printing(&c, "SOR-5-foil", "SOR-5", "SOR", "5", "Standard", "Foil");
+        }
+        let conn = connect_user(
+            &dir.path().join("collection.sqlite"),
+            &dir.path().join("shared.sqlite"),
+        )
+        .unwrap();
+        let report = preview(&conn, ImportFormat::Manabox, CSV).unwrap();
+        assert_eq!(report.matched.len(), 3);
+        assert_eq!(report.matched[2].printing_id, "SOR-5-foil");
+        assert_eq!(report.matched[2].finish, "Foil");
+        assert_eq!(report.unmatched.len(), 1);
     }
 
     #[test]
@@ -917,210 +840,196 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         // Collectr writes '090'; the catalog stores '90'. An exact WHERE
         // number='090' misses — the resolver must normalize both sides.
         let (_d, conn) = db();
-        let rows = vec![ParsedRow {
-            source_line: 2,
-            set_hint: "sv3pt5".into(),
-            set_name: None,
-            name: None,
-            number: "090".into(),
-            variant: "normal".into(),
-            condition: "Near Mint".into(),
-            language: "English".into(),
-            purchase_price: None,
-            acquired_at: None,
-            tags: Vec::new(),
-        }];
-        let report = resolve(&conn, &rows).unwrap();
+        let report = resolve(&conn, &[row("SOR", None, "090", "Normal")]).unwrap();
         assert_eq!(report.matched.len(), 1, "{:?}", report.unmatched);
-        assert_eq!(report.matched[0].card_name, "Simisage");
-        assert_eq!(report.matched[0].printing_id, "sv3pt5-90-normal");
+        assert_eq!(report.matched[0].card_name, "Vanquish");
+        assert_eq!(report.matched[0].printing_id, "SOR-90-normal");
+        assert_eq!(report.matched[0].number, "90");
     }
 
     #[test]
-    fn set_alias_plus_leading_zero_resolves_promo_card() {
-        // Collectr sends set 'Mega Evolution Promos' (aliased to mep) and a
-        // zero-padded number '009'; the catalog has mep #9 Alakazam. Both the
-        // alias fallback and the leading-zero fix must fire together.
-        let dir = tempfile::tempdir().unwrap();
-        let shared = dir.path().join("shared.sqlite");
-        {
-            let mut c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series) \
-                 VALUES ('mep', 'ME Black Star Promos', 'SV')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('mep-9', 'mep', '9', 9, 'Alakazam')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES ('mep-9-normal', 'mep-9', 'normal')",
-                [],
-            )
-            .unwrap();
-            // Now that the mep set exists, the seed writes its alias.
-            let n =
-                crate::set_aliases::reconcile_from(&mut c, crate::set_aliases::tests::TEST_SEED)
-                    .unwrap();
-            assert!(n >= 1, "expected the mep alias to seed once its set exists");
-        }
-        let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-
-        // resolve_set consults the alias table as a fallback.
+    fn set_name_plus_leading_zero_resolves() {
+        // Collectr sends the set's name ('Spark of Rebellion', not its code)
+        // and a zero-padded number '005'; both normalizations must fire.
+        let (_d, conn) = db();
         assert_eq!(
-            resolve_set(
-                &conn,
-                "Mega Evolution Promos",
-                Some("Mega Evolution Promos")
-            )
-            .unwrap(),
-            Some("mep".to_string())
+            resolve_set(&conn, "Spark of Rebellion", Some("Spark of Rebellion")).unwrap(),
+            Some("SOR".to_string())
         );
+        assert_eq!(
+            resolve_set(&conn, "sor", None).unwrap(),
+            Some("SOR".to_string())
+        );
+        assert_eq!(resolve_set(&conn, "Nowhere", None).unwrap(), None);
 
-        let rows = vec![ParsedRow {
-            source_line: 2,
-            set_hint: "Mega Evolution Promos".into(),
-            set_name: Some("Mega Evolution Promos".into()),
-            name: None,
-            number: "009".into(),
-            variant: "normal".into(),
-            condition: "Near Mint".into(),
-            language: "English".into(),
-            purchase_price: None,
-            acquired_at: None,
-            tags: Vec::new(),
-        }];
-        let report = resolve(&conn, &rows).unwrap();
+        let report = resolve(&conn, &[row("Spark of Rebellion", None, "005", "Normal")]).unwrap();
         assert_eq!(report.matched.len(), 1, "{:?}", report.unmatched);
-        assert_eq!(report.matched[0].set_code, "mep");
-        assert_eq!(report.matched[0].card_name, "Alakazam");
+        assert_eq!(report.matched[0].set_code, "SOR");
+        assert_eq!(
+            report.matched[0].card_name,
+            "Luke Skywalker - Faithful Friend"
+        );
     }
 
-    /// A catalog with the catch-all cards used by the fallback tests.
+    /// A catalog for the name+number fallback: Luke at SOR #5, Vanquish at
+    /// SHD #26 (Normal and Foil), a different card at SOR #26.
     fn misc_db() -> (tempfile::TempDir, Connection) {
         let dir = tempfile::tempdir().unwrap();
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series) VALUES \
-                   ('mcap', 'Miscellaneous Promos', 'Other'), \
-                   ('svp', 'Scarlet & Violet Black Star Promos', 'SV'), \
-                   ('sv4pt5', 'Paldean Fates', 'SV')",
-                [],
-            )
-            .unwrap();
-            // Ancient Mew at #1, and a distinct Japanese-exclusive printing at
-            // #1a — the catalog side keeps its "(...)" so it stays separate.
-            // Great Tusk ex #72 in svp vs Oinkologne #72 in sv4pt5 (same
-            // number, different name → the name disambiguates).
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) VALUES \
-                   ('mcap-1',  'mcap',   '1',  1, 'Ancient Mew'), \
-                   ('mcap-1a', 'mcap',   '1a', 1, 'Ancient Mew (Japanese Exclusive Print)'), \
-                   ('svp-72',  'svp',    '72', 72, 'Great Tusk ex'), \
-                   ('sv4pt5-72','sv4pt5','72', 72, 'Oinkologne')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO printings (printing_id, card_id, variant) VALUES \
-                   ('mcap-1-normal', 'mcap-1', 'normal'), \
-                   ('svp-72-holo', 'svp-72', 'holo')",
-                [],
-            )
-            .unwrap();
+            testkit::set(&c, "SOR", "Spark of Rebellion");
+            testkit::set(&c, "SHD", "Shadows of the Galaxy");
+            testkit::card_full(
+                &c,
+                "SOR-5",
+                "Luke Skywalker",
+                Some("Faithful Friend"),
+                "Leader",
+                None,
+                None,
+                None,
+                "[]",
+                "[]",
+                "[]",
+                None,
+            );
+            testkit::printing(
+                &c,
+                "SOR-5-normal",
+                "SOR-5",
+                "SOR",
+                "5",
+                "Standard",
+                "Normal",
+            );
+            testkit::simple(&c, "SOR", "26", "Cartel Spoils");
+            testkit::simple(&c, "SHD", "26", "Vanquish");
+            testkit::foil_of(&c, "SHD", "26");
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         (dir, conn)
     }
 
-    fn misc_row(name: &str, number: &str, variant: &str) -> ParsedRow {
-        ParsedRow {
-            source_line: 2,
-            set_hint: "Miscellaneous Cards & Products".into(),
-            set_name: Some("Miscellaneous Cards & Products".into()),
-            name: Some(name.into()),
-            number: number.into(),
-            variant: variant.into(),
-            condition: "Near Mint".into(),
-            language: "English".into(),
-            purchase_price: None,
-            acquired_at: None,
-            tags: Vec::new(),
-        }
+    fn misc_row(name: &str, number: &str, finish: &str) -> ParsedRow {
+        row("Miscellaneous Products", Some(name), number, finish)
     }
 
     #[test]
-    fn misc_card_resolves_by_name_stripping_year_suffix() {
-        // Collectr's Misc bucket doesn't resolve as a set; the name (with its
-        // "[2000]" suffix stripped) plus number falls back to mcap #1, not the
-        // distinct "(Japanese Exclusive Print)" at #1a.
-        let (_d, conn) = misc_db();
-        let report = resolve(&conn, &[misc_row("Ancient Mew [2000]", "1", "normal")]).unwrap();
-        assert_eq!(report.matched.len(), 1, "{:?}", report.unmatched);
-        assert_eq!(report.matched[0].card_name, "Ancient Mew");
-        assert_eq!(report.matched[0].set_code, "mcap");
-        assert_eq!(report.matched[0].printing_id, "mcap-1-normal");
-    }
-
-    #[test]
-    fn stamped_promo_resolves_by_name_and_number_across_sets() {
-        // "Great Tusk ex (Paldean Fates Stamped)" #072 → svp #72 (leading-zero
-        // strip + descriptor strip), never sv4pt5 #72 (Oinkologne).
+    fn name_with_subtitle_resolves_across_sets() {
+        // The set doesn't resolve; "Name - Subtitle" plus the number falls
+        // back to SOR #5.
         let (_d, conn) = misc_db();
         let report = resolve(
             &conn,
             &[misc_row(
-                "Great Tusk ex (Paldean Fates Stamped)",
-                "072",
-                "holo",
+                "Luke Skywalker - Faithful Friend",
+                "005",
+                "Normal",
             )],
         )
         .unwrap();
         assert_eq!(report.matched.len(), 1, "{:?}", report.unmatched);
-        assert_eq!(report.matched[0].set_code, "svp");
-        assert_eq!(report.matched[0].number, "72");
-        assert_eq!(report.matched[0].printing_id, "svp-72-holo");
+        assert_eq!(report.matched[0].set_code, "SOR");
+        assert_eq!(report.matched[0].printing_id, "SOR-5-normal");
+    }
+
+    #[test]
+    fn bare_name_matches_a_card_with_a_subtitle() {
+        let (_d, conn) = misc_db();
+        let report = resolve(&conn, &[misc_row("Luke Skywalker", "5", "Normal")]).unwrap();
+        assert_eq!(report.matched.len(), 1, "{:?}", report.unmatched);
+        assert_eq!(report.matched[0].printing_id, "SOR-5-normal");
+    }
+
+    #[test]
+    fn stamped_promo_resolves_by_name_and_number_across_sets() {
+        // "Vanquish (Prerelease Promo)" #026 Foil → SHD #26 Foil (leading-zero
+        // strip + descriptor strip), never SOR #26 (Cartel Spoils).
+        let (_d, conn) = misc_db();
+        let report = resolve(
+            &conn,
+            &[misc_row("Vanquish (Prerelease Promo)", "026", "Foil")],
+        )
+        .unwrap();
+        assert_eq!(report.matched.len(), 1, "{:?}", report.unmatched);
+        assert_eq!(report.matched[0].set_code, "SHD");
+        assert_eq!(report.matched[0].number, "26");
+        assert_eq!(report.matched[0].printing_id, "SHD-26-foil");
+    }
+
+    #[test]
+    fn missing_finish_is_reported() {
+        let (_d, conn) = misc_db();
+        let report = resolve(&conn, &[misc_row("Cartel Spoils", "26", "Foil")]).unwrap();
+        assert!(report.matched.is_empty());
+        assert_eq!(report.unmatched.len(), 1);
+        assert!(
+            report.unmatched[0]
+                .reason
+                .contains("finish 'Foil' not available"),
+            "{}",
+            report.unmatched[0].reason
+        );
     }
 
     #[test]
     fn ambiguous_name_number_is_flagged_not_guessed() {
-        // Two catalog cards share a (name, number): the fallback must report
-        // the candidates for manual resolution rather than pick one.
+        // Two sets carry a card with the same (name, number): the fallback
+        // must report the candidates for manual resolution, not pick one.
         let dir = tempfile::tempdir().unwrap();
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series) VALUES \
-                   ('seta', 'Set A', 'X'), ('setb', 'Set B', 'X')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) VALUES \
-                   ('seta-5', 'seta', '5', 5, 'Darth Vader'), \
-                   ('setb-5', 'setb', '5', 5, 'Darth Vader')",
-                [],
-            )
-            .unwrap();
+            testkit::simple(&c, "SOR", "5", "Rebel Trooper");
+            testkit::simple(&c, "SHD", "5", "Rebel Trooper");
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-        let report = resolve(&conn, &[misc_row("Darth Vader", "5", "normal")]).unwrap();
+        let report = resolve(&conn, &[misc_row("Rebel Trooper", "5", "Normal")]).unwrap();
         assert!(report.matched.is_empty());
         assert_eq!(report.unmatched.len(), 1);
         let reason = &report.unmatched[0].reason;
         assert!(reason.contains("ambiguous"), "{reason}");
         assert!(
-            reason.contains("seta #5") && reason.contains("setb #5"),
+            reason.contains("SOR #5") && reason.contains("SHD #5"),
             "{reason}"
         );
+    }
+
+    #[test]
+    fn hyperspace_number_resolves_to_the_hyperspace_printing() {
+        // Standard #5 and Hyperspace #262 are different collector numbers of
+        // the same card: the number carries the variant.
+        let (dir, _conn) = db();
+        {
+            let c = open_shared(&dir.path().join("shared.sqlite")).unwrap();
+            testkit::printing(
+                &c,
+                "SOR-5-hs",
+                "SOR-5",
+                "SOR",
+                "262",
+                "Hyperspace",
+                "Normal",
+            );
+        }
+        let conn = connect_user(
+            &dir.path().join("collection.sqlite"),
+            &dir.path().join("shared.sqlite"),
+        )
+        .unwrap();
+        let report = resolve(
+            &conn,
+            &[
+                row("SOR", None, "5", "Normal"),
+                row("SOR", None, "262", "Normal"),
+            ],
+        )
+        .unwrap();
+        assert_eq!(report.matched.len(), 2, "{:?}", report.unmatched);
+        assert_eq!(report.matched[0].variant, "Standard");
+        assert_eq!(report.matched[1].variant, "Hyperspace");
+        assert_eq!(report.matched[1].printing_id, "SOR-5-hs");
     }
 
     #[test]
@@ -1134,18 +1043,16 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         collection::add(
             &mut conn,
             &NewCopy {
-                printing_id: "sv3pt5-6-normal".into(),
+                printing_id: "SOR-5-normal".into(),
                 source: "manual_id".into(),
                 ..Default::default()
             },
         )
         .unwrap();
         let report = preview(&conn, ImportFormat::Manabox, CSV).unwrap();
+        assert!(!report.matched.is_empty());
         assert!(
-            report
-                .matched
-                .iter()
-                .all(|r| r.printing_id != "sv3pt5-6-normal" || r.already_owned == 1),
+            report.matched.iter().all(|r| r.already_owned == 1),
             "matched normal rows should report already_owned == 1"
         );
     }
@@ -1174,62 +1081,6 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
     }
 
     #[test]
-    fn set_prefixed_catalog_number_matches_bare_import_number() {
-        // svp stores some promo numbers with a redundant 'svp ' prefix
-        // ('svp 176' = Umbreon ex) and others bare ('163' = Cinderace ex) —
-        // upstream inconsistency we can't renumber. A Collectr 'SVP 176'
-        // (normalized to '176') must still resolve to the prefixed card.
-        let dir = tempfile::tempdir().unwrap();
-        let shared = dir.path().join("shared.sqlite");
-        {
-            let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series) \
-                 VALUES ('svp', 'Scarlet & Violet Black Star Promos', 'SV')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) VALUES \
-                   ('svp-svp 176', 'svp', 'svp 176', 176, 'Umbreon ex'), \
-                   ('svp-163', 'svp', '163', 163, 'Cinderace ex')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO printings (printing_id, card_id, variant) VALUES \
-                   ('svp-svp 176-holo', 'svp-svp 176', 'holo'), \
-                   ('svp-163-holo', 'svp-163', 'holo')",
-                [],
-            )
-            .unwrap();
-        }
-        let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-
-        let row = |name: &str, num: &str| ParsedRow {
-            source_line: 2,
-            set_hint: "svp".into(),
-            set_name: None,
-            name: Some(name.into()),
-            number: num.into(),
-            variant: "holo".into(),
-            condition: "Near Mint".into(),
-            language: "English".into(),
-            purchase_price: None,
-            acquired_at: None,
-            tags: Vec::new(),
-        };
-        // Prefixed catalog number vs bare import number — the reported bug.
-        let r = resolve(&conn, &[row("Umbreon ex - 176", "176")]).unwrap();
-        assert_eq!(r.matched.len(), 1, "{:?}", r.unmatched);
-        assert_eq!(r.matched[0].printing_id, "svp-svp 176-holo");
-        // Bare catalog number still resolves directly (regression guard).
-        let r2 = resolve(&conn, &[row("Cinderace ex", "163")]).unwrap();
-        assert_eq!(r2.matched.len(), 1, "{:?}", r2.unmatched);
-        assert_eq!(r2.matched[0].printing_id, "svp-163-holo");
-    }
-
-    #[test]
     fn unknown_format_is_rejected() {
         assert!(ImportFormat::parse("nonsense").is_err());
         // Collectr is now a recognized format.
@@ -1241,44 +1092,27 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
 
     const COLLECTR_CSV: &str = "\
 Portfolio Name,Category,Set,Product Name,Card Number,Rarity,Variance,Grade,Card Condition,Average Cost Paid,Quantity,Market Price (As of 2026-07-17),Price Override,Watchlist,Date Added,Notes
-Main,Lorcana,Disney Lorcana Promo Cards,Elsa,6,Promo,Foil,Ungraded,Near Mint,0,1,7.12,0,false,2026-01-24,
-Main,Star Wars Unlimited,Spark of Rebellion,Luke Skywalker,6,Legendary,Normal,Ungraded,Near Mint,1.50,2,5.00,0,false,2026-04-14,
-Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebellion Two-Player Starter,,,Normal,Ungraded,Near Mint,49.99,3,60.00,0,false,2026-02-28,";
+Main,Lorcana,Disney Lorcana Promo Cards,Elsa,6,Promo,Holofoil,Ungraded,Near Mint,0,1,7.12,0,false,2026-01-24,
+Main,Star Wars Unlimited,Spark of Rebellion,Luke Skywalker - Faithful Friend,005/252,Legendary,Normal,Ungraded,Near Mint,1.50,2,5.00,0,false,2026-04-14,
+Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebellion Booster Box,,,Normal,Ungraded,Near Mint,49.99,3,60.00,0,false,2026-02-28,";
 
     fn sealed_db() -> (tempfile::TempDir, Connection) {
-        let (dir, conn) = {
-            let dir = tempfile::tempdir().unwrap();
-            let shared = dir.path().join("shared.sqlite");
-            {
-                let c = open_shared(&shared).unwrap();
-                c.execute(
-                    "INSERT INTO sets (set_code, ptcgo_code, name, series) \
-                     VALUES ('sv3pt5', 'SOR', 'Spark of Rebellion', 'SOR')",
-                    [],
-                )
-                .unwrap();
-                c.execute(
-                    "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                     VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Luke Skywalker')",
-                    [],
-                )
-                .unwrap();
-                c.execute(
-                    "INSERT INTO printings (printing_id, card_id, variant) \
-                     VALUES ('sv3pt5-6-normal', 'sv3pt5-6', 'normal')",
-                    [],
-                )
-                .unwrap();
-                c.execute(
-                    "INSERT INTO sealed_products (product_id, set_code, name, category, fetched_at) \
-                     VALUES (7001, 'sv3pt5', 'Spark of Rebellion Two-Player Starter', 'two_player_starter', '2026-02-28')",
-                    [],
-                )
-                .unwrap();
-            }
-            let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-            (dir, conn)
-        };
+        let (dir, conn) = db();
+        drop(conn);
+        {
+            let c = open_shared(&dir.path().join("shared.sqlite")).unwrap();
+            c.execute(
+                "INSERT INTO sealed_products (product_id, set_code, name, category, fetched_at) \
+                 VALUES (7001, 'SOR', 'Spark of Rebellion Booster Box', 'sealed', '2026-02-28')",
+                [],
+            )
+            .unwrap();
+        }
+        let conn = connect_user(
+            &dir.path().join("collection.sqlite"),
+            &dir.path().join("shared.sqlite"),
+        )
+        .unwrap();
         (dir, conn)
     }
 
@@ -1287,14 +1121,17 @@ Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebel
         let (_d, conn) = sealed_db();
         let report = preview_collectr(&conn, COLLECTR_CSV).unwrap();
 
-        // Two 'normal' Luke copies resolve; set 'Spark of Rebellion' matches by name.
+        // Two 'Normal' Luke copies resolve; set 'Spark of Rebellion' matches by name.
         assert_eq!(report.singles.matched.len(), 2);
-        assert_eq!(report.singles.matched[0].card_name, "Luke Skywalker");
+        assert_eq!(
+            report.singles.matched[0].card_name,
+            "Luke Skywalker - Faithful Friend"
+        );
         assert_eq!(
             report.singles.matched[0].acquired_at.as_deref(),
             Some("2026-04-14T00:00:00Z")
         );
-        // The starter resolves on the sealed side, quantity 3 preserved.
+        // The booster box resolves on the sealed side, quantity 3 preserved.
         assert_eq!(report.sealed.matched.len(), 1);
         assert_eq!(report.sealed.matched[0].quantity, 3);
         // Lorcana row is skipped.
@@ -1311,7 +1148,7 @@ Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebel
         assert_eq!(result.skipped, 1);
 
         // Singles landed in `collection`, sealed in `sealed_collection` —
-        // one starter row with quantity 3, never leaked into singles.
+        // one box row with quantity 3, never leaked into singles.
         let singles = collection::list_by_batch(&conn, result.singles.batch_id).unwrap();
         assert_eq!(singles.len(), 2);
         assert!(singles.iter().all(|c| c.source == "csv_collectr"));
@@ -1324,11 +1161,11 @@ Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebel
     #[test]
     fn collectr_preview_annotates_owned_on_both_sides() {
         let (_d, mut conn) = sealed_db();
-        // Own one Luke copy and the starter up front.
+        // Own one Luke copy and the box up front.
         collection::add(
             &mut conn,
             &NewCopy {
-                printing_id: "sv3pt5-6-normal".into(),
+                printing_id: "SOR-5-normal".into(),
                 source: "manual_id".into(),
                 ..Default::default()
             },

@@ -177,17 +177,17 @@ mod tests {
     use super::*;
     use crate::query::registry::KeywordDef;
 
-    /// A representative Pokémon keyword registry for parser tests. The real
+    /// A representative SWU keyword registry for parser tests. The real
     /// definitions are data (task idf.6); the parser only needs alias
     /// resolution, so this covers enough keywords to exercise it.
     fn registry() -> KeywordRegistry {
         KeywordRegistry::new(vec![
-            KeywordDef::new("energy_type", &["t", "type"]),
+            KeywordDef::new("card_type", &["t", "type"]),
             KeywordDef::new("hp", &["hp"]),
             KeywordDef::new("rarity", &["r", "rarity"]),
             KeywordDef::new("set", &["s", "set", "e"]),
-            KeywordDef::new("supertype", &["super", "supertype"]),
-            KeywordDef::new("subtype", &["sub", "subtype"]),
+            KeywordDef::new("aspect", &["a", "aspect"]),
+            KeywordDef::new("trait", &["trait"]),
             KeywordDef::new("status", &["status"]),
             KeywordDef::new("is_flag", &["is"]),
             KeywordDef::new("price", &["price"]),
@@ -238,7 +238,7 @@ mod tests {
         assert_eq!(
             parse_ok("t:fire"),
             Ast::Comparison {
-                keyword: "energy_type".into(),
+                keyword: "card_type".into(),
                 op: Op::Contains,
                 value: "fire".into(),
             }
@@ -284,7 +284,7 @@ mod tests {
     fn aliases_resolve_to_canonical() {
         for alias in ["t", "type", "TYPE"] {
             match parse_ok(&format!("{alias}:water")) {
-                Ast::Comparison { keyword, .. } => assert_eq!(keyword, "energy_type"),
+                Ast::Comparison { keyword, .. } => assert_eq!(keyword, "card_type"),
                 other => panic!("unexpected {other:?}"),
             }
         }

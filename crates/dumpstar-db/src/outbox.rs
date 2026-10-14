@@ -689,43 +689,16 @@ mod tests {
         let shared = dir.path().join("shared.sqlite");
         {
             let c = crate::open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series) \
-                 VALUES ('sv3pt5', '151', 'Scarlet & Violet')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('sv3pt5-1', 'sv3pt5', '1', 1, 'Bulbasaur')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('sv3pt5-2', 'sv3pt5', '2', 2, 'Ivysaur')",
-                [],
-            )
-            .unwrap();
-            for (printing, card, variant) in [
-                ("sv3pt5-1-normal", "sv3pt5-1", "normal"),
-                ("sv3pt5-1-holo", "sv3pt5-1", "holo"),
-                ("sv3pt5-2-normal", "sv3pt5-2", "normal"),
-            ] {
-                c.execute(
-                    "INSERT INTO printings (printing_id, card_id, variant) \
-                     VALUES (?1, ?2, ?3)",
-                    rusqlite::params![printing, card, variant],
-                )
-                .unwrap();
-            }
+            crate::testkit::simple(&c, "SOR", "1", "Luke Skywalker");
+            crate::testkit::foil_of(&c, "SOR", "1");
+            crate::testkit::simple(&c, "SOR", "2", "Darth Vader");
             for (product, name) in [
-                (5001, "Spark of Rebellion Two-Player Starter"),
-                (5002, "Spark of Rebellion Prerelease Kit"),
+                (5001, "Spark of Rebellion Booster Box"),
+                (5002, "Spark of Rebellion Carbonite Set"),
             ] {
                 c.execute(
                     "INSERT INTO sealed_products (product_id, name, category, fetched_at) \
-                     VALUES (?1, ?2, 'two_player_starter', '2026-05-18')",
+                     VALUES (?1, ?2, 'sealed', '2026-05-18')",
                     rusqlite::params![product, name],
                 )
                 .unwrap();
@@ -817,7 +790,7 @@ mod tests {
     #[test]
     fn adding_a_copy_appends_one_insert_event_carrying_the_new_row() {
         let (_dir, mut conn) = user_conn();
-        let id = collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        let id = collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
 
         let events = evs(&conn);
         assert_eq!(events.len(), 1, "one mutation, one event");
@@ -828,7 +801,7 @@ mod tests {
 
         let payload: serde_json::Value = serde_json::from_str(&e.payload).unwrap();
         assert_eq!(payload["id"], id);
-        assert_eq!(payload["printing_id"], "sv3pt5-1-normal");
+        assert_eq!(payload["printing_id"], "SOR-1-normal");
         assert_eq!(payload["status"], "owned");
         assert_eq!(payload["condition"], "Near Mint");
         assert!(payload["notes"].is_null(), "an unset column is JSON null");
@@ -837,14 +810,14 @@ mod tests {
     #[test]
     fn a_delete_event_carries_the_row_as_it_was() {
         let (_dir, mut conn) = user_conn();
-        let id = collection::add(&mut conn, &new_copy("sv3pt5-1-holo")).unwrap();
+        let id = collection::add(&mut conn, &new_copy("SOR-1-foil")).unwrap();
         assert!(collection::delete(&conn, id).unwrap());
 
         let events = evs(&conn);
         assert_eq!(ops(&conn), ["insert", "delete"]);
         let payload: serde_json::Value = serde_json::from_str(&events[1].payload).unwrap();
         assert_eq!(
-            payload["printing_id"], "sv3pt5-1-holo",
+            payload["printing_id"], "SOR-1-foil",
             "a delete records the pre-image — the row is gone, so nothing \
              else can say what was lost"
         );
@@ -872,7 +845,7 @@ mod tests {
 
         // Every op on every source, in one database — which also puts the
         // two sources' events in one sequence, as production will.
-        let id = collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        let id = collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
         collection::set_status(&mut conn, id, "sold", None).unwrap();
         collection::delete(&conn, id).unwrap();
 
@@ -947,7 +920,7 @@ mod tests {
     fn every_collection_mutation_appends_an_event() {
         let (_dir, mut conn) = user_conn();
 
-        let id = collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        let id = collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
         assert_eq!(count(&conn), 1, "add");
 
         collection::update(
@@ -975,10 +948,10 @@ mod tests {
         collection::move_to(&mut conn, id, Some(binder), None, None).unwrap();
         assert_eq!(count(&conn), 4, "move_to");
 
-        collection::change_printing(&conn, id, "sv3pt5-1-holo").unwrap();
+        collection::change_printing(&conn, id, "SOR-1-foil").unwrap();
         assert_eq!(count(&conn), 5, "change_printing");
 
-        assert!(collection::delete_latest_for_printing(&conn, "sv3pt5-1-holo").unwrap());
+        assert!(collection::delete_latest_for_printing(&conn, "SOR-1-foil").unwrap());
         assert_eq!(count(&conn), 6, "delete_latest_for_printing");
 
         assert_eq!(
@@ -1063,7 +1036,7 @@ mod tests {
         let (_dir, conn) = user_conn();
         conn.execute(
             "INSERT INTO collection (printing_id, acquired_at, source) \
-             VALUES ('sv3pt5-2-normal', '2026-08-13T00:00:00Z', 'order_import')",
+             VALUES ('SOR-2-normal', '2026-08-13T00:00:00Z', 'order_import')",
             [],
         )
         .unwrap();
@@ -1118,7 +1091,7 @@ mod tests {
     fn a_single_and_a_sealed_lot_can_share_a_row_id() {
         let (_dir, mut conn) = user_conn();
 
-        let copy = collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        let copy = collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
         let lot = sealed::add(&conn, &new_sealed(5001)).unwrap();
         assert_eq!((copy, lot), (1, 1), "both tables start their ids at 1");
 
@@ -1149,9 +1122,9 @@ mod tests {
     fn the_two_sources_share_one_interleaved_sequence() {
         let (_dir, mut conn) = user_conn();
 
-        collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
         sealed::add(&conn, &new_sealed(5001)).unwrap();
-        collection::add(&mut conn, &new_copy("sv3pt5-1-holo")).unwrap();
+        collection::add(&mut conn, &new_copy("SOR-1-foil")).unwrap();
         sealed::add(&conn, &new_sealed(5002)).unwrap();
 
         let events = evs(&conn);
@@ -1198,7 +1171,7 @@ mod tests {
             &mut conn,
             &collection::NewCopy {
                 binder_id: Some(binder),
-                ..new_copy("sv3pt5-1-normal")
+                ..new_copy("SOR-1-normal")
             },
         )
         .unwrap();
@@ -1229,7 +1202,7 @@ mod tests {
         let tx = conn.transaction().unwrap();
         tx.execute(
             "INSERT INTO collection (printing_id, acquired_at, source) \
-             VALUES ('sv3pt5-1-normal', '2026-08-13T00:00:00Z', 'test')",
+             VALUES ('SOR-1-normal', '2026-08-13T00:00:00Z', 'test')",
             [],
         )
         .unwrap();
@@ -1284,13 +1257,13 @@ mod tests {
         let tx = conn.transaction().unwrap();
         tx.execute(
             "INSERT INTO collection (printing_id, acquired_at, source) \
-             VALUES ('sv3pt5-1-normal', '2026-08-13T00:00:00Z', 'test')",
+             VALUES ('SOR-1-normal', '2026-08-13T00:00:00Z', 'test')",
             [],
         )
         .unwrap();
         tx.rollback().unwrap();
 
-        collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
         assert_eq!(evs(&conn)[0].seq, 1, "the first surviving event is seq 1");
     }
 
@@ -1302,9 +1275,9 @@ mod tests {
     #[test]
     fn a_refused_mutation_leaves_neither_a_change_nor_an_event() {
         let (_dir, mut conn) = user_conn();
-        let id = collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        let id = collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
 
-        let err = collection::change_printing(&conn, id, "sv3pt5-2-normal").unwrap_err();
+        let err = collection::change_printing(&conn, id, "SOR-2-normal").unwrap_err();
         assert!(matches!(err, DbError::Conflict(_)), "{err:?}");
 
         assert_eq!(count(&conn), 1, "only the add");
@@ -1315,7 +1288,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(printing, "sv3pt5-1-normal");
+        assert_eq!(printing, "SOR-1-normal");
     }
 
     // -----------------------------------------------------------------
@@ -1414,11 +1387,11 @@ mod tests {
     #[test]
     fn a_trimmed_sequence_number_is_never_reused() {
         let (_dir, mut conn) = user_conn();
-        collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
-        collection::add(&mut conn, &new_copy("sv3pt5-1-holo")).unwrap();
+        collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
+        collection::add(&mut conn, &new_copy("SOR-1-foil")).unwrap();
         conn.execute(&format!("DELETE FROM {TABLE}"), []).unwrap();
 
-        collection::add(&mut conn, &new_copy("sv3pt5-2-normal")).unwrap();
+        collection::add(&mut conn, &new_copy("SOR-2-normal")).unwrap();
         assert_eq!(
             evs(&conn)[0].seq,
             3,
@@ -1437,7 +1410,7 @@ mod tests {
     #[test]
     fn the_outbox_is_not_carried_by_the_json_envelope() {
         let (_dir, mut conn) = user_conn();
-        collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
         sealed::add(&conn, &new_sealed(5001)).unwrap();
         assert_eq!(count(&conn), 2);
 
@@ -1472,11 +1445,11 @@ mod tests {
     #[test]
     fn a_restore_records_itself_rather_than_restoring_a_stale_log() {
         let (_dir, mut conn) = user_conn();
-        collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
         sealed::add(&conn, &new_sealed(5001)).unwrap();
         let envelope = crate::json_backup::export(&conn).unwrap();
 
-        collection::add(&mut conn, &new_copy("sv3pt5-1-holo")).unwrap();
+        collection::add(&mut conn, &new_copy("SOR-1-foil")).unwrap();
         sealed::add(&conn, &new_sealed(5002)).unwrap();
         let before = count(&conn);
         assert_eq!(before, 4);
@@ -1518,7 +1491,7 @@ mod tests {
     #[test]
     fn outbox_rows_alone_do_not_make_a_collection_look_occupied() {
         let (_dir, mut conn) = user_conn();
-        let id = collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        let id = collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
         collection::delete(&conn, id).unwrap();
         let lot = sealed::add(&conn, &new_sealed(5001)).unwrap();
         sealed::delete(&conn, lot).unwrap();
@@ -1593,9 +1566,9 @@ mod tests {
     /// a `collection` row and a `sealed_collection` row that share a number.
     /// A projection keyed on `row_id` alone loses one of them.
     fn a_collection_with_history(conn: &mut Connection) -> (i64, i64) {
-        let kept = collection::add(conn, &new_copy("sv3pt5-1-normal")).unwrap();
-        let sold = collection::add(conn, &new_copy("sv3pt5-1-holo")).unwrap();
-        let gone = collection::add(conn, &new_copy("sv3pt5-2-normal")).unwrap();
+        let kept = collection::add(conn, &new_copy("SOR-1-normal")).unwrap();
+        let sold = collection::add(conn, &new_copy("SOR-1-foil")).unwrap();
+        let gone = collection::add(conn, &new_copy("SOR-2-normal")).unwrap();
 
         collection::update(
             conn,
@@ -1734,7 +1707,7 @@ mod tests {
     #[test]
     fn a_stale_redrive_with_a_higher_seq_does_not_clobber_a_live_mutation() {
         let (_dir, mut conn) = user_conn();
-        let id = collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        let id = collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
 
         // The state a redrive's snapshot would have caught.
         let stale = evs(&conn)[0].clone();
@@ -1788,7 +1761,7 @@ mod tests {
     #[test]
     fn an_emitted_event_carries_the_rows_own_time_not_the_moment_of_emission() {
         let (_dir, mut conn) = user_conn();
-        let id = collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        let id = collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
         collection::set_status(&mut conn, id, "listed", None).unwrap();
         let newest = evs(&conn).last().unwrap().occurred_at.clone();
 
@@ -1813,7 +1786,7 @@ mod tests {
             &mut conn,
             &collection::NewCopy {
                 acquired_at: Some("2020-01-02T03:04:05+00:00".into()),
-                ..new_copy("sv3pt5-1-normal")
+                ..new_copy("SOR-1-normal")
             },
         )
         .unwrap();
@@ -1833,7 +1806,7 @@ mod tests {
     #[test]
     fn a_row_whose_own_timestamp_is_unreadable_is_dated_to_the_floor() {
         let (_dir, mut conn) = user_conn();
-        collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
         conn.execute("UPDATE collection SET acquired_at = 'sometime in 2019'", [])
             .unwrap();
         conn.execute(&format!("DELETE FROM {TABLE}"), []).unwrap();
@@ -1855,7 +1828,7 @@ mod tests {
     #[test]
     fn an_emitted_payload_is_byte_identical_to_the_triggers() {
         let (_dir, mut conn) = user_conn();
-        let id = collection::add(&mut conn, &new_copy("sv3pt5-1-holo")).unwrap();
+        let id = collection::add(&mut conn, &new_copy("SOR-1-foil")).unwrap();
         let from_trigger = evs(&conn)[0].payload.clone();
 
         emit(&mut conn, &row_scope(id), false).unwrap();
@@ -1870,7 +1843,7 @@ mod tests {
     #[test]
     fn provenance_is_recorded_and_is_the_only_difference() {
         let (_dir, mut conn) = user_conn();
-        let id = collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        let id = collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
         emit(&mut conn, &row_scope(id), false).unwrap();
         emit(&mut conn, &Scope::Collection, false).unwrap();
 
@@ -1942,7 +1915,7 @@ mod tests {
             .unwrap();
             conn.execute(
                 "INSERT INTO collection (printing_id, acquired_at, source) \
-                 VALUES ('sv3pt5-1-normal', '2024-01-01T00:00:00Z', 'manual_id')",
+                 VALUES ('SOR-1-normal', '2024-01-01T00:00:00Z', 'manual_id')",
                 [],
             )
             .unwrap();
@@ -2019,7 +1992,7 @@ mod tests {
             .unwrap();
             conn.execute(
                 "INSERT INTO collection (printing_id, acquired_at, source) \
-                 VALUES ('sv3pt5-1-normal', '2024-01-01T00:00:00Z', 'manual_id')",
+                 VALUES ('SOR-1-normal', '2024-01-01T00:00:00Z', 'manual_id')",
                 [],
             )
             .unwrap();
@@ -2177,7 +2150,7 @@ mod tests {
     #[test]
     fn a_redrive_is_recorded_but_never_refused() {
         let (_dir, mut conn) = user_conn();
-        let id = collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        let id = collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
         emit(&mut conn, &row_scope(id), false).unwrap();
         emit(&mut conn, &row_scope(id), false).unwrap();
 
@@ -2210,7 +2183,7 @@ mod tests {
     #[test]
     fn a_row_scope_redrives_only_its_own_table() {
         let (_dir, mut conn) = user_conn();
-        let copy = collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        let copy = collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
         let lot = sealed::add(&conn, &new_sealed(5001)).unwrap();
         assert_eq!((copy, lot), (1, 1), "the two row 1s exist at once");
 
@@ -2252,7 +2225,7 @@ mod tests {
     #[test]
     fn a_row_scope_naming_a_table_the_outbox_does_not_carry_is_refused() {
         let (_dir, mut conn) = user_conn();
-        collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
 
         let err = emit(
             &mut conn,
@@ -2306,8 +2279,8 @@ mod tests {
     #[test]
     fn the_reported_range_is_the_numbers_written_not_the_rows_present() {
         let (_dir, mut conn) = user_conn();
-        collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
-        collection::add(&mut conn, &new_copy("sv3pt5-1-holo")).unwrap();
+        collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
+        collection::add(&mut conn, &new_copy("SOR-1-foil")).unwrap();
         // The shipper shipped those two and trimmed them.
         conn.execute(&format!("DELETE FROM {TABLE}"), []).unwrap();
 
@@ -2340,9 +2313,9 @@ mod tests {
     #[test]
     fn a_seq_range_redrives_exactly_the_rows_that_range_named() {
         let (_dir, mut conn) = user_conn();
-        let a = collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
-        let b = collection::add(&mut conn, &new_copy("sv3pt5-1-holo")).unwrap();
-        collection::add(&mut conn, &new_copy("sv3pt5-2-normal")).unwrap();
+        let a = collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
+        let b = collection::add(&mut conn, &new_copy("SOR-1-foil")).unwrap();
+        collection::add(&mut conn, &new_copy("SOR-2-normal")).unwrap();
 
         // seq 1 named a, seq 2 named b; seq 3's row is outside the range.
         let run = emit(&mut conn, &Scope::Seq { from: 1, to: 2 }, false).unwrap();
@@ -2364,8 +2337,8 @@ mod tests {
     #[test]
     fn a_redrive_reproduces_the_removals_in_the_slice_it_covers() {
         let (_dir, mut conn) = user_conn();
-        let kept = collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
-        let gone = collection::add(&mut conn, &new_copy("sv3pt5-1-holo")).unwrap();
+        let kept = collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
+        let gone = collection::add(&mut conn, &new_copy("SOR-1-foil")).unwrap();
         collection::delete(&conn, gone).unwrap();
         let last = evs(&conn).last().unwrap().seq;
 
@@ -2390,8 +2363,8 @@ mod tests {
     #[test]
     fn a_backfill_does_not_reemit_historical_removals() {
         let (_dir, mut conn) = user_conn();
-        collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
-        let gone = collection::add(&mut conn, &new_copy("sv3pt5-1-holo")).unwrap();
+        collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
+        let gone = collection::add(&mut conn, &new_copy("SOR-1-foil")).unwrap();
         collection::delete(&conn, gone).unwrap();
 
         let run = emit(&mut conn, &Scope::Collection, false).unwrap();
@@ -2406,7 +2379,7 @@ mod tests {
     #[test]
     fn a_scope_that_names_no_row_emits_nothing_and_is_still_recorded() {
         let (_dir, mut conn) = user_conn();
-        collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
 
         let run = emit(&mut conn, &row_scope(9999), false).unwrap();
         assert_eq!(run.events, 0);
@@ -2443,7 +2416,7 @@ mod tests {
     #[test]
     fn a_redrive_reconciles_the_zone_to_a_database_restored_to_an_earlier_point() {
         let (_dir, mut conn) = user_conn();
-        let id = collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        let id = collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
         collection::update(
             &conn,
             id,
@@ -2457,7 +2430,7 @@ mod tests {
         let restored_to = evs(&conn).last().unwrap().seq;
 
         // ...the collection carried on, and then the file was rolled back.
-        collection::add(&mut conn, &new_copy("sv3pt5-1-holo")).unwrap();
+        collection::add(&mut conn, &new_copy("SOR-1-foil")).unwrap();
         collection::delete(&conn, id).unwrap();
         conn.execute(
             &format!("DELETE FROM {TABLE} WHERE seq > ?1"),
@@ -2526,7 +2499,7 @@ mod tests {
     #[test]
     fn the_emit_ledger_is_not_carried_by_the_json_envelope() {
         let (_dir, mut conn) = user_conn();
-        collection::add(&mut conn, &new_copy("sv3pt5-1-normal")).unwrap();
+        collection::add(&mut conn, &new_copy("SOR-1-normal")).unwrap();
         emit(&mut conn, &Scope::Collection, false).unwrap();
 
         let envelope: serde_json::Value =

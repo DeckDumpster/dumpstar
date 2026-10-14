@@ -6,67 +6,51 @@ use rusqlite::{Connection, OptionalExtension, params};
 use crate::collection::{self, CollectionEntry};
 use crate::error::Result;
 
-const CARD_COLS: &str = "c.card_id, c.set_code, c.number, c.number_sortable, c.name, \
-     c.supertype, c.subtypes, c.hp, c.types, c.rarity, c.artist, c.flavor_text, c.attacks, \
-     c.abilities, c.weaknesses, c.resistances, c.retreat_cost, c.regulation_mark, \
-     c.national_pokedex_numbers, c.legalities, c.image_small, c.image_large, \
-     json_extract(c.raw_json, '$.evolvesFrom') AS evolves_from, \
-     json_extract(c.raw_json, '$.evolvesTo')   AS evolves_to, \
-     s.ptcgo_code AS set_ptcgo_code, s.symbol_url AS set_symbol_url, s.name AS set_name";
-
-/// A catalog card. JSON-typed columns (`subtypes`, `attacks`, …) are passed
-/// through as raw JSON strings for the frontend to parse.
+/// A catalog card as the detail page shows it. The JSON-typed columns
+/// (`aspects`, `traits`, `arenas`) are passed through as raw JSON arrays for
+/// the frontend to parse. `set_code`, `number`, `rarity`, `artist` and
+/// `image_url` are the *lead printing's* — the one the page was asked for.
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
 #[ts(export)]
 pub struct Card {
     pub card_id: String,
     pub set_code: String,
+    /// Full set name.
+    pub set_name: String,
     pub number: String,
-    #[ts(type = "number")]
-    pub number_sortable: i64,
     pub name: String,
-    pub supertype: Option<String>,
-    pub subtypes: Option<String>,
+    pub subtitle: Option<String>,
+    /// `Leader` | `Unit` | `Event` | `Upgrade` | `Base` | `Token`.
+    pub card_type: Option<String>,
+    #[ts(type = "number | null")]
+    pub cost: Option<i64>,
+    #[ts(type = "number | null")]
+    pub power: Option<i64>,
     #[ts(type = "number | null")]
     pub hp: Option<i64>,
-    pub types: Option<String>,
+    pub aspects: Option<String>,
+    pub traits: Option<String>,
+    pub arenas: Option<String>,
+    pub rules_text: Option<String>,
     pub rarity: Option<String>,
     pub artist: Option<String>,
-    pub flavor_text: Option<String>,
-    pub attacks: Option<String>,
-    pub abilities: Option<String>,
-    pub weaknesses: Option<String>,
-    pub resistances: Option<String>,
-    pub retreat_cost: Option<String>,
-    pub regulation_mark: Option<String>,
-    pub national_pokedex_numbers: Option<String>,
-    pub legalities: Option<String>,
-    pub image_small: Option<String>,
-    pub image_large: Option<String>,
-    /// pokemontcg.io `evolvesFrom` — the name of the card this evolves from.
-    pub evolves_from: Option<String>,
-    /// pokemontcg.io `evolvesTo` — a JSON array of names this evolves to.
-    pub evolves_to: Option<String>,
-    /// 3-letter TCGplayer code (e.g. "MEW", "WHT") for the set; preferred
-    /// over `set_code` as the human-visible label.
-    pub set_ptcgo_code: Option<String>,
-    /// URL of the set's symbol image (joined from `sets.symbol_url`).
-    pub set_symbol_url: Option<String>,
-    /// Full set name (joined from `sets.name`).
-    pub set_name: String,
+    pub image_url: Option<String>,
 }
 
-/// One printing of a card, with how many copies the user owns and the
-/// latest TCGplayer market price (NULL until printing↔product linking lands).
+/// One printing of a card, with how many copies the user owns and its latest
+/// market price.
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
 #[ts(export)]
 pub struct PrintingInfo {
     pub printing_id: String,
+    pub set_code: String,
+    pub number: String,
+    /// `Standard`, `Hyperspace`, `Showcase`, `Promo`, …
     pub variant: String,
-    pub language: String,
-    pub badge_overlay: Option<String>,
-    pub image_override: Option<String>,
-    pub deprecated: bool,
+    /// `Normal` or `Foil`.
+    pub finish: String,
+    pub rarity: Option<String>,
+    pub image_url: Option<String>,
     #[ts(type = "number")]
     pub owned_count: i64,
     pub market_price: Option<f64>,
@@ -90,52 +74,45 @@ pub struct CardDetail {
     pub copies: Vec<CollectionEntry>,
 }
 
-fn card_from_row(r: &rusqlite::Row) -> rusqlite::Result<Card> {
-    Ok(Card {
-        card_id: r.get(0)?,
-        set_code: r.get(1)?,
-        number: r.get(2)?,
-        number_sortable: r.get(3)?,
-        name: r.get(4)?,
-        supertype: r.get(5)?,
-        subtypes: r.get(6)?,
-        hp: r.get(7)?,
-        types: r.get(8)?,
-        rarity: r.get(9)?,
-        artist: r.get(10)?,
-        flavor_text: r.get(11)?,
-        attacks: r.get(12)?,
-        abilities: r.get(13)?,
-        weaknesses: r.get(14)?,
-        resistances: r.get(15)?,
-        retreat_cost: r.get(16)?,
-        regulation_mark: r.get(17)?,
-        national_pokedex_numbers: r.get(18)?,
-        legalities: r.get(19)?,
-        image_small: r.get(20)?,
-        image_large: r.get(21)?,
-        evolves_from: r.get(22)?,
-        evolves_to: r.get(23)?,
-        set_ptcgo_code: r.get(24)?,
-        set_symbol_url: r.get(25)?,
-        set_name: r.get(26)?,
-    })
-}
-
-/// Fetch the card-detail payload for a card identified by set code and
-/// collector number. Returns `None` if no such card is in the catalog.
+/// Fetch the card-detail payload for the card printed at a set code and
+/// collector number. Returns `None` if no such printing is in the catalog.
 pub fn get_card_detail(
     conn: &Connection,
     set_code: &str,
     number: &str,
 ) -> Result<Option<CardDetail>> {
     let card: Option<Card> = conn
-        .prepare(&format!(
-            "SELECT {CARD_COLS} FROM cards c \
-             JOIN sets s ON s.set_code = c.set_code \
-             WHERE c.set_code = ?1 AND c.number = ?2"
-        ))?
-        .query_row(params![set_code, number], card_from_row)
+        .prepare(
+            "SELECT c.card_id, p.set_code, s.name, p.number, c.name, c.subtitle, c.card_type, \
+                    c.cost, c.power, c.hp, c.aspects, c.traits, c.arenas, c.rules_text, \
+                    p.rarity, p.artist, p.image_url \
+               FROM printings p \
+               JOIN cards c ON c.card_id = p.card_id \
+               JOIN sets s ON s.set_code = p.set_code \
+              WHERE p.set_code = ?1 AND p.number = ?2 \
+              ORDER BY p.finish <> 'Normal', p.printing_id LIMIT 1",
+        )?
+        .query_row(params![set_code, number], |r| {
+            Ok(Card {
+                card_id: r.get(0)?,
+                set_code: r.get(1)?,
+                set_name: r.get(2)?,
+                number: r.get(3)?,
+                name: r.get(4)?,
+                subtitle: r.get(5)?,
+                card_type: r.get(6)?,
+                cost: r.get(7)?,
+                power: r.get(8)?,
+                hp: r.get(9)?,
+                aspects: r.get(10)?,
+                traits: r.get(11)?,
+                arenas: r.get(12)?,
+                rules_text: r.get(13)?,
+                rarity: r.get(14)?,
+                artist: r.get(15)?,
+                image_url: r.get(16)?,
+            })
+        })
         .optional()?;
     let Some(card) = card else {
         return Ok(None);
@@ -143,26 +120,26 @@ pub fn get_card_detail(
 
     let printings: Vec<PrintingInfo> = {
         // UNION ALL of shared.printings and user_printings so the
-        // missing-variant escape hatch (decision dumpstar-x7k)
-        // shows up alongside catalog rows on /card and CardModal. The
-        // binder browse query (binder.rs) deliberately does NOT do
-        // this — VariantModal stays catalog-only.
+        // missing-variant escape hatch (decision dumpstar-x7k) shows up
+        // alongside catalog rows on /card and CardModal. The binder browse
+        // query (binder.rs) deliberately does NOT do this — VariantModal
+        // stays catalog-only.
         let mut stmt = conn.prepare(concat!(
-            "SELECT p.printing_id, p.variant, p.language, p.badge_overlay, \
-                    p.image_override, p.deprecated_at, \
+            "SELECT p.printing_id, p.set_code, p.number, p.variant, p.finish, p.rarity, \
+                    p.image_url, \
                     (SELECT count(*) FROM collection c \
                        WHERE c.printing_id = p.printing_id) AS owned_count, \
                     ",
             crate::market_price_expr!(),
             " AS market_price, \
-                    p.tcgplayer_product_id, \
+                    (SELECT CAST(psi.source_id AS INTEGER) FROM printing_source_id psi \
+                       WHERE psi.printing_id = p.printing_id AND psi.source = 'tcgcsv' \
+                       LIMIT 1) AS tcgplayer_product_id, \
                     0 AS is_user_added, \
                     NULL AS description \
              FROM printings p WHERE p.card_id = ?1 \
              UNION ALL \
-             SELECT up.printing_id, up.variant, 'en' AS language, \
-                    NULL AS badge_overlay, NULL AS image_override, \
-                    NULL AS deprecated_at, \
+             SELECT up.printing_id, ?2, ?3, up.variant, 'Normal', NULL, NULL, \
                     (SELECT count(*) FROM collection c \
                        WHERE c.printing_id = up.printing_id) AS owned_count, \
                     (SELECT mp.price FROM manual_prices mp \
@@ -172,21 +149,22 @@ pub fn get_card_detail(
                     1 AS is_user_added, \
                     up.description \
              FROM user_printings up WHERE up.card_id = ?1 \
-             ORDER BY is_user_added, variant, printing_id",
+             ORDER BY is_user_added, set_code, number, variant, finish, printing_id",
         ))?;
-        let rows = stmt.query_map([&card.card_id], |r| {
+        let rows = stmt.query_map(params![&card.card_id, &card.set_code, &card.number], |r| {
             Ok(PrintingInfo {
                 printing_id: r.get(0)?,
-                variant: r.get(1)?,
-                language: r.get(2)?,
-                badge_overlay: r.get(3)?,
-                image_override: r.get(4)?,
-                deprecated: r.get::<_, Option<String>>(5)?.is_some(),
-                owned_count: r.get(6)?,
-                market_price: r.get(7)?,
-                tcgplayer_product_id: r.get(8)?,
-                is_user_added: r.get::<_, i64>(9)? != 0,
-                description: r.get(10)?,
+                set_code: r.get(1)?,
+                number: r.get(2)?,
+                variant: r.get(3)?,
+                finish: r.get(4)?,
+                rarity: r.get(5)?,
+                image_url: r.get(6)?,
+                owned_count: r.get(7)?,
+                market_price: r.get(8)?,
+                tcgplayer_product_id: r.get(9)?,
+                is_user_added: r.get::<_, i64>(10)? != 0,
+                description: r.get(11)?,
             })
         })?;
         rows.collect::<rusqlite::Result<_>>()?
@@ -204,20 +182,22 @@ pub fn get_card_detail(
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
 #[ts(export)]
 pub struct PricePoint {
-    /// `YYYY-MM-DD` — the day TCGCSV was queried (see `import_prices`).
+    /// `YYYY-MM-DD` — the day the price was observed.
     pub date: String,
     pub price: f64,
 }
 
 /// Full price history for one printing × price_type. The frontend renders
-/// one chart line per series. v1 only emits `price_type = "market"`.
+/// one chart line per series.
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
 #[ts(export)]
 pub struct PriceSeries {
     pub printing_id: String,
     pub variant: String,
-    /// TCGplayer sub_type — `Normal` / `Holofoil` / `Reverse Holofoil` / …
-    pub sub_type_name: String,
+    /// `Normal` or `Foil`.
+    pub finish: String,
+    /// `market` (the feed) or `manual` (hand-entered, for a printing the
+    /// tenant invented).
     pub price_type: String,
     pub points: Vec<PricePoint>,
 }
@@ -226,19 +206,14 @@ pub struct PriceSeries {
 /// newest within each series.
 ///
 /// Emits two `price_type`s:
-/// - `"market"` — TCGplayer market price from the shared `prices` table.
-///   Printings with no `tcgplayer_product_id` (or no matching `prices`
-///   row) yield no market series.
-/// - `"manual"` — hand-entered prices, from whichever side of the
-///   `ATTACH` owns them (pd-m4gw): the curated `catalog_price_overrides`
-///   row for a catalog printing, the tenant's `manual_prices` rows for a
-///   printing that tenant invented. Surfaced so they're visible on the
-///   chart alongside TCGplayer.
+/// - `"market"` — the feed's market price from the catalog `prices` table.
+///   A printing with no `market` quote yields no series.
+/// - `"manual"` — the tenant's `manual_prices` rows for a printing that
+///   tenant invented.
 ///
 /// A tenant `manual_prices` row against a *catalog* printing is deliberately
-/// not drawn. Nothing reads it any more, so charting it would show a line
-/// that does not price the card — the residue of the old shape, presented as
-/// if it were live.
+/// not drawn: nothing reads it, so charting it would show a line that does not
+/// price the card.
 ///
 /// For "the effective current value of this printing" the rule is gap-fill:
 /// take the latest `market` point if one exists, otherwise the latest
@@ -251,7 +226,7 @@ pub fn get_card_prices(
     number: &str,
 ) -> Result<Vec<PriceSeries>> {
     let card_id: Option<String> = conn
-        .prepare("SELECT card_id FROM cards WHERE set_code = ?1 AND number = ?2")?
+        .prepare("SELECT card_id FROM printings WHERE set_code = ?1 AND number = ?2 LIMIT 1")?
         .query_row(params![set_code, number], |r| r.get(0))
         .optional()?;
     let Some(card_id) = card_id else {
@@ -259,22 +234,13 @@ pub fn get_card_prices(
     };
 
     let mut stmt = conn.prepare(
-        "SELECT p.printing_id, p.variant, p.sub_type_name, \
-                'market' AS price_type, pr.observed_at AS observed_at, pr.price \
+        "SELECT p.printing_id AS printing_id, p.variant, p.finish, \
+                'market' AS price_type, pr.observed_on AS observed_at, pr.market \
            FROM printings p \
-           JOIN prices pr ON pr.tcgplayer_product_id = p.tcgplayer_product_id \
-                         AND pr.sub_type_name = p.sub_type_name \
-                         AND pr.source = 'tcgplayer' \
-                         AND pr.price_type = 'market' \
-          WHERE p.card_id = ?1 \
+           JOIN prices pr ON pr.printing_id = p.printing_id \
+          WHERE p.card_id = ?1 AND pr.market IS NOT NULL \
          UNION ALL \
-         SELECT p.printing_id, p.variant, p.sub_type_name, \
-                'manual' AS price_type, o.observed_at AS observed_at, o.price \
-           FROM printings p \
-           JOIN catalog_price_overrides o ON o.printing_id = p.printing_id \
-          WHERE p.card_id = ?1 \
-         UNION ALL \
-         SELECT up.printing_id, up.variant, NULL AS sub_type_name, \
+         SELECT up.printing_id, up.variant, 'Normal' AS finish, \
                 'manual' AS price_type, mp.observed_at AS observed_at, mp.price \
            FROM user_printings up \
            JOIN manual_prices mp ON mp.printing_id = up.printing_id \
@@ -287,7 +253,7 @@ pub fn get_card_prices(
     while let Some(r) = rows.next()? {
         let printing_id: String = r.get(0)?;
         let variant: String = r.get(1)?;
-        let sub: Option<String> = r.get(2)?;
+        let finish: String = r.get(2)?;
         let price_type: String = r.get(3)?;
         let date: String = r.get(4)?;
         let price: f64 = r.get(5)?;
@@ -302,7 +268,7 @@ pub fn get_card_prices(
             None => series.push(PriceSeries {
                 printing_id,
                 variant,
-                sub_type_name: sub.unwrap_or_default(),
+                finish,
                 price_type,
                 points: vec![point],
             }),
@@ -315,36 +281,57 @@ pub fn get_card_prices(
 mod tests {
     use super::*;
     use crate::collection::NewCopy;
+    use crate::testkit;
     use crate::{connect_user, open_shared};
 
+    /// A catalog with Luke Skywalker (SOR 5): Standard Normal, Standard Foil
+    /// and a Hyperspace Normal printing, the lead printing carrying rarity
+    /// and artist.
     fn user_conn() -> (tempfile::TempDir, Connection) {
         let dir = tempfile::tempdir().unwrap();
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
+            testkit::set(&c, "SOR", "Spark of Rebellion");
+            testkit::card_full(
+                &c,
+                "SOR-5",
+                "Luke Skywalker",
+                Some("Jedi Knight"),
+                "Unit",
+                Some(4),
+                Some(4),
+                Some(5),
+                "[\"Vigilance\",\"Heroism\"]",
+                "[\"Force\",\"Rebel\"]",
+                "[\"Ground\"]",
+                Some("When Played: Give a Shield token to this unit."),
+            );
+            testkit::printing(
+                &c,
+                "SOR-5-normal",
+                "SOR-5",
+                "SOR",
+                "5",
+                "Standard",
+                "Normal",
+            );
+            testkit::foil_of(&c, "SOR", "5");
+            testkit::printing(
+                &c,
+                "SOR-5-hyper",
+                "SOR-5",
+                "SOR",
+                "255",
+                "Hyperspace",
+                "Normal",
+            );
             c.execute(
-                "INSERT INTO sets (set_code, name, series) \
-                 VALUES ('sv3pt5', '151', 'Scarlet & Violet')",
+                "UPDATE printings SET rarity = 'Legendary', artist = 'Jane Artist', \
+                        image_url = 'https://img/luke.png' WHERE printing_id = 'SOR-5-normal'",
                 [],
             )
             .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name, rarity, \
-                     artist, attacks) \
-                 VALUES ('sv3pt5-1', 'sv3pt5', '1', 1, 'Bulbasaur', 'Common', 'Narumi Sato', \
-                     '[{\"name\":\"Vine Whip\",\"damage\":\"20\",\"cost\":[\"Grass\",\"Colorless\"], \
-                        \"convertedEnergyCost\":2,\"text\":\"Nothing happens.\"}]')",
-                [],
-            )
-            .unwrap();
-            for variant in ["normal", "reverse_holo"] {
-                c.execute(
-                    "INSERT INTO printings (printing_id, card_id, variant) \
-                     VALUES (?1, 'sv3pt5-1', ?2)",
-                    params![format!("sv3pt5-1-{variant}"), variant],
-                )
-                .unwrap();
-            }
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         (dir, conn)
@@ -356,168 +343,162 @@ mod tests {
         collection::add(
             &mut conn,
             &NewCopy {
-                printing_id: "sv3pt5-1-normal".into(),
+                printing_id: "SOR-5-normal".into(),
                 source: "manual_id".into(),
                 ..Default::default()
             },
         )
         .unwrap();
 
-        let detail = get_card_detail(&conn, "sv3pt5", "1").unwrap().unwrap();
-        assert_eq!(detail.card.name, "Bulbasaur");
-        assert_eq!(detail.printings.len(), 2);
+        let detail = get_card_detail(&conn, "SOR", "5").unwrap().unwrap();
+        assert_eq!(detail.card.name, "Luke Skywalker");
+        assert_eq!(detail.card.set_name, "Spark of Rebellion");
+        assert_eq!(detail.printings.len(), 3);
         assert_eq!(detail.copies.len(), 1);
 
         let normal = detail
             .printings
             .iter()
-            .find(|p| p.variant == "normal")
+            .find(|p| p.variant == "Standard" && p.finish == "Normal")
             .unwrap();
         assert_eq!(normal.owned_count, 1);
-        let rh = detail
+        let foil = detail
             .printings
             .iter()
-            .find(|p| p.variant == "reverse_holo")
+            .find(|p| p.finish == "Foil")
             .unwrap();
-        assert_eq!(rh.owned_count, 0);
+        assert_eq!(foil.owned_count, 0);
+        let hyper = detail
+            .printings
+            .iter()
+            .find(|p| p.variant == "Hyperspace")
+            .unwrap();
+        assert_eq!(hyper.owned_count, 0);
+        assert_eq!(hyper.number, "255");
     }
 
-    // The other half of pd-lk8v. The search list stopped shipping `attacks`
-    // and `artist` because it never drew them; the card modal (CardDetailView,
-    // fed by this payload) is what does draw them, one card at a time. If this
-    // ever thinned out to match the list, the Attacks section and the artist
+    // The other half of pd-lk8v. The search list stopped shipping the heavy
+    // fields because it never drew them; the card modal (CardDetailView, fed
+    // by this payload) is what does draw them, one card at a time. If this
+    // ever thinned out to match the list, the rules text and the artist
     // facet link would silently go blank.
     #[test]
-    fn card_detail_carries_the_full_attack_the_modal_renders() {
+    fn card_detail_carries_the_full_rules_the_modal_renders() {
         let (_d, conn) = user_conn();
-        let detail = get_card_detail(&conn, "sv3pt5", "1").unwrap().unwrap();
+        let detail = get_card_detail(&conn, "SOR", "5").unwrap().unwrap();
 
-        let attacks = detail.card.attacks.as_deref().expect("attacks survive");
-        for part in ["Vine Whip", "Grass", "Colorless", "20", "Nothing happens."] {
-            assert!(
-                attacks.contains(part),
-                "the modal renders {part}; the detail payload must carry it"
-            );
+        let rules = detail.card.rules_text.as_deref().expect("rules survive");
+        assert!(rules.contains("Give a Shield token"));
+        assert_eq!(detail.card.subtitle.as_deref(), Some("Jedi Knight"));
+        assert_eq!(detail.card.card_type.as_deref(), Some("Unit"));
+        assert_eq!(
+            (detail.card.cost, detail.card.power, detail.card.hp),
+            (Some(4), Some(4), Some(5))
+        );
+        for (field, part) in [
+            (&detail.card.aspects, "Vigilance"),
+            (&detail.card.traits, "Rebel"),
+            (&detail.card.arenas, "Ground"),
+        ] {
+            assert!(field.as_deref().unwrap().contains(part));
         }
-        assert_eq!(detail.card.artist.as_deref(), Some("Narumi Sato"));
+        // Lead printing's fields.
+        assert_eq!(detail.card.number, "5");
+        assert_eq!(detail.card.rarity.as_deref(), Some("Legendary"));
+        assert_eq!(detail.card.artist.as_deref(), Some("Jane Artist"));
+        assert_eq!(
+            detail.card.image_url.as_deref(),
+            Some("https://img/luke.png")
+        );
     }
 
     #[test]
     fn missing_card_returns_none() {
         let (_d, conn) = user_conn();
-        assert!(get_card_detail(&conn, "sv3pt5", "999").unwrap().is_none());
+        assert!(get_card_detail(&conn, "SOR", "999").unwrap().is_none());
     }
 
     #[test]
-    fn card_detail_resolves_per_variant_market_price() {
+    fn card_detail_resolves_per_printing_market_price() {
         let dir = tempfile::tempdir().unwrap();
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series) \
-                 VALUES ('sv3pt5', '151', 'Scarlet & Violet')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Charizard ex')",
-                [],
-            )
-            .unwrap();
-            // Printings linked to TCGplayer product 5006; each carries
-            // the sub_type_name expansion would have set.
-            for (v, sub) in [("normal", "Normal"), ("reverse_holo", "Reverse Holofoil")] {
-                c.execute(
-                    "INSERT INTO printings \
-                       (printing_id, card_id, variant, tcgplayer_product_id, sub_type_name) \
-                     VALUES (?1, 'sv3pt5-6', ?2, 5006, ?3)",
-                    rusqlite::params![format!("sv3pt5-6-{v}"), v, sub],
-                )
-                .unwrap();
-            }
-            for (sub, price) in [("Normal", 10.0_f64), ("Reverse Holofoil", 25.0)] {
-                c.execute(
-                    "INSERT INTO prices \
-                       (tcgplayer_product_id, sub_type_name, source, price_type, price, observed_at) \
-                     VALUES (5006, ?1, 'tcgplayer', 'market', ?2, '2026-05-18')",
-                    rusqlite::params![sub, price],
-                )
-                .unwrap();
-            }
-            crate::latest_prices::refresh_latest_prices(&c).unwrap();
+            testkit::simple(&c, "SOR", "6", "Millennium Falcon");
+            testkit::foil_of(&c, "SOR", "6");
+            testkit::price(&c, "SOR-6-normal", "2026-05-17", 9.0);
+            testkit::price(&c, "SOR-6-normal", "2026-05-18", 10.0);
+            testkit::price(&c, "SOR-6-foil", "2026-05-18", 25.0);
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-        let detail = get_card_detail(&conn, "sv3pt5", "6").unwrap().unwrap();
+        let detail = get_card_detail(&conn, "SOR", "6").unwrap().unwrap();
 
         let normal = detail
             .printings
             .iter()
-            .find(|p| p.variant == "normal")
+            .find(|p| p.finish == "Normal")
             .unwrap();
-        let rh = detail
+        let foil = detail
             .printings
             .iter()
-            .find(|p| p.variant == "reverse_holo")
+            .find(|p| p.finish == "Foil")
             .unwrap();
+        // The newest quote wins.
         assert_eq!(normal.market_price, Some(10.0));
-        assert_eq!(rh.market_price, Some(25.0));
+        assert_eq!(foil.market_price, Some(25.0));
     }
 
     #[test]
-    fn card_detail_gap_fills_market_price_from_the_catalog_override() {
-        // basep motivating case: the printing has no tcgplayer_product_id, so
-        // latest_prices yields NULL. Since pd-m4gw the gap is filled by the
-        // curated shared-side override, not by a tenant manual price — a
-        // catalog printing prices identically for every tenant.
+    fn card_detail_leaves_an_unpriced_catalog_printing_null_and_gap_fills_only_user_printings() {
+        // A catalog printing prices identically for every tenant: with no
+        // feed quote it is NULL, and a stray tenant manual price against it
+        // does not fill the gap. A printing the tenant invented has no feed
+        // to wait for, so its newest manual price stands.
         let dir = tempfile::tempdir().unwrap();
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series) VALUES ('basep', 'Promos', 'Base')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('basep-10', 'basep', '10', 10, 'Meowth')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO printings (printing_id, card_id, variant) \
-                 VALUES ('basep-10-normal', 'basep-10', 'normal')",
-                [],
-            )
-            .unwrap();
-        }
-
-        {
-            let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-            // No override yet → market_price is NULL rather than guessed.
-            let detail = get_card_detail(&conn, "basep", "10").unwrap().unwrap();
-            assert_eq!(detail.printings[0].market_price, None);
-        }
-
-        {
-            let c = open_shared(&shared).unwrap();
-            c.execute(
-                // Upsert: re-opening the catalog read-write re-ran the
-                // shipped seed, which now finds its printing present and
-                // carries basep-10-normal at its own price.
-                "INSERT INTO catalog_price_overrides (printing_id, price, observed_at) \
-                 VALUES ('basep-10-normal', 12.50, '2026-05-01T00:00:00Z') \
-                 ON CONFLICT(printing_id) DO UPDATE SET price = excluded.price, \
-                                                        observed_at = excluded.observed_at",
-                [],
-            )
-            .unwrap();
+            testkit::simple(&c, "SOR", "10", "Vanquish");
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-        let detail = get_card_detail(&conn, "basep", "10").unwrap().unwrap();
-        assert_eq!(detail.printings[0].market_price, Some(12.50));
+        let detail = get_card_detail(&conn, "SOR", "10").unwrap().unwrap();
+        assert_eq!(detail.printings[0].market_price, None);
+
+        conn.execute(
+            "INSERT INTO manual_prices (printing_id, price, observed_at) \
+             VALUES ('SOR-10-normal', 99.0, '2026-05-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO user_printings (printing_id, card_id, variant, description) \
+             VALUES ('SOR-10-user-1', 'SOR-10', 'missing_variant', 'Convention stamp')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO manual_prices (printing_id, price, observed_at) \
+             VALUES ('SOR-10-user-1', 12.5, '2026-05-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+
+        let detail = get_card_detail(&conn, "SOR", "10").unwrap().unwrap();
+        let catalog = detail
+            .printings
+            .iter()
+            .find(|p| p.printing_id == "SOR-10-normal")
+            .unwrap();
+        assert_eq!(catalog.market_price, None, "tenant price cannot reach it");
+        assert!(!catalog.is_user_added);
+        let user = detail
+            .printings
+            .iter()
+            .find(|p| p.printing_id == "SOR-10-user-1")
+            .unwrap();
+        assert_eq!(user.market_price, Some(12.5));
+        assert!(user.is_user_added);
+        assert_eq!(user.description.as_deref(), Some("Convention stamp"));
     }
 
     #[test]
@@ -526,152 +507,102 @@ mod tests {
         let shared = dir.path().join("shared.sqlite");
         {
             let c = open_shared(&shared).unwrap();
+            testkit::simple(&c, "SOR", "6", "Millennium Falcon");
+            testkit::foil_of(&c, "SOR", "6");
+            // Two days per finish, inserted out of order, plus a quote with
+            // no market that must be filtered out.
+            testkit::price(&c, "SOR-6-normal", "2026-05-22", 10.0);
+            testkit::price(&c, "SOR-6-normal", "2026-05-21", 9.5);
+            testkit::price(&c, "SOR-6-foil", "2026-05-21", 24.0);
+            testkit::price(&c, "SOR-6-foil", "2026-05-22", 25.0);
             c.execute(
-                "INSERT INTO sets (set_code, name, series) \
-                 VALUES ('sv3pt5', '151', 'Scarlet & Violet')",
+                "INSERT INTO prices (printing_id, source, observed_on, low) \
+                 VALUES ('SOR-6-normal', 'tcgcsv', '2026-05-23', 7.0)",
                 [],
             )
             .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Charizard ex')",
-                [],
-            )
-            .unwrap();
-            for (v, sub) in [("normal", "Normal"), ("reverse_holo", "Reverse Holofoil")] {
-                c.execute(
-                    "INSERT INTO printings \
-                       (printing_id, card_id, variant, tcgplayer_product_id, sub_type_name) \
-                     VALUES (?1, 'sv3pt5-6', ?2, 5006, ?3)",
-                    params![format!("sv3pt5-6-{v}"), v, sub],
-                )
-                .unwrap();
-            }
-            // Two days, two sub-types, plus a non-market row that must be filtered out.
-            let rows = [
-                ("Normal", "market", 9.5_f64, "2026-05-21"),
-                ("Normal", "market", 10.0, "2026-05-22"),
-                ("Reverse Holofoil", "market", 24.0, "2026-05-21"),
-                ("Reverse Holofoil", "market", 25.0, "2026-05-22"),
-                ("Normal", "low", 7.0, "2026-05-22"),
-            ];
-            for (sub, pt, price, day) in rows {
-                c.execute(
-                    "INSERT INTO prices \
-                       (tcgplayer_product_id, sub_type_name, source, price_type, price, observed_at) \
-                     VALUES (5006, ?1, 'tcgplayer', ?2, ?3, ?4)",
-                    params![sub, pt, price, day],
-                )
-                .unwrap();
-            }
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-        let series = get_card_prices(&conn, "sv3pt5", "6").unwrap();
+        let series = get_card_prices(&conn, "SOR", "6").unwrap();
         assert_eq!(series.len(), 2, "one series per printing");
-        let normal = series.iter().find(|s| s.variant == "normal").unwrap();
+        let normal = series.iter().find(|s| s.finish == "Normal").unwrap();
+        assert_eq!(normal.variant, "Standard");
         assert_eq!(normal.points.len(), 2);
         assert_eq!(normal.points[0].date, "2026-05-21");
         assert_eq!(normal.points[0].price, 9.5);
         assert_eq!(normal.points[1].price, 10.0);
+        let foil = series.iter().find(|s| s.finish == "Foil").unwrap();
+        assert_eq!(foil.points[1].price, 25.0);
         assert!(series.iter().all(|s| s.price_type == "market"));
     }
 
     #[test]
     fn get_card_prices_returns_empty_for_unknown_card() {
         let (_d, conn) = user_conn();
-        assert!(get_card_prices(&conn, "sv3pt5", "999").unwrap().is_empty());
+        assert!(get_card_prices(&conn, "SOR", "999").unwrap().is_empty());
     }
 
-    /// A catalog with `basep-14-normal` and no TCGplayer link at all — the
-    /// basep motivating case.
-    fn unlinked_basep_catalog(dir: &std::path::Path) -> std::path::PathBuf {
+    /// A catalog with `SOR-14-normal` and no price quote at all.
+    fn unpriced_catalog(dir: &std::path::Path) -> std::path::PathBuf {
         let shared = dir.join("shared.sqlite");
         let c = open_shared(&shared).unwrap();
-        c.execute(
-            "INSERT INTO sets (set_code, name, series) VALUES ('basep', 'Promos', 'Base')",
-            [],
-        )
-        .unwrap();
-        c.execute(
-            "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-             VALUES ('basep-14', 'basep', '14', 14, 'Mewtwo')",
-            [],
-        )
-        .unwrap();
-        c.execute(
-            "INSERT INTO printings (printing_id, card_id, variant) \
-             VALUES ('basep-14-normal', 'basep-14', 'normal')",
-            [],
-        )
-        .unwrap();
+        testkit::simple(&c, "SOR", "14", "Darth Vader");
         shared
     }
 
     #[test]
-    fn get_card_prices_charts_the_catalog_override_when_there_is_no_tcgplayer_link() {
+    fn get_card_prices_has_no_series_for_a_catalog_printing_without_a_quote() {
         let dir = tempfile::tempdir().unwrap();
-        let shared = unlinked_basep_catalog(dir.path());
-        {
-            let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO catalog_price_overrides (printing_id, price, observed_at) \
-                 VALUES ('basep-14-normal', 29.0, '2026-05-29T06:21:13Z') \
-                 ON CONFLICT(printing_id) DO UPDATE SET price = excluded.price, \
-                                                        observed_at = excluded.observed_at",
-                [],
-            )
-            .unwrap();
-        }
+        let shared = unpriced_catalog(dir.path());
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-
-        let series = get_card_prices(&conn, "basep", "14").unwrap();
-        assert_eq!(series.len(), 1, "one hand-entered series, no market");
-        assert_eq!(series[0].price_type, "manual");
-        assert_eq!(series[0].printing_id, "basep-14-normal");
-        assert_eq!(series[0].points[0].price, 29.0);
+        assert!(get_card_prices(&conn, "SOR", "14").unwrap().is_empty());
     }
 
-    /// The residue case: a tenant that still holds a pre-pd-m4gw manual price
-    /// against a catalog printing. Nothing reads it any more, so the chart
-    /// must not draw it either — a line that does not price the card is worse
-    /// than no line.
+    /// A tenant that holds a manual price against a catalog printing. Nothing
+    /// reads it, so the chart must not draw it either — a line that does not
+    /// price the card is worse than no line.
     #[test]
     fn get_card_prices_ignores_a_stale_tenant_manual_price_on_a_catalog_printing() {
         let dir = tempfile::tempdir().unwrap();
-        let shared = unlinked_basep_catalog(dir.path());
+        let shared = unpriced_catalog(dir.path());
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-        // Written the way the old build wrote it — straight to the table,
-        // since `manual_prices::insert` now refuses this printing.
+        // Written straight to the table, since `manual_prices::insert`
+        // refuses this printing.
         conn.execute(
             "INSERT INTO manual_prices (printing_id, price, observed_at) \
-             VALUES ('basep-14-normal', 200.0, '2024-06-01T00:00:00Z')",
+             VALUES ('SOR-14-normal', 200.0, '2024-06-01T00:00:00Z')",
             [],
         )
         .unwrap();
 
-        assert!(get_card_prices(&conn, "basep", "14").unwrap().is_empty());
+        assert!(get_card_prices(&conn, "SOR", "14").unwrap().is_empty());
     }
 
-    /// …while a printing the tenant invented still charts from its own rows.
+    /// …while a printing the tenant invented still charts from its own rows,
+    /// alongside the catalog printing's market series.
     #[test]
     fn get_card_prices_charts_a_user_created_printings_manual_series() {
         let dir = tempfile::tempdir().unwrap();
-        let shared = unlinked_basep_catalog(dir.path());
+        let shared = unpriced_catalog(dir.path());
+        {
+            let c = open_shared(&shared).unwrap();
+            testkit::price(&c, "SOR-14-normal", "2026-05-22", 3.0);
+        }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         conn.execute(
             "INSERT INTO user_printings (printing_id, card_id, variant, created_at) \
-             VALUES ('basep-14-user-1', 'basep-14', 'missing_variant', '2026-08-10')",
+             VALUES ('SOR-14-user-1', 'SOR-14', 'missing_variant', '2026-08-10')",
             [],
         )
         .unwrap();
         for (t, p) in [
-            ("2024-03-01T00:00:00Z", 175.0),
             ("2024-06-01T00:00:00Z", 200.0),
+            ("2024-03-01T00:00:00Z", 175.0),
         ] {
             crate::manual_prices::insert(
                 &conn,
                 &crate::manual_prices::NewManualPrice {
-                    printing_id: "basep-14-user-1".into(),
+                    printing_id: "SOR-14-user-1".into(),
                     price: p,
                     observed_at: Some(t.into()),
                     note: None,
@@ -680,64 +611,16 @@ mod tests {
             .unwrap();
         }
 
-        let series = get_card_prices(&conn, "basep", "14").unwrap();
-        assert_eq!(series.len(), 1);
-        let s = &series[0];
-        assert_eq!(s.price_type, "manual");
-        assert_eq!(s.printing_id, "basep-14-user-1");
+        let series = get_card_prices(&conn, "SOR", "14").unwrap();
+        assert_eq!(series.len(), 2);
+        let market = series.iter().find(|s| s.price_type == "market").unwrap();
+        assert_eq!(market.printing_id, "SOR-14-normal");
+        assert_eq!(market.points[0].price, 3.0);
+        let s = series.iter().find(|s| s.price_type == "manual").unwrap();
+        assert_eq!(s.printing_id, "SOR-14-user-1");
         assert_eq!(s.points.len(), 2);
         // Oldest first within the series.
         assert_eq!(s.points[0].price, 175.0);
         assert_eq!(s.points[1].price, 200.0);
-    }
-
-    #[test]
-    fn get_card_prices_emits_both_market_and_override_series_for_same_printing() {
-        let dir = tempfile::tempdir().unwrap();
-        let shared = dir.path().join("shared.sqlite");
-        {
-            let c = open_shared(&shared).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, name, series) VALUES ('sv3pt5', '151', 'SV')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO cards (card_id, set_code, number, number_sortable, name) \
-                 VALUES ('sv3pt5-6', 'sv3pt5', '6', 6, 'Charizard ex')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO printings \
-                   (printing_id, card_id, variant, tcgplayer_product_id, sub_type_name) \
-                 VALUES ('sv3pt5-6-normal', 'sv3pt5-6', 'normal', 5006, 'Normal')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO prices \
-                   (tcgplayer_product_id, sub_type_name, source, price_type, price, observed_at) \
-                 VALUES (5006, 'Normal', 'tcgplayer', 'market', 10.0, '2026-05-22')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO catalog_price_overrides (printing_id, price, observed_at, note) \
-                 VALUES ('sv3pt5-6-normal', 12.5, '2026-05-25T00:00:00Z', 'eBay sold')",
-                [],
-            )
-            .unwrap();
-        }
-        let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-
-        let series = get_card_prices(&conn, "sv3pt5", "6").unwrap();
-        assert_eq!(series.len(), 2);
-        let market = series.iter().find(|s| s.price_type == "market").unwrap();
-        let manual = series.iter().find(|s| s.price_type == "manual").unwrap();
-        assert_eq!(market.points.len(), 1);
-        assert_eq!(manual.points.len(), 1);
-        assert_eq!(market.points[0].price, 10.0);
-        assert_eq!(manual.points[0].price, 12.5);
     }
 }

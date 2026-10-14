@@ -3,4 +3,4 @@
 /**
  * A row that could not be resolved, with a human-readable reason.
  */
-export type UnmatchedRow = { source_line: number, set_hint: string, number: string, variant: string, reason: string, };
+export type UnmatchedRow = { source_line: number, set_hint: string, number: string, finish: string, reason: string, };

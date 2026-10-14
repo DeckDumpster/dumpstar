@@ -40,29 +40,11 @@
 		return total > 0 ? Math.round((owned / total) * 100) : 0;
 	}
 
-	// Rarity glyphs live under static/rarity/ — same convention the
-	// /collection table uses (rarityIconSrc + isBasicRarity scaling).
-	function rarityIconSrc(rarity: string | null): string | null {
-		if (!rarity) return null;
-		const slug = rarity.toLowerCase().replace(/[ ._]/g, '-');
-		return `/rarity/${slug}.svg`;
-	}
-	function isBasicRarity(rarity: string | null): boolean {
-		return (
-			rarity === 'Common' ||
-			rarity === 'Uncommon' ||
-			rarity === 'Rare' ||
-			rarity === 'Illustration Rare' ||
-			rarity === 'ACE SPEC Rare' ||
-			rarity === 'Rare ACE'
-		);
-	}
-
 	// Rarity order, canonical spelling and tier group all arrive on the
 	// API rows, read off the shared catalog's `rarities` table. This page
 	// used to carry its own RARITY_ORDER map and a canonicalRarity()
 	// normaliser — a second copy of a typology the catalog already owns,
-	// and one that only knew eleven of the fifty-four tiers (pd-xzea).
+	// and one that only knew a handful of the catalog's tiers (pd-xzea).
 	// `stats.rarities` is pre-sorted by rank; render it as it comes.
 
 	// Duplicates summary — owned_copies counts every physical card,
@@ -107,7 +89,7 @@
 	<header>
 		<div>
 			<h1>{stats.name}</h1>
-			<p class="series">{stats.series}</p>
+			{#if stats.release_date}<p class="series">Released {stats.release_date}</p>{/if}
 		</div>
 		<a class="binderlink" href="/browse/{stats.set_code}">Binder view →</a>
 	</header>
@@ -126,8 +108,7 @@
 						max={total}
 					/>
 				{/snippet}
-				{@render bar('Base set', stats.base_owned_cards, stats.base_total_cards)}
-				{@render bar('Numbered set', stats.owned_cards, stats.total_cards)}
+				{@render bar('Cards', stats.owned_cards, stats.total_cards)}
 				{@render bar('Master set', stats.owned_printings, stats.total_printings)}
 			</div>
 		</section>
@@ -219,7 +200,6 @@
 			<table>
 				<thead>
 					<tr>
-						<th class="iconcol" aria-label="Rarity glyph"></th>
 						<th>Rarity</th>
 						<th>Owned</th>
 						<th>Total</th>
@@ -229,19 +209,6 @@
 				<tbody>
 					{#each stats.rarities as r (r.rarity)}
 						<tr>
-							<td class="iconcol">
-								{#if rarityIconSrc(r.rarity)}
-									<img
-										class="rarityicon"
-										class:basic={isBasicRarity(r.rarity)}
-										src={rarityIconSrc(r.rarity)}
-										alt=""
-										onerror={(e) =>
-											((e.currentTarget as HTMLImageElement).style.display =
-												'none')}
-									/>
-								{/if}
-							</td>
 							<td>{r.rarity}</td>
 							<td>{count(r.owned_cards)}</td>
 							<td>{count(r.total_cards)}</td>
@@ -360,25 +327,6 @@
 		padding: 0.4rem 0.6rem;
 		border-bottom: 1px solid var(--color-border);
 	}
-	/* Rarity glyph in its own column, right-aligned, so every rarity
-	   name in the next column starts on the same x-position. Glyph
-	   scaling matches the /collection table for visual consistency. */
-	.iconcol {
-		width: 1%;
-		text-align: right;
-		white-space: nowrap;
-		padding-right: 0.4rem;
-	}
-	.rarityicon {
-		width: 22px;
-		height: 22px;
-		display: inline-block;
-		vertical-align: middle;
-	}
-	.rarityicon.basic {
-		width: 11px;
-		height: 11px;
-	}
 	.pcol {
 		width: 40%;
 	}
@@ -449,17 +397,11 @@
 	.histo-col.g-promo {
 		background: var(--color-rarity-promo);
 	}
-	.histo-col.g-holo {
-		background: var(--color-rarity-holo);
-	}
-	.histo-col.g-ultra {
+	.histo-col.g-legendary {
 		background: var(--color-rarity-ultra);
 	}
 	.histo-col.g-special {
 		background: var(--color-rarity-special);
-	}
-	.histo-col.g-secret {
-		background: var(--color-rarity-secret);
 	}
 	.histo-col.g-unranked {
 		background: var(--color-rarity-unranked);

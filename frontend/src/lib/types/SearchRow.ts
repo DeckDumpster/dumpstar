@@ -12,13 +12,23 @@ import type { CopySummary } from "./CopySummary";
  * `list_payload_carries_only_what_the_list_renders`, which fails if a field
  * is added here without that decision being made.
  */
-export type SearchRow = { printing_id: string, card_id: string, set_code: string, set_name: string, set_ptcgo_code: string | null, set_symbol_url: string | null, number: string, name: string, rarity: string | null, supertype: string | null, subtypes: string | null, types: string | null, 
+export type SearchRow = { printing_id: string, card_id: string, set_code: string, set_name: string, number: string, name: string, subtitle: string | null, rarity: string | null, 
 /**
- * JSON array of `{name, cost}`, one entry per attack — the Cost column's
- * energy pips and their tooltip, and nothing else. The full attack
- * (`text`, `damage`, …) comes from `CardDetail`.
+ * `Leader` | `Unit` | `Event` | `Upgrade` | `Base` | `Token`.
  */
-attack_costs: string | null, market_price: number | null, image_small: string | null, variant: string, 
+card_type: string | null, cost: number | null, power: number | null, hp: number | null, 
+/**
+ * JSON array, e.g. `["Vigilance","Heroism"]`.
+ */
+aspects: string | null, 
+/**
+ * JSON array, e.g. `["Ground"]`.
+ */
+arenas: string | null, market_price: number | null, image_url: string | null, variant: string, 
+/**
+ * `Normal` or `Foil`.
+ */
+finish: string, 
 /**
  * True when at least one copy is owned (`owned_count > 0`).
  */

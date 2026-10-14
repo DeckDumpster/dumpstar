@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { variantLabel, variantSortCmp, variantProvenance } from '$lib/variants.svelte';
+	import { variantSortCmp } from '$lib/variants.svelte';
 	import { CONDITIONS } from '$lib/conditions';
-	import { money } from '$lib/format';
+	import { money, printingLabel } from '$lib/format';
 	import type { BinderSlot } from '$lib/types/BinderSlot';
 
 	let {
@@ -23,20 +23,17 @@
 		onClose: () => void;
 	} = $props();
 
-	// Hide deprecated printings the user doesn't own (e.g. a stale
-	// foil printing for a card that variant expansion has since
-	// dropped). Keep deprecated printings the user *does* own visible — and
-	// dimmed — so they can still see and remove those copies. Sort by
-	// (rank, tiebreak, code) so the modal mirrors the browse slot chip order.
+	// Sort by (rank, tiebreak, variant) so the modal mirrors the browse slot
+	// chip order; the Normal printing of a variant precedes its Foil.
 	const visible = $derived(
 		slot.printings
-			.filter((p) => !p.deprecated || p.owned_count > 0)
 			.slice()
-			.sort((a, b) => variantSortCmp(a.variant, b.variant))
+			.sort(
+				(a, b) =>
+					variantSortCmp(a.variant, b.variant) ||
+					Number(a.finish === 'Foil') - Number(b.finish === 'Foil')
+			)
 	);
-	// For bundle slots whose card lives in another set, route the
-	// card-detail link to the home set rather than the bundle slug.
-	const linkSet = $derived(slot.external_set?.set_code ?? setCode);
 </script>
 
 <svelte:window
@@ -64,12 +61,9 @@
 
 	<ul>
 		{#each visible as p (p.printing_id)}
-			<li class:dim={p.deprecated}>
+			<li>
 				<div class="vlabel">
-					<span class="variant">{variantLabel(p.variant)}</span>
-					{#if variantProvenance(p.variant)}
-						<span class="provenance">{variantProvenance(p.variant)}</span>
-					{/if}
+					<span class="variant">{printingLabel(p.variant, p.finish)}</span>
 				</div>
 				<span class="price">
 					{p.market_price != null ? money(p.market_price) : ''}
@@ -77,18 +71,17 @@
 				<div class="stepper">
 					<button
 						class="step"
-						disabled={p.deprecated || p.owned_count <= 0}
+						disabled={p.owned_count <= 0}
 						onclick={() => onRemove(p.printing_id, p.variant)}
-						aria-label="Remove one {variantLabel(p.variant)}"
+						aria-label="Remove one {printingLabel(p.variant, p.finish)}"
 					>
 						−
 					</button>
 					<span class="count" class:has={p.owned_count > 0}>{p.owned_count}</span>
 					<button
 						class="step"
-						disabled={p.deprecated}
 						onclick={() => onAdd(p.printing_id, p.variant)}
-						aria-label="Add one {variantLabel(p.variant)}"
+						aria-label="Add one {printingLabel(p.variant, p.finish)}"
 					>
 						+
 					</button>
@@ -97,7 +90,7 @@
 		{/each}
 	</ul>
 
-	<a class="full" href="/card/{linkSet}/{slot.number}">Full card details →</a>
+	<a class="full" href="/card/{setCode}/{slot.number}">Full card details →</a>
 </div>
 
 <style>
@@ -153,19 +146,11 @@
 		padding: 0.45rem 0;
 		border-bottom: 1px solid var(--color-border);
 	}
-	li.dim {
-		opacity: 0.5;
-	}
 	.vlabel {
 		display: flex;
 		flex-direction: column;
 		gap: 0.1rem;
 		min-width: 0;
-	}
-	.provenance {
-		color: var(--color-text-subtle);
-		font-size: 0.72rem;
-		line-height: 1.25;
 	}
 	.price {
 		font-size: 0.8rem;

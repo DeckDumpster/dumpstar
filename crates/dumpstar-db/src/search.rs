@@ -66,27 +66,23 @@ const OWNED_VALUE_SUBQ: &str = concat!(
 // printing it resolves entirely inside `shared`, which is what lets
 // `ORDER BY price` stop spanning the ATTACH boundary (pd-m4gw).
 use crate::prices::MARKET_PRICE_EXPR;
-// The attack list projected down to exactly what the collection table's Cost
-// column draws: one energy-pip line per attack, with the attack name as its
-// tooltip. Attack `text`, `damage` and `convertedEnergyCost` are the card
-// modal's business and reach it through `/api/card/...`, one card at a time.
-// Shipping them on every row made `attacks` 54% of a 44 MB all-cards payload
-// (pd-lk8v) for a column that never rendered a byte of them.
-const ATTACK_COSTS_EXPR: &str = "CASE WHEN cd.attacks IS NULL THEN NULL ELSE ( \
-     SELECT json_group_array(json_object( \
-         'name', json_extract(value, '$.name'), \
-         'cost', json(json_extract(value, '$.cost')))) \
-     FROM json_each(cd.attacks)) END";
-// printings ⋃ user_printings, joined to cards + sets. Mirrors collection::ROW_FROM.
-const FROM_CLAUSE: &str = "FROM ( \
-        SELECT printing_id, card_id, variant, tcgplayer_product_id, sub_type_name, \
-               NULL AS variant_description FROM printings \
-        UNION ALL \
-        SELECT printing_id, card_id, variant, NULL AS tcgplayer_product_id, \
-               NULL AS sub_type_name, description AS variant_description FROM user_printings \
-     ) p \
+// printings ⋃ user_printings (`printing_rel!`), joined to cards + sets. Mirrors
+// collection::ROW_FROM.
+const FROM_CLAUSE: &str = concat!(
+    "FROM ",
+    crate::printing_rel!(),
+    " p \
      JOIN cards cd ON p.card_id = cd.card_id \
-     JOIN sets s ON cd.set_code = s.set_code";
+     JOIN sets s ON p.set_code = s.set_code"
+);
+
+// A collector number as a sortable integer: plain numbers by value, lettered
+// ones (P01, T02) after every plain one. The SQL twin of
+// `dumpstar_core::number_sort_key`.
+const NUMBER_KEY: &str = "CASE WHEN p.number GLOB '*[^0-9]*' \
+     THEN 1000000 + COALESCE(CAST(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(\
+         p.number, 'P', ''), 'T', ''), 'p', ''), 't', ''), '/', ''), ' ', '') AS INTEGER), 0) \
+     ELSE CAST(p.number AS INTEGER) END";
 
 /// A per-copy summary nested under a [`SearchRow`] in the expand/drill-down.
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
@@ -122,21 +118,27 @@ pub struct SearchRow {
     pub card_id: String,
     pub set_code: String,
     pub set_name: String,
-    pub set_ptcgo_code: Option<String>,
-    pub set_symbol_url: Option<String>,
     pub number: String,
     pub name: String,
+    pub subtitle: Option<String>,
     pub rarity: Option<String>,
-    pub supertype: Option<String>,
-    pub subtypes: Option<String>,
-    pub types: Option<String>,
-    /// JSON array of `{name, cost}`, one entry per attack — the Cost column's
-    /// energy pips and their tooltip, and nothing else. The full attack
-    /// (`text`, `damage`, …) comes from `CardDetail`.
-    pub attack_costs: Option<String>,
+    /// `Leader` | `Unit` | `Event` | `Upgrade` | `Base` | `Token`.
+    pub card_type: Option<String>,
+    #[ts(type = "number | null")]
+    pub cost: Option<i64>,
+    #[ts(type = "number | null")]
+    pub power: Option<i64>,
+    #[ts(type = "number | null")]
+    pub hp: Option<i64>,
+    /// JSON array, e.g. `["Vigilance","Heroism"]`.
+    pub aspects: Option<String>,
+    /// JSON array, e.g. `["Ground"]`.
+    pub arenas: Option<String>,
     pub market_price: Option<f64>,
-    pub image_small: Option<String>,
+    pub image_url: Option<String>,
     pub variant: String,
+    /// `Normal` or `Foil`.
+    pub finish: String,
     /// True when at least one copy is owned (`owned_count > 0`).
     pub owned: bool,
     #[ts(type = "number")]
@@ -485,67 +487,36 @@ fn compile_comparison(
             _ => like_contains("cd.name", value),
         },
 
-        // --- energy type / weakness / resistance / subtype (JSON arrays) ---
-        "energy_type" => json_array(op, "cd.types", value),
-        "weakness" => json_contains("cd.weaknesses", value),
-        "resistance" => json_contains("cd.resistances", value),
-        "subtype" => json_array(op, "cd.subtypes", value),
-
-        // --- enums ---
-        "supertype" => enum_eq("cd.supertype", op, value),
-        "regulation" => enum_eq("cd.regulation_mark", op, value),
+        // --- card type / aspects / arenas / traits ---
+        "card_type" => enum_eq("cd.card_type", op, value),
+        "aspect" => json_array(op, "cd.aspects", value),
+        "arena" => json_array(op, "cd.arenas", value),
+        "trait" => json_array(op, "cd.traits", value),
 
         // --- numeric ---
+        "cost" => numeric("cd.cost", op, value, Some("cd.cost IS NOT NULL")),
+        "power" => numeric("cd.power", op, value, Some("cd.power IS NOT NULL")),
         "hp" => numeric("cd.hp", op, value, Some("cd.hp IS NOT NULL")),
-        "damage" => numeric(
-            "(SELECT MAX(CAST(json_extract(value, '$.damage') AS INTEGER)) FROM json_each(cd.attacks))",
-            op,
-            value,
-            None,
-        ),
-        "retreat" => numeric(
-            "json_array_length(cd.retreat_cost)",
-            op,
-            value,
-            Some("cd.retreat_cost IS NOT NULL"),
-        ),
         "year" => numeric(
             "CAST(SUBSTR(s.release_date, 1, 4) AS INTEGER)",
             op,
             value,
             None,
         ),
-        "pokedex" => pokedex(op, value),
 
         // --- text contains ---
-        "artist" => like_contains("cd.artist", value),
-        "flavor" => like_contains("cd.flavor_text", value),
-        "ability" => like_contains("cd.abilities", value),
-        "attack" => like_contains("cd.attacks", value),
-        "oracle" => {
-            let pat = pct(value);
-            (
-                "(cd.abilities LIKE ? COLLATE NOCASE OR cd.attacks LIKE ? COLLATE NOCASE)"
-                    .to_string(),
-                vec![text(&pat), text(&pat)],
-            )
-        }
+        "artist" => like_contains("p.artist", value),
+        "oracle" => like_contains("cd.rules_text", value),
 
         // --- rarity (rank table for ordinals) ---
         "rarity" => rarity(op, value),
 
-        // --- set (ptcgo_code / set_code / name) ---
+        // --- set (code / name) ---
         "set" => set(op, value),
 
-        // --- legality ---
-        "legality" => (
-            "json_extract(cd.legalities, '$.' || ?) = 'Legal' COLLATE NOCASE".to_string(),
-            vec![text(value.to_ascii_lowercase())],
-        ),
-        "banned" => (
-            "json_extract(cd.legalities, '$.' || ?) = 'Banned' COLLATE NOCASE".to_string(),
-            vec![text(value.to_ascii_lowercase())],
-        ),
+        // --- legality: a card with no row is legal, as in deck checking ---
+        "legality" => legality(value, false),
+        "banned" => legality(value, true),
 
         // --- variant ---
         "variant" => {
@@ -556,6 +527,7 @@ fn compile_comparison(
                 frag
             }
         }
+        "finish" => enum_eq("p.finish", op, value),
 
         // --- flags ---
         "is_flag" => is_flag(value, flags, ctx),
@@ -711,37 +683,23 @@ fn numeric(expr: &str, op: Op, val: &str, extra: Option<&str>) -> (String, Vec<V
     }
 }
 
-fn pokedex(op: Op, val: &str) -> (String, Vec<Value>) {
-    match val.parse::<f64>() {
-        Ok(n) => (
-            format!(
-                "EXISTS (SELECT 1 FROM json_each(cd.national_pokedex_numbers) \
-                 WHERE CAST(value AS INTEGER) {} ?)",
-                num_op(op)
-            ),
-            vec![Value::Real(n)],
-        ),
-        Err(_) => ("1=0 /* invalid number */".to_string(), Vec::new()),
-    }
-}
-
 fn rarity(op: Op, val: &str) -> (String, Vec<Value>) {
     match op {
         Op::Contains | Op::Eq => (
-            "(cd.rarity = ? COLLATE NOCASE OR cd.rarity IN \
+            "(p.rarity = ? COLLATE NOCASE OR p.rarity IN \
              (SELECT name FROM rarities WHERE grp = ? COLLATE NOCASE))"
                 .to_string(),
             vec![text(val), text(val)],
         ),
         Op::Ne => (
-            "NOT (cd.rarity = ? COLLATE NOCASE OR cd.rarity IN \
+            "NOT (p.rarity = ? COLLATE NOCASE OR p.rarity IN \
              (SELECT name FROM rarities WHERE grp = ? COLLATE NOCASE))"
                 .to_string(),
             vec![text(val), text(val)],
         ),
         _ => (
             format!(
-                "((SELECT rank FROM rarities WHERE name = cd.rarity) {} \
+                "((SELECT rank FROM rarities WHERE name = p.rarity) {} \
                  (SELECT rank FROM rarities WHERE name = ? COLLATE NOCASE))",
                 num_op(op)
             ),
@@ -752,21 +710,36 @@ fn rarity(op: Op, val: &str) -> (String, Vec<Value>) {
 
 fn set(op: Op, val: &str) -> (String, Vec<Value>) {
     match op {
-        Op::Eq => (
-            "(s.set_code = ? COLLATE NOCASE OR s.ptcgo_code = ? COLLATE NOCASE)".to_string(),
-            vec![text(val), text(val)],
-        ),
+        Op::Eq => ("s.set_code = ? COLLATE NOCASE".to_string(), vec![text(val)]),
         Op::Ne => (
-            "NOT (s.set_code = ? COLLATE NOCASE OR s.ptcgo_code = ? COLLATE NOCASE)".to_string(),
-            vec![text(val), text(val)],
+            "NOT (s.set_code = ? COLLATE NOCASE)".to_string(),
+            vec![text(val)],
         ),
         _ => (
-            "(s.set_code = ? COLLATE NOCASE OR s.ptcgo_code = ? COLLATE NOCASE \
-             OR s.name LIKE ? COLLATE NOCASE)"
-                .to_string(),
-            vec![text(val), text(val), text(pct(val))],
+            "(s.set_code = ? COLLATE NOCASE OR s.name LIKE ? COLLATE NOCASE)".to_string(),
+            vec![text(val), text(pct(val))],
         ),
     }
+}
+
+/// `legal:<format>` / `banned:<format>`. An unknown format matches nothing
+/// rather than everything.
+fn legality(format: &str, banned: bool) -> (String, Vec<Value>) {
+    let known = "EXISTS (SELECT 1 FROM formats f WHERE f.format_id = ? COLLATE NOCASE)";
+    let sql = if banned {
+        format!(
+            "({known} AND EXISTS (SELECT 1 FROM card_legality l \
+               WHERE l.card_id = cd.card_id AND l.format_id = ? COLLATE NOCASE \
+                 AND l.status = 'banned'))"
+        )
+    } else {
+        format!(
+            "({known} AND NOT EXISTS (SELECT 1 FROM card_legality l \
+               WHERE l.card_id = cd.card_id AND l.format_id = ? COLLATE NOCASE \
+                 AND l.status IN ('banned', 'not_legal')))"
+        )
+    };
+    (sql, vec![text(format), text(format)])
 }
 
 fn variant_match(val: &str) -> (String, Vec<Value>) {
@@ -846,6 +819,10 @@ fn is_flag(value: &str, flags: &[SearchFlag], ctx: &mut Ctx) -> (String, Vec<Val
             }
             _ => ("1=0 /* unknown computed flag */".to_string(), Vec::new()),
         },
+        "finish" => (
+            "p.finish = ? COLLATE NOCASE".to_string(),
+            vec![text(flag.match_str.clone().unwrap_or_default())],
+        ),
         "variant_match" => {
             let m = flag.match_str.clone().unwrap_or_default();
             let pat = pct(&m);
@@ -860,12 +837,9 @@ fn is_flag(value: &str, flags: &[SearchFlag], ctx: &mut Ctx) -> (String, Vec<Val
 
 fn has_flag(value: &str) -> (String, Vec<Value>) {
     let sql = match value.to_ascii_lowercase().as_str() {
-        "ability" => "cd.abilities IS NOT NULL AND cd.abilities NOT IN ('', '[]')",
-        "flavor" => "cd.flavor_text IS NOT NULL AND cd.flavor_text != ''",
-        "attack" => "cd.attacks IS NOT NULL AND cd.attacks NOT IN ('', '[]')",
-        "weakness" => "cd.weaknesses IS NOT NULL AND cd.weaknesses NOT IN ('', '[]')",
-        "resistance" => "cd.resistances IS NOT NULL AND cd.resistances NOT IN ('', '[]')",
-        "retreat" => "cd.retreat_cost IS NOT NULL AND json_array_length(cd.retreat_cost) > 0",
+        "text" => "cd.rules_text IS NOT NULL AND cd.rules_text != ''",
+        "subtitle" => "cd.subtitle IS NOT NULL AND cd.subtitle != ''",
+        "artist" => "p.artist IS NOT NULL AND p.artist != ''",
         _ => "1=0 /* unknown has: flag */",
     };
     (sql.to_string(), Vec::new())
@@ -897,22 +871,19 @@ fn has_flag(value: &str) -> (String, Vec<Value>) {
 /// What that is **not**, and pd-66hq measured rather than assumed: it is not
 /// "every key is a stored scalar in one database", and none of these orderings
 /// is index-satisfied. `qty` and `added` are still correlated subqueries over
-/// the tenant's `collection`, `rarity` and `dex` are subqueries, `set` is a
-/// joined column, and `price` still COALESCEs shared `latest_prices` with
-/// tenant `manual_prices` (pd-m4gw). Every one of them sorts in a temp b-tree,
-/// and no index can change that — see `SORTS_THAT_STILL_SORT` in this file's
-/// tests for the two structural reasons and pd-pvz0 for the shape that would
-/// fix it.
+/// the tenant's `collection`, `rarity` is a subquery, `set` is a joined
+/// column, and `price` still COALESCEs the shared `prices` with tenant
+/// `manual_prices` (pd-m4gw). Every one of them sorts in a temp b-tree, and no
+/// index can change that — see `SORTS_THAT_STILL_SORT` in this file's tests
+/// for the two structural reasons and pd-pvz0 for the shape that would fix it.
 ///
-/// Nor was the 1,543 ms of the collection's 2,495 ms first paint the price of
-/// ordering. Measured over the same 56,672-row result, `order:value` and
+/// Nor is ordering what a large result's first paint costs: `order:value` and
 /// `order:adj` cost what `order:name` costs (±10%), and dropping the ORDER BY
-/// altogether saves 3%: the time is per-row projection — `attack_costs` alone
-/// is 36% — and it is still there. Removing `value` and `adj` fixed an
-/// affordance and an unindexable ordering, not this number (pd-66hq).
+/// altogether saves 3%. The time is per-row projection, and removing `value`
+/// and `adj` fixed an affordance and an unindexable ordering, not that number
+/// (pd-66hq).
 pub const SORT_KEYS: &[&str] = &[
-    "name", "number", "set", "rarity", "type", "etype", "hp", "price", "qty", "added", "dex",
-    "pokedex",
+    "name", "number", "set", "rarity", "type", "cost", "power", "hp", "price", "qty", "added",
 ];
 
 /// Whether `sort=<key>` names a column this query can order by.
@@ -926,33 +897,22 @@ pub fn is_sortable(key: &str) -> bool {
 
 fn order_sql(order_by: Option<&str>) -> String {
     match order_by.unwrap_or("name") {
-        "number" => "cd.number_sortable".to_string(),
+        "number" => NUMBER_KEY.to_string(),
         // release_date is only the primary key here; build_full_sql adds
         // set_code as the secondary set-level key so sets sharing a date stay
-        // grouped.  set_sort_order is NULL for every set in prod and is never
-        // written by ingest, so it cannot be used.
+        // grouped.
         "set" => "s.release_date".to_string(),
-        "rarity" => "(SELECT rank FROM rarities WHERE name = cd.rarity)".to_string(),
+        "rarity" => "(SELECT rank FROM rarities WHERE name = p.rarity)".to_string(),
+        "type" => "cd.card_type".to_string(),
+        "cost" => "cd.cost".to_string(),
+        "power" => "cd.power".to_string(),
         "hp" => "cd.hp".to_string(),
         "price" => format!("({MARKET_PRICE_EXPR})"),
         "added" => {
             "(SELECT MAX(c.acquired_at) FROM collection c WHERE c.printing_id = p.printing_id)"
                 .to_string()
         }
-        "dex" | "pokedex" => {
-            "(SELECT MIN(CAST(value AS INTEGER)) FROM json_each(cd.national_pokedex_numbers))"
-                .to_string()
-        }
         "qty" => format!("({OWNED_COUNT_SUBQ})"),
-        // Class and energy type — the two catalog columns the collection
-        // table sorts on that had no arm here. They arrived when that page
-        // stopped sorting its own rows: once results are paged, a sort the
-        // client applies orders 250 rows out of 56,635, which is the wrong
-        // 250 (pd-tsqd). `cd.types` is the stored JSON array, and ordering
-        // its text is ordering its first element — `["Fire"]` before
-        // `["Water"]` — which is what the column shows.
-        "type" => "cd.supertype".to_string(),
-        "etype" => "cd.types".to_string(),
         "name" => "cd.name".to_string(),
         // Anything else orders by name. `sort=` never reaches here — the
         // endpoint refuses a key outside `SORT_KEYS` — but the query language's
@@ -984,8 +944,8 @@ fn build_full_sql(c: &CompiledSearch, page: Option<(u32, u32)>) -> String {
         "ASC"
     };
     // `p.printing_id` is unique, so the ORDER BY is a total order. Without a
-    // unique final key, rows tied on the sort column (Pikachu normal and
-    // reverse holo share a name AND a number) may sit in either order from one
+    // unique final key, rows tied on the sort column (a card's Standard and
+    // Hyperspace printings share a name) may sit in either order from one
     // statement to the next, and OFFSET paging then drops and duplicates them.
     let paging = if page.is_some() {
         " LIMIT ? OFFSET ?"
@@ -996,17 +956,17 @@ fn build_full_sql(c: &CompiledSearch, page: Option<(u32, u32)>) -> String {
     // release_date still group correctly; within a set, collector number is
     // always ascending regardless of dir.
     let order_clause = if c.order_by.as_deref() == Some("set") {
-        format!("s.release_date {dir}, s.set_code {dir}, cd.number_sortable ASC, p.printing_id ASC")
+        format!("s.release_date {dir}, s.set_code {dir}, {NUMBER_KEY} ASC, p.printing_id ASC")
     } else {
         let order_col = order_sql(c.order_by.as_deref());
-        format!("{order_col} {dir}, cd.number_sortable ASC, p.printing_id ASC")
+        format!("{order_col} {dir}, {NUMBER_KEY} ASC, p.printing_id ASC")
     };
     format!(
-        "SELECT p.printing_id, cd.card_id, cd.set_code, s.name AS set_name, s.ptcgo_code, \
-                s.symbol_url, cd.number, cd.name, cd.rarity, cd.supertype, \
-                cd.subtypes, cd.types, {ATTACK_COSTS_EXPR} AS attack_costs, \
+        "SELECT p.printing_id, cd.card_id, p.set_code, s.name AS set_name, p.number, \
+                cd.name, cd.subtitle, p.rarity, cd.card_type, cd.cost, cd.power, cd.hp, \
+                cd.aspects, cd.arenas, \
                 {MARKET_PRICE_EXPR} AS market_price, \
-                cd.image_small, p.variant, \
+                p.image_url, p.variant, p.finish, \
                 ({OWNED_COUNT_SUBQ}) AS owned_count \
          {FROM_CLAUSE} \
          WHERE {where_clause} \
@@ -1015,24 +975,26 @@ fn build_full_sql(c: &CompiledSearch, page: Option<(u32, u32)>) -> String {
 }
 
 fn row_from(r: &rusqlite::Row) -> rusqlite::Result<SearchRow> {
-    let owned_count: i64 = r.get(16)?;
+    let owned_count: i64 = r.get(18)?;
     Ok(SearchRow {
         printing_id: r.get(0)?,
         card_id: r.get(1)?,
         set_code: r.get(2)?,
         set_name: r.get(3)?,
-        set_ptcgo_code: r.get(4)?,
-        set_symbol_url: r.get(5)?,
-        number: r.get(6)?,
-        name: r.get(7)?,
-        rarity: r.get(8)?,
-        supertype: r.get(9)?,
-        subtypes: r.get(10)?,
-        types: r.get(11)?,
-        attack_costs: r.get(12)?,
-        market_price: r.get(13)?,
-        image_small: r.get(14)?,
-        variant: r.get(15)?,
+        number: r.get(4)?,
+        name: r.get(5)?,
+        subtitle: r.get(6)?,
+        rarity: r.get(7)?,
+        card_type: r.get(8)?,
+        cost: r.get(9)?,
+        power: r.get(10)?,
+        hp: r.get(11)?,
+        aspects: r.get(12)?,
+        arenas: r.get(13)?,
+        market_price: r.get(14)?,
+        image_url: r.get(15)?,
+        variant: r.get(16)?,
+        finish: r.get(17)?,
         owned: owned_count > 0,
         owned_count,
         copies: Vec::new(),
@@ -1088,7 +1050,7 @@ fn attach_copies(conn: &Connection, rows: &mut [SearchRow]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{connect_user, open_shared, search_meta};
+    use crate::{connect_user, open_shared, search_meta, testkit};
     use dumpstar_core::query::{KeywordRegistry, parse};
 
     struct Fix {
@@ -1105,46 +1067,108 @@ mod tests {
         {
             let mut c = open_shared(&shared).unwrap();
             search_meta::reconcile(&mut c).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, ptcgo_code, name, series, set_sort_order, release_date)
-                 VALUES ('base1','BS','Base Set','Base',1,'1999/01/09'),
-                        ('sv3pt5','MEW','151','Scarlet & Violet',35,'2023/09/22')",
-                [],
-            )
-            .unwrap();
-            // Charizard (Fire, Rare Holo, hp 120, dex 6), Pikachu (Lightning,
-            // Common, hp 60, dex 25), Blastoise (Water, Rare Holo, hp 100).
-            c.execute(
-                "INSERT INTO cards (card_id,set_code,number,number_sortable,name,supertype,
-                    subtypes,hp,types,rarity,artist,flavor_text,attacks,
-                    national_pokedex_numbers,legalities)
-                 VALUES
-                 ('base1-4','base1','4',4,'Charizard','Pokémon','[\"Stage 2\"]',120,'[\"Fire\"]',
-                   'Rare Holo','Mitsuhiro Arita','Spits fire.',
-                   '[{\"name\":\"Fire Spin\",\"damage\":\"100\",\"cost\":[\"Fire\",\"Fire\",\"Fire\",\"Fire\"],
-                      \"convertedEnergyCost\":4,\"text\":\"Discard 2 Energy cards.\"}]',
-                   '[6]','{\"unlimited\":\"Legal\"}'),
-                 ('sv3pt5-25','sv3pt5','25',25,'Pikachu','Pokémon','[\"Basic\"]',60,'[\"Lightning\"]',
-                   'Common','Naoki Saito','Loves ketchup.',
-                   '[{\"name\":\"Thunder Jolt\",\"damage\":\"30\"}]','[25]','{\"standard\":\"Legal\"}'),
-                 ('base1-2','base1','2',2,'Blastoise','Pokémon','[\"Stage 2\"]',100,'[\"Water\"]',
-                   'Rare Holo','Ken Sugimori','Crushes foes.',
-                   '[{\"name\":\"Hydro Pump\",\"damage\":\"60\"}]','[9]','{\"unlimited\":\"Legal\"}'),
-                 -- A Trainer: no types, no hp, no attacks. Unowned, so it only
-                 -- surfaces catalog-wide and leaves the owned-mode tests alone.
-                 ('base1-88','base1','88',88,'Professor Oak','Trainer',NULL,NULL,NULL,
-                   'Uncommon','Ken Sugimori','Draw 7 cards.',NULL,NULL,'{\"unlimited\":\"Legal\"}')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO printings (printing_id,card_id,variant) VALUES
-                 ('base1-4-holo','base1-4','holo'),
-                 ('sv3pt5-25-normal','sv3pt5-25','normal'),
-                 ('sv3pt5-25-reverse_holo','sv3pt5-25','reverse_holo'),
-                 ('base1-2-holo','base1-2','holo'),
-                 ('base1-88-normal','base1-88','normal')",
-                [],
+            testkit::set_on(&c, "SOR", "Spark of Rebellion", "2024-03-08");
+            testkit::set_on(&c, "SHD", "Shadows of the Galaxy", "2024-07-12");
+            // Luke (Vigilance/Heroism, power 3, hp 5), Millennium Falcon
+            // (Cunning/Heroism, Space, power 3, hp 3), Han Solo (Aggression/
+            // Villainy, power 7, hp 6) and Vanquish, an Event with no stats.
+            testkit::card_full(
+                &c,
+                "luke",
+                "Luke Skywalker",
+                Some("Faithful Friend"),
+                "Unit",
+                Some(3),
+                Some(3),
+                Some(5),
+                r#"["Vigilance","Heroism"]"#,
+                r#"["Force","Rebel","Jedi"]"#,
+                r#"["Ground"]"#,
+                Some("On Attack: Heal 2 damage from a base."),
+            );
+            testkit::card_full(
+                &c,
+                "falcon",
+                "Millennium Falcon",
+                Some("Piece of Junk"),
+                "Unit",
+                Some(2),
+                Some(3),
+                Some(3),
+                r#"["Cunning","Heroism"]"#,
+                r#"["Vehicle","Transport","Underworld"]"#,
+                r#"["Space"]"#,
+                Some("Piloting [2]."),
+            );
+            testkit::card_full(
+                &c,
+                "han",
+                "Han Solo",
+                Some("Reluctant Hero"),
+                "Unit",
+                Some(6),
+                Some(7),
+                Some(6),
+                r#"["Aggression","Villainy"]"#,
+                r#"["Underworld","Rebel"]"#,
+                r#"["Ground"]"#,
+                Some("When Played: Deal 2 damage to a unit."),
+            );
+            // An Event: no stats, no arena. Unowned, so it only surfaces
+            // catalog-wide and leaves the owned-mode tests alone.
+            testkit::card_full(
+                &c,
+                "vanquish",
+                "Vanquish",
+                None,
+                "Event",
+                Some(5),
+                None,
+                None,
+                r#"["Vigilance"]"#,
+                "[]",
+                "[]",
+                Some("Defeat a non-leader unit."),
+            );
+            testkit::printing(&c, "luke-foil", "luke", "SOR", "005", "Standard", "Foil");
+            testkit::printing(
+                &c,
+                "falcon-std",
+                "falcon",
+                "SHD",
+                "252",
+                "Standard",
+                "Normal",
+            );
+            testkit::printing(
+                &c,
+                "falcon-hyper",
+                "falcon",
+                "SHD",
+                "512",
+                "Hyperspace",
+                "Normal",
+            );
+            testkit::printing(&c, "han-std", "han", "SOR", "010", "Standard", "Normal");
+            testkit::printing(
+                &c,
+                "vanquish-std",
+                "vanquish",
+                "SOR",
+                "193",
+                "Standard",
+                "Normal",
+            );
+            c.execute_batch(
+                "UPDATE printings SET rarity = 'Legendary', artist = 'Borja Pindado' \
+                    WHERE printing_id = 'luke-foil';
+                 UPDATE printings SET rarity = 'Common', artist = 'Ralph McQuarrie' \
+                    WHERE printing_id = 'falcon-std';
+                 UPDATE printings SET rarity = 'Common', artist = 'Ralph McQuarrie' \
+                    WHERE printing_id = 'falcon-hyper';
+                 UPDATE printings SET rarity = 'Rare', artist = 'Ryan Grayson' \
+                    WHERE printing_id = 'han-std';
+                 UPDATE printings SET rarity = 'Uncommon' WHERE printing_id = 'vanquish-std';",
             )
             .unwrap();
         }
@@ -1153,13 +1177,13 @@ mod tests {
         // a fixture without them could not tell a condition-adjusted sum from
         // a raw one.
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-        // Own two Charizards (a dupe) and one Pikachu; Blastoise is unowned.
+        // Own two Lukes (a dupe) and one Falcon; Han and Vanquish are unowned.
         conn.execute(
             "INSERT INTO collection (printing_id,condition,language,acquired_at,source,status)
              VALUES
-             ('base1-4-holo','Near Mint','English','2024-01-01','manual_id','owned'),
-             ('base1-4-holo','Lightly Played','English','2024-02-01','manual_id','owned'),
-             ('sv3pt5-25-normal','Near Mint','English','2025-03-01','manual_id','owned')",
+             ('luke-foil','Near Mint','English','2024-01-01','manual_id','owned'),
+             ('luke-foil','Lightly Played','English','2024-02-01','manual_id','owned'),
+             ('falcon-std','Near Mint','English','2025-03-01','manual_id','owned')",
             [],
         )
         .unwrap();
@@ -1175,19 +1199,13 @@ mod tests {
     }
 
     impl Fix {
-        /// Price a catalog printing the way the catalog does since pd-m4gw:
-        /// a curated override in `shared`, not a tenant manual price. Reopens
-        /// the catalog read-write, because the search connection has it
-        /// attached read-only — which is the property under test.
+        /// Price a catalog printing the way the catalog does: a market quote
+        /// in `shared.prices`. Reopens the catalog read-write, because the
+        /// search connection has it attached read-only — which is the
+        /// property under test.
         fn set_catalog_price(&self, printing_id: &str, price: f64) {
             let c = open_shared(&self.shared).unwrap();
-            c.execute(
-                "INSERT INTO catalog_price_overrides (printing_id, price, observed_at) \
-                 VALUES (?1, ?2, '2025-01-01') \
-                 ON CONFLICT(printing_id) DO UPDATE SET price = excluded.price",
-                rusqlite::params![printing_id, price],
-            )
-            .unwrap();
+            testkit::price(&c, printing_id, "2025-01-01", price);
         }
 
         fn compile(&self, q: &str) -> CompiledSearch {
@@ -1211,10 +1229,30 @@ mod tests {
     #[test]
     fn compiles_card_predicates_to_sql() {
         let f = fixture();
-        assert!(f.compile("t:fire").where_sql.contains("cd.types LIKE"));
-        assert!(f.compile("hp>=100").where_sql.contains("cd.hp"));
-        assert!(f.compile("s:pfl").where_sql.contains("ptcgo_code"));
+        assert!(
+            f.compile("a:vigilance")
+                .where_sql
+                .contains("cd.aspects LIKE")
+        );
+        assert!(
+            f.compile("arena:space")
+                .where_sql
+                .contains("cd.arenas LIKE")
+        );
+        assert!(
+            f.compile("trait:rebel")
+                .where_sql
+                .contains("cd.traits LIKE")
+        );
+        assert!(f.compile("hp>=5").where_sql.contains("cd.hp"));
+        assert!(f.compile("cost<=3").where_sql.contains("cd.cost"));
+        assert!(f.compile("s:shd").where_sql.contains("s.set_code"));
         assert!(f.compile("rarity>=rare").where_sql.contains("rarities"));
+        assert!(
+            f.compile("legal:premier")
+                .where_sql
+                .contains("card_legality")
+        );
     }
 
     #[test]
@@ -1247,19 +1285,19 @@ mod tests {
     #[test]
     fn owned_mode_only_returns_owned_printings() {
         let f = fixture();
-        // Fire cards I own → Charizard; Blastoise (Water, unowned) excluded.
-        assert_eq!(f.ids("t:fire"), vec!["base1-4-holo"]);
-        // Default owned mode never surfaces the unowned Blastoise.
-        assert!(f.ids("t:water").is_empty());
+        // Vigilance cards I own → Luke; Vanquish (Vigilance, unowned) excluded.
+        assert_eq!(f.ids("a:vigilance"), vec!["luke-foil"]);
+        // Default owned mode never surfaces the unowned Han Solo.
+        assert!(f.ids("a:aggression").is_empty());
     }
 
     #[test]
     fn is_missing_surfaces_unowned() {
         let f = fixture();
-        let c = f.compile("is:missing t:water");
+        let c = f.compile("is:missing a:aggression");
         let rows = search(&f.conn, &c).unwrap();
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].printing_id, "base1-2-holo");
+        assert_eq!(rows[0].printing_id, "han-std");
         assert!(!rows[0].owned);
         assert_eq!(rows[0].owned_count, 0);
         assert!(rows[0].copies.is_empty());
@@ -1280,18 +1318,20 @@ mod tests {
             card_id: String::new(),
             set_code: String::new(),
             set_name: String::new(),
-            set_ptcgo_code: None,
-            set_symbol_url: None,
             number: String::new(),
             name: String::new(),
+            subtitle: None,
             rarity: None,
-            supertype: None,
-            subtypes: None,
-            types: None,
-            attack_costs: None,
+            card_type: None,
+            cost: None,
+            power: None,
+            hp: None,
+            aspects: None,
+            arenas: None,
             market_price: None,
-            image_small: None,
+            image_url: None,
             variant: String::new(),
+            finish: String::new(),
             owned: false,
             owned_count: 0,
             copies: Vec::new(),
@@ -1299,7 +1339,7 @@ mod tests {
         // 40_000 > the 32_766 default limit, and well past the legacy 999.
         let mut rows: Vec<SearchRow> = (0..40_000).map(|i| blank(&format!("p{i}"))).collect();
         // A real owned printing dropped in the middle, far past chunk 1.
-        rows[20_000] = blank("base1-4-holo");
+        rows[20_000] = blank("luke-foil");
 
         attach_copies(&f.conn, &mut rows).unwrap();
 
@@ -1328,38 +1368,29 @@ mod tests {
         {
             let mut c = open_shared(&shared).unwrap();
             search_meta::reconcile(&mut c).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, ptcgo_code, name, series, set_sort_order, release_date)
-                 VALUES ('big','BIG','Big Set','Test',1,'2024/01/01')",
-                [],
-            )
-            .unwrap();
+            testkit::set_on(&c, "BIG", "Big Set", "2024-01-01");
             let tx = c.transaction().unwrap();
             {
                 let mut card_stmt = tx
-                    .prepare(
-                        "INSERT INTO cards (card_id,set_code,number,number_sortable,name,supertype)
-                         VALUES (?1,'big',?2,?3,?4,'Pokémon')",
-                    )
+                    .prepare("INSERT INTO cards (card_id,name,card_type) VALUES (?1,?2,'Unit')")
                     .unwrap();
                 let mut pr_stmt = tx
                     .prepare(
-                        "INSERT INTO printings (printing_id,card_id,variant)
-                         VALUES (?1,?2,'normal')",
+                        "INSERT INTO printings (printing_id,card_id,set_code,number,variant,finish)
+                         VALUES (?1,?2,'BIG',?3,'Standard','Normal')",
                     )
                     .unwrap();
                 for i in 0..N {
                     let card_id = format!("big-{i}");
                     card_stmt
-                        .execute(rusqlite::params![
-                            card_id,
-                            i.to_string(),
-                            i as i64,
-                            format!("Mon {i}")
-                        ])
+                        .execute(rusqlite::params![card_id, format!("Trooper {i}")])
                         .unwrap();
                     pr_stmt
-                        .execute(rusqlite::params![format!("{card_id}-normal"), card_id])
+                        .execute(rusqlite::params![
+                            format!("{card_id}-normal"),
+                            card_id,
+                            i.to_string()
+                        ])
                         .unwrap();
                 }
             }
@@ -1384,7 +1415,7 @@ mod tests {
     #[test]
     fn owned_row_carries_copies_and_count() {
         let f = fixture();
-        let c = f.compile("charizard");
+        let c = f.compile("luke");
         let rows = search(&f.conn, &c).unwrap();
         assert_eq!(rows.len(), 1);
         assert!(rows[0].owned);
@@ -1395,10 +1426,10 @@ mod tests {
     // --- payload shape (pd-lk8v) -------------------------------------------
 
     // Every field here is paid once per row — for its value *and* for its key
-    // name. `attacks` alone was 54% of a 44 MB response for a Cost column that
-    // renders only the energy pips, back when catalog-wide mode returned the
-    // whole catalog in one body (~57k rows on prod). The endpoint pages now
-    // (pd-jsby), which caps the multiplier without changing the argument.
+    // name. Back when catalog-wide mode returned the whole catalog in one body
+    // (~57k rows on prod) one over-long field was 54% of a 44 MB response. The
+    // endpoint pages now (pd-jsby), which caps the multiplier without changing
+    // the argument.
     //
     // Named explicitly, not size-asserted: a byte budget rots, a key set does
     // not. Adding a field to SearchRow fails this test, which is the point —
@@ -1406,7 +1437,7 @@ mod tests {
     #[test]
     fn list_payload_carries_only_what_the_list_renders() {
         let f = fixture();
-        let rows = search(&f.conn, &f.compile("charizard")).unwrap();
+        let rows = search(&f.conn, &f.compile("luke")).unwrap();
         let json = serde_json::to_value(&rows[0]).unwrap();
         let keys: Vec<&str> = json
             .as_object()
@@ -1418,30 +1449,32 @@ mod tests {
         assert_eq!(
             keys,
             vec![
-                "attack_costs",
+                "arenas",
+                "aspects",
                 "card_id",
+                "card_type",
                 "copies",
-                "image_small",
+                "cost",
+                "finish",
+                "hp",
+                "image_url",
                 "market_price",
                 "name",
                 "number",
                 "owned",
                 "owned_count",
+                "power",
                 "printing_id",
                 "rarity",
                 "set_code",
                 "set_name",
-                "set_ptcgo_code",
-                "set_symbol_url",
-                "subtypes",
-                "supertype",
-                "types",
+                "subtitle",
                 "variant",
             ],
             "a field the list does not render belongs on CardDetail, not here"
         );
-        // The three the modal owns, spelled out so a revert reads as one.
-        for gone in ["attacks", "artist", "variant_description"] {
+        // What the card modal owns, spelled out so a revert reads as one.
+        for gone in ["rules_text", "traits", "artist", "variant_description"] {
             assert!(
                 !keys.contains(&gone),
                 "{gone} is card-modal data — it must not ride the list payload"
@@ -1449,76 +1482,100 @@ mod tests {
         }
     }
 
-    // The Cost column keeps its pips and its tooltip; the bulk (text, damage,
-    // convertedEnergyCost) does not ride along.
+    // Aspects and arenas ride the list as the raw JSON arrays the catalog
+    // stores; the client parses them. A card with none (an Event has no arena)
+    // carries the empty array, not NULL.
     #[test]
-    fn attack_costs_keeps_pips_and_tooltip_and_drops_the_prose() {
+    fn aspects_and_arenas_ride_as_json_arrays() {
         let f = fixture();
-        let rows = search(&f.conn, &f.compile("charizard")).unwrap();
-        let raw = rows[0]
-            .attack_costs
-            .as_deref()
-            .expect("Charizard has attacks");
+        let rows = search(&f.conn, &f.compile("luke")).unwrap();
         assert_eq!(
-            raw, r#"[{"name":"Fire Spin","cost":["Fire","Fire","Fire","Fire"]}]"#,
-            "exactly the two keys the Cost column reads"
+            rows[0].aspects.as_deref(),
+            Some(r#"["Vigilance","Heroism"]"#)
         );
-        assert!(!raw.contains("text"), "attack text is modal-only");
-        assert!(!raw.contains("damage"), "attack damage is modal-only");
-        assert!(!raw.contains("convertedEnergyCost"));
-    }
+        assert_eq!(rows[0].arenas.as_deref(), Some(r#"["Ground"]"#));
+        assert_eq!(rows[0].card_type.as_deref(), Some("Unit"));
+        assert_eq!(rows[0].subtitle.as_deref(), Some("Faithful Friend"));
+        assert_eq!(
+            (rows[0].cost, rows[0].power, rows[0].hp),
+            (Some(3), Some(3), Some(5))
+        );
 
-    // A Trainer has no attacks at all — json_each over a NULL column must
-    // yield NULL, not an empty array and not an error.
-    #[test]
-    fn attack_costs_is_null_when_the_card_has_no_attacks() {
-        let f = fixture();
-        let rows = search(&f.conn, &f.compile("is:missing professor oak")).unwrap();
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].printing_id, "base1-88-normal");
-        assert!(rows[0].attack_costs.is_none());
+        let event = search(&f.conn, &f.compile("is:missing vanquish")).unwrap();
+        assert_eq!(event.len(), 1);
+        assert_eq!(event[0].printing_id, "vanquish-std");
+        assert_eq!(event[0].arenas.as_deref(), Some("[]"));
+        assert_eq!(event[0].subtitle, None);
+        assert_eq!((event[0].power, event[0].hp), (None, None));
     }
 
     #[test]
     fn qty_counts_per_printing() {
         let f = fixture();
-        // Charizard printing has 2 copies; Pikachu has 1.
-        assert_eq!(f.ids("qty>=2"), vec!["base1-4-holo"]);
-        assert!(f.ids("pikachu qty>=2").is_empty());
-        assert_eq!(f.ids("is:dupe"), vec!["base1-4-holo"]);
+        // Luke's printing has 2 copies; the Falcon has 1.
+        assert_eq!(f.ids("qty>=2"), vec!["luke-foil"]);
+        assert!(f.ids("falcon qty>=2").is_empty());
+        assert_eq!(f.ids("is:dupe"), vec!["luke-foil"]);
     }
 
     #[test]
     fn numeric_and_rarity_ordinals() {
         let f = fixture();
-        // hp>=100 among owned → Charizard (120); Pikachu (60) excluded.
-        assert_eq!(f.ids("hp>=100"), vec!["base1-4-holo"]);
-        // rarity>=rare → Rare Holo (Charizard); Common (Pikachu) excluded.
-        assert_eq!(f.ids("rarity>=rare"), vec!["base1-4-holo"]);
+        // hp>=5 among owned → Luke (5); the Falcon (3) excluded.
+        assert_eq!(f.ids("hp>=5"), vec!["luke-foil"]);
+        // rarity>=rare → Legendary (Luke); Common (Falcon) excluded.
+        assert_eq!(f.ids("rarity>=rare"), vec!["luke-foil"]);
     }
 
     #[test]
-    fn variant_flag_matches_holo() {
+    fn finish_and_variant_flags() {
         let f = fixture();
-        assert_eq!(f.ids("is:holo"), vec!["base1-4-holo"]);
+        assert_eq!(f.ids("is:foil"), vec!["luke-foil"]);
+        assert_eq!(f.ids("is:nonfoil"), vec!["falcon-std"]);
+        assert_eq!(f.ids("f:foil"), vec!["luke-foil"]);
+        assert_eq!(f.ids("is:standard"), vec!["falcon-std", "luke-foil"]);
+        // Owned mode: the Hyperspace Falcon is not owned.
+        assert!(f.ids("is:hyperspace").is_empty());
+        assert_eq!(
+            f.ids("is:missing is:hyperspace"),
+            vec!["falcon-hyper"],
+            "catalog-wide surfaces the unowned Hyperspace printing"
+        );
+        assert_eq!(f.ids("v:standard c:3"), vec!["luke-foil"]);
     }
 
     #[test]
-    fn set_by_ptcgo_code() {
+    fn set_by_code_and_name() {
         let f = fixture();
-        // s:mew → 151 set; only the owned Pikachu printing.
-        assert_eq!(f.ids("s:mew"), vec!["sv3pt5-25-normal"]);
+        // s:shd → Shadows of the Galaxy; only the owned Falcon printing.
+        assert_eq!(f.ids("s:shd"), vec!["falcon-std"]);
+        assert_eq!(f.ids("s:shadows"), vec!["falcon-std"]);
+        assert_eq!(f.ids("s:sor"), vec!["luke-foil"]);
+    }
+
+    #[test]
+    fn swu_vocabulary_compiles_and_filters() {
+        let f = fixture();
+        assert_eq!(f.ids("arena:space"), vec!["falcon-std"]);
+        assert_eq!(f.ids("trait:jedi"), vec!["luke-foil"]);
+        assert_eq!(f.ids("t:unit cost<=2"), vec!["falcon-std"]);
+        assert_eq!(f.ids("p>=3"), vec!["falcon-std", "luke-foil"]);
+        assert_eq!(f.ids("o:heal"), vec!["luke-foil"]);
+        assert_eq!(f.ids("has:subtitle"), vec!["falcon-std", "luke-foil"]);
+        assert_eq!(f.ids("artist:mcquarrie"), vec!["falcon-std"]);
+        assert_eq!(f.ids("year:2024"), vec!["falcon-std", "luke-foil"]);
+        assert_eq!(f.ids("a:heroism"), vec!["falcon-std", "luke-foil"]);
     }
 
     #[test]
     fn negation_and_boolean() {
         let f = fixture();
-        // Owned, not fire → Pikachu only.
-        assert_eq!(f.ids("-t:fire"), vec!["sv3pt5-25-normal"]);
+        // Owned, not Vigilance → the Falcon only.
+        assert_eq!(f.ids("-a:vigilance"), vec!["falcon-std"]);
         // OR across owned printings.
         assert_eq!(
-            f.ids("t:fire or t:lightning"),
-            vec!["base1-4-holo", "sv3pt5-25-normal"]
+            f.ids("a:vigilance or a:cunning"),
+            vec!["falcon-std", "luke-foil"]
         );
     }
 
@@ -1550,39 +1607,56 @@ mod tests {
     // therefore has to be expressible here.
 
     #[test]
-    fn order_by_type_sorts_on_supertype() {
+    fn order_by_type_sorts_on_card_type() {
         let f = fixture();
-        // Three Pokémon and one Trainer (Professor Oak, base1-88-normal).
+        // Three Units and one Event (Vanquish, vanquish-std).
         let asc = ordered(&f, "type", "asc");
         assert_eq!(
-            asc.last().map(String::as_str),
-            Some("base1-88-normal"),
-            "Pokémon before Trainer: {asc:?}"
+            asc.first().map(String::as_str),
+            Some("vanquish-std"),
+            "Event before Unit: {asc:?}"
         );
         let desc = ordered(&f, "type", "desc");
-        assert_eq!(desc.first().map(String::as_str), Some("base1-88-normal"));
+        assert_eq!(desc.last().map(String::as_str), Some("vanquish-std"));
     }
 
     #[test]
-    fn order_by_etype_sorts_on_energy_type() {
+    fn order_by_cost_sorts_on_resource_cost() {
         let f = fixture();
-        // Fire (Charizard) < Lightning (Pikachu ×2) < Water (Blastoise); the
-        // Trainer has no types at all and NULL sorts first ascending.
+        // Falcon 2 (two printings, tied: number breaks it), Luke 3,
+        // Vanquish 5, Han 6.
         assert_eq!(
-            ordered(&f, "etype", "asc"),
+            ordered(&f, "cost", "asc"),
             vec![
-                "base1-88-normal",
-                "base1-4-holo",
-                "sv3pt5-25-normal",
-                "sv3pt5-25-reverse_holo",
-                "base1-2-holo",
+                "falcon-std",
+                "falcon-hyper",
+                "luke-foil",
+                "vanquish-std",
+                "han-std",
+            ]
+        );
+    }
+
+    #[test]
+    fn order_by_power_puts_the_unpowered_first_ascending() {
+        let f = fixture();
+        // The Event has no power and NULL sorts first ascending; Luke and the
+        // Falcon tie on 3 and fall to collector number; Han is 7.
+        assert_eq!(
+            ordered(&f, "power", "asc"),
+            vec![
+                "vanquish-std",
+                "luke-foil",
+                "falcon-std",
+                "falcon-hyper",
+                "han-std",
             ]
         );
     }
 
     // --- sort=set with NULL set_sort_order (db-hdwl) ----------------------
     //
-    // In prod set_sort_order is NULL for every set — ingest never writes it.
+    // In prod sort_order is the default for every set — ingest never writes it.
     // The sort must therefore use release_date + set_code, both of which ingest
     // does populate.  The fixture below is shaped like prod: set_sort_order NULL
     // throughout, two sets sharing a release_date, and one set with no
@@ -1597,54 +1671,38 @@ mod tests {
         {
             let mut c = open_shared(&shared).unwrap();
             search_meta::reconcile(&mut c).unwrap();
-            // Three sets.  set_sort_order deliberately omitted so it is NULL.
-            // 'early' and 'late' share 2000/06/01; 'nodate' has no release_date.
+            // Four sets.  sort_order deliberately omitted so it is the default.
+            // 'shared' and 'also' share 2000-06-01; 'nodate' has no release_date.
             c.execute(
-                "INSERT INTO sets (set_code, name, series, release_date)
-                 VALUES ('early',  'Early Set',  'Gen1', '2000/01/01'),
-                        ('shared', 'Shared Date','Gen2', '2000/06/01'),
-                        ('also',   'Also Shared','Gen3', '2000/06/01'),
-                        ('nodate', 'No Date Set','Gen4', NULL)",
+                "INSERT INTO sets (set_code, name, release_date)
+                 VALUES ('early',  'Early Set',  '2000-01-01'),
+                        ('shared', 'Shared Date','2000-06-01'),
+                        ('also',   'Also Shared','2000-06-01'),
+                        ('nodate', 'No Date Set', NULL)",
                 [],
             )
             .unwrap();
             // Two cards per set, collector numbers 1 and 2.
-            c.execute(
-                "INSERT INTO cards (card_id,set_code,number,number_sortable,name,supertype,
-                    subtypes,hp,types,rarity,artist,legalities)
-                 VALUES
-                 ('early-1','early','1',1,'E-One','Pokémon','[\"Basic\"]',60,'[\"Fire\"]',
-                   'Common','A','{\"unlimited\":\"Legal\"}'),
-                 ('early-2','early','2',2,'E-Two','Pokémon','[\"Basic\"]',60,'[\"Fire\"]',
-                   'Common','A','{\"unlimited\":\"Legal\"}'),
-                 ('shared-1','shared','1',1,'S-One','Pokémon','[\"Basic\"]',60,'[\"Water\"]',
-                   'Common','B','{\"unlimited\":\"Legal\"}'),
-                 ('shared-2','shared','2',2,'S-Two','Pokémon','[\"Basic\"]',60,'[\"Water\"]',
-                   'Common','B','{\"unlimited\":\"Legal\"}'),
-                 ('also-1','also','1',1,'A-One','Pokémon','[\"Basic\"]',60,'[\"Lightning\"]',
-                   'Common','C','{\"unlimited\":\"Legal\"}'),
-                 ('also-2','also','2',2,'A-Two','Pokémon','[\"Basic\"]',60,'[\"Lightning\"]',
-                   'Common','C','{\"unlimited\":\"Legal\"}'),
-                 ('nodate-1','nodate','1',1,'N-One','Pokémon','[\"Basic\"]',60,'[\"Grass\"]',
-                   'Common','D','{\"unlimited\":\"Legal\"}'),
-                 ('nodate-2','nodate','2',2,'N-Two','Pokémon','[\"Basic\"]',60,'[\"Grass\"]',
-                   'Common','D','{\"unlimited\":\"Legal\"}')",
-                [],
-            )
-            .unwrap();
-            c.execute(
-                "INSERT INTO printings (printing_id,card_id,variant) VALUES
-                 ('early-1-n','early-1','normal'),
-                 ('early-2-n','early-2','normal'),
-                 ('shared-1-n','shared-1','normal'),
-                 ('shared-2-n','shared-2','normal'),
-                 ('also-1-n','also-1','normal'),
-                 ('also-2-n','also-2','normal'),
-                 ('nodate-1-n','nodate-1','normal'),
-                 ('nodate-2-n','nodate-2','normal')",
-                [],
-            )
-            .unwrap();
+            for (set, name) in [
+                ("early", "E"),
+                ("shared", "S"),
+                ("also", "A"),
+                ("nodate", "N"),
+            ] {
+                for n in ["1", "2"] {
+                    let card_id = format!("{set}-{n}");
+                    testkit::card(&c, &card_id, &format!("{name}-{n}"));
+                    testkit::printing(
+                        &c,
+                        &format!("{card_id}-n"),
+                        &card_id,
+                        set,
+                        n,
+                        "Standard",
+                        "Normal",
+                    );
+                }
+            }
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         let registry = search_meta::load_registry(&conn).unwrap();
@@ -1660,7 +1718,7 @@ mod tests {
 
     /// Positive control: verifies the test fixture actually catches the bug that
     /// existed in prod.  With the old `s.set_sort_order` sort key (always NULL),
-    /// SQLite falls back to the tiebreak `cd.number_sortable, p.printing_id`,
+    /// SQLite falls back to the tiebreak `NUMBER_KEY, p.printing_id`,
     /// which interleaves sets by collector number instead of grouping them.
     ///
     /// This test would fail on the pre-fix code and passes after the fix.
@@ -1861,20 +1919,20 @@ mod tests {
     }
 
     /// `order:price` for a catalog printing is decided entirely inside
-    /// `shared` (pd-m4gw). The curated override prices it; a tenant
-    /// `manual_prices` row against the same printing — the residue every
-    /// pre-pd-m4gw collection still carries — cannot move it.
+    /// `shared` (pd-m4gw). The newest catalog quote prices it; a tenant
+    /// `manual_prices` row against the same printing — the residue a
+    /// collection may still carry — cannot move it.
     #[test]
-    fn order_by_price_reads_the_catalog_override_and_not_a_tenant_manual_price() {
+    fn order_by_price_reads_the_catalog_quote_and_not_a_tenant_manual_price() {
         let f = fixture();
-        f.set_catalog_price("base1-4-holo", 10.0);
-        f.set_catalog_price("sv3pt5-25-normal", 20.0);
-        // Written straight to the table, the way the old build wrote it —
-        // `manual_prices::insert` now refuses a catalog printing outright.
+        f.set_catalog_price("luke-foil", 10.0);
+        f.set_catalog_price("falcon-std", 20.0);
+        // Written straight to the table: `manual_prices::insert` refuses a
+        // catalog printing outright.
         f.conn
             .execute(
                 "INSERT INTO manual_prices (printing_id, price, observed_at) \
-                 VALUES ('base1-4-holo', 9999.0, '2026-08-11T00:00:00Z')",
+                 VALUES ('luke-foil', 9999.0, '2026-08-11T00:00:00Z')",
                 [],
             )
             .unwrap();
@@ -1882,8 +1940,8 @@ mod tests {
         let desc = ordered(&f, "price", "desc");
         assert_eq!(
             &desc[..2],
-            &["sv3pt5-25-normal", "base1-4-holo"],
-            "the $9999 tenant row must not lift the Charizard above the Pikachu: {desc:?}"
+            &["falcon-std", "luke-foil"],
+            "the $9999 tenant row must not lift the Luke above the Falcon: {desc:?}"
         );
     }
 
@@ -1894,7 +1952,7 @@ mod tests {
     #[test]
     fn order_by_price_reaches_a_tenant_table_only_through_the_user_printings_guard() {
         let sql = order_sql(Some("price"));
-        assert!(sql.contains("catalog_price_overrides"));
+        assert!(sql.contains("FROM prices lp"));
         let manual = sql
             .split_once("manual_prices")
             .expect("price still consults manual_prices for user-created printings")
@@ -1987,10 +2045,10 @@ mod tests {
     #[test]
     fn total_value_is_the_whole_result_whatever_slice_was_asked_for() {
         let f = fixture();
-        // Two owned Charizards (Near Mint ×1.00 and Lightly Played ×0.85) and
-        // one Near Mint Pikachu.
-        f.set_catalog_price("base1-4-holo", 100.0);
-        f.set_catalog_price("sv3pt5-25-normal", 10.0);
+        // Two owned Lukes (Near Mint ×1.00 and Lightly Played ×0.85) and
+        // one Near Mint Falcon.
+        f.set_catalog_price("luke-foil", 100.0);
+        f.set_catalog_price("falcon-std", 10.0);
         let expected = 100.0 * 1.00 + 100.0 * 0.85 + 10.0 * 1.00;
 
         let c = all_printings();
@@ -2029,21 +2087,21 @@ mod tests {
     #[test]
     fn total_value_counts_owned_copies_and_not_the_others() {
         let f = fixture();
-        f.set_catalog_price("base1-2-holo", 50.0);
-        // Blastoise is unowned in the fixture. Give it one copy per status
+        f.set_catalog_price("han-std", 50.0);
+        // Han Solo is unowned in the fixture. Give it one copy per status
         // owned mode is willing to list, plus a sold one.
         f.conn
             .execute(
                 "INSERT INTO collection (printing_id,condition,language,acquired_at,source,status)
                  VALUES
-                 ('base1-2-holo','Near Mint','English','2024-03-01','manual_id','owned'),
-                 ('base1-2-holo','Near Mint','English','2024-03-02','manual_id','ordered'),
-                 ('base1-2-holo','Near Mint','English','2024-03-03','manual_id','sold')",
+                 ('han-std','Near Mint','English','2024-03-01','manual_id','owned'),
+                 ('han-std','Near Mint','English','2024-03-02','manual_id','ordered'),
+                 ('han-std','Near Mint','English','2024-03-03','manual_id','sold')",
                 [],
             )
             .unwrap();
 
-        let c = f.compile("blastoise");
+        let c = f.compile("han solo");
         let page = search_page(&f.conn, &c, Slice::All).unwrap();
         assert_eq!(page.total, 1, "one printing matches, whatever its copies");
         assert_eq!(
@@ -2074,8 +2132,8 @@ mod tests {
 
         // Price everything; now ask for a result that matches only printings
         // nobody owns.
-        f.set_catalog_price("base1-4-holo", 100.0);
-        f.set_catalog_price("base1-2-holo", 50.0);
+        f.set_catalog_price("luke-foil", 100.0);
+        f.set_catalog_price("han-std", 50.0);
         let unowned = search_page(&f.conn, &f.compile("is:missing"), Slice::All).unwrap();
         assert!(unowned.total > 0, "catalog-wide rows matched");
         assert_eq!(
@@ -2090,13 +2148,13 @@ mod tests {
     #[test]
     fn an_unpriced_copy_costs_the_sum_nothing_rather_than_emptying_it() {
         let f = fixture();
-        // Only the Charizard is priced; the owned Pikachu is not.
-        f.set_catalog_price("base1-4-holo", 100.0);
+        // Only the Luke is priced; the owned Falcon is not.
+        f.set_catalog_price("luke-foil", 100.0);
         let page = search_page(&f.conn, &all_printings(), Slice::All).unwrap();
         let got = page.total_value.unwrap();
         assert!(
             (got - (100.0 + 85.0)).abs() < 1e-9,
-            "the unpriced Pikachu drops out of the sum, got {got}"
+            "the unpriced Falcon drops out of the sum, got {got}"
         );
     }
 
@@ -2121,9 +2179,8 @@ mod tests {
     // The classic form of this bug: an ORDER BY that is not a total order lets
     // SQLite return tied rows in either order between statements, so an OFFSET
     // walk drops some rows and repeats others. The fixture has a tie pair by
-    // construction — sv3pt5-25-normal and sv3pt5-25-reverse_holo are the same
-    // card, so they share `cd.name` AND `cd.number_sortable`, the only two
-    // ORDER BY keys this query had before the printing_id tiebreaker.
+    // construction — falcon-std and falcon-hyper are the same card, so they
+    // share `cd.name`, the first ORDER BY key, and differ only by number.
     //
     // This asserts the SQL shape rather than a walk, deliberately: SQLite's
     // sorter happens to be stable at four rows, so the walk below passes with
@@ -2133,7 +2190,9 @@ mod tests {
     fn order_by_is_a_total_order() {
         let sql = build_full_sql(&all_printings(), Some((1, 0)));
         assert!(
-            sql.contains("cd.number_sortable ASC, p.printing_id ASC LIMIT ? OFFSET ?"),
+            sql.contains(&format!(
+                "{NUMBER_KEY} ASC, p.printing_id ASC LIMIT ? OFFSET ?"
+            )),
             "unique final sort key + bound paging: {sql}"
         );
         // And the bounds are bound parameters, never formatted into the SQL.
@@ -2200,7 +2259,7 @@ mod tests {
     fn paging_respects_the_query_filter() {
         let f = fixture();
         // Owned mode, one match: paging must not widen or narrow the filter.
-        let c = f.compile("t:fire");
+        let c = f.compile("a:vigilance");
         let page = search_page(
             &f.conn,
             &c,
@@ -2212,7 +2271,7 @@ mod tests {
         .unwrap();
         assert_eq!(page.total, 1);
         assert_eq!(page.rows.len(), 1);
-        assert_eq!(page.rows[0].printing_id, "base1-4-holo");
+        assert_eq!(page.rows[0].printing_id, "luke-foil");
         assert_eq!(
             page.rows[0].copies.len(),
             2,
@@ -2244,72 +2303,61 @@ mod tests {
         {
             let mut c = open_shared(&shared).unwrap();
             search_meta::reconcile(&mut c).unwrap();
-            c.execute(
-                "INSERT INTO sets (set_code, ptcgo_code, name, series, set_sort_order, release_date)
-                 VALUES ('tie1','TI1','Tie Set One','Ties',1,'2024/01/01'),
-                        ('tie2','TI2','Tie Set Two','Ties',2,'2024/06/01')",
-                [],
-            )
-            .unwrap();
+            testkit::set_on(&c, "TI1", "Tie Set One", "2024-01-01");
+            testkit::set_on(&c, "TI2", "Tie Set Two", "2024-06-01");
             let tx = c.transaction().unwrap();
             {
                 let mut card = tx
                     .prepare(
-                        "INSERT INTO cards (card_id,set_code,number,number_sortable,name,
-                             supertype,types,rarity,hp,national_pokedex_numbers)
-                         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
+                        "INSERT INTO cards (card_id,name,card_type,cost,power,hp)
+                         VALUES (?1,?2,?3,?4,?5,?6)",
                     )
                     .unwrap();
                 let mut pr = tx
                     .prepare(
-                        "INSERT INTO printings (printing_id,card_id,variant,tcgplayer_product_id,
-                             sub_type_name)
-                         VALUES (?1,?2,?3,?4,'Normal')",
+                        "INSERT INTO printings (printing_id,card_id,set_code,number,variant,
+                             finish,rarity)
+                         VALUES (?1,?2,?3,?4,?5,'Normal',?6)",
                     )
                     .unwrap();
                 let mut price = tx
                     .prepare(
-                        "INSERT INTO latest_prices (tcgplayer_product_id,sub_type_name,source,
-                             price_type,price,observed_at)
-                         VALUES (?1,'Normal','tcgcsv','market',?2,'2026-08-09')",
+                        "INSERT INTO prices (printing_id,source,observed_on,market)
+                         VALUES (?1,'tcgcsv','2026-08-09',?2)",
                     )
                     .unwrap();
                 for i in 0..CARDS {
                     let card_id = format!("tie-{i}");
                     card.execute(rusqlite::params![
                         card_id,
-                        if i % 2 == 0 { "tie1" } else { "tie2" },
-                        (i % 50 + 1).to_string(),
-                        (i % 50 + 1) as i64,
-                        format!("Tied Mon {}", i % NAMES),
-                        if i % 5 == 0 { "Trainer" } else { "Pokémon" },
-                        if i % 5 == 0 {
-                            None
-                        } else {
-                            Some(format!("[\"{}\"]", ["Fire", "Water", "Grass"][i % 3]))
-                        },
-                        ["Common", "Uncommon", "Rare", "Rare Holo"][(i / 4) % 4],
-                        // Ten HP buckets and ten dex buckets: `order:hp` and
-                        // `order:dex` get long ties too rather than a total
+                        format!("Tied Trooper {}", i % NAMES),
+                        if i % 5 == 0 { "Event" } else { "Unit" },
+                        // Ten buckets each: `order:cost`, `order:power` and
+                        // `order:hp` get long ties too rather than a total
                         // order of their own.
+                        (i % 10) as i64,
+                        (i % 10) as i64 * 2,
                         60 + (i % 10) as i64 * 20,
-                        format!("[{}]", i % 10 + 1),
                     ])
                     .unwrap();
-                    for (v, variant) in ["normal", "reverse_holo", "holo"].iter().enumerate() {
-                        let product = (i * 3 + v) as i64 + 90_000;
+                    for (v, variant) in ["Standard", "Hyperspace", "Showcase"].iter().enumerate() {
+                        let n = (i * 3 + v) as i64;
+                        let printing_id = format!("{card_id}-{variant}");
                         pr.execute(rusqlite::params![
-                            format!("{card_id}-{variant}"),
+                            printing_id,
                             card_id,
+                            if i % 2 == 0 { "TI1" } else { "TI2" },
+                            // Unique per (set, variant); ties across sets.
+                            (i / 2 + 1).to_string(),
                             variant,
-                            product
+                            ["Common", "Uncommon", "Rare", "Legendary"][(i / 4) % 4],
                         ])
                         .unwrap();
                         // Prices in 20 buckets, and every fifth printing has
                         // none at all — `order:price` must tie on NULL too.
-                        if product % 5 != 0 {
+                        if n % 5 != 0 {
                             price
-                                .execute(rusqlite::params![product, (i % 20) as f64 + 0.5])
+                                .execute(rusqlite::params![printing_id, (i % 20) as f64 + 0.5])
                                 .unwrap();
                         }
                     }
@@ -2318,8 +2366,8 @@ mod tests {
             tx.commit().unwrap();
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-        // Own 0, 1 or 2 copies of the first 300 printings so `order:qty` has
-        // three buckets and the rest of the catalog ties at 0.
+        // Own 0, 1 or 2 copies of the first 50 cards' printings so `order:qty`
+        // has three buckets and the rest of the catalog ties at 0.
         {
             let tx = conn.unchecked_transaction().unwrap();
             {
@@ -2332,7 +2380,7 @@ mod tests {
                     .unwrap();
                 for i in 0..50 {
                     let card_id = format!("tie-{i}");
-                    for (v, variant) in ["normal", "reverse_holo", "holo"].iter().enumerate() {
+                    for (v, variant) in ["Standard", "Hyperspace", "Showcase"].iter().enumerate() {
                         let printing = format!("{card_id}-{variant}");
                         for _ in 0..(v % 3) {
                             ins.execute(rusqlite::params![
@@ -2368,14 +2416,16 @@ mod tests {
             c.override_order(Some(key), Some("desc"));
             let sql = build_full_sql(&c, Some((250, 0)));
             assert!(
-                sql.contains("cd.number_sortable ASC, p.printing_id ASC LIMIT ? OFFSET ?"),
+                sql.contains(&format!(
+                    "{NUMBER_KEY} ASC, p.printing_id ASC LIMIT ? OFFSET ?"
+                )),
                 "order:{key} must end in the unique tiebreak: {sql}"
             );
             // The direction applies to the sort column, never to the tiebreak:
             // flipping the tiebreak with it would reorder tied rows between a
             // page and the whole result.
             assert!(
-                sql.contains("DESC, cd.number_sortable ASC"),
+                sql.contains(&format!("DESC, {NUMBER_KEY} ASC")),
                 "order:{key} desc keeps an ASC tiebreak: {sql}"
             );
         }
@@ -2477,11 +2527,11 @@ mod tests {
     /// (measured on SQLite 3.45.1, pd-66hq):
     ///
     /// 1. **The ORDER BY's unique tiebreak lives on a different table from
-    ///    its sort column.** `ORDER BY cd.name, cd.number_sortable,
+    ///    its sort column.** `ORDER BY cd.name, NUMBER_KEY,
     ///    p.printing_id` needs the leading terms from `cards` and the last
     ///    from `printings`; SQLite will not use an inner-loop index to
     ///    satisfy a trailing ORDER BY term, even given
-    ///    `cards(name, number_sortable, card_id)` and
+    ///    `cards(name, card_id)` and
     ///    `printings(card_id, printing_id)` as covering unique indexes. It
     ///    reports `USE TEMP B-TREE FOR RIGHT PART OF ORDER BY` and sorts.
     /// 2. **`FROM` is a cross-database `UNION ALL`** (`printings` in the
@@ -2508,7 +2558,7 @@ mod tests {
         let f = tie_dense_fixture();
         let mut sorting: Vec<&str> = Vec::new();
         for key in SORT_KEYS {
-            let mut c = f.compile("supertype:Pokémon");
+            let mut c = f.compile("t:unit");
             c.set_catalog_wide(true);
             c.override_order(Some(key), None);
             let sql = build_full_sql(&c, Some((250, 0)));

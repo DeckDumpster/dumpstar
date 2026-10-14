@@ -120,6 +120,10 @@ jobs:
             bash tests/visual/run.sh --update
           fi
 
+      - name: List the failed tests in the job summary
+        if: failure()
+        run: bash tests/visual/failure-summary.sh >> "$GITHUB_STEP_SUMMARY"
+
       - name: Commit and push the moved baselines
         env:
           BRANCH: ${{ inputs.branch }}

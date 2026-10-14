@@ -13,18 +13,18 @@ export async function steps(h: ReplayHarness) {
   await h.wait_for_visible('[data-testid="search-input"]');
 
   // Debounced, client-side URL rewrite of the active query.
-  await h.fill_by_selector('[data-testid="search-input"]', 'char');
-  await h.page.waitForURL(/[?&]q=char/, { timeout: 5000 });
+  await h.fill_by_selector('[data-testid="search-input"]', 'luke');
+  await h.page.waitForURL(/[?&]q=luke/, { timeout: 5000 });
 
   // Leave for a card detail page, then come back.
-  await h.navigate('/card/sv8/191');
+  await h.navigate('/card/SOR/005');
   await h.page.waitForURL(/\/card\//, { timeout: 5000 });
   await h.page.goBack({ waitUntil: 'networkidle' });
 
   // The query must still be in the URL and in the box.
-  await h.page.waitForURL(/[?&]q=char/, { timeout: 5000 });
+  await h.page.waitForURL(/[?&]q=luke/, { timeout: 5000 });
   const value = await h.page.locator('[data-testid="search-input"]').inputValue();
-  if (value !== 'char') {
+  if (value !== 'luke') {
     throw new Error(`Back dropped the search query: input="${value}", url=${h.page.url()}`);
   }
   await h.screenshot('final_state');

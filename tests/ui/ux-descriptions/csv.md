@@ -8,7 +8,7 @@
 ## 1. Page Purpose
 
 The CSV Import page brings an entire collection in from an external export —
-ManaBox or TCGplayer. The user picks the source format, supplies the CSV
+TCGplayer or Dumpstar. The user picks the source format, supplies the CSV
 (either by uploading a file or by pasting text), previews a resolution report
 that classifies every row as matched or unmatched, then commits the import.
 Committing adds the matched cards and links them to a new ingestion batch.
@@ -19,7 +19,7 @@ Committing adds the matched cards and links them to a new ingestion batch.
 
 - **Header** — `<h1>` "Import CSV" and a muted line linking to the other add-
   cards routes (manual entry, paste an order).
-- **Form (`.form`)** — a Format `<select>` (ManaBox / TCGplayer), a "CSV file"
+- **Form (`.form`)** — a Format `<select>` (TCGplayer / Dumpstar / Collectr), a "CSV file"
   file input, a "…or paste CSV text" textarea, and an `.actions` row with a
   "Preview" button and a "Import" button.
 - **Inline error line** — red text on failure.
@@ -35,7 +35,7 @@ Committing adds the matched cards and links them to a new ingestion batch.
 
 | Element | Action |
 |---------|--------|
-| Format `<select>` | Chooses the import parser — ManaBox or TCGplayer |
+| Format `<select>` | Chooses the import parser — TCGplayer or Dumpstar |
 | "CSV file" input | Reads a chosen file's text into the content field |
 | Paste textarea | Lets the user paste CSV text directly; editing it clears any prior preview/result |
 | "Preview" button | Requests a resolution report without importing |

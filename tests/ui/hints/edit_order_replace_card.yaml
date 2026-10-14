@@ -5,11 +5,11 @@ involves:
   - 'clicking the Name link navigates to the card detail page'
 fixture_data:
   order_number: "TCG-100001"
-  card_name: "Charizard ex"
-  card_set: "sv3pt5"
-  card_number: "6"
+  card_name: "Luke Skywalker - Faithful Friend"
+  card_set: "SOR"
+  card_number: "5"
 notes: >
   Navigate to /orders and open the TCG-100001 order detail. Wait for the
   card table. Note a card's name. Click that card's Name link. Verify
-  the page navigates to /card/sv3pt5/6 and the card detail for that card
+  the page navigates to /card/SOR/005 and the card detail for that card
   loads.

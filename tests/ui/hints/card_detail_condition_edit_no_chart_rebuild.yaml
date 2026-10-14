@@ -1,15 +1,15 @@
-start_page: /card/base1/2
+start_page: /card/SOR/005
 involves:
-  - "card detail page for Blastoise (base1 #2), owned with one copy"
+  - "card detail page for Luke Skywalker - Faithful Friend (SOR #5), owned with several copies"
   - "price chart [data-testid=price-chart] with a data-builds counter"
   - "per-copy Condition select: td[data-label='Condition'] select"
   - "inline '✓ Saved' confirmation (.cellSaved) after the edit commits"
 fixture_data:
-  start_card: Blastoise
+  start_card: Luke Skywalker - Faithful Friend
   current_condition: "Near Mint"
-  new_condition: "Lightly Played"
+  new_condition: "Moderately Played"
 notes: >
-  Blastoise (base1/2) is owned (one Near Mint copy) and has a price chart.
-  Read data-builds on the price chart, change the copy's Condition to Lightly
+  Luke Skywalker - Faithful Friend (SOR/005) is owned (8 copies; the first copy row is Near Mint) and has a price chart.
+  Read data-builds on the price chart, change the first copy row's Condition to Lightly
   Played, wait for the .cellSaved tick, then assert data-builds is unchanged
   — the chart must not rebuild because the price data didn't change.

@@ -1,6 +1,6 @@
 # Scenario: Back button after leaving /collection preserves the active search
 
-# Related: collection_search_keyword_filter, browse_back_preserves_page_param
+# Related: browse_back_preserves_page_param
 
 description: >
   I type a query into the collection search box so the URL reflects it as

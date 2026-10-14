@@ -2,7 +2,7 @@
  * Hand-written implementation for collectr_export_menu_links.
  *
  * Opens the collection overflow menu and asserts the two separate Collectr
- * export downloads (cards, sealed) are offered alongside the ManaBox export.
+ * export downloads (cards, sealed) are offered alongside the CSV export.
  */
 import type { ReplayHarness } from '../replay';
 

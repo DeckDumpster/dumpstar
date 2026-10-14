@@ -262,14 +262,15 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
         "set_code",
         "number",
         "variant",
+        "variant_code",
         "finish",
         "rarity",
         "artist",
         "image_url",
     ];
     let sql = format!(
-        "INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish, rarity, artist, image_url)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)
+        "INSERT INTO printings (printing_id, card_id, set_code, number, variant, variant_code, finish, rarity, artist, image_url)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)
          ON CONFLICT(printing_id) DO UPDATE SET {}
          WHERE {}",
         cols.iter().map(|c| format!("{c}=excluded.{c}")).collect::<Vec<_>>().join(", "),
@@ -288,6 +289,7 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
                 pr.set_code,
                 pr.number,
                 pr.variant,
+                pr.variant_code,
                 pr.finish,
                 pr.rarity,
                 pr.artist,
@@ -493,7 +495,7 @@ fn rejoin(tx: &Transaction, r: &mut ApplyReport) -> Result<()> {
     }
     let printings: Vec<OfficialPrinting> = tx
         .prepare(
-            "SELECT p.printing_id, p.set_code, p.number, p.variant, p.finish, c.name, c.subtitle
+            "SELECT p.printing_id, p.set_code, p.number, p.variant, p.variant_code, p.finish, c.name, c.subtitle
              FROM printings p JOIN cards c ON c.card_id = p.card_id ORDER BY p.printing_id",
         )?
         .query_map([], |row| {
@@ -502,9 +504,10 @@ fn rejoin(tx: &Transaction, r: &mut ApplyReport) -> Result<()> {
                 set_code: row.get(1)?,
                 number: row.get(2)?,
                 variant: row.get(3)?,
-                finish: row.get(4)?,
-                name: row.get(5)?,
-                subtitle: row.get(6)?,
+                variant_code: row.get(4)?,
+                finish: row.get(5)?,
+                name: row.get(6)?,
+                subtitle: row.get(7)?,
             })
         })?
         .collect::<std::result::Result<_, _>>()?;

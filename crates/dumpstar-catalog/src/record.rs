@@ -101,6 +101,11 @@ pub struct PrintingRecord {
     pub set_code: String,
     pub number: String,
     pub variant: String,
+    /// The official serial code's variant digits (`SS VV NNN`): what tells
+    /// apart two printings that share set, number, display variant and finish.
+    /// Empty when the source has no serial code.
+    #[serde(default)]
+    pub variant_code: String,
     pub finish: String,
     pub rarity: Option<String>,
     pub artist: Option<String>,

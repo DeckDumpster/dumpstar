@@ -161,7 +161,7 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
                 ))
             )
         });
-        let Some((_, _, number)) = split_serial(&serial) else {
+        let Some((_, variant_code, number)) = split_serial(&serial) else {
             payload.alarms.push(AlarmRecord::alarm(
                 "official_bad_record",
                 uid,
@@ -258,6 +258,7 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
             set_code,
             number,
             variant,
+            variant_code: variant_code.to_string(),
             finish: if foil { "Foil" } else { "Normal" }.into(),
             rarity: rel_name(a, "rarity"),
             artist: text(a, "artist"),

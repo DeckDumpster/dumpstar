@@ -163,7 +163,7 @@ mod raw_coverage {
     fn route(target: &str, _n: usize) -> Reply {
         let path = target.split('?').next().unwrap_or(target);
         match path {
-            "/79/groups" => Reply::ok(GROUPS),
+            "/tcgplayer/79/groups" => Reply::ok(GROUPS),
             p if p.ends_with("/products") || p.ends_with("/prices") => Reply::ok(EMPTY),
             other => Reply::status(
                 404,

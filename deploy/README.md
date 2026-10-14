@@ -1,14 +1,5 @@
 # Dumpstar Deployment
 
-> **Provenance.** This document was written for the Pokémon site this workspace was
-> copied from. The pokemontcg.io tail, the pokemon-tcg-data bulk corpus, the Japan
-> catalog, set symbols and the "PARTIAL" (exit 2) derive described below were removed
-> with the Pokémon modules (dumpstar design row S1); the raw landing zone, the offline
-> derive and the TCGCSV landing are what remain, now for Star Wars: Unlimited
-> (TCGCSV category 79). Read the sections on those removed parts as history until the
-> catalog seam (row S6) rewrites them.
-
-
 Rootless Podman + systemd. No GitHub Actions — all build / test / deploy
 logic lives in these scripts. No sudo required after the one-time Podman
 install. Each instance is a separate repo clone with its own image, data
@@ -183,7 +174,7 @@ Startup was enough when one gate ran at a time and the previous one's teardown
 had already returned its space; two at a time can be two images, two
 volumes and two MinIO stores deep at once. It is the same
 `deploy/diskcheck.sh --floor` guard as everywhere else, over the same list —
-copied from `DUMPSTAR_CI_DISK_PATHS` rather than spelled a second time, so
+taken from `DUMPSTAR_CI_DISK_PATHS` rather than spelled a second time, so
 `DUMPSTAR_DISK_FLOOR_GB` moves all of them together and neither check can quietly
 stop covering a disk. Below the
 floor with gates still running, the runner **holds** — the thing most likely to
@@ -706,11 +697,7 @@ changed.
     is disabled, because landing without deriving is a box that is green every
     night and serves a catalog frozen at the day of the upgrade. `lake.env` is
     required for the same reason, and there is no `--land-raw` any more.
-    Exit 2 is a **partial** run: the pokemontcg.io tail failed every retry, so the
-    set list in tonight's partition is stale, but the run continued and TCGCSV's
-    prices — the half a night cannot get back — landed (pd-nons). Unlike the
-    transform tier's, it is deliberately not declared a success, so a persistent
-    stall still pages.
+    It exits 0 or 1; there is no partial run.
 - `dumpstar-derive@<instance>` — nightly `dumpstar-lake-derive shared` (07:00),
   ordered `After=` the landing. **The only thing that builds `shared.sqlite`.**
   Enable it on any box that runs the refresh; enable it *first*. See
@@ -965,7 +952,7 @@ assuming it — write, read, commit again, then read the table as of the first
 commit. Two findings from standing it up (pd-fzeb), both measured:
 
 - **Catalog-level time travel works.** `main@<commit-hash>` addresses every
-  table at once, which is the single-value provenance handle a published
+  table at once, which is the single-value lineage handle a published
   artefact records.
 - **Per-table Iceberg snapshot travel does not survive Nessie.** The metadata
   Nessie hands a client carries **only the current snapshot**, so

@@ -406,10 +406,7 @@ bash deploy/restore-litestream.sh --yes prod 01K2C7HQ8P41K8T2Y7Q3N5E1DEF
 # being designed against is yesterday's raw silently producing today's catalog
 # and looking current.
 #
-# A partition is usable when TCGCSV reports "complete": true.  A gap only in
-# the pokemontcg.io tail (sets/cards INCOMPLETE, products and prices COMPLETE)
-# derives and exits 2 — stale set list, prices whole — and is acceptable for
-# a restore.
+# A partition is usable when TCGCSV reports "complete": true.
 set -a; . ~/.config/dumpstar/lake.env; set +a
 
 # 1. List available dates, newest first.  tcgcsv/prices is the dataset to
@@ -436,7 +433,7 @@ systemctl --user start dumpstar-prod              # start the app
 
 # ── FALLBACK — if the lake is also gone, rebuild from upstream.
 #    Use only when the lake bucket is inaccessible or holds no usable
-#    partition.  This path depends on pokemontcg.io and tcgcsv.com both being
+#    partition.  This path depends on tcgcsv.com being
 #    up at the moment of the restore, which may not hold during the incident
 #    that brought the box down.  Document the fallback if you use it.
 # bash deploy/seed.sh prod && systemctl --user start dumpstar-prod

@@ -1,0 +1,102 @@
+{
+ "data": [
+  {
+   "id": 91001,
+   "attributes": {
+    "title": "Senator Chuchi",
+    "subtitle": null,
+    "cardId": "9900001125",
+    "cardUid": "9911251036",
+    "serialCode": "06361125",
+    "hyperspace": false,
+    "showcase": false,
+    "cost": 3,
+    "power": 2,
+    "hp": 4,
+    "artist": "Test Artist",
+    "updatedAt": "2026-10-13T00:00:00.000Z",
+    "expansion": {
+     "data": {
+      "id": 30,
+      "attributes": {
+       "code": "SEC",
+       "name": "Secrets of Power",
+       "sortValue": 9
+      }
+     }
+    },
+    "variantTypes": {
+     "data": [
+      {
+       "id": 1,
+       "attributes": {
+        "name": "Standard"
+       }
+      }
+     ]
+    },
+    "rarity": {
+     "data": {
+      "id": 2,
+      "attributes": {
+       "name": "Uncommon"
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": 91002,
+   "attributes": {
+    "title": "Senator Chuchi",
+    "subtitle": null,
+    "cardId": "9900001125",
+    "cardUid": "9911251037",
+    "serialCode": "06371125",
+    "hyperspace": false,
+    "showcase": false,
+    "cost": 3,
+    "power": 2,
+    "hp": 4,
+    "artist": "Test Artist",
+    "updatedAt": "2026-10-13T00:00:00.000Z",
+    "expansion": {
+     "data": {
+      "id": 30,
+      "attributes": {
+       "code": "SEC",
+       "name": "Secrets of Power",
+       "sortValue": 9
+      }
+     }
+    },
+    "variantTypes": {
+     "data": [
+      {
+       "id": 1,
+       "attributes": {
+        "name": "Standard"
+       }
+      }
+     ]
+    },
+    "rarity": {
+     "data": {
+      "id": 2,
+      "attributes": {
+       "name": "Uncommon"
+      }
+     }
+    }
+   }
+  }
+ ],
+ "meta": {
+  "pagination": {
+   "page": 1,
+   "pageSize": 100,
+   "pageCount": 1,
+   "total": 2
+  }
+ }
+}

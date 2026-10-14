@@ -720,3 +720,56 @@ fn a_thin_price_day_raises_a_coverage_alarm() {
             .any(|a| a.kind == "low_price_coverage")
     );
 }
+
+// ---- sp-5zcm06: two official printings that share a display variant ---------
+
+#[test]
+fn two_printings_sharing_set_number_variant_name_and_finish_both_apply() {
+    use dumpstar_catalog::apply::apply;
+    use dumpstar_catalog::landing::{Provenance, sha256_hex};
+    let bytes = read("off-sec-shared-standard.json");
+    let dir = tempfile::tempdir().unwrap();
+    let mut catalog = Catalog::open_writer(&dir.path().join("shared.sqlite")).unwrap();
+    let prov = Provenance {
+        source: "official".into(),
+        url: "https://official.test/api/cards?page=1".into(),
+        fetched_at: "2026-10-13T00:00:00Z".into(),
+        sha256: sha256_hex(&bytes),
+        bytes: bytes.len() as u64,
+        as_of: None,
+    };
+    let r = apply(&mut catalog, &bytes, &prov).unwrap();
+    assert_eq!(r.printings, 2);
+    let conn = catalog.conn();
+    let mut s = conn
+        .prepare(
+            "SELECT printing_id, set_code, number, variant, variant_code, finish
+             FROM printings ORDER BY printing_id",
+        )
+        .unwrap();
+    let rows: Vec<(String, String, String, String, String, String)> = s
+        .query_map([], |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+            ))
+        })
+        .unwrap()
+        .map(|r| r.unwrap())
+        .collect();
+    let row = |uid: &str, code: &str| {
+        (
+            uid.to_string(),
+            "SEC".to_string(),
+            "1125".to_string(),
+            "Standard".to_string(),
+            code.to_string(),
+            "Normal".to_string(),
+        )
+    };
+    assert_eq!(rows, vec![row("9911251036", "36"), row("9911251037", "37")]);
+}

@@ -26,6 +26,9 @@ pub struct OfficialPrinting {
     pub set_code: String,
     pub number: String,
     pub variant: String,
+    /// The serial code's variant digits; two printings may share every other
+    /// key field and differ only here.
+    pub variant_code: String,
     pub finish: String,
     pub name: String,
     pub subtitle: Option<String>,
@@ -326,6 +329,38 @@ pub fn join(
         if ok.is_empty() {
             continue;
         }
+        // Two official printings of one finish that tcgcsv lists as one
+        // product (they differ only in the serial's variant code): which one
+        // the product prices is not knowable here, so it is an alarm, not a
+        // guess (sp-5zcm06).
+        let mut per_finish: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+        for o in &ok {
+            per_finish
+                .entry(o.finish.as_str())
+                .or_default()
+                .push(o.variant_code.as_str());
+        }
+        if let Some((finish, codes)) = per_finish.iter().find(|(_, c)| c.len() > 1) {
+            if ambiguous.insert(p.product_id) {
+                out.alarms.push(AlarmRecord::alarm(
+                    "ambiguous_tcgcsv",
+                    p.product_id.to_string(),
+                    format!(
+                        "{} official {finish} printings (variant codes {}) claim tcgcsv product {} at {}/{}/{}",
+                        codes.len(),
+                        codes.join(", "),
+                        p.product_id,
+                        key.0,
+                        key.1,
+                        key.2
+                    ),
+                ));
+            }
+            for o in offs {
+                linked.insert(&o.printing_id);
+            }
+            continue;
+        }
         matched_products.insert(p.product_id);
         for o in ok {
             link(&mut out, o, p.product_id, false);
@@ -469,4 +504,65 @@ pub fn join(
     out.links.dedup();
     out.alarms.sort();
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn printing(uid: &str, code: &str) -> OfficialPrinting {
+        OfficialPrinting {
+            printing_id: uid.into(),
+            set_code: "SEC".into(),
+            number: "1125".into(),
+            variant: "Standard".into(),
+            variant_code: code.into(),
+            finish: "Normal".into(),
+            name: "Senator Chuchi".into(),
+            subtitle: None,
+        }
+    }
+
+    /// sp-5zcm06: two official printings sharing set, number, display variant
+    /// and finish, and one tcgcsv product for them: an alarm, not a guess.
+    #[test]
+    fn one_product_for_two_printings_of_one_finish_is_ambiguous_not_guessed() {
+        let groups = BTreeMap::from([(
+            1,
+            GroupInfo {
+                set_code: "SEC".into(),
+                kind: GroupKind::Main,
+                variants: vec![],
+            },
+        )]);
+        let products = [ProductRecord {
+            product_id: 77,
+            group_id: 1,
+            name: "Senator Chuchi".into(),
+            number: Some("1125".into()),
+        }];
+        let j = join(
+            &[printing("u36", "36"), printing("u37", "37")],
+            &products,
+            &groups,
+            &BTreeMap::new(),
+        );
+        assert!(j.links.is_empty(), "{:?}", j.links);
+        let kinds: Vec<(&str, &str)> = j
+            .alarms
+            .iter()
+            .map(|a| (a.kind.as_str(), a.key.as_str()))
+            .collect();
+        assert_eq!(kinds, vec![("ambiguous_tcgcsv", "77")]);
+
+        // One printing alone still joins.
+        let j = join(
+            &[printing("u36", "36")],
+            &products,
+            &groups,
+            &BTreeMap::new(),
+        );
+        assert_eq!(j.links.len(), 1);
+        assert!(j.alarms.is_empty(), "{:?}", j.alarms);
+    }
 }

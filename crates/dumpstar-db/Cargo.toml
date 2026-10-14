@@ -9,6 +9,7 @@ authors.workspace = true
 dumpstar-core.workspace = true
 dumpstar-catalog.workspace = true
 rusqlite.workspace = true
+dumpster-kit-tenancy.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
 serde.workspace = true
@@ -19,5 +20,7 @@ ulid.workspace = true
 sha2.workspace = true
 
 [dev-dependencies]
+dumpster-kit-tenancy = { workspace = true, features = ["testing"] }
+dumpster-kit-conformance.workspace = true
 tempfile.workspace = true
 reqwest.workspace = true

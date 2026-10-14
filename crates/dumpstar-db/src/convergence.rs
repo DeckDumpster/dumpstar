@@ -121,10 +121,6 @@ pub(crate) const NOT_CATALOG_INPUTS: &[(&str, &str)] = &[
         "the per-tenant collection database, converged by open_user on its own file",
     ),
     (
-        "crates/dumpstar-db/src/schema_registry.sql",
-        "registry.sqlite, converged by open_registry on its own file",
-    ),
-    (
         "data/conditions.json",
         "the collection's own condition multipliers — pd-s4c2 moved `conditions` out of \
          the catalog and into the tenant database, and `init_user_schema` seeds it there \
@@ -144,12 +140,7 @@ pub(crate) fn fingerprint() -> String {
     // transformed rows without touching a seed would otherwise be invisible
     // here — which is precisely the change that must not be skipped.
     h.update(b"schema_version=");
-    h.update(
-        crate::schema_version::Database::Shared
-            .version()
-            .to_string()
-            .as_bytes(),
-    );
+    h.update(crate::schema_version::Shared.version.to_string().as_bytes());
     h.update(b"\n");
     for (path, bytes) in inputs() {
         h.update(format!("input={path}:{}\n", bytes.len()).as_bytes());
@@ -187,7 +178,7 @@ pub(crate) fn record(conn: &Connection) -> Result<()> {
 /// same "no". See the module docs for why that direction is the safe one.
 pub(crate) fn is_converged(conn: &Connection) -> bool {
     let stamped = crate::schema_version::version(conn)
-        .map(|found| found == crate::schema_version::Database::Shared.version())
+        .map(|found| found == crate::schema_version::Shared.version)
         .unwrap_or(false);
     if !stamped {
         return false;

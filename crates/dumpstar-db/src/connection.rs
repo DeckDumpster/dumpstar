@@ -23,7 +23,8 @@ use rusqlite::Connection;
 use rusqlite::backup::Backup;
 
 use crate::error::Result;
-use crate::schema_version::{self, Database};
+use crate::schema_version::{self};
+use dumpster_kit_tenancy::{TenancyError, TenantDbSpec};
 
 /// How long an open in this crate waits for a lock before giving up. Every
 /// `open_*` sets it, and [`checkpoint_truncate`] restores it after borrowing
@@ -34,7 +35,6 @@ pub const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 /// on it, applied in that order.
 pub(crate) const SCHEMA_OVERLAY: &str = include_str!("schema_shared.sql");
 const SCHEMA_USER: &str = include_str!("schema_user.sql");
-const SCHEMA_REGISTRY: &str = include_str!("schema_registry.sql");
 
 /// How long a catalog open waits for another writer before giving up.
 ///
@@ -108,7 +108,7 @@ pub fn open_shared_with_patience(path: &Path, patience: Duration) -> Result<Conn
     )?;
     // Before a single statement of schema runs: a catalog written by a newer
     // build is refused, not migrated backwards into.
-    schema_version::gate(&conn, Database::Shared)?;
+    schema_version::gate(&conn, schema_version::Shared)?;
     // A catalog written by the Pokémon-shaped schema this project was forked
     // with is emptied, not migrated: it is derived data (sp-r7w5xi).
     if dumpstar_catalog::reset_if_legacy(&conn).map_err(|e| match e {
@@ -144,7 +144,7 @@ fn converge(conn: &mut Connection) -> Result<()> {
     // when asking whether a catalog was converged (pd-dzu5).
     crate::search_meta::reconcile(conn)?;
     // Stamped last but one: the file claims this shape only once it has it.
-    schema_version::stamp(conn, Database::Shared)?;
+    schema_version::stamp(conn, schema_version::Shared)?;
     // And last of all, the claim that all of the above has happened. After
     // the stamp, deliberately: a fingerprint recorded before the work would
     // let a convergence that died halfway be skipped forever.
@@ -245,7 +245,7 @@ pub fn open_shared_readonly(path: &Path) -> Result<Connection> {
     // written by a newer build is not one this build may read rows out of and
     // act on. Reading is what this handle is for, so the gate is the whole of
     // the check — there is nothing here to stamp.
-    schema_version::gate(&conn, Database::Shared)?;
+    schema_version::gate(&conn, schema_version::Shared)?;
     Ok(conn)
 }
 
@@ -324,52 +324,38 @@ fn add_columns(conn: &Connection, columns: &[(&str, &str, &str)]) -> Result<()> 
     Ok(())
 }
 
-/// `ATTACH` the shared catalog read-only as `shared`, then create a
-/// `TEMP VIEW` for every catalog table and view so they are queryable
-/// unqualified alongside the user database's own tables.
-///
-/// The catalog is version-gated here too. This is the path the *server*
-/// reaches it by — `open_shared` is `dumpstar setup` / ingest — so without a
-/// check here a catalog from a newer build would be joined against
-/// silently on every request.
-///
-/// A catalog name that the collection itself already declares gets **no
-/// view**. SQLite resolves an unqualified name in `temp` before `main`, so a
-/// TEMP VIEW would not sit beside the collection's own table — it would
-/// shade it, and every join would silently read the catalog's rows instead.
-/// That is not hypothetical: `gate_attached` deliberately accepts a catalog
-/// that is *behind* this build, so a `shared.sqlite` that has not been opened
-/// read-write since `conditions` moved into the collection (pd-s4c2) still
-/// physically holds the old table. The collection's own tables win; the
-/// catalog fills in around them.
+/// `ATTACH` the shared catalog read-only as `shared` with its `TEMP VIEW`s, version-gated
+/// (the kit's [`dumpster_kit_tenancy::attach_shared_readonly`], with Dumpstar's catalog version).
 pub fn attach_shared_readonly(conn: &Connection, shared_path: &Path) -> Result<()> {
-    let uri = format!("file:{}?mode=ro", shared_path.display());
-    conn.execute("ATTACH DATABASE ?1 AS shared", [uri])?;
-    schema_version::gate_attached(conn, Database::Shared, "shared")?;
+    Ok(dumpster_kit_tenancy::attach_shared_readonly(
+        conn,
+        shared_path,
+        crate::app::SHARED,
+    )?)
+}
 
-    // Everything the catalog declares, minus SQLite's own internals and
-    // anything `main` already owns. Nothing else is named here: a table the
-    // catalog should not have is dropped by `schema_shared.sql`, not skipped
-    // by every reader of it (pd-yj40).
-    let names: Vec<String> = {
-        let mut stmt = conn.prepare(
-            "SELECT name FROM shared.sqlite_master \
-             WHERE type IN ('table', 'view') \
-               AND name NOT LIKE 'sqlite_%' \
-               AND name NOT IN (SELECT name FROM main.sqlite_master \
-                                WHERE type IN ('table', 'view'))",
-        )?;
-        let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
-        rows.collect::<rusqlite::Result<_>>()?
+/// What Dumpstar contributes to a tenant connection: its collection schema, its two schema
+/// versions, and the work `CREATE … IF NOT EXISTS` cannot express (added columns, seeded
+/// conditions).
+pub fn user_spec() -> TenantDbSpec {
+    let mut spec = TenantDbSpec::new(SCHEMA_USER, crate::app::USER, crate::app::SHARED);
+    spec.prepare = |conn| {
+        add_missing_user_columns(conn).map_err(into_tenancy)?;
+        crate::conditions::seed_defaults(conn).map_err(into_tenancy)?;
+        Ok(())
     };
+    spec
+}
 
-    for name in names {
-        conn.execute_batch(&format!(
-            "CREATE TEMP VIEW IF NOT EXISTS \"{name}\" \
-             AS SELECT * FROM shared.\"{name}\";"
-        ))?;
+fn into_tenancy(e: crate::error::DbError) -> TenancyError {
+    use crate::error::DbError as D;
+    match e {
+        D::Sqlite(e) => TenancyError::Sqlite(e),
+        D::NotFound(m) => TenancyError::NotFound(m),
+        D::Conflict(m) => TenancyError::Conflict(m),
+        D::SchemaVersion(m) => TenancyError::SchemaVersion(m),
+        other => TenancyError::Env(other.to_string()),
     }
-    Ok(())
 }
 
 /// Open a per-user collection database — applying the user schema — without
@@ -383,72 +369,32 @@ pub fn attach_shared_readonly(conn: &Connection, shared_path: &Path) -> Result<(
 /// the table lived here grows them on its next open. Insert-if-absent, so an
 /// already-seeded collection is not written to at all.
 pub fn open_user(user_path: &Path) -> Result<Connection> {
-    if let Some(parent) = user_path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let conn = Connection::open(user_path)?;
-    // Set the timeout BEFORE the WAL pragma: `PRAGMA journal_mode = WAL`
-    // needs a brief write lock even when WAL is already set, and two
-    // connections opening the same file simultaneously would fail
-    // immediately without it.
-    conn.busy_timeout(BUSY_TIMEOUT)?;
-    conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;")?;
-    schema_version::gate(&conn, Database::User)?;
-    conn.execute_batch(SCHEMA_USER)?;
-    add_missing_user_columns(&conn)?;
-    crate::conditions::seed_defaults(&conn)?;
-    schema_version::stamp(&conn, Database::User)?;
-    Ok(conn)
+    Ok(dumpster_kit_tenancy::open_tenant(user_path, &user_spec())?)
 }
 
-/// Open the user registry database, creating it if absent, and apply the
-/// registry schema (idempotent, like the other two).
-///
-/// Never attaches the catalog: the registry answers one question — which
-/// database file belongs to this handle — and joins nothing. WAL so a
-/// resolver reading it is not blocked by a `dumpstar tenant create` writing
-/// it.
-///
-/// Gated and stamped exactly as [`open_user`] is, and for a sharper reason:
-/// this is the file that says whose database is whose. A build that did not
-/// understand its shape and wrote to it anyway would not corrupt a
-/// collection — it would corrupt the map, and an unattributable collection is
-/// the failure this whole layout exists to prevent (`deploy/TENANTS.md`).
-/// Every registry in existence is version 0, so the adoption path is the one
-/// that actually runs (pd-r60h).
+/// Open the user registry database, creating it if absent, and apply the registry schema
+/// (gated and stamped by the kit). Never attaches the catalog.
 pub fn open_registry(path: &Path) -> Result<Connection> {
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let conn = Connection::open(path)?;
-    conn.busy_timeout(BUSY_TIMEOUT)?;
-    conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;")?;
-    schema_version::gate(&conn, Database::Registry)?;
-    conn.execute_batch(SCHEMA_REGISTRY)?;
-    schema_version::stamp(&conn, Database::Registry)?;
-    Ok(conn)
+    Ok(dumpster_kit_tenancy::open_registry(path)?)
 }
 
-/// Open a per-user collection database — applying the user schema — with
-/// the shared catalog attached read-only.
+/// Open a per-user collection database — applying the user schema — with the shared catalog
+/// attached read-only, refused unless the connection is isolated.
 pub fn connect_user(user_path: &Path, shared_path: &Path) -> Result<Connection> {
-    let conn = open_user(user_path)?;
-    attach_shared_readonly(&conn, shared_path)?;
-    Ok(conn)
+    Ok(dumpster_kit_tenancy::connect_tenant(
+        user_path,
+        shared_path,
+        &user_spec(),
+    )?)
 }
 
-/// Apply the user schema to an arbitrary connection. Used by tests that
-/// open an in-memory user DB without going through `connect_user`.
-///
-/// Gates and stamps exactly as [`open_user`] does, so a test connection is
-/// not a second, laxer way into the user schema.
+/// Apply the user schema to an arbitrary connection. Used by tests that open an in-memory user
+/// DB without going through `connect_user`.
 pub fn init_user_schema(conn: &Connection) -> Result<()> {
-    schema_version::gate(conn, Database::User)?;
-    conn.execute_batch(SCHEMA_USER)?;
-    add_missing_user_columns(conn)?;
-    crate::conditions::seed_defaults(conn)?;
-    schema_version::stamp(conn, Database::User)?;
-    Ok(())
+    Ok(dumpster_kit_tenancy::init_tenant_schema(
+        conn,
+        &user_spec(),
+    )?)
 }
 
 /// What one truncating WAL checkpoint achieved.
@@ -880,7 +826,7 @@ mod tests {
 
         assert_eq!(
             file_user_version(&path),
-            Database::User.version() as u32,
+            schema_version::User.version as u32,
             "the adopted database must carry the version afterwards"
         );
         assert_eq!(
@@ -906,7 +852,10 @@ mod tests {
         let conn = open_shared(&path).unwrap();
         assert!(crate::catalog::card_exists(&conn, "SOR-1").unwrap());
         drop(conn);
-        assert_eq!(file_user_version(&path), Database::Shared.version() as u32);
+        assert_eq!(
+            file_user_version(&path),
+            schema_version::Shared.version as u32
+        );
     }
 
     /// Re-opening an up-to-date database leaves its version exactly where it
@@ -919,7 +868,7 @@ mod tests {
         let path = dir.path().join("collection.sqlite");
         drop(open_user(&path).unwrap());
         let stamped = file_user_version(&path);
-        assert_eq!(stamped, Database::User.version() as u32);
+        assert_eq!(stamped, schema_version::User.version as u32);
 
         for _ in 0..3 {
             let conn = open_user(&path).unwrap();
@@ -941,7 +890,7 @@ mod tests {
         let path = dir.path().join("collection.sqlite");
         drop(open_user(&path).unwrap());
 
-        let ahead = Database::User.version() + 1;
+        let ahead = schema_version::User.version + 1;
         {
             let c = Connection::open(&path).unwrap();
             c.execute_batch(&format!("PRAGMA user_version = {ahead}"))
@@ -956,7 +905,7 @@ mod tests {
             "no file version: {msg}"
         );
         assert!(
-            msg.contains(&format!("version {}", Database::User.version())),
+            msg.contains(&format!("version {}", schema_version::User.version)),
             "no binary version: {msg}"
         );
         assert!(msg.contains("collection.sqlite"), "no file named: {msg}");
@@ -972,7 +921,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let shared_path = dir.path().join("shared.sqlite");
         seed_shared(&shared_path);
-        let ahead = Database::Shared.version() + 1;
+        let ahead = schema_version::Shared.version + 1;
         {
             let c = Connection::open(&shared_path).unwrap();
             c.execute_batch(&format!("PRAGMA user_version = {ahead}"))
@@ -995,11 +944,9 @@ mod tests {
     /// file and the epic that added the gate were separate branches, so there
     /// has never been a build that stamped one (pd-r60h).
     fn unversioned_registry(path: &Path) -> String {
-        let conn = Connection::open(path).unwrap();
-        conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;")
-            .unwrap();
-        conn.execute_batch(SCHEMA_REGISTRY).unwrap();
+        let conn = open_registry(path).unwrap();
         let user = crate::registry::insert(&conn, "alice").unwrap();
+        conn.execute_batch("PRAGMA user_version = 0").unwrap();
         conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)")
             .unwrap();
         drop(conn);
@@ -1034,7 +981,7 @@ mod tests {
 
         assert_eq!(
             file_user_version(&path),
-            Database::Registry.version() as u32,
+            schema_version::Registry.version as u32,
             "the adopted registry must carry the version afterwards"
         );
         assert_eq!(
@@ -1057,7 +1004,7 @@ mod tests {
         let path = dir.path().join("registry.sqlite");
         drop(open_registry(&path).unwrap());
 
-        let ahead = Database::Registry.version() + 1;
+        let ahead = schema_version::Registry.version + 1;
         {
             let c = Connection::open(&path).unwrap();
             c.execute_batch(&format!(
@@ -1075,12 +1022,12 @@ mod tests {
             "no file version: {msg}"
         );
         assert!(
-            msg.contains(&format!("version {}", Database::Registry.version())),
+            msg.contains(&format!("version {}", schema_version::Registry.version)),
             "no binary version: {msg}"
         );
         assert!(msg.contains("registry.sqlite"), "no file named: {msg}");
         assert!(
-            msg.contains(Database::Registry.label()),
+            msg.contains(schema_version::Registry.label),
             "no database named: {msg}"
         );
 
@@ -1101,9 +1048,9 @@ mod tests {
     #[test]
     fn every_database_refuses_a_file_from_the_future() {
         let dir = tempfile::tempdir().unwrap();
-        let ahead_by_one = |path: &Path, db: Database| {
+        let ahead_by_one = |path: &Path, db: dumpster_kit_tenancy::SchemaSpec| {
             let c = Connection::open(path).unwrap();
-            c.execute_batch(&format!("PRAGMA user_version = {}", db.version() + 1))
+            c.execute_batch(&format!("PRAGMA user_version = {}", db.version + 1))
                 .unwrap();
         };
 
@@ -1113,9 +1060,9 @@ mod tests {
         drop(open_shared(&shared).unwrap());
         drop(open_user(&user).unwrap());
         drop(open_registry(&registry).unwrap());
-        ahead_by_one(&shared, Database::Shared);
-        ahead_by_one(&user, Database::User);
-        ahead_by_one(&registry, Database::Registry);
+        ahead_by_one(&shared, schema_version::Shared);
+        ahead_by_one(&user, schema_version::User);
+        ahead_by_one(&registry, schema_version::Registry);
 
         assert!(open_shared(&shared).is_err(), "the catalog is not gated");
         assert!(open_user(&user).is_err(), "the collection is not gated");
@@ -1272,7 +1219,10 @@ mod tests {
         assert_eq!(rows, 1, "the migration must not lose the collection");
         drop(conn);
 
-        assert_eq!(file_user_version(&path), Database::User.version() as u32);
+        assert_eq!(
+            file_user_version(&path),
+            schema_version::User.version as u32
+        );
     }
 
     /// The catalog sheds its copy on the one path that holds it read-write:
@@ -1436,7 +1386,10 @@ mod tests {
         );
         drop(conn);
         assert_eq!(file_user_version(&path), 3);
-        assert_eq!(file_user_version(&path), Database::Shared.version() as u32);
+        assert_eq!(
+            file_user_version(&path),
+            schema_version::Shared.version as u32
+        );
     }
 
     /// The rebuild happens once: the file it leaves is SWU-shaped, so the next

@@ -30,7 +30,7 @@ pub struct ServeArgs {
 /// Execute `dumpstar serve`. Database paths come from `DUMPSTAR_HOME`.
 pub fn run(args: ServeArgs) -> anyhow::Result<()> {
     // Read first so a server without Access refuses before touching any data.
-    let access = dumpstar_server::access::AccessConfig::from_env()?;
+    let access = dumpstar_server::access::AccessConfig::from_env(dumpstar_db::app::app())?;
     let cfg = ServeConfig {
         tenants_dir: dumpstar_db::tenants_dir()?,
         registry_db: dumpstar_db::registry_db_path()?,

@@ -163,7 +163,7 @@ After it:
   is present**;
 * every other tenant is unaffected;
 * deleting the user row does not undo it (the tombstone has no foreign key,
-  deliberately — see `schema_registry.sql`);
+  deliberately — see the kit's `schema_registry.sql`);
 * restoring any backup does not undo it;
 * `dumpstar keys register` on that id refuses. A tombstone is terminal.
 

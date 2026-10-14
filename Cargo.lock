@@ -1236,6 +1236,8 @@ dependencies = [
  "csv",
  "dumpstar-catalog",
  "dumpstar-core",
+ "dumpster-kit-conformance",
+ "dumpster-kit-tenancy",
  "reqwest",
  "rusqlite",
  "serde",
@@ -1363,9 +1365,9 @@ dependencies = [
  "dumpstar-catalog",
  "dumpstar-core",
  "dumpstar-db",
+ "dumpster-kit-conformance",
+ "dumpster-kit-tenancy",
  "flate2",
- "jsonwebtoken",
- "reqwest",
  "rsa",
  "rusqlite",
  "serde",
@@ -1400,13 +1402,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "dumpster-kit-conformance"
+version = "0.1.0"
+source = "git+https://github.com/DeckDumpster/dumpster-kit?rev=ecc3ed6ebf32d551262609f61fe519546c0878ea#ecc3ed6ebf32d551262609f61fe519546c0878ea"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "dumpster-kit-tcgcsv"
 version = "0.1.0"
-source = "git+https://github.com/DeckDumpster/dumpster-kit?rev=5987630bd14623f215f12b40cf399072f3fca7c7#5987630bd14623f215f12b40cf399072f3fca7c7"
+source = "git+https://github.com/DeckDumpster/dumpster-kit?rev=ecc3ed6ebf32d551262609f61fe519546c0878ea#ecc3ed6ebf32d551262609f61fe519546c0878ea"
 dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "dumpster-kit-tenancy"
+version = "0.1.0"
+source = "git+https://github.com/DeckDumpster/dumpster-kit?rev=ecc3ed6ebf32d551262609f61fe519546c0878ea#ecc3ed6ebf32d551262609f61fe519546c0878ea"
+dependencies = [
+ "axum",
+ "base64",
+ "chrono",
+ "jsonwebtoken",
+ "reqwest",
+ "rsa",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "ulid",
 ]
 
 [[package]]

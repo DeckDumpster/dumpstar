@@ -6,6 +6,7 @@
 //! schema for each database lives in `schema_shared.sql` / `schema_user.sql`
 //! and is re-applied idempotently on every open (dumpstar-luo).
 
+pub mod app;
 pub mod batches;
 pub mod binder;
 pub mod binders;
@@ -48,7 +49,7 @@ pub use connection::{
     BUSY_TIMEOUT, WalCheckpoint, WalReclaim, attach_shared_readonly, checkpoint_truncate,
     connect_user, init_user_schema, open_registry, open_shared, open_shared_for_serving,
     open_shared_readonly, open_shared_with_patience, open_user, reclaim_catalog_wal, restore_db,
-    snapshot_db,
+    snapshot_db, user_spec,
 };
 pub use error::{DbError, Result};
 pub use paths::{

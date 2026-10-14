@@ -9,6 +9,7 @@ authors.workspace = true
 dumpstar-core.workspace = true
 dumpstar-db.workspace = true
 dumpstar-lake.workspace = true
+dumpster-kit-tcgcsv.workspace = true
 rusqlite.workspace = true
 reqwest.workspace = true
 serde.workspace = true

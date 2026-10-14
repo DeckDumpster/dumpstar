@@ -130,9 +130,9 @@ fn start_upstream(script: Arc<Script>) -> FakeUpstream {
         let (path, _query) = target.split_once('?').unwrap_or((target, ""));
         let parts: Vec<&str> = path.trim_matches('/').split('/').collect();
         match parts.as_slice() {
-            [_, "groups"] => Reply::ok(GROUPS),
-            [_, group, "products"] => Reply::ok(products_json(group.parse().unwrap())),
-            [_, group, "prices"] => {
+            ["tcgplayer", _, "groups"] => Reply::ok(GROUPS),
+            ["tcgplayer", _, group, "products"] => Reply::ok(products_json(group.parse().unwrap())),
+            ["tcgplayer", _, group, "prices"] => {
                 let group: usize = group.parse().unwrap();
                 if script.fail_group.load(Ordering::SeqCst) == group {
                     return Reply::status(503, r#"{"error":"upstream is having a day"}"#);

@@ -13,7 +13,7 @@ catalog, tenancy and the shared kit arrive in later rows.
 | `crates/dumpstar-core` | domain types, the collection search query parser, importers |
 | `crates/dumpstar-db` | SQLite schemas (`schema_shared.sql`, `schema_user.sql`), queries, seeds |
 | `crates/dumpstar-catalog` | the SWU catalog seam: `schema.sql`, record types, raw landing, idempotent apply, the fake source, the `catalog-apply` job; the official-API and tcgcsv adapters (`swu`, `official`, `tcgcsv`), the join (`crosswalk`, `groups.tsv`), alarms (`check`, `catalog-check`) |
-| `crates/dumpstar-ingest` | the TCGCSV client (category 79, Star Wars: Unlimited), retry, raw landing wire |
+| `crates/dumpstar-ingest` | the transport for the kit's TCGCSV client (`dumpster-kit-tcgcsv`, pinned by rev in the workspace `Cargo.toml`; category 79, Star Wars: Unlimited), retry, raw landing wire |
 | `crates/dumpstar-lake`, `-lakehouse`, `-derive` | the raw landing zone, the offline derive, replay |
 | `crates/dumpstar-keys`, `-ship`, `-erase` | tenant key custody, the shipper to the tenant zone, deletion |
 | `crates/dumpstar-server`, `-cli` | the HTTP server and the `dumpstar` binary |

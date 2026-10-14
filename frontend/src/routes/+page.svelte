@@ -46,7 +46,7 @@
 		{ href: '/browse', label: 'Browse', desc: 'Open sets as virtual binder pages.' },
 		{ href: '/binders', label: 'Binders', desc: 'Custom binders and their pages.' },
 		{ href: '/decks', label: 'Decks', desc: 'Saved decklists.' },
-		{ href: '/sealed', label: 'Sealed', desc: 'Sealed product (boxes, packs, ETBs).' },
+		{ href: '/sealed', label: 'Sealed', desc: 'Sealed product (booster boxes, packs, starter decks).' },
 		{ href: '/wishlist', label: 'Wishlist', desc: 'Cards you want.' },
 		{ href: '/orders', label: 'Orders', desc: 'Purchases and their attached cards.' },
 		{ href: '/recent', label: 'Recent', desc: 'Latest collection activity.' },

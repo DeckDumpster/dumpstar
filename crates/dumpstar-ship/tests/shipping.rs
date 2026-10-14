@@ -27,9 +27,9 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
-use dumpstar_lake::{DirStore, ObjectStore, TenantZoneConfig};
-use dumpstar_ship::run::{Outcome, Status};
-use dumpstar_ship::{cipher, cursor, encode};
+use dumpster_kit_lake::{DirStore, ObjectStore, TenantZoneConfig};
+use dumpster_kit_ship::run::{Outcome, Status};
+use dumpster_kit_ship::{cipher, cursor, encode};
 use rusqlite::Connection;
 
 const ALICE: &str = "01J0000000000000000000000A";
@@ -38,7 +38,7 @@ const BOB: &str = "01J0000000000000000000000B";
 // ── the world one test runs in ──────────────────────────────────────────────
 
 /// The environment this crate's jobs read is process-wide, so tests that set
-/// it cannot overlap. Same shape as `dumpstar-keys`' own guard.
+/// it cannot overlap. Same shape as the kit's own guard.
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 struct World {
@@ -61,15 +61,15 @@ impl World {
         std::fs::create_dir_all(&zone_root).unwrap();
 
         let previous_home = std::env::var("DUMPSTAR_HOME").ok();
-        let previous_key = std::env::var(dumpstar_keys::master::KEY_ENV_FILE).ok();
+        let previous_key = std::env::var(dumpstar_ship::key_env().key_file_var).ok();
         unsafe {
             std::env::set_var("DUMPSTAR_HOME", &home);
             std::env::set_var(
-                dumpstar_keys::master::KEY_ENV_FILE,
+                dumpstar_ship::key_env().key_file_var,
                 dir.path().join("tenant-master.key"),
             );
         }
-        dumpstar_keys::master::create().unwrap();
+        dumpster_kit_keys::master::create(&dumpstar_ship::key_env()).unwrap();
 
         World {
             _dir: dir,
@@ -92,7 +92,7 @@ impl World {
                 rusqlite::params![database_id, handle],
             )
             .unwrap();
-        dumpstar_keys::state::register(&registry, database_id).unwrap();
+        dumpster_kit_keys::state::register(&registry, database_id).unwrap();
         let path = self
             .home
             .join("tenants")
@@ -140,8 +140,8 @@ impl Drop for World {
                 None => std::env::remove_var("DUMPSTAR_HOME"),
             }
             match &self.previous_key {
-                Some(v) => std::env::set_var(dumpstar_keys::master::KEY_ENV_FILE, v),
-                None => std::env::remove_var(dumpstar_keys::master::KEY_ENV_FILE),
+                Some(v) => std::env::set_var(dumpstar_ship::key_env().key_file_var, v),
+                None => std::env::remove_var(dumpstar_ship::key_env().key_file_var),
             }
         }
     }
@@ -166,8 +166,9 @@ fn walk(root: &Path, dir: &Path, out: &mut BTreeMap<String, Vec<u8>>) {
 
 fn config() -> TenantZoneConfig {
     TenantZoneConfig::from_settings(
+        &dumpstar_ship::lake_env(),
         &[(
-            dumpstar_lake::tenant::KEY_TENANT_PROFILE.to_string(),
+            dumpstar_ship::lake_env().tenant_profile,
             "dumpstar-tenant-test".to_string(),
         )]
         .into_iter()
@@ -234,14 +235,14 @@ fn ship(
     world: &World,
     tenants: &[dumpstar_db::tenants::Tenant],
     max_rows: usize,
-) -> dumpstar_ship::Report {
-    dumpstar_ship::ship_all(
-        &world.zone(),
-        &config(),
-        &world.registry(),
-        tenants,
-        max_rows,
-    )
+) -> dumpster_kit_ship::Report {
+    let zone = world.zone();
+    let config = config();
+    let registry = world.registry();
+    let keys = dumpstar_ship::key_env();
+    let ctx = dumpstar_ship::context(&keys, &zone, &config, &registry);
+    let tenants: Vec<_> = tenants.iter().map(dumpstar_ship::kit_tenant).collect();
+    dumpster_kit_ship::ship_all(&ctx, &tenants, max_rows)
 }
 
 // ── the run ─────────────────────────────────────────────────────────────────
@@ -357,7 +358,7 @@ struct DiesAfter {
 }
 
 impl ObjectStore for DiesAfter {
-    fn put(&self, key: &str, body: Vec<u8>) -> dumpstar_lake::Result<()> {
+    fn put(&self, key: &str, body: Vec<u8>) -> dumpster_kit_lake::Result<()> {
         self.inner.put(key, body)?;
         let done = self.puts.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
         if done >= self.after {
@@ -385,7 +386,10 @@ fn a_crash_after_a_part_lands_but_before_the_cursor_moves_re_ships_only_that_par
     };
     let registry = world.registry();
     let killed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        dumpstar_ship::ship_one(&dying, &config(), &registry, &alice, 4)
+        let config = config();
+        let keys = dumpstar_ship::key_env();
+        let ctx = dumpstar_ship::context(&keys, &dying, &config, &registry);
+        dumpster_kit_ship::ship_one(&ctx, &dumpstar_ship::kit_tenant(&alice), 4)
     }));
     assert!(killed.is_err(), "the fixture did not actually kill the run");
 
@@ -425,7 +429,9 @@ fn a_crash_after_a_part_lands_but_before_the_cursor_moves_re_ships_only_that_par
     // Nothing was lost: every event is in the zone exactly once.
     let mut seqs: Vec<i64> = Vec::new();
     for (key, bytes) in &objects {
-        let tenant_key = dumpstar_keys::tenant_key(&world.registry(), ALICE).unwrap();
+        let tenant_key =
+            dumpster_kit_keys::tenant_key(&dumpstar_ship::key_env(), &world.registry(), ALICE)
+                .unwrap();
         let parquet = cipher::open(&tenant_key, key, bytes).unwrap();
         seqs.extend(encode::decode(parquet).unwrap().into_iter().map(|e| e.seq));
     }
@@ -460,7 +466,7 @@ fn a_dropped_sequence_number_is_detected_recorded_and_alarmed() {
         report.gaps(),
         [(
             ALICE,
-            dumpstar_ship::Gap {
+            dumpster_kit_ship::Gap {
                 from_seq: 3,
                 to_seq: 4
             }
@@ -511,7 +517,7 @@ fn a_gap_at_the_head_of_the_batch_is_seen_too() {
         report.gaps(),
         [(
             ALICE,
-            dumpstar_ship::Gap {
+            dumpster_kit_ship::Gap {
                 from_seq: 1,
                 to_seq: 2
             }
@@ -536,8 +542,9 @@ fn each_tenant_s_parts_open_only_under_that_tenant_s_own_key() {
     let objects = world.objects();
     assert_eq!(objects.len(), 2);
     let registry = world.registry();
-    let alice_key = dumpstar_keys::tenant_key(&registry, ALICE).unwrap();
-    let bob_key = dumpstar_keys::tenant_key(&registry, BOB).unwrap();
+    let alice_key =
+        dumpster_kit_keys::tenant_key(&dumpstar_ship::key_env(), &registry, ALICE).unwrap();
+    let bob_key = dumpster_kit_keys::tenant_key(&dumpstar_ship::key_env(), &registry, BOB).unwrap();
 
     for (key, bytes) in &objects {
         let (mine, theirs) = if key.contains(ALICE) {
@@ -580,7 +587,8 @@ fn what_lands_in_the_zone_is_what_the_outbox_held() {
 
     ship(&world, &[alice], 100);
     let (key, bytes) = world.objects().into_iter().next().unwrap();
-    let tenant_key = dumpstar_keys::tenant_key(&world.registry(), ALICE).unwrap();
+    let tenant_key =
+        dumpster_kit_keys::tenant_key(&dumpstar_ship::key_env(), &world.registry(), ALICE).unwrap();
     let events = encode::decode(cipher::open(&tenant_key, &key, &bytes).unwrap()).unwrap();
 
     assert_eq!(
@@ -607,7 +615,7 @@ fn a_tombstoned_tenant_is_not_shipped_and_is_not_an_anomaly() {
     add_holdings(&world.collection(ALICE), 3, "2026-08-14");
     add_holdings(&world.collection(BOB), 3, "2026-08-14");
 
-    dumpstar_keys::destroy::tombstone(&world.registry(), BOB, Some("account deleted")).unwrap();
+    dumpster_kit_keys::destroy::tombstone(&world.registry(), BOB, Some("account deleted")).unwrap();
 
     let report = ship(&world, &[alice, bob], 100);
 
@@ -665,7 +673,7 @@ fn a_run_that_ships_nobody_at_all_is_a_failure_not_a_warning() {
     let alice = world.tenant("alice", ALICE);
     add_holdings(&world.collection(ALICE), 2, "2026-08-14");
     // The systemic failure: the master key is gone, so no tenant can ship.
-    std::fs::remove_file(dumpstar_keys::master::key_path().unwrap()).unwrap();
+    std::fs::remove_file(dumpstar_ship::key_env().key_path().unwrap()).unwrap();
 
     let report = ship(&world, &[alice], 100);
     assert_eq!(report.outcome(), Outcome::Failed);
@@ -763,7 +771,8 @@ fn a_backfilled_collection_ships_as_ordinary_events() {
          the day the backfill ran — otherwise re-running it would move the \
          partition. Key was {key}"
     );
-    let tenant_key = dumpstar_keys::tenant_key(&world.registry(), ALICE).unwrap();
+    let tenant_key =
+        dumpster_kit_keys::tenant_key(&dumpstar_ship::key_env(), &world.registry(), ALICE).unwrap();
     let events = encode::decode(cipher::open(&tenant_key, &key, &bytes).unwrap()).unwrap();
     assert_eq!(
         events
@@ -805,8 +814,8 @@ fn a_backfilled_collection_ships_as_ordinary_events() {
 /// inbound leg.
 ///
 /// It is only assertable now that a shipped part decodes into
-/// [`dumpstar_db::outbox::Event`] rather than a second spelling of one: the
-/// reduction is [`dumpstar_db::outbox::project`], the ONE implementation of
+/// [`dumpster_kit_ship::outbox::Event`] rather than a second spelling of one: the
+/// reduction is [`dumpster_kit_ship::outbox::project`], the ONE implementation of
 /// rule 3, and a reader that had to rebuild an event to call it would be
 /// proving something about the rebuild instead.
 ///
@@ -839,8 +848,9 @@ fn a_shipped_part_projects_back_to_the_live_collection() {
 
     // Decode every part in the zone and reduce it with the collection's own
     // resolution rule. Nothing here reimplements that rule.
-    let tenant_key = dumpstar_keys::tenant_key(&world.registry(), ALICE).unwrap();
-    let mut shipped: Vec<dumpstar_db::outbox::Event> = world
+    let tenant_key =
+        dumpster_kit_keys::tenant_key(&dumpstar_ship::key_env(), &world.registry(), ALICE).unwrap();
+    let mut shipped: Vec<dumpster_kit_ship::outbox::Event> = world
         .objects()
         .into_iter()
         .flat_map(|(key, bytes)| {
@@ -848,13 +858,13 @@ fn a_shipped_part_projects_back_to_the_live_collection() {
         })
         .collect();
     shipped.sort_by_key(|e| e.seq);
-    let zone = dumpstar_db::outbox::project(&shipped);
+    let zone = dumpster_kit_ship::outbox::project(&shipped);
 
     // 1. The transport lost nothing: the zone reduces to what the collection's
     //    own outbox reduces to.
     assert_eq!(
         zone,
-        dumpstar_db::outbox::project(&dumpstar_db::outbox::events(&conn).unwrap()),
+        dumpster_kit_ship::outbox::project(&dumpster_kit_ship::outbox::events(&conn).unwrap()),
         "the zone's projection and the outbox's are the same projection"
     );
 
@@ -930,8 +940,16 @@ fn the_zone_read_back_materialises_the_collection_row_for_row() {
     assert_eq!(report.outcome(), Outcome::Clean);
     assert!(world.objects().len() > 1, "the fixture spans parts");
 
-    let key = dumpstar_keys::tenant_key(&world.registry(), ALICE).unwrap();
-    let holdings = dumpstar_ship::zone::read(&world.zone(), &config(), &key, ALICE).unwrap();
+    let key =
+        dumpster_kit_keys::tenant_key(&dumpstar_ship::key_env(), &world.registry(), ALICE).unwrap();
+    let holdings = dumpster_kit_ship::zone::read(
+        &world.zone(),
+        &config(),
+        &key,
+        ALICE,
+        dumpstar_db::outbox::ZONE_SOURCES,
+    )
+    .unwrap();
     assert_eq!(
         holdings.partitions,
         vec!["2026-08-13".to_string(), "2026-08-14".to_string()],
@@ -940,7 +958,13 @@ fn the_zone_read_back_materialises_the_collection_row_for_row() {
     );
     assert!(holdings.declined.is_empty(), "{:?}", holdings.declined);
 
-    dumpstar_ship::zone::materialize(&conn, &holdings, "2026-08-14T09:00:00Z").unwrap();
+    dumpster_kit_ship::zone::materialize(
+        &conn,
+        &holdings,
+        dumpstar_db::outbox::ZONE_SOURCES,
+        "2026-08-14T09:00:00Z",
+    )
+    .unwrap();
 
     assert_eq!(
         dump(&conn, "zone_holdings"),
@@ -976,14 +1000,28 @@ fn the_zone_read_back_materialises_the_sealed_lots_too() {
     let report = ship(&world, &[alice], 3);
     assert_eq!(report.outcome(), Outcome::Clean);
 
-    let key = dumpstar_keys::tenant_key(&world.registry(), ALICE).unwrap();
-    let holdings = dumpstar_ship::zone::read(&world.zone(), &config(), &key, ALICE).unwrap();
+    let key =
+        dumpster_kit_keys::tenant_key(&dumpstar_ship::key_env(), &world.registry(), ALICE).unwrap();
+    let holdings = dumpster_kit_ship::zone::read(
+        &world.zone(),
+        &config(),
+        &key,
+        ALICE,
+        dumpstar_db::outbox::ZONE_SOURCES,
+    )
+    .unwrap();
     assert!(
         holdings.declined.is_empty(),
         "sealed is materialised now, not declined: {:?}",
         holdings.declined
     );
-    dumpstar_ship::zone::materialize(&conn, &holdings, "2026-08-14T09:00:00Z").unwrap();
+    dumpster_kit_ship::zone::materialize(
+        &conn,
+        &holdings,
+        dumpstar_db::outbox::ZONE_SOURCES,
+        "2026-08-14T09:00:00Z",
+    )
+    .unwrap();
 
     assert_eq!(
         dump(&conn, "zone_sealed_holdings"),
@@ -996,16 +1034,16 @@ fn the_zone_read_back_materialises_the_sealed_lots_too() {
         "and the singles are still themselves — the two reductions did not mix"
     );
 
-    let (cards, sealed): (i64, i64) = conn
+    let per_source: String = conn
         .query_row(
-            "SELECT rows, sealed_rows FROM zone_holdings_run WHERE dataset = 'holdings'",
+            "SELECT per_source FROM zone_holdings_run WHERE dataset = 'holdings'",
             [],
-            |r| Ok((r.get(0)?, r.get(1)?)),
+            |r| r.get(0),
         )
         .unwrap();
     assert_eq!(
-        (cards, sealed),
-        (3, 3),
+        serde_json::from_str::<serde_json::Value>(&per_source).unwrap(),
+        serde_json::json!({"collection": 3, "sealed_collection": 3}),
         "the run row counts both halves: three singles, three sealed lots \
          (four added, one deleted)"
     );
@@ -1036,10 +1074,24 @@ fn a_change_that_has_not_shipped_is_not_in_the_staged_holdings() {
     add_holdings(&conn, 3, "2026-08-13");
     ship(&world, std::slice::from_ref(&alice), 100);
 
-    let key = dumpstar_keys::tenant_key(&world.registry(), ALICE).unwrap();
+    let key =
+        dumpster_kit_keys::tenant_key(&dumpstar_ship::key_env(), &world.registry(), ALICE).unwrap();
     let read = |conn: &Connection| {
-        let holdings = dumpstar_ship::zone::read(&world.zone(), &config(), &key, ALICE).unwrap();
-        dumpstar_ship::zone::materialize(conn, &holdings, "2026-08-14T09:00:00Z").unwrap()
+        let holdings = dumpster_kit_ship::zone::read(
+            &world.zone(),
+            &config(),
+            &key,
+            ALICE,
+            dumpstar_db::outbox::ZONE_SOURCES,
+        )
+        .unwrap();
+        dumpster_kit_ship::zone::materialize(
+            conn,
+            &holdings,
+            dumpstar_db::outbox::ZONE_SOURCES,
+            "2026-08-14T09:00:00Z",
+        )
+        .unwrap()
     };
     assert_eq!(read(&conn), 3);
     assert_eq!(dump(&conn, "zone_holdings"), dump(&conn, "collection"));
@@ -1080,27 +1132,46 @@ fn a_tenant_reads_only_their_own_holdings() {
     assert_eq!(ship(&world, &[alice, bob], 100).outcome(), Outcome::Clean);
 
     let registry = world.registry();
-    let alice_key = dumpstar_keys::tenant_key(&registry, ALICE).unwrap();
-    let bob_key = dumpstar_keys::tenant_key(&registry, BOB).unwrap();
+    let alice_key =
+        dumpster_kit_keys::tenant_key(&dumpstar_ship::key_env(), &registry, ALICE).unwrap();
+    let bob_key = dumpster_kit_keys::tenant_key(&dumpstar_ship::key_env(), &registry, BOB).unwrap();
 
     assert_eq!(
-        dumpstar_ship::zone::read(&world.zone(), &config(), &alice_key, ALICE)
-            .unwrap()
-            .rows
-            .len(),
+        dumpster_kit_ship::zone::read(
+            &world.zone(),
+            &config(),
+            &alice_key,
+            ALICE,
+            dumpstar_db::outbox::ZONE_SOURCES
+        )
+        .unwrap()
+        .rows
+        .len(),
         4
     );
     assert_eq!(
-        dumpstar_ship::zone::read(&world.zone(), &config(), &bob_key, BOB)
-            .unwrap()
-            .rows
-            .len(),
+        dumpster_kit_ship::zone::read(
+            &world.zone(),
+            &config(),
+            &bob_key,
+            BOB,
+            dumpstar_db::outbox::ZONE_SOURCES
+        )
+        .unwrap()
+        .rows
+        .len(),
         2
     );
 
     // Alice's key against Bob's prefix: the objects are found and none of
     // them opens. Not an empty read — a refusal.
-    let crossed = dumpstar_ship::zone::read(&world.zone(), &config(), &alice_key, BOB);
+    let crossed = dumpster_kit_ship::zone::read(
+        &world.zone(),
+        &config(),
+        &alice_key,
+        BOB,
+        dumpstar_db::outbox::ZONE_SOURCES,
+    );
     assert!(
         crossed.is_err(),
         "alice's key opened bob's partition: {crossed:?}"
@@ -1118,11 +1189,25 @@ fn a_tenant_with_nothing_in_the_zone_stages_an_empty_table() {
     let conn = world.collection(ALICE);
     add_holdings(&conn, 2, "2026-08-14"); // in the outbox, never shipped
 
-    let key = dumpstar_keys::tenant_key(&world.registry(), ALICE).unwrap();
-    let holdings = dumpstar_ship::zone::read(&world.zone(), &config(), &key, ALICE).unwrap();
+    let key =
+        dumpster_kit_keys::tenant_key(&dumpstar_ship::key_env(), &world.registry(), ALICE).unwrap();
+    let holdings = dumpster_kit_ship::zone::read(
+        &world.zone(),
+        &config(),
+        &key,
+        ALICE,
+        dumpstar_db::outbox::ZONE_SOURCES,
+    )
+    .unwrap();
     assert_eq!(holdings.parts, 0);
     assert_eq!(
-        dumpstar_ship::zone::materialize(&conn, &holdings, "x").unwrap(),
+        dumpster_kit_ship::zone::materialize(
+            &conn,
+            &holdings,
+            dumpstar_db::outbox::ZONE_SOURCES,
+            "x"
+        )
+        .unwrap(),
         0
     );
 
@@ -1149,12 +1234,18 @@ fn the_staged_holdings_are_not_carried_by_the_json_envelope() {
     let conn = world.collection(ALICE);
     add_holdings(&conn, 2, "2026-08-14");
 
-    let mut holdings = dumpstar_ship::ZoneHoldings::default();
+    let mut holdings = dumpster_kit_ship::ZoneHoldings::default();
     holdings.rows.insert(
         ("collection".into(), 1),
         serde_json::json!({"id": 1, "printing_id": "p", "acquired_at": "x", "source": "zone"}),
     );
-    dumpstar_ship::zone::materialize(&conn, &holdings, "2026-08-14T09:00:00Z").unwrap();
+    dumpster_kit_ship::zone::materialize(
+        &conn,
+        &holdings,
+        dumpstar_db::outbox::ZONE_SOURCES,
+        "2026-08-14T09:00:00Z",
+    )
+    .unwrap();
 
     let envelope = dumpstar_db::json_backup::export(&conn).unwrap();
     assert!(!envelope.contains("zone_holdings"), "{envelope}");
@@ -1195,9 +1286,9 @@ struct FailsFor {
 }
 
 impl ObjectStore for FailsFor {
-    fn put(&self, key: &str, body: Vec<u8>) -> dumpstar_lake::Result<()> {
+    fn put(&self, key: &str, body: Vec<u8>) -> dumpster_kit_lake::Result<()> {
         if key.contains(self.database_id) {
-            return Err(dumpstar_lake::LakeError::S3(format!(
+            return Err(dumpster_kit_lake::LakeError::S3(format!(
                 "injected: zone refuses {key}"
             )));
         }
@@ -1222,11 +1313,16 @@ fn one_tenant_s_shipping_failure_delays_no_other_tenant() {
         inner: world.zone(),
         database_id: ALICE,
     };
-    let report = dumpstar_ship::ship_all(
-        &broken,
-        &config(),
-        &world.registry(),
-        &[alice.clone(), bob.clone()],
+    let config = config();
+    let registry = world.registry();
+    let keys = dumpstar_ship::key_env();
+    let ctx = dumpstar_ship::context(&keys, &broken, &config, &registry);
+    let report = dumpster_kit_ship::ship_all(
+        &ctx,
+        &[
+            dumpstar_ship::kit_tenant(&alice),
+            dumpstar_ship::kit_tenant(&bob),
+        ],
         100,
     );
     assert!(matches!(report.tenants[0].status, Status::Skipped(_)));
@@ -1274,9 +1370,23 @@ fn swu_printings_of_every_variant_and_finish_round_trip_through_the_zone() {
 
     assert_eq!(ship(&world, &[alice], 100).outcome(), Outcome::Clean);
 
-    let key = dumpstar_keys::tenant_key(&world.registry(), ALICE).unwrap();
-    let holdings = dumpstar_ship::zone::read(&world.zone(), &config(), &key, ALICE).unwrap();
-    dumpstar_ship::zone::materialize(&conn, &holdings, "2026-08-14T09:00:00Z").unwrap();
+    let key =
+        dumpster_kit_keys::tenant_key(&dumpstar_ship::key_env(), &world.registry(), ALICE).unwrap();
+    let holdings = dumpster_kit_ship::zone::read(
+        &world.zone(),
+        &config(),
+        &key,
+        ALICE,
+        dumpstar_db::outbox::ZONE_SOURCES,
+    )
+    .unwrap();
+    dumpster_kit_ship::zone::materialize(
+        &conn,
+        &holdings,
+        dumpstar_db::outbox::ZONE_SOURCES,
+        "2026-08-14T09:00:00Z",
+    )
+    .unwrap();
     let mut staged: Vec<String> = conn
         .prepare("SELECT printing_id FROM zone_holdings")
         .unwrap()

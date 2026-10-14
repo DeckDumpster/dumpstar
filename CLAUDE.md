@@ -14,8 +14,8 @@ catalog, tenancy and the shared kit arrive in later rows.
 | `crates/dumpstar-db` | SQLite schemas — `shared.sqlite` is `dumpstar-catalog`'s `schema.sql` plus the overlay `schema_shared.sql`, tenants are `schema_user.sql` — and the queries and seeds over them |
 | `crates/dumpstar-catalog` | the SWU catalog seam: `schema.sql`, record types, raw landing, idempotent apply, the fake source, the `catalog-apply` job; the official-API and tcgcsv adapters (`swu`, `official`, `tcgcsv`), the join (`crosswalk`, `groups.tsv`), alarms (`check`, `catalog-check`) |
 | `crates/dumpstar-ingest` | the transport for the kit's TCGCSV client (`dumpster-kit-tcgcsv`, pinned by rev in the workspace `Cargo.toml`; category 79, Star Wars: Unlimited), retry, raw landing wire |
-| `crates/dumpstar-lake`, `-lakehouse`, `-derive` | the raw landing zone, the offline derive, replay |
-| `crates/dumpstar-keys`, `-ship`, `-erase` | tenant key custody, the shipper to the tenant zone, deletion |
+| `crates/dumpstar-derive`, `-lakehouse` | the site's land/derive entry points and the `dumpstar-lake-derive` binary, over `dumpster-kit-lake`/`-derive`/`-lakehouse` |
+| `crates/dumpstar-ship`, `-erase` | the `DUMPSTAR` bindings and operator binaries over the kit's `-keys`, `-ship`, `-erase`; the raw landing zone, key custody, shipper, deletion and replay themselves are the kit's (`dumpster-kit-*` pinned in the workspace `Cargo.toml`) |
 | `crates/dumpstar-server`, `-cli` | the HTTP server and the `dumpstar` binary |
 | `frontend/` | SvelteKit (Svelte 5, adapter-static). Tokens and ui primitives are dumpster-kit's, vendored at the revision `frontend/kit.lock` pins into `src/lib/kit/` (`scripts/kit-sync.sh <kit checkout>` bumps it; `tests/kit-pin.test.js` fails on drift); dumpstar's own theme is `src/lib/styles/theme.css` |
 | `deploy/`, `Containerfile` | container image, units, `deploy/ci.sh` |

@@ -83,8 +83,6 @@
 //! redrive and DR reconcile together — it is the single decision this
 //! module rests on.
 
-use std::collections::BTreeMap;
-
 use rusqlite::{Connection, Transaction};
 
 use crate::{DbError, Result};
@@ -115,6 +113,13 @@ pub const ZONE_HOLDINGS_TABLE: &str = "zone_holdings";
 /// source: reducing both into one table would merge a single and a sealed lot
 /// that merely share a number.
 pub const ZONE_SEALED_HOLDINGS_TABLE: &str = "zone_sealed_holdings";
+/// The zone read-back's map: each outbox source table and the staging table its reduction
+/// lands in. The shipper's reader (`dumpster-kit-ship`) takes it as an argument — which tables
+/// are holdings is the site's part — and a test holds it to [`SOURCE_TABLES`] both ways.
+pub const ZONE_SOURCES: &[(&str, &str)] = &[
+    ("collection", ZONE_HOLDINGS_TABLE),
+    ("sealed_collection", ZONE_SEALED_HOLDINGS_TABLE),
+];
 /// See [`ZONE_HOLDINGS_TABLE`].
 pub const ZONE_HOLDINGS_RUN_TABLE: &str = "zone_holdings_run";
 
@@ -318,89 +323,6 @@ pub struct EmitRun {
     pub seq_first: Option<i64>,
     pub seq_last: Option<i64>,
     pub forced: bool,
-}
-
-/// One outbox event, as read back.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Event {
-    pub seq: i64,
-    pub occurred_at: String,
-    pub source_table: String,
-    pub op: String,
-    pub row_id: i64,
-    pub payload: String,
-    pub source: String,
-}
-
-// ---------------------------------------------------------------------
-// Reading
-// ---------------------------------------------------------------------
-
-/// Every event in the outbox, in `seq` order.
-pub fn events(conn: &Connection) -> Result<Vec<Event>> {
-    let mut stmt = conn.prepare(&format!(
-        "SELECT seq, occurred_at, source_table, op, row_id, payload, source \
-         FROM {TABLE} ORDER BY seq"
-    ))?;
-    let rows = stmt.query_map([], |r| {
-        Ok(Event {
-            seq: r.get(0)?,
-            occurred_at: r.get(1)?,
-            source_table: r.get(2)?,
-            op: r.get(3)?,
-            row_id: r.get(4)?,
-            payload: r.get(5)?,
-            source: r.get(6)?,
-        })
-    })?;
-    Ok(rows.collect::<rusqlite::Result<_>>()?)
-}
-
-/// **Rule 3, and the only implementation of it**: reduce an event stream to
-/// the holdings it describes, resolving conflicts by `occurred_at` and
-/// tie-breaking by `seq`.
-///
-/// This is what the tenant zone holds, and it is deliberately a pure
-/// function over events so that "the zone rebuilt by backfill equals the
-/// zone built incrementally" is a claim that can be *made* — the shipper
-/// (pd-dxn3) writes this projection, and both sides of that comparison run
-/// the same reduction.
-///
-/// ## Why `occurred_at` and not `seq`
-///
-/// A redrive takes a snapshot and appends it with a NEW, higher `seq`. If a
-/// live mutation lands in between, resolving by `seq` alone would let the
-/// stale snapshot overwrite newer truth. Resolving by `occurred_at` cannot,
-/// because [`emit`] dates its events with the row's own last-known change
-/// time rather than the moment of re-emission. `seq` breaks exact ties,
-/// where the two events describe the same instant and the later one is by
-/// definition no staler.
-///
-/// A `delete` removes the holding; `insert` and `update` are the same
-/// upsert, because the payload is the whole row in both cases.
-pub fn project(events: &[Event]) -> BTreeMap<(String, i64), serde_json::Value> {
-    let mut ordered: Vec<&Event> = events.iter().collect();
-    ordered.sort_by(|a, b| {
-        a.occurred_at
-            .cmp(&b.occurred_at)
-            .then_with(|| a.seq.cmp(&b.seq))
-    });
-
-    let mut state = BTreeMap::new();
-    for e in ordered {
-        let key = (e.source_table.clone(), e.row_id);
-        if e.op == "delete" {
-            state.remove(&key);
-        } else {
-            // A payload that will not parse is a corrupted event, and a
-            // projection that silently skipped it would under-report a
-            // holding — the exact failure the whole item exists to prevent.
-            let value = serde_json::from_str(&e.payload)
-                .unwrap_or_else(|_| serde_json::Value::String(e.payload.clone()));
-            state.insert(key, value);
-        }
-    }
-    state
 }
 
 /// Every emit run this collection has recorded, newest first.
@@ -678,7 +600,9 @@ fn emit_missing_rows(
 mod tests {
     use super::*;
     use crate::{DbError, collection, connect_user, sealed};
+    use dumpster_kit_ship::outbox::{Event, events, project};
     use rusqlite::Connection;
+    use std::collections::BTreeMap;
 
     /// A user connection whose catalog holds two printings of one card and
     /// one printing of another — enough to exercise `change_printing` in

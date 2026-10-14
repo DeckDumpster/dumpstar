@@ -488,6 +488,8 @@ CREATE TABLE IF NOT EXISTS zone_holdings_run (
     partitions    TEXT NOT NULL,             -- the as_of= dates read, comma-separated
     rows          INTEGER NOT NULL,          -- `collection` holdings the reduction produced
     read_at       TEXT NOT NULL,             -- UTC ISO-8601
+    -- The kit's zone reader records rows per source table, as a JSON object.
+    per_source    TEXT NOT NULL DEFAULT '{}',
     -- `sealed_collection` lots the same reduction produced (pd-bbv7). One
     -- read of one dataset fills two staging tables, so the row that describes
     -- the read counts both. A collection whose last read-back predates sealed

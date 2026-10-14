@@ -17,7 +17,7 @@ mod support;
 use std::sync::Arc;
 
 use dumpstar_ingest::tcgcsv::TcgcsvClient;
-use dumpstar_lake::{Dataset, DirStore, Manifest, RawLanding, Source};
+use dumpster_kit_lake::{Dataset, DirStore, Manifest, RawLanding, Source};
 use support::{FakeUpstream, Reply};
 
 const INGEST_DATE: &str = "2026-08-11";
@@ -63,7 +63,7 @@ fn manifest_of(
 ) -> Manifest {
     read_manifest(
         root,
-        &dumpstar_lake::keys::manifest_key(source, dataset, INGEST_DATE, landing.run_id()),
+        &dumpster_kit_lake::keys::manifest_key(source, dataset, INGEST_DATE, landing.run_id()),
     )
 }
 
@@ -141,7 +141,7 @@ fn the_manifest_describes_the_bytes_that_were_stored() {
             assert_eq!(part.bytes, raw.len() as u64, "{}", part.key);
             assert_eq!(
                 part.sha256,
-                dumpstar_lake::sink::sha256_hex(&raw),
+                dumpster_kit_lake::sink::sha256_hex(&raw),
                 "{}",
                 part.key
             );
@@ -260,7 +260,7 @@ fn a_retry_lands_beside_the_first_attempt_not_on_it() {
 
     // Same date, same dataset, different run — both prefixes present.
     let prefix = |run: &str| {
-        tmp.path().join(dumpstar_lake::keys::run_prefix(
+        tmp.path().join(dumpster_kit_lake::keys::run_prefix(
             Source::Tcgcsv,
             Dataset::Groups,
             INGEST_DATE,

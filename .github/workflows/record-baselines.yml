@@ -1,0 +1,167 @@
+name: Record visual baselines
+
+# For an agent or operator whose host cannot run podman + Playwright: dispatch
+# this against a branch and it records the baselines on the CI runner, then
+# pushes ONE commit with the new PNGs to that branch. The recording is
+# tests/visual/run.sh --update, which goes through approval-guard.sh, so a
+# viewport-narrowed approval is still refused here. Nothing in this file calls
+# Playwright itself (tests/visual/approval_test.sh §3 reads .github for that).
+#
+# Runs on the same per-run ephemeral VM as ci.yml, because that is the runner
+# that has podman and the browsers. Refuses the default branch: baselines reach
+# main only by landing a branch that carries them.
+#
+# A push made with GITHUB_TOKEN does not trigger other workflows. Re-run CI on
+# the branch afterwards if a run is wanted.
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to record on (never the default branch)'
+        type: string
+        required: true
+      bead:
+        description: 'Bead id the baselines belong to (named in the commit message)'
+        type: string
+        required: true
+      route:
+        description: 'Optional route filter, passed as -g (every viewport still moves)'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse the default branch and malformed inputs
+        env:
+          BRANCH: ${{ inputs.branch }}
+          BEAD: ${{ inputs.bead }}
+          ROUTE: ${{ inputs.route }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        shell: bash
+        run: |
+          set -eu
+          case "$BRANCH" in
+            "$DEFAULT_BRANCH" | main | master | refs/*)
+              echo "refusing to record baselines on '$BRANCH' (default branch)" >&2; exit 1 ;;
+          esac
+          [[ "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]] ||
+            { echo "branch '$BRANCH' has unexpected characters" >&2; exit 1; }
+          [[ "$BEAD" =~ ^[A-Za-z0-9._-]+$ ]] ||
+            { echo "bead '$BEAD' has unexpected characters" >&2; exit 1; }
+          if [ -n "$ROUTE" ]; then
+            [[ "$ROUTE" =~ ^[A-Za-z0-9._-]+$ ]] ||
+              { echo "route '$ROUTE' has unexpected characters" >&2; exit 1; }
+          fi
+
+  provision:
+    needs: [validate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      vmid: ${{ steps.vm.outputs.vmid }}
+      label: ${{ steps.vm.outputs.label }}
+      vm-token: ${{ steps.vm.outputs.vm-token }}
+    steps:
+      - uses: DeckDumpster/ephemeral-ci/provision@v2
+        id: vm
+        with:
+          ts-oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          ts-oauth-secret:    ${{ secrets.TS_OAUTH_SECRET }}
+          runner-reg-pat:     ${{ secrets.RUNNER_REG_PAT }}
+          pve-token-id:       ${{ secrets.PVE_TOKEN_ID }}
+          pve-token-secret:   ${{ secrets.PVE_TOKEN_SECRET }}
+          pve-api-host:       ${{ vars.PVE_API_HOST }}
+          pve-api-hostname:   ${{ vars.PVE_API_HOSTNAME }}
+          pve-ca-cert:        ${{ vars.PVE_CA_CERT }}
+          pve-node:           ${{ vars.PVE_NODE }}
+          template-vmid:      ${{ vars.TEMPLATE_VMID }}
+          spill:              ec2
+          spill-after-seconds: '60'
+          spill-max-instances: 2
+          aws-role-to-assume: ${{ secrets.AWS_SPILL_ROLE_ARN }}
+
+  record:
+    needs: [provision]
+    runs-on: [self-hosted, "${{ needs.provision.outputs.label }}"]
+    permissions:
+      contents: write
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+          fetch-depth: 0
+
+      - name: Confirm the job landed on the ephemeral VM
+        run: test "$RUNNER_NAME" = "${{ needs.provision.outputs.label }}"
+
+      - name: Install runner dependencies
+        run: bash deploy/runner-deps.sh
+
+      # The one recording path. --update is translated to --update-snapshots
+      # inside run.sh and checked by approval-guard.sh before anything is built.
+      - name: Record baselines (run.sh --update)
+        env:
+          ROUTE: ${{ inputs.route }}
+        run: |
+          set -eu
+          if [ -n "$ROUTE" ]; then
+            bash tests/visual/run.sh --update -g "$ROUTE"
+          else
+            bash tests/visual/run.sh --update
+          fi
+
+      - name: Commit and push the moved baselines
+        env:
+          BRANCH: ${{ inputs.branch }}
+          BEAD: ${{ inputs.bead }}
+          ROUTE: ${{ inputs.route }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -eu
+          git add -A tests/visual/baselines
+          if git diff --cached --quiet; then
+            echo "no baseline moved; nothing to push"
+            exit 0
+          fi
+          {
+            printf '%s: record visual baselines on the CI runner\n\n' "$BEAD"
+            printf 'Recorded by tests/visual/run.sh --update%s via the Record visual baselines\nworkflow (%s).\n\n' \
+              "${ROUTE:+ -g $ROUTE}" "$RUN_URL"
+            echo "Baselines moved:"
+            git diff --cached --name-status -- tests/visual/baselines | sed 's/^/  /'
+          } > "${RUNNER_TEMP}/msg.txt"
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -q -F "${RUNNER_TEMP}/msg.txt"
+          git push origin "HEAD:refs/heads/${BRANCH}"
+
+  teardown:
+    needs: [provision, record]
+    if: always() && needs.provision.result != 'skipped'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: DeckDumpster/ephemeral-ci/teardown@v2
+        with:
+          vmid:  ${{ needs.provision.outputs.vmid }}
+          label: ${{ needs.provision.outputs.label }}
+          runner-reg-pat:     ${{ secrets.RUNNER_REG_PAT }}
+          ts-oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          ts-oauth-secret:    ${{ secrets.TS_OAUTH_SECRET }}
+          pve-token-id:       ${{ secrets.PVE_TOKEN_ID }}
+          pve-token-secret:   ${{ secrets.PVE_TOKEN_SECRET }}
+          pve-api-host:       ${{ vars.PVE_API_HOST }}
+          pve-api-hostname:   ${{ vars.PVE_API_HOSTNAME }}
+          pve-ca-cert:        ${{ vars.PVE_CA_CERT }}
+          pve-node:           ${{ vars.PVE_NODE }}
+          template-vmid:      ${{ vars.TEMPLATE_VMID }}
+          vm-token:           ${{ needs.provision.outputs.vm-token }}

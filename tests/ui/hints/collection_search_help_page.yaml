@@ -6,4 +6,4 @@ fixture_data: {}
 notes: >
   From /collection, click [data-testid=search-help-link]. It navigates to
   /search-help, which renders [data-testid=search-help] with the heading
-  "Search syntax" and a keyword table that includes "Energy type".
+  "Search syntax" and a keyword table that includes "Rarity".

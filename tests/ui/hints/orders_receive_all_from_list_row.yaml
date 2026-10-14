@@ -4,10 +4,10 @@ involves:
   - '"Receive 1 card(s)" button in the order detail header'
   - 'POST /api/orders/:id/receive on click'
   - 'load() re-runs — button replaced by static "All received" label'
-  - 'the Base Set Charizard card row status flips ordered → owned'
+  - 'the Showcase Millennium Falcon card row status flips ordered → owned'
 fixture_data:
   order_number: "EBAY-55012"
-  card: "Charizard (Base Set #4, holo)"
+  card: "Millennium Falcon - Piece of Junk (Showcase) (SHD #500, normal)"
   pending_before: 1
   pending_after: 0
 notes: >

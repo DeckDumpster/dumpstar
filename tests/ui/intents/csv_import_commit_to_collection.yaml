@@ -4,6 +4,6 @@
 #   issues: []
 
 description: >
-  After previewing a ManaBox CSV on the CSV Import page, I click "Import".
+  After previewing a TCGplayer CSV on the CSV Import page, I click "Import".
   On success a result banner appears reporting the added and skipped counts,
   the preview tables clear, and the banner offers a "View batch →" link.

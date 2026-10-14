@@ -94,11 +94,10 @@
 	function anchorId(series: string): string {
 		return 'series-' + series.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 	}
-	/** The short identity stamp shown when a set has no symbol art. The PTCGO
-	 *  code is the one the physical card carries; `set_code` is the catalogue
-	 *  key and only stands in when there is no printed code. */
+	/** The short identity stamp shown when a set has no symbol art: the set
+	 *  code the physical card carries (e.g. SOR). */
 	function shortCode(s: SetSummary): string {
-		return (s.ptcgo_code ?? s.set_code).toUpperCase();
+		return s.set_code.toUpperCase();
 	}
 
 	function toggle(series: string) {
@@ -151,7 +150,7 @@
 			{#if search.trim()}
 				<EmptyState
 					title="No sets match “{search.trim()}”."
-					description="The search reads set names, bundle names and series — try the era (“Scarlet & Violet”) or a shorter fragment."
+					description="The search reads set names, bundle names and series — try a set name (“Spark of Rebellion”) or a shorter fragment."
 				>
 					{#snippet action()}
 						<Button variant="ghost" onclick={() => (search = '')}>Clear search</Button>

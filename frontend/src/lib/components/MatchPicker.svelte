@@ -114,7 +114,7 @@
 								{variantTag(row.variant)}
 							</span>
 							<span class="meta">
-								{row.set_ptcgo_code ?? row.set_code} · #{row.number}
+								{row.set_code} · #{row.number}
 								{#if row.owned}· owned ×{row.owned_count}{/if}
 							</span>
 						</button>

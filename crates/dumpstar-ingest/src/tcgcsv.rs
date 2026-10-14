@@ -9,7 +9,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use dumpstar_lake::{Dataset, PartFormat, RawLanding, Source};
+use dumpster_kit_lake::{Dataset, PartFormat, RawLanding, Source};
 use dumpster_kit_tcgcsv::Fetch;
 pub use dumpster_kit_tcgcsv::{Group, Price, Product};
 

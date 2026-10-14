@@ -74,8 +74,16 @@ build_tree() {
 	rm -rf "$TREE"
 	mkdir -p "$TREE/tests/lake" "$TREE/lake"
 	cp -r "${REPO_DIR}/crates" "$TREE/crates"
+	# the lake crate is the kit's: mutate a copy of it, never the cargo checkout
+	rm -rf "$TREE/crates/dumpstar-lake"
+	cp -r "$(bash "${REPO_DIR}/tests/lake/kit_lake_dir.sh")" "$TREE/crates/dumpstar-lake"
+	rm -rf "$TREE/crates/kit-ship"
+	cp -r "$(bash "${REPO_DIR}/tests/lake/kit_lake_dir.sh" dumpster-kit-ship)" "$TREE/crates/kit-ship"
+	chmod -R u+w "$TREE/crates/kit-ship"
+	chmod -R u+w "$TREE/crates/dumpstar-lake"
 	cp -r "${REPO_DIR}/lake/src" "$TREE/lake/src"
 	cp "${REPO_DIR}/${GUARD_REL}" "$TREE/${GUARD_REL}"
+	cp "${REPO_DIR}/tests/lake/kit_lake_dir.sh" "$TREE/tests/lake/kit_lake_dir.sh"
 }
 build_tree
 cp -r "$TREE" "$PRISTINE"
@@ -86,7 +94,7 @@ restore() { # restore <repo-relative-path>
 	cp "${PRISTINE}/$1" "${TREE}/$1"
 }
 
-guard() { bash "${TREE}/${GUARD_REL}" 2>&1; }
+guard() { KIT_LAKE_DIR="${TREE}/crates/dumpstar-lake" KIT_SHIP_DIR="${TREE}/crates/kit-ship" bash "${TREE}/${GUARD_REL}" 2>&1; }
 
 # ── the cases ───────────────────────────────────────────────────────────────
 # expect_red <label> <assertion-substring> — the guard must exit non-zero AND
@@ -124,14 +132,19 @@ add() { # add <repo-relative-path> <text>
 	printf '%s\n' "$2" >>"${TREE}/$1"
 }
 
+# Add a line under [dependencies] (not at the end, which is [dev-dependencies]).
+add_dep() { # add_dep <repo-relative-path> <text>
+	sed -i "0,/^\\[dependencies\\]/s||[dependencies]\n$2|" "${TREE}/$1"
+}
+
 LAKE_TOML=crates/dumpstar-lake/Cargo.toml
 KEYS_RS=crates/dumpstar-lake/src/keys.rs
 TENANT_RS=crates/dumpstar-lake/src/tenant.rs
 CATALOG_PY=lake/src/dumpstar_lake/catalog.py
 PRICES_PY=lake/src/dumpstar_lake/prices.py
 VS_PY=lake/src/dumpstar_lake/value_snapshots.py
-SHIP_RUN=crates/dumpstar-ship/src/run.rs
-SHIP_ENCODE=crates/dumpstar-ship/src/encode.rs
+SHIP_RUN=crates/kit-ship/src/run.rs
+SHIP_ENCODE=crates/kit-ship/src/encode.rs
 DB_TOML=crates/dumpstar-db/Cargo.toml
 
 log "0. the control: an unmutated copy passes"
@@ -229,7 +242,7 @@ expect_red "the shipper reaching for the catalog credential is refused" \
 	"the shipper names no catalog credential"
 restore "$SHIP_RUN"
 
-add "$SHIP_RUN" 'pub fn oops() -> dumpstar_lake::Result<dumpstar_lake::RawLanding> { dumpstar_lake::open() }'
+add "$SHIP_RUN" 'pub fn oops() -> dumpster_kit_lake::Result<dumpster_kit_lake::RawLanding> { dumpster_kit_lake::open() }'
 expect_red "the shipper opening the catalog landing zone is refused" \
 	"the shipper calls no catalog-zone entry point"
 restore "$SHIP_RUN"
@@ -242,12 +255,12 @@ expect_red "a shipper that no longer opens the tenant zone is refused" \
 restore crates/dumpstar-ship/src/bin/dumpstar-ship.rs
 
 log "5. the online path (the outbox's premise, pd-5m54)"
-add "$DB_TOML" 'dumpstar-lake.workspace = true'
+add_dep "$DB_TOML" 'dumpster-kit-lake.workspace = true'
 expect_red "the outbox's crate linking the lake is refused" \
 	"no online crate depends on a lake crate or the S3 SDK"
 restore "$DB_TOML"
 
-add crates/dumpstar-server/Cargo.toml 'aws-sdk-s3.workspace = true'
+add_dep crates/dumpstar-server/Cargo.toml 'aws-sdk-s3.workspace = true'
 expect_red "the request-serving crate holding an S3 client is refused" \
 	"no online crate depends on a lake crate or the S3 SDK"
 restore crates/dumpstar-server/Cargo.toml
@@ -272,7 +285,7 @@ expect_red "a corpus that has moved away is refused" \
 	"dumpstar-lakehouse has Rust sources"
 build_tree
 
-rm -rf "${TREE}/crates/dumpstar-ship/src"
+rm -rf "${TREE}/crates/dumpstar-ship/src" "${TREE}/crates/kit-ship/src"
 expect_red "the shipper's corpus disappearing is refused" \
 	"dumpstar-ship has Rust sources"
 build_tree

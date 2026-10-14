@@ -21,7 +21,7 @@ pub enum IngestError {
     Db(#[from] dumpstar_db::DbError),
 
     #[error("lake: {0}")]
-    Lake(#[from] dumpstar_lake::LakeError),
+    Lake(#[from] dumpster_kit_lake::LakeError),
 
     #[error("tcgcsv: {0}")]
     Tcgcsv(#[from] dumpster_kit_tcgcsv::Error),

@@ -67,7 +67,7 @@ pub struct BinderSlot {
     pub section: String,
     pub printings: Vec<SlotPrinting>,
     /// Home set of the slot's card when different from the container —
-    /// bundle slots use this to surface "lives in Obsidian Flames" and
+    /// bundle slots use this to surface "lives in <set name>" and
     /// to route the card-detail link. `None` for regular set slots.
     pub external_set: Option<ExternalSet>,
 }

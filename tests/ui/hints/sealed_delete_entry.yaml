@@ -4,10 +4,10 @@ involves:
   - '"Remove" link in the row action cell'
   - "browser confirm dialog (auto-accepted by harness)"
 fixture_data:
-  product_name: "151 Elite Trainer Box"
+  product_name: "Spark of Rebellion Two-Player Starter"
   quantity: 1
 notes: >
-  Navigate to /sealed. The fixture seeds a single 151 Elite Trainer Box
+  Navigate to /sealed. The fixture seeds a single Spark of Rebellion Two-Player Starter
   entry (qty 1). Click the "Remove" link on that row. The confirm dialog
-  is auto-accepted. The table reloads and the 151 Elite Trainer Box row
+  is auto-accepted. The table reloads and the Spark of Rebellion Two-Player Starter row
   disappears from the sealed collection.

@@ -86,9 +86,9 @@ struct Candidate {
 }
 
 /// Normalize a product name for tolerant matching across platforms: fold
-/// case, straighten curly apostrophes, drop the accent on `é` (Pokémon),
-/// fold hyphens/dashes to spaces (catalog "Super-Premium" vs Collectr
-/// "Super Premium"), and collapse runs of whitespace. Mirrors the spirit
+/// case, straighten curly apostrophes, drop accents,
+/// fold hyphens/dashes to spaces (catalog "Two-Player" vs Collectr
+/// "Two Player"), and collapse runs of whitespace. Mirrors the spirit
 /// of the shared column-value mappings in `dumpstar-core::import`.
 ///
 /// Shared with the singles resolver ([`crate::import`]) for its global
@@ -140,7 +140,7 @@ fn candidates_in_set(conn: &Connection, set_code: &str) -> Result<Vec<Candidate>
 }
 
 /// Load every sealed catalog product — across all sets, and including the
-/// many products with a NULL `set_code` (UPCs, Tin Displays). The candidate
+/// many products with a NULL `set_code` (prerelease kits, displays). The candidate
 /// pool for the global name fallback when set resolution fails or a product
 /// isn't found in its stated set (dumpstar-oq3i.3).
 fn all_candidates(conn: &Connection) -> Result<Vec<Candidate>> {
@@ -268,7 +268,7 @@ pub fn resolve_sealed(
 
         // Fallback: the stated set didn't resolve, or the product wasn't in
         // it. Search the whole sealed catalog, NULL-set-code products
-        // included (UPCs, Tin Displays, cross-set promos).
+        // included (prerelease kits, displays, cross-set promos).
         if all_cache.is_none() {
             all_cache = Some(all_candidates(conn)?);
         }
@@ -334,17 +334,17 @@ mod tests {
             let c = open_shared(&shared).unwrap();
             c.execute(
                 "INSERT INTO sets (set_code, ptcgo_code, name, series) \
-                 VALUES ('jtg', 'JTG', 'Journey Together', 'SV')",
+                 VALUES ('sor', 'SOR', 'Spark of Rebellion', 'SOR')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO sealed_products (product_id, set_code, name, category, fetched_at) \
                  VALUES \
-                   (6001, 'jtg', 'Journey Together Elite Trainer Box', 'elite_trainer_box', '2026-02-28'), \
-                   (6002, 'jtg', 'Journey Together Booster Bundle', 'booster_bundle', '2026-02-28'), \
-                   (6003, 'jtg', 'Journey Together 3 Pack Blister [Scrafty]', 'blister', '2026-02-28'), \
-                   (6004, 'jtg', 'Journey Together 3 Pack Blister [Yanmega]', 'blister', '2026-02-28')",
+                   (6001, 'sor', 'Spark of Rebellion Two-Player Starter', 'two_player_starter', '2026-02-28'), \
+                   (6002, 'sor', 'Spark of Rebellion Prerelease Kit', 'prerelease_kit', '2026-02-28'), \
+                   (6003, 'sor', 'Spark of Rebellion Booster Pack', 'booster_pack', '2026-02-28'), \
+                   (6004, 'sor', 'Spark of Rebellion Booster Display', 'booster_display', '2026-02-28')",
                 [],
             )
             .unwrap();
@@ -372,8 +372,8 @@ mod tests {
     fn resolves_exact_name_and_keeps_quantity() {
         let (_d, conn) = db();
         let rows = vec![row(
-            "Journey Together Elite Trainer Box",
-            "Journey Together",
+            "Spark of Rebellion Two-Player Starter",
+            "Spark of Rebellion",
             3,
         )];
         let report = resolve_sealed(&conn, &rows).unwrap();
@@ -387,8 +387,8 @@ mod tests {
     fn commit_writes_one_row_with_quantity() {
         let (_d, conn) = db();
         let rows = vec![row(
-            "Journey Together Elite Trainer Box",
-            "Journey Together",
+            "Spark of Rebellion Two-Player Starter",
+            "Spark of Rebellion",
             3,
         )];
         let report = resolve_sealed(&conn, &rows).unwrap();
@@ -407,7 +407,7 @@ mod tests {
         let (_d, conn) = db();
         let rows = vec![
             row("Some Box", "No Such Set", 1),
-            row("Nonexistent Product", "Journey Together", 1),
+            row("Nonexistent Product", "Spark of Rebellion", 1),
         ];
         let report = resolve_sealed(&conn, &rows).unwrap();
         assert!(report.matched.is_empty());
@@ -425,13 +425,13 @@ mod tests {
     }
 
     #[test]
-    fn distinct_blister_variants_do_not_collide() {
+    fn products_sharing_a_name_prefix_do_not_collide() {
         let (_d, conn) = db();
-        // The two 3-pack blisters differ only by their bracketed mascot;
+        // The booster pack's name is a prefix of the booster display's;
         // an exact normalized match must pick the right one, not go ambiguous.
         let rows = vec![row(
-            "Journey Together 3 Pack Blister [Yanmega]",
-            "Journey Together",
+            "Spark of Rebellion Booster Display",
+            "Spark of Rebellion",
             4,
         )];
         let report = resolve_sealed(&conn, &rows).unwrap();
@@ -439,7 +439,7 @@ mod tests {
         assert_eq!(report.matched[0].product_id, 6004);
     }
 
-    /// A catalog with NULL-set-code products (UPCs, Tin Displays), reachable
+    /// A catalog with NULL-set-code products (prerelease kits, displays), reachable
     /// only through the global name fallback (dumpstar-oq3i.3).
     fn null_set_db() -> (tempfile::TempDir, Connection) {
         let dir = tempfile::tempdir().unwrap();
@@ -448,15 +448,15 @@ mod tests {
             let c = open_shared(&shared).unwrap();
             c.execute(
                 "INSERT INTO sets (set_code, ptcgo_code, name, series) \
-                 VALUES ('sv8pt5', 'PRE', 'Prismatic Evolutions', 'SV')",
+                 VALUES ('sor', 'SOR', 'Spark of Rebellion', 'SOR')",
                 [],
             )
             .unwrap();
             c.execute(
                 "INSERT INTO sealed_products (product_id, set_code, name, category, fetched_at) VALUES \
-                   (654213, NULL, 'Mega Charizard X ex Ultra Premium Collection', 'upc', '2026-02-01'), \
-                   (656997, NULL, 'Team Rocket’s Moltres ex Ultra-Premium Collection', 'upc', '2026-02-01'), \
-                   (622770, 'sv8pt5', 'Prismatic Evolutions Super-Premium Collection', 'spc', '2026-02-01')",
+                   (654213, NULL, 'Twilight of the Republic Prerelease Kit', 'prerelease_kit', '2026-02-01'), \
+                   (656997, NULL, 'Collector’s Booster Display', 'booster_display', '2026-02-01'), \
+                   (622770, 'sor', 'Spark of Rebellion Two-Player Starter', 'two_player_starter', '2026-02-01')",
                 [],
             )
             .unwrap();
@@ -487,7 +487,7 @@ mod tests {
         let (_d, conn) = null_set_db();
         let report = resolve_sealed(
             &conn,
-            &[misc_sealed("Mega Charizard X ex Ultra Premium Collection")],
+            &[misc_sealed("Twilight of the Republic Prerelease Kit")],
         )
         .unwrap();
         assert_eq!(report.matched.len(), 1, "{:?}", report.unmatched);
@@ -498,24 +498,17 @@ mod tests {
     #[test]
     fn global_fallback_folds_hyphens_and_apostrophes() {
         let (_d, conn) = null_set_db();
-        // Collectr "Super Premium" (space) vs catalog "Super-Premium" (hyphen).
+        // Collectr "Two Player" (space) vs catalog "Two-Player" (hyphen).
         let r1 = resolve_sealed(
             &conn,
-            &[misc_sealed("Prismatic Evolutions Super Premium Collection")],
+            &[misc_sealed("Spark of Rebellion Two Player Starter")],
         )
         .unwrap();
         assert_eq!(r1.matched.len(), 1, "{:?}", r1.unmatched);
         assert_eq!(r1.matched[0].product_id, 622770);
 
-        // Straight apostrophe + spaced "Ultra Premium" vs catalog U+2019 +
-        // hyphenated "Ultra-Premium".
-        let r2 = resolve_sealed(
-            &conn,
-            &[misc_sealed(
-                "Team Rocket's Moltres ex Ultra Premium Collection",
-            )],
-        )
-        .unwrap();
+        // Straight apostrophe in the Collectr row vs U+2019 in the catalog.
+        let r2 = resolve_sealed(&conn, &[misc_sealed("Collector's Booster Display")]).unwrap();
         assert_eq!(r2.matched.len(), 1, "{:?}", r2.unmatched);
         assert_eq!(r2.matched[0].product_id, 656997);
     }

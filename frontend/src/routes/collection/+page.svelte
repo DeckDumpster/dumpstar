@@ -10,7 +10,7 @@
 	import { money, count } from '$lib/format';
 	import { stackOffsets, windowOf } from '$lib/virtual';
 
-	// Foil shimmer treatment for holo / reverse-holo / pattern-RH /
+	// Foil shimmer treatment for Foil / Hyperspace Foil /
 	// cosmos_holo variants — ranks 1..3 in the variants table. Stamps
 	// (rank 4) and normals (rank 0) are matte.
 	function isFoilVariant(code: string): boolean {
@@ -115,7 +115,7 @@
 	);
 
 	// Debounced search. Initial value comes from ?q= so clickable facets
-	// on the card-detail page (artist, set, energy type, rarity, …) can
+	// on the card-detail page (artist, set, rarity, …) can
 	// land here with the filter pre-applied.
 	const initialQuery =
 		typeof window !== 'undefined' ? (page.url.searchParams.get('q') ?? '') : '';
@@ -582,7 +582,7 @@
 		return parseJsonStrArr(a.subtypes).join(' ');
 	}
 
-	// Energy-type icons live under /static/energy/<lowercase>.png — pulled
+	// Aspect icons live under /static/energy/<lowercase>.png — pulled
 	// from pkmn.gg (see static/energy/README.md). "Free" — a zero-energy
 	// attack cost the card art draws as a clear circle — maps to the
 	// colorless icon, and anything else unknown falls back to colorless
@@ -697,7 +697,7 @@
 	// you scroll through is organised. So the grid cuts itself into labelled
 	// sections along whatever the active sort already orders on, whenever
 	// that field is a category a person browses by — set, rarity, class,
-	// energy type, or a name's initial. The continuous fields (#, NM) group
+	// or a name's initial. The continuous fields (#, NM) group
 	// into nothing useful, so they stay one flat run.
 	//
 	// Every label is read straight off the row's own fields. No new
@@ -2072,7 +2072,7 @@
 	/* The active pill is a wash and an edge, not a slab. Solid crimson next
 	   to card art read as the loudest element on a page whose whole job is
 	   to show the art; the accent still marks the pill, at a weight that
-	   loses to a Charizard. */
+	   loses to a Luke Skywalker. */
 	.sortbtn.active {
 		background: var(--color-surface-selected);
 		border-color: var(--color-border-accent);
@@ -2147,7 +2147,7 @@
 	.cardtile.missing {
 		opacity: 0.82;
 	}
-	/* Foil treatment for holo / reverse-holo / pattern-RH / cosmos
+	/* Foil treatment for Foil / Hyperspace Foil / cosmos
 	   variants. Two pseudo-elements stacked over the card image:
 	   ::before paints a rainbow tint via mix-blend-mode, ::after
 	   animates a diagonal sheen across the surface. Pointer-events
@@ -2295,7 +2295,7 @@
 		   before, at a width that moved. */
 		--col-sel: 2.25rem;
 		--col-qty: 2.5rem;
-		/* Wide enough for "Pokémon" over a two-word subtype, which is nearly
+		/* Wide enough for "Character" over a two-word subtype, which is nearly
 		   all of them. A third subtype ("Stage 2 · VSTAR · Ultra Beast") wants
 		   172px, is a few rows per thousand, and ellipsises instead: the
 		   alternative is a column permanently ~90px wider than its own content
@@ -2639,7 +2639,7 @@
 		vertical-align: middle;
 	}
 
-	/* Real Pokémon rarity icons live under static/rarity/, sourced from
+	/* Rarity icons live under static/rarity/, sourced from
 	   pkmn.gg (see static/rarity/README.md). Sized to sit comfortably in
 	   one table-row height. */
 	.rarityicon {

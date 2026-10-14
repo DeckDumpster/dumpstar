@@ -720,12 +720,12 @@ mod tests {
                 .unwrap();
             }
             for (product, name) in [
-                (5001, "151 Elite Trainer Box"),
-                (5002, "151 Booster Bundle"),
+                (5001, "Spark of Rebellion Two-Player Starter"),
+                (5002, "Spark of Rebellion Prerelease Kit"),
             ] {
                 c.execute(
                     "INSERT INTO sealed_products (product_id, name, category, fetched_at) \
-                     VALUES (?1, ?2, 'elite_trainer_box', '2026-05-18')",
+                     VALUES (?1, ?2, 'two_player_starter', '2026-05-18')",
                     rusqlite::params![product, name],
                 )
                 .unwrap();

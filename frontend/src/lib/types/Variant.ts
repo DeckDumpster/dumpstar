@@ -14,7 +14,7 @@ export type Variant = { code: string, label: string, short: string, rank: number
 tiebreak: number, color: string, 
 /**
  * Human-readable origin description (e.g. "Build & Battle Box",
- * "Trick or Trade BOOster Bundle"). NULL for variants without a
+ * "Two-Player Starter"). NULL for variants without a
  * single canonical source. See dumpstar-rlq.
  */
 provenance: string | null, };

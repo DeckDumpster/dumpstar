@@ -81,9 +81,9 @@
 
 	// Upgrade the breadcrumb labels once card data resolves — the route
 	// page seeded a synchronous placeholder using URL params, this swaps
-	// the bare set_code for "Base" and "#4" for "Charizard #4". $effect.pre
+	// the bare set_code for "Base" and "#4" for "Luke Skywalker #5". $effect.pre
 	// runs before the DOM updates so the upgrade lands in the same frame
-	// as the data; no visible "Base1 → Base" / "#4 → Charizard #4" flash.
+	// as the data; no visible "Base1 → Base" / "#5 → Luke Skywalker #5" flash.
 	// No unmount cleanup needed — the breadcrumbs store is path-keyed
 	// and auto-discards overrides when the URL changes.
 	$effect.pre(() => {
@@ -272,7 +272,7 @@
 	// Show the toggle only when there's something hidden to reveal.
 	const hasHiddenSeries = $derived(ownedSeries.length > 0 && allSeries.length > ownedSeries.length);
 
-	// Pokémon energy-type icons, served from /static/energy. "Free" (a
+	// Aspect and arena icons, served from /static/energy. "Free" (a
 	// zero-energy attack cost rendered on the card art as a clear circle)
 	// falls back to colorless; any other unknown type does too rather than
 	// 404 → broken-image.
@@ -382,18 +382,6 @@
 				{#if card.artist}<dt>Artist</dt><dd>
 						<a class="facet" href={facetHref('artist', card.artist)} title="Find all cards by {card.artist}">{card.artist}</a>
 					</dd>{/if}
-				{#if parseStrArr(card.national_pokedex_numbers).length}
-					<dt>Pokédex</dt>
-					<dd>
-						{#each parseStrArr(card.national_pokedex_numbers) as dex, i (dex)}
-							{#if i > 0},
-							{/if}
-							<a class="facet" href={facetHref('pokedex', dex)} title="Find every card of Pokédex #{dex}">
-								#{dex}
-							</a>
-						{/each}
-					</dd>
-				{/if}
 
 				{#if card.evolves_from}
 					<dt>Evolves from</dt>
@@ -770,7 +758,7 @@
 									type="text"
 									value={copy.notes ?? ''}
 									disabled={isSaving(`${copy.id}:notes`)}
-									placeholder="Notes — e.g. red mark near holo, two visible bumps"
+									placeholder="Notes — e.g. corner wear on the back, a crease near the border"
 									title="Condition notes for this copy"
 									onchange={(e) => changeNotes(copy.id, e.currentTarget.value)}
 								/>

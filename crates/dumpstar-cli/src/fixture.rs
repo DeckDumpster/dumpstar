@@ -330,8 +330,8 @@ fn seed_catalog(conn: &Connection) -> anyhow::Result<()> {
         (
             900001,
             "base1",
-            "Base Set Booster Box",
-            "booster_box",
+            "Spark of Rebellion Booster Display",
+            "booster_display",
             Some(11),
             Some(36),
             "1999/01/09",
@@ -339,8 +339,8 @@ fn seed_catalog(conn: &Connection) -> anyhow::Result<()> {
         (
             900002,
             "sv3pt5",
-            "151 Elite Trainer Box",
-            "etb",
+            "Spark of Rebellion Two-Player Starter",
+            "two_player_starter",
             Some(10),
             Some(9),
             "2023/09/22",
@@ -348,8 +348,8 @@ fn seed_catalog(conn: &Connection) -> anyhow::Result<()> {
         (
             900003,
             "sv3pt5",
-            "151 Booster Bundle",
-            "bundle",
+            "Spark of Rebellion Prerelease Kit",
+            "prerelease_kit",
             Some(10),
             Some(6),
             "2023/09/22",
@@ -357,7 +357,7 @@ fn seed_catalog(conn: &Connection) -> anyhow::Result<()> {
         (
             900004,
             "sv8",
-            "Surging Sparks Booster Pack",
+            "Shadows of the Galaxy Booster Pack",
             "booster_pack",
             Some(10),
             Some(1),
@@ -1594,9 +1594,9 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             condition: "Near Mint".into_some(),
             purchase_price: Some(49.99),
             purchase_date: "2023-09-22".into_some(),
-            source: "pokemoncenter".into_some(),
-            seller_name: "Pokémon Center".into_some(),
-            notes: "Sealed 151 ETB — keeping factory sealed.".into_some(),
+            source: "lgs".into_some(),
+            seller_name: "Local Game Store".into_some(),
+            notes: "Sealed Two-Player Starter — keeping factory sealed.".into_some(),
         },
     )?;
     sealed::add(
@@ -1609,7 +1609,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             purchase_date: "2024-11-08".into_some(),
             source: "lgs".into_some(),
             seller_name: "Local Game Store".into_some(),
-            notes: "Loose Surging Sparks packs to rip.".into_some(),
+            notes: "Loose Shadows of the Galaxy packs to rip.".into_some(),
         },
     )?;
 

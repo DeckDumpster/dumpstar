@@ -19,7 +19,7 @@
 
 	function buildConfig(series: PriceSeries[]): ChartConfiguration {
 		// Distinct line color per series; cycles if there are more printings than
-		// palette entries (Pokémon cards almost always have <= 4 printings).
+		// palette entries (SWU cards have at most four printings).
 		// Resolved here rather than at module scope because the token layer only
 		// exists once the document does.
 		const palette = chartPalette();

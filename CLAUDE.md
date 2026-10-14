@@ -19,7 +19,7 @@ catalog, tenancy and the shared kit arrive in later rows.
 | `crates/dumpstar-server`, `-cli` | the HTTP server and the `dumpstar` binary |
 | `frontend/` | SvelteKit (Svelte 5, adapter-static) |
 | `deploy/`, `Containerfile` | container image, units, `deploy/ci.sh` |
-| `fixtures/swu/` | verbatim captures of the SWU data sources (official API, tcgcsv) |
+| `fixtures/swu/` | verbatim captures of the SWU data sources (official API, tcgcsv) and, in `rules/`, the retrieved Comprehensive Rules the format data cites |
 
 **Not here yet** (each is its own bead of the dumpstar design): the SWU catalog
 seam and variant model (a derive builds no card rows today), authentication and

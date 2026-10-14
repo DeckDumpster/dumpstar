@@ -1,15 +1,15 @@
-start_page: /card/base1/4
+start_page: /card/SOR/005
 involves:
-  - "card detail page for Charizard (base1 #4), artist Mitsuhiro Arita"
-  - "artist link a.facet[title='Find all cards by Mitsuhiro Arita']"
+  - "card detail page for Luke Skywalker - Faithful Friend (SOR #5), artist Borja Pindado"
+  - "artist link a.facet[title='Find all cards by Borja Pindado']"
   - "lands on /collection with q=artist:... and all=1 (catalog-wide)"
   - "result grid .cardtile tiles titled by card name"
 fixture_data:
-  start_card: Charizard
-  artist: "Mitsuhiro Arita"
-  also_by_artist: "Venusaur"
+  start_card: Luke Skywalker - Faithful Friend
+  artist: "Borja Pindado"
+  also_by_artist: "Luke Skywalker - Faithful Friend (Hyperspace)"
 notes: >
-  Charizard base1/4 is by Mitsuhiro Arita, who in the fixture also drew
-  base1 Venusaur, Bulbasaur and Pikachu. Click the artist link; assert the
-  URL carries q=artist and all=1, then assert both Charizard and Venusaur
-  tiles appear — a bare name search for the artist would return nothing.
+  Luke Skywalker SOR/005 is by Borja Pindado, who in the fixture also drew
+  SOR/262 (the Hyperspace printing card). Click the artist link; assert the
+  URL carries q=artist and all=1, then assert both the plain Luke
+  Skywalker tile and the "(Hyperspace)" tile appear — a bare name search for the artist would return nothing.

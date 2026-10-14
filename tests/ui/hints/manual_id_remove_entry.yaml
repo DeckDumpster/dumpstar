@@ -6,11 +6,9 @@ involves:
   - "variants table with '+ Add' buttons"
   - "session log section: h2 'This session (N)' and green 'Added ...' lines"
 fixture_data:
-  first_card: { set_code: "base1", collector_number: "7", card_name: "Hitmonchan", variant: "holo" }
-  second_card: { set_code: "base1", collector_number: "4", card_name: "Charizard", variant: "holo" }
+  first_card: { set_code: "SOR", collector_number: "5", card_name: "Luke Skywalker - Faithful Friend", variant: "holo" }
+  second_card: { set_code: "SOR", collector_number: "193", card_name: "Millennium Falcon - Piece of Junk", variant: "normal" }
 notes: >
-  Navigate to /ingest/manual. Look up "base1" / "7", click "+ Add" on the
+  Navigate to /ingest/manual. Look up "SOR" / "5", click "+ Add" on the
   holo variant. Verify the session log shows "This session (1)" with an
-  "Added Hitmonchan · holo · ..." line. Look up "base1" / "4", click "+ Add"
-  on the holo variant. Verify "This session (2)" and that the Charizard line
-  is newest-first above the Hitmonchan line.
+  "Added Luke Skywalker - Faithful Friend · holo · ..." line. Look up "SOR" / "193", click "+ Add" on the normal variant. Verify "This session (2)" and that the Millennium Falcon - Piece of Junk line is newest-first above the Luke Skywalker - Faithful Friend line.

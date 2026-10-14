@@ -2,13 +2,13 @@
  * Hand-written implementation for card_detail_facet_rarity_search.
  *
  * Guards dumpstar-xj6: the rarity link now emits rarity:"<R>"&all=1
- * instead of a bare name search. Charizard (base1/4) is Rare Holo, as are
- * base1 Blastoise and Venusaur — so the search returns several, Blastoise
+ * instead of a bare name search. Luke Skywalker (SOR/005) is Special, as is
+ * SOR/262 (Hyperspace) — so the search returns both, the Hyperspace card
  * among them.
  */
 import type { ReplayHarness } from '../replay';
 
-const RARITY = 'a.facet[title="Find all Rare Holo cards"]';
+const RARITY = 'a.facet[title="Find all Special cards"]';
 
 export async function steps(h: ReplayHarness) {
   await h.wait_for_visible(RARITY, 6000);
@@ -17,6 +17,6 @@ export async function steps(h: ReplayHarness) {
   const url = h.page.url();
   if (!url.includes('q=rarity')) throw new Error(`expected a rarity: DSL query, got: ${url}`);
   if (!url.includes('all=1')) throw new Error(`expected catalog-wide all=1, got: ${url}`);
-  await h.wait_for_visible('.cardtile[title^="Blastoise"]', 6000);
+  await h.wait_for_visible('.cardtile[title*="(Hyperspace)"]', 6000);
   await h.screenshot('final_state');
 }

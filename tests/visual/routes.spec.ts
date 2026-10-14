@@ -84,7 +84,7 @@ test('every route in the app has a baseline', () => {
 		.map((f) => 'routes/' + relative(routesDir, f).split(sep).join('/'));
 
 	// A manifest path covers a page file when its segments line up, treating
-	// `[param]` as a wildcard: /browse/sv3pt5 covers routes/browse/[set].
+	// `[param]` as a wildcard: /browse/<set> covers routes/browse/[set].
 	const covers = (urlPath: string, pageFile: string): boolean => {
 		const pageSegs = pageFile.replace(/^routes\//, '').replace(/\/?\+page\.svelte$/, '');
 		const expected = pageSegs === '' ? [] : pageSegs.split('/');

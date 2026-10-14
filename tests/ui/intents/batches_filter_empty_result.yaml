@@ -4,7 +4,7 @@
 
 description: >
   When I choose "manual_id" from the Type filter on the batches page,
-  the table narrows to show only the manual-entry batch "Vintage holo
+  the table narrows to show only the manual-entry batch "Showcase
   entry". When I choose a type with no batches, the table renders with
   no body rows. Switching the filter back to "All" restores the full
   batch list.

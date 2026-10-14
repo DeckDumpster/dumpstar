@@ -5,8 +5,8 @@
 #   pull_requests: []
 #
 # Prerequisites:
-#   The fixture collection spans three sets (Base Set, 151, Surging Sparks)
-#   and three binders (Vintage Vault, Master Set: 151, Trade Binder), and
+#   The fixture collection spans two sets (Spark of Rebellion, Shadows of the Galaxy)
+#   and three binders (Hyperspace Vault, Master Set: Spark of Rebellion, Trade Binder), and
 #   `dumpstar seed-fixture` backfills a snapshot row for each.
 
 description: >

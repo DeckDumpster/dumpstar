@@ -1,7 +1,7 @@
 /**
  * /collection must not put the whole result set in the DOM (pd-tsqd, pd-7z4o).
  *
- * The reported case is `?q=supertype:Pokémon&all=1` on the real catalog:
+ * The reported case is a catalog-wide `all=1` search on the real catalog:
  * 56,635 matching printings, and a tab that died rendering them — 289,612 DOM
  * nodes and a 457 MB heap (pd-5vgp). The client holds every one of those rows
  * as a JS object now and renders only the slice under the viewport, so this
@@ -47,17 +47,12 @@ function row(i: number) {
 	return {
 		printing_id: `synthetic-${i}-normal`,
 		card_id: `synthetic-${i}`,
-		set_code: 'base1',
-		set_name: 'Base Set',
-		set_ptcgo_code: 'BS',
+		set_code: 'sor',
+		set_name: 'Spark of Rebellion',
 		set_symbol_url: null,
 		number: String(i + 1),
 		name: `Synthetic ${i}`,
 		rarity: 'Common',
-		supertype: 'Pokémon',
-		subtypes: '["Basic"]',
-		types: '["Fire"]',
-		attack_costs: null,
 		market_price: 1.5,
 		image_small: null,
 		variant: 'normal',
@@ -123,7 +118,7 @@ async function openCollection(
 		localStorage.setItem('collection.sortDir', 'asc');
 		sessionStorage.clear();
 	}, view);
-	await page.goto('/collection?q=supertype%3APok%C3%A9mon&all=1');
+	await page.goto('/collection?q=set%3Asor&all=1');
 	await page.locator(view === 'grid' ? '[data-testid="collection-grid"]' : 'table.dd').waitFor();
 	return asked;
 }
@@ -134,7 +129,7 @@ async function openCollection(
  * is what the node-count assertions want and is exactly what this one cannot
  * use. A window's columns only shift if the WIDEST content in a column differs
  * between windows, so `variedRow()` reproduces the catalog's real shape: long
- * collector numbers, four-figure prices, wordy subtypes and dual types are all
+ * collector numbers, four-figure prices and long card names are all
  * RARE, a few rows per thousand. A window either contains one or it doesn't,
  * and under `table-layout: auto` that is a different column width either way.
  *
@@ -150,19 +145,10 @@ function variedRow(i: number) {
 	return {
 		...r,
 		// A promo number is ~1 row in 97; the rest are 1-3 digits.
-		number: i % 97 === 0 ? `SWSH${200 + (i % 90)}` : String((i % 250) + 1),
+		number: i % 97 === 0 ? `PROMO${200 + (i % 90)}` : String((i % 250) + 1),
 		// Bulk is the rule and a four-figure card the exception, as upstream.
 		market_price: i % 53 === 0 ? 4832.75 : i % 7 === 0 ? 128.4 : 1.5,
-		subtypes: i % 71 === 0 ? '["Stage 2","VSTAR","Ultra Beast"]' : '["Basic"]',
-		types: i % 89 === 0 ? '["Fighting","Colorless"]' : '["Fire"]',
-		attack_costs:
-			i % 3 === 0
-				? JSON.stringify([
-						{ name: 'Hyper Beam', cost: ['Fire', 'Fire', 'Colorless', 'Colorless'] },
-						{ name: 'Brave Blade', cost: ['Fire', 'Colorless'] }
-					])
-				: null,
-		name: i % 61 === 0 ? `Ancient Booster Energy Capsule ${i}` : `Synthetic ${i}`
+		name: i % 61 === 0 ? `Darth Vader, Commanding the First Legion ${i}` : `Synthetic ${i}`
 	};
 }
 
@@ -348,7 +334,7 @@ test('the table stays usable at the mobile breakpoint', async ({ page }, testInf
 		const label = `${at}: ${widths.join(', ')}`;
 
 		// Every column wide enough for the content it draws: the narrowest thing
-		// in the table is the 22px rarity icon inside 0.35rem of padding.
+		// in the table is the qty column inside 0.35rem of padding.
 		for (const w of widths) expect(w, label).toBeGreaterThan(28);
 		// And the name column — the one that flexes, and the one that collapsed
 		// in the scar — is still the widest by a distance.

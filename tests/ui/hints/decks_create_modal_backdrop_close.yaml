@@ -6,9 +6,9 @@ involves:
   - deck card table unchanged after the modal closes
 fixture_data:
   deck_id: 2
-  deck_name: "Pikachu ex Aggro"
+  deck_name: "Vader Aggro"
 notes: >
-  Navigate to /decks/2 (Pikachu ex Aggro). Wait for the page to load.
+  Navigate to /decks/2 (Vader Aggro). Wait for the page to load.
   Click "+ Add cards". Wait for the picker modal to appear. Click the "×"
   button to dismiss it without selecting any copies. Verify the modal is
   no longer visible. Verify the deck's card table is unchanged. Take a

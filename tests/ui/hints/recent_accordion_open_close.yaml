@@ -4,10 +4,9 @@ involves:
   - "caret ▸ collapsed / ▾ expanded inside the row"
   - "indented expanded card list ul.cards"
 fixture_data:
-  batch: "151 binder page-through (binder_click) — 8 sv3pt5 cards"
+  batch: "Spark of Rebellion binder page-through (binder_click) — 7 SOR cards"
 notes: >
-  1. Navigate to /recent. 2. Wait for ul.timeline. 3. Click the "151
-  binder page-through" batch row. 4. Verify the caret becomes ▾ and an
+  1. Navigate to /recent. 2. Wait for ul.timeline. 3. Click the "Spark of Rebellion binder page-through" batch row. 4. Verify the caret becomes ▾ and an
   indented ul.cards list appears with one entry per card. 5. Click the
   same row again. 6. Verify the card list is gone and the caret is back
   to ▸.

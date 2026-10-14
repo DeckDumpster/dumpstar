@@ -15,7 +15,7 @@ from dumpstar_lake import nessie_backup as nb  # noqa: E402
 NOW = dt.datetime(2026, 10, 12, 8, 0, tzinfo=dt.timezone.utc)
 TABLES = [
     {"identifier": "catalog.prices", "metadata_location": "s3://b/m1.json", "snapshot_id": 1, "rows": 10},
-    {"identifier": "deckdumpster.x", "metadata_location": "s3://b/m2.json", "snapshot_id": 2, "rows": 3},
+    {"identifier": "otherproject.x", "metadata_location": "s3://b/m2.json", "snapshot_id": 2, "rows": 3},
 ]
 
 
@@ -53,7 +53,7 @@ class FakeCatalog:
 
 def good_catalog():
     return FakeCatalog(
-        {"catalog.prices": FakeTable("s3://b/m1.json", 10), "deckdumpster.x": FakeTable("s3://b/m2.json", 3)}
+        {"catalog.prices": FakeTable("s3://b/m1.json", 10), "otherproject.x": FakeTable("s3://b/m2.json", 3)}
     )
 
 
@@ -128,7 +128,7 @@ class Drill(unittest.TestCase):
     M = {"tables": TABLES}
 
     def test_all_tables_read_back(self):
-        self.assertEqual(nb.drill(good_catalog(), self.M, ["catalog", "deckdumpster"]), [])
+        self.assertEqual(nb.drill(good_catalog(), self.M, ["catalog", "otherproject"]), [])
 
     def test_unreadable_table_fails(self):
         c = good_catalog()
@@ -139,7 +139,7 @@ class Drill(unittest.TestCase):
 
     def test_missing_table_fails(self):
         c = good_catalog()
-        del c.t["deckdumpster.x"]
+        del c.t["otherproject.x"]
         self.assertEqual(len(nb.drill(c, self.M, [])), 1)
 
     def test_row_count_mismatch_fails(self):
@@ -156,7 +156,7 @@ class Drill(unittest.TestCase):
         self.assertTrue(nb.drill(good_catalog(), {"tables": []}, []))
 
     def test_required_namespace_absent_fails(self):
-        self.assertTrue(nb.drill(good_catalog(), {"tables": TABLES[:1]}, ["deckdumpster"]))
+        self.assertTrue(nb.drill(good_catalog(), {"tables": TABLES[:1]}, ["otherproject"]))
 
 
 class Fallback(unittest.TestCase):

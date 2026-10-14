@@ -5,13 +5,13 @@ involves:
   - "navigating back to /collection via the header nav"
   - "repeating the '+ Add' flow on a second, different card"
 fixture_data:
-  first_card_name: "Pikachu"
-  first_card_route: /card/sv3pt5/25
-  second_card_name: "Bulbasaur"
-  second_card_route: /card/sv3pt5/1
+  first_card_name: "Vanquish"
+  first_card_route: /card/SOR/P01
+  second_card_name: "Millennium Falcon - Piece of Junk (Showcase)"
+  second_card_route: /card/SOR/521
 notes: >
-  Open /collection, click the "Pikachu" Name link, and add a copy from
+  Open /collection, click the "Vanquish" Name link, and add a copy from
   the card detail page's Printings "+ Add" button. Use the header
   "Collection" link to return to /collection (no full browser refresh).
-  Click the "Bulbasaur" Name link and add a copy the same way. The
+  Click the "Millennium Falcon - Piece of Junk (Showcase)" Name link and add a copy the same way. The
   second "+ Add" must work — the copy count increments after its reload.

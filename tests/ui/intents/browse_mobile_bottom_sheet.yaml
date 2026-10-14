@@ -1,6 +1,6 @@
 # Scenario: The variant modal becomes a bottom sheet on a narrow viewport
 
-# Related: browse_slot_click_opens_variant_modal, browse_mobile_breakpoints
+# Related: browse_slot_click_opens_variant_modal
 
 description: >
   On a narrow phone-width viewport I open the variant modal from a binder

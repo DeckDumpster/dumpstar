@@ -13,7 +13,7 @@ import type { ReplayHarness } from '../replay';
 
 export async function steps(h: ReplayHarness) {
   await h.wait_for_visible('.slot', 6000);
-  await h.wait_for_text('Page 1 of 3', 4000);
+  await h.wait_for_text('Page 1 of 2', 4000);
 
   // Scroll to the bottom row, near the pagers.
   await h.page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
@@ -24,7 +24,7 @@ export async function steps(h: ReplayHarness) {
   await h.page
     .locator('.toppager button', { hasText: 'Next' })
     .dispatchEvent('click');
-  await h.wait_for_text('Page 2 of 3', 4000);
+  await h.wait_for_text('Page 2 of 2', 4000);
 
   // The viewport must re-center near the top of the grid.
   await h.page.waitForFunction(() => window.scrollY < 50, undefined, { timeout: 4000 });

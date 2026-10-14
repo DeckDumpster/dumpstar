@@ -171,7 +171,7 @@ that needs a Vision call belongs in `tests/ui`.
 
 `stabilize.ts` pins everything that could churn pixels for reasons unrelated to
 the design system: a frozen clock, a stubbed backup-status response, card art
-replaced by a flat placeholder (the fixture points at `images.pokemontcg.io`,
+replaced by a flat placeholder (the fixture points at a remote image CDN,
 and a CDN is not the thing under test), no transitions, no caret, no
 scrollbar. Its header explains each one.
 

@@ -9,7 +9,7 @@
  *   clock      — the layout header renders a backup age in hours/days
  *   backup     — ...and only renders that banner at all when the host's
  *                Litestream marker is stale, which is host state, not UI state
- *   card art   — the fixture points at images.pokemontcg.io; the test box may
+ *   card art   — the fixture points at a remote image CDN; the test box may
  *                be offline, and a CDN is not the thing under test
  *   motion     — CSS transitions/animations, and the caret
  *   scrollbars — width differs with the overlay-scrollbar setting
@@ -18,7 +18,31 @@
  * the application runs in.
  */
 
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { Page } from '@playwright/test';
+
+/**
+ * The Access JWT the instance demands on every /api request. A `--test`
+ * instance is verified against a throwaway JWKS (deploy/setup.sh), and run.sh
+ * hands its directory over in UI_TEST_JWKS_DIR; a token is minted per call
+ * because the issued ones expire after an hour. Without it every data fetch is
+ * a 401 and the page never leaves its loading state — which is what a
+ * recording run looked like when this was missing: each data route timed out.
+ * Null when there is neither a token nor a JWKS directory (an instance run
+ * without Access needs none).
+ */
+function accessToken(): string | null {
+	if (process.env.UI_TEST_ACCESS_TOKEN) return process.env.UI_TEST_ACCESS_TOKEN;
+	const dir = process.env.UI_TEST_JWKS_DIR;
+	if (!dir || !existsSync(join(dir, 'jwks.json'))) return null;
+	const issuer = join(dirname(fileURLToPath(import.meta.url)), '../lib/test_jwks.py');
+	return execFileSync('python3', [issuer, 'issue', dir, 'visual-test@example.com'], {
+		encoding: 'utf8'
+	}).trim();
+}
 
 /**
  * The instant every baseline is taken at. Arbitrary but fixed, so anything the
@@ -61,6 +85,11 @@ export async function stabilize(page: Page): Promise<void> {
 	// and a fully faked clock would also freeze requestAnimationFrame, leaving
 	// every Chart.js canvas baselined mid-animation.
 	await page.clock.setFixedTime(FROZEN_TIME);
+
+	const token = accessToken();
+	if (token !== null) {
+		await page.context().setExtraHTTPHeaders({ 'Cf-Access-Jwt-Assertion': token });
+	}
 
 	// Host state, not UI state. Stubbed rather than masked so the banner's
 	// absence is itself part of the baseline: if a future change makes it

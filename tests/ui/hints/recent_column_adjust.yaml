@@ -4,9 +4,9 @@ involves:
   - "expanded card list ul.cards"
   - "per-batch detail cached in a Map after the first expand"
 fixture_data:
-  batch: "Vintage holo entry (manual_id)"
+  batch: "Showcase entry (manual_id)"
 notes: >
   1. Navigate to /recent. 2. Wait for ul.timeline. 3. Expand the
-  "Vintage holo entry" batch and wait for ul.cards. 4. Collapse it.
+  "Showcase entry" batch and wait for ul.cards. 4. Collapse it.
   5. Expand it again. 6. Verify the card list reappears immediately
   (cached — no "Loading…" indicator on the second expand).

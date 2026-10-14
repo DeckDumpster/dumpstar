@@ -1,23 +1,12 @@
 # The raw landing zone
 
-> **Provenance.** This document was written for the Pokémon site this workspace was
-> copied from. The pokemontcg.io tail, the pokemon-tcg-data bulk corpus, the Japan
-> catalog, set symbols and the "PARTIAL" (exit 2) derive described below were removed
-> with the Pokémon modules (dumpstar design row S1); the raw landing zone, the offline
-> derive and the TCGCSV landing are what remain, now for Star Wars: Unlimited
-> (TCGCSV category 79). Read the sections on those removed parts as history until the
-> catalog seam (row S6) rewrites them.
-
-
 Every byte Dumpstar fetches from an upstream can be landed in S3,
 immutably, **before anything parses it**.
 
 Today's refresh fetches, parses into `shared.sqlite`, and throws the bytes
 away. When a parser turns out to be wrong the only recovery is to re-fetch
-whatever upstream serves *today* — yesterday's catalog is gone. This project
-shipped two parser defects in one day (`pd-0o5m`: `basep` mapped 0 of 53
-printings; `pd-v0oi`: 26 more sets in the same class), so "the parser was
-wrong" is the normal case, not the exceptional one. The landing zone is the
+whatever upstream serves *today* — yesterday's catalog is gone. "The parser
+was wrong" is the normal case, not the exceptional one. The landing zone is the
 insurance policy: fix the parser, rebuild from history.
 
 This is step 1 of the offline-lakehouse design
@@ -39,8 +28,8 @@ transform tier is `pd-hkbc`.
 ## 1. The key layout
 
 ```
-raw/source=<tcgcsv|pokemontcgio|pokemon-tcg-data>/
-    dataset=<groups|products|prices|sets|cards|bulk>/
+raw/source=tcgcsv/
+    dataset=<groups|products|prices>/
     ingest_date=YYYY-MM-DD/
     run=<ULID>/
         part-0000.json.zst
@@ -86,30 +75,10 @@ would let exactly that prefix read as whole. So `complete: true` means "this
 dataset is all of that date's data"; `complete: false` means "do not assume
 so, read `error` and `failures`".
 
-**One carve-out, and it is not a softening of that rule** (pd-nons): a
-pokemontcg.io tail that fails no longer ends the acquisition — the run carries
-the error and goes on to fetch TCGCSV, which is the half a night cannot get
-back. Every dataset after the tail therefore *did* run to its end, so
-`finalize` is called with no run-level error and each manifest is judged on its
-own failures. `sets` (and `cards`, if it got that far) read incomplete because
-`fetch_bytes` recorded their failure; `groups`, `products` and `prices` read
-complete because they are. The conservatism above still applies to everything
-that genuinely cuts a run short — a TCGCSV failure still stops the acquisition
-and still marks the whole invocation incomplete.
-
 **Nothing in `raw/` is parsed.** The bytes stored are the bytes received,
 zstd-compressed and otherwise untouched. `_manifest.json` itself is
 uncompressed — it is the file you open when a refresh looks wrong, and
 needing a decompressor first is friction at the wrong moment.
-
-### What is deliberately *not* landed
-
-`images.pokemontcg.io` — set symbols and card art. The retention arithmetic
-below is for JSON only; landing card art would change it completely. That is
-its own decision, not something that creeps in under "everything we fetch".
-
-`dumpstar data normalize-symbols` and the symbols phase of a refresh therefore
-fetch without landing, on purpose.
 
 ---
 
@@ -118,169 +87,9 @@ fetch without landing, on purpose.
 **`raw/` is kept indefinitely, and the absence of a lifecycle rule on it is a
 decision, not an oversight.**
 
-It is measured rather than assumed, and it has now been measured twice three
-weeks apart. These are the objects one real refresh left in the bucket
-(`ingest_date=2026-08-31`, the last night the tail completed; the uncompressed
-column is `total_bytes` out of each `_manifest.json`, the bucket column is what
-`s3 ls --summarize` reports for the prefix, manifest included):
-
-| dataset | parts | uncompressed | in the bucket |
-| --- | ---: | ---: | ---: |
-| `tcgcsv/products` | 675 | 74.0 MB | **6.13 MB** |
-| `tcgcsv/prices` | 675 | 11.2 MB | **1.27 MB** |
-| `tcgcsv/groups` | 2 | 135 kB | 21 kB |
-| `pokemontcgio/sets` | 1 | 58.8 kB | 6.7 kB |
-| `pokemontcgio/cards` | — | — | — |
-| `pokemon-tcg-data/bulk` | 1 | 26.0 MB | **2.65 MB** |
-| **one night** | **1,354** | **111.4 MB** | **10.07 MB** |
-
-`pd-fet2` measured 2026-08-11 at 1,345 parts / 85.3 MB / 7.40 MB. Three weeks
-of new TCGCSV groups moved it by 0.3%, so this is a stable figure rather than
-one night's weather.
-
-**~7.4 MB/night, ~2.7 GB/year, ~27 GB over ten years** — still roughly
-$0.03/month in year one, so the decision is unchanged, but note two things the
-first estimate got wrong. `products` is landed every night and is **five times
-the size of `prices`**, so "prices only; cards and sets are near-static" was the
-wrong simplification: a group's product list is re-fetched whole each run
-whether or not it moved. And the bill is not really storage — 1,357 objects a
-night is ~495k PUTs/year, about $2.48, which is more than the bytes cost.
-
-### The `pokemontcgio/cards` row: covered by the bulk corpus
-
-That dash is not a quiet night. **`raw/source=pokemontcgio/dataset=cards/`
-does not exist in the bucket, on any date** — the whole listing under
-`source=pokemontcgio/` is `dataset=sets/`, measured 2026-09-04.
-
-It follows from what the refresh asks for rather than from anything failing.
-`land_tail` lands the cards of `missing_sets()` — the sets the catalog does not
-already hold — so cards reach `raw/` only on a night a new set is published,
-and a night that publishes none lands none. `Dataset::Cards` is
-`Need::Optional` for exactly that reason (`partition::requirement`), and the
-nightly derive is green because it is INCREMENTAL: it updates the catalog it is
-given, which already holds every set, so it asks for no cards and misses none.
-
-**The bulk corpus closes the cold-rebuild gap.** `raw/source=pokemon-tcg-data/
-dataset=bulk/` now lands on every nightly refresh — one GET of the
-`PokemonTCG/pokemon-tcg-data` GitHub tarball (2.65 MB on the wire, 26.0 MB
-uncompressed, 177 `cards/en/*.json` files across all sets, 0.54 s). A cold
-derive replays it instead of sweeping the pokemontcg.io API. The pokemontcg.io
-tail's remaining job is the 2–3 month lag window: sets published too recently
-to appear in the bulk repo are still fetched set-by-set and landed under
-`pokemontcgio/cards` the night they appear. Bead `db-m1sd` wires the derive to
-read from the bulk partition instead of the API; `db-5tgs` proves it. The lake
-can now rebuild the catalog from scratch; `deploy/RESTORE.md` Scenario C step 3
-depends on this.
-
-#### The cold-rebuild proof (`db-5tgs`)
-
-`row_identical.rs::cold_rebuild_from_raw_is_row_identical_to_warm_and_no_pokemontcgio_cards_needed`
-is the acceptance gate. The key property it establishes: the warm `online()` run
-imports the bulk corpus FIRST so `missing_sets` returns 0, meaning
-pokemontcg.io card URLs are **never fetched and never land in `raw/`**. The cold
-derive — starting from an empty catalog, zero rows in `cards` or `sets`, verified
-before the derive runs — must then rebuild from bulk + TCGCSV alone. If the bulk
-import were broken the derive would call `missing_sets`, get back the full set
-list, and try to replay their card URLs; those URLs are not in `raw/`, the gap
-is fatal, and the process exits non-zero. There is no way to reach the diff
-assertion on a broken bulk path.
-
-The gate also checks that the fixture upstream receives zero new requests during
-the cold derive: every URL the derive needs is replayed from `raw/` or is
-irrelevant, and any request that arrived would be for a URL the replay could
-not supply — which would already have killed the derive before this check.
-
-Over the fixture (2 sets, 3 cards, 5 prices):
-
-| side | `cards` | `sets` | `prices` | wall clock |
-| --- | ---: | ---: | ---: | ---: |
-| warm (online) | 3 | 2 | 5 | — |
-| cold (derive from raw) | 3 | 2 | 5 | **0.79 s** |
-
-Row-identical: `h.diff()` exits 0, `raw_derivation` excluded and named.
-
-The fixture is smaller than prod (3 cards vs 47,671; 2 sets vs 630), but the
-proof does not rest on scale — it rests on the card URLs being absent from
-`raw/`. At fixture scale, as at prod scale, the bulk corpus is the only source
-of card data in the partition.
-
-What would have gone wrong without the bulk corpus: a derive into an EMPTY
-catalog would have been a refusal. `missing_sets` would return all 174 sets,
-the tail would ask for `/v2/cards?q=set.id:…`, and `RawReplay::missing` is
-fatal with no fallback (`pd-6yql` removed the fallback deliberately). The
-sections below measure what a pokemontcg.io sweep to close that gap would have
-cost — the path evaluated and not taken.
-
-#### What a pokemontcg.io card sweep would have cost (the path not taken)
-
-Not estimated. On 2026-09-04 every request `land_tail` would make for a
-whole-catalog sweep was made for real against `api.pokemontcg.io`, mirroring
-`PokemonTcgClient::fetch_cards_for_set` exactly — `/v2/cards?q=set.id:<id>
-&page=N&pageSize=250`, another page whenever one comes back full, the client's
-100ms floor between requests — and each response body was sized as landed and
-compressed with the sink's own `zstd -10`:
-
-| | measured | the `pd-v1ca` estimate |
-| --- | ---: | ---: |
-| sets swept | 174 | ~170 |
-| parts (requests) | **184** | ~170 |
-| cards | 20,479 | ~20k |
-| uncompressed | **38.1 MB** | ~60 MB |
-| in the bucket | **3.53 MB** | ~5 MB |
-
-184 rather than 174 because ten sets hold 250 cards or more and take a second
-page. The compression ratio is **10.8x**, close to `tcgcsv/products`' 12x and
-nothing like the 8x `sink.rs` assumes in general.
-
-So a night that swept the cards would be:
-
-| | today | with the sweep |
-| --- | ---: | ---: |
-| parts | 1,353 | **1,537** |
-| objects | 1,357 | **1,542** |
-| uncompressed | 85.4 MB | **123.6 MB** |
-| in the bucket | **7.42 MB** | **10.95 MB** |
-
-**~11 MB/night, ~4.0 GB/year, ~40 GB over ten years**, and ~563k PUTs/year at
-about **$2.81** — the same shape of answer §2 already gives, half again as
-large, and still not a reason to write a lifecycle rule. `pd-v1ca` put the
-night at 12.4 MB, high because it guessed 3 kB a card; a card is **1.86 kB**.
-
-The cost that is NOT cheap is time. The median request took **4.5s** and the
-184 of them summed to **14m19s** — against an acquisition phase that today
-takes 3m38s in total. A sweep roughly quintuples the wall clock of a landing
-run, which matters because `TimeoutStartSec=1800` is what bounds it. That
-figure was taken on a degraded day (below), so read it as the bad end of the
-range rather than the typical one; the bytes above are not weather-dependent.
-
-### The rate limit, since the sweep would be the first thing to approach it
-
-`api.pokemontcg.io` allows **1,000 requests/day** without a key and 20,000 with
-one. Today's landing spends **one** — the single `/v2/sets` page — so the
-ceiling is nowhere near, and prod has no key configured.
-
-A sweep would spend **185**: the set list plus the 184 measured above. Still
-comfortably under the keyless ceiling on a good day — and 2026-09-04 was not
-one. Getting those 184 responses took **535 HTTP requests**, because roughly a
-third of them answered 500 or 502 and were retried; the API had been bad enough
-for four days running that `dumpstar-refresh@prod` landed `pokemontcgio/sets`
-INCOMPLETE every night from 2026-09-01 and the wrapper was paging about it. Half
-the keyless ceiling, spent on retries, is the real shape of the risk here rather
-than the request count.
-
-The retries are the smaller half of that risk. `retry.rs`'s budget is four
-attempts and then the error propagates, and the tail is one loop over every set
-— so on that weather a sweep does not degrade, it **ends**, at whichever set
-exhausts its budget first. That is a decision for whoever re-lands the sweep
-(`pd-432m`) and it is not the decision the one-request tail has today.
-
-`POKEMONTCG_API_KEY` is what raises it. `PokemonTcgClient::new` reads it from
-the environment, `dumpstar-refresh@<instance>.service` documents it as a drop-in
-`Environment=`, and `deploy/refresh.sh` forwards it into the container — that
-last leg is not decoration: a drop-in sets the variable in the WRAPPER's
-environment, and a wrapper that does not forward it leaves a key that reads as
-set and does nothing until a run starts being throttled (the pd-vk22 shape,
-which is why the retry budget is forwarded on the same line).
+Everything in `raw/` is the only record of what an upstream served on a given
+day, and a lifecycle rule would delete exactly the history the zone exists to
+keep. The JSON it holds is small; the cost of losing a day is not.
 
 If you are here because you found an unmanaged prefix and were about to tidy
 it up: **this is the one that is meant to be unmanaged.**
@@ -517,11 +326,6 @@ manifest's `failures[]`, and if the failures are all in other datasets,
 `--allow-incomplete` is the right answer and the snapshot will say that is what
 you did.
 
-A **failed pokemontcg.io tail** is the one case that no longer does this
-(pd-nons, §1): it does not cut the acquisition short, so `prices` reads
-complete and only `sets`/`cards` read incomplete. Building the price table from
-such a day needs no flag at all.
-
 **Every product's prices are in the table, sealed and single alike.** A TCGCSV
 price payload does not say which kind of product it describes; that is a fact
 about the catalog, and joining it in would make this table wrong whenever the
@@ -568,11 +372,8 @@ Four things about it are decisions:
   comparison **exact in both directions** rather than "the lake may hold more".
 - **What counts as sealed is read from the SAME partition's `products`
   dataset**, never from a catalog database, using the same discriminator the
-  two Rust importers use: a product with an extended-data `Number` is a single
-  card (category 3), a Japanese product with a `CardType` is a card (category
-  85, where ~40% of vintage products carry no number at all), and a product
-  that is neither is sealed. The category comes off the part's own URL in the
-  manifest. **A missing `products` partition is fatal** — classifying nothing
+  Rust importers use (`lake/src/dumpstar_lake/prices.py`). The category comes
+  off the part's own URL in the manifest. **A missing `products` partition is fatal** — classifying nothing
   as sealed produces a table saying every tenant's sealed holdings are worth
   nothing, and under-reporting is the defect this exists to fix.
 
@@ -599,7 +400,7 @@ Three things about the scheduling are decisions:
 
 **The nightly build passes `--allow-incomplete`.** The refusal above is right
 for a hand run and wrong for a timer: `complete` is conservative across
-datasets, so a pokemontcg.io tail that died marks the *prices* manifest
+datasets, so another dataset that fell short marks the *prices* manifest
 incomplete on a night when every price fetch succeeded — the normal shape of a
 flaky night. A unit that failed there would page most nights, and a pager that
 cries wolf gets ignored (this project has already paid a day for that shape,
@@ -693,10 +494,7 @@ Looping inside the refresh was considered and rejected. The catalog refresh is
 not the component that knows about tenants — it opens `shared.sqlite` and
 should have no business opening anything else — and a refresh that half-writes
 N collections fails worse than one that writes none. Step 7 is therefore
-**deleted** rather than fixed in place (`pd-hkbc`), and
-`tests/refresh/tenant_bytes.sh` holds it deleted: a real refresh over a data
-directory with two provisioned tenants must leave every tenant database
-byte-identical.
+**deleted** rather than fixed in place (`pd-hkbc`).
 
 **Nothing snapshots today's value until this job runs.** That is the operational
 consequence of the split, and it is why the job is on a timer rather than
@@ -796,7 +594,7 @@ catalog yourself.
 ## 8. The offline catalog derive: `shared.sqlite` from `raw/`
 
 The transform tier above produces a *tenant* artifact. This one produces the
-**catalog** — the 1.5 GB, 20-table `shared.sqlite` every instance serves — from
+**catalog** — the `shared.sqlite` every instance serves — from
 one `raw/` partition, replaying the responses that partition holds rather than
 fetching anything.
 
@@ -865,9 +663,8 @@ today's catalog and looking current*, and four things close it:
   the newest available. A date that landed nothing refuses; a date whose only
   run died partway refuses, because nothing in the landing zone can say whether
   an incomplete run's parts add up to a day, and a catalog that is quietly
-  smaller reads as *cards that do not exist*. **One exception, and it is
-  narrow** — a partition short only in the pokemontcg.io tail derives and exits
-  **2**; see "A partial night is exit 2" below.
+  smaller reads as *cards that do not exist*. Every dataset is
+  all-or-nothing; there is no partial success.
 - **Re-deriving a date replaces it.** Twice equals once.
 - **Provenance**: `shared.raw_derivation` records which run ULIDs produced the
   catalog, how many parts each held, and when the derive ran — so a rerun is
@@ -884,72 +681,13 @@ as `ingest_date`. They agree for almost every run and differ for exactly the one
 that crossed UTC midnight — the run where taking the partition for the
 observation date would file yesterday's prices under today.
 
-### A partial night is exit 2, not a refusal (pd-llbq)
-
-```
-0  the catalog is the derivation of that partition
-2  it is the derivation of a PARTIAL partition — the pokemontcg.io tail did not
-   complete that night, so the set list is as old as the last run that finished
-   one. The TCGCSV half is whole.
-1  there is no catalog for that partition
-```
-
-On a night `api.pokemontcg.io` is having — 5xx to ~45% of requests on
-2026-08-11 — the tail spends its retries and gives up. `dumpstar data refresh`
-carries on, imports the prices, and exits 2 (pd-nons), because a day's prices
-cannot be re-fetched later and a day's set list can: tomorrow's is a superset of
-tonight's. The landing zone records that honestly, per dataset:
-
-```
-raw: pokemontcgio/sets — 0 part(s), 0 byte(s), INCOMPLETE (1 failure(s))
-raw: tcgcsv/groups     — 2 part(s), complete
-raw: tcgcsv/prices     — 1 part(s), complete
-```
-
-The derive used to **refuse** that partition outright — "no complete run" — and
-`dumpstar-derive@` had no `SuccessExitStatus=`, so it paged. Two units answering
-one upstream's weather in opposite ways, which nobody decided; it is what fell
-out of pd-nons and pd-1uem landing beside each other. Since pd-llbq the derive
-answers it the way the refresh does.
-
-Two things keep this from becoming a licence for a smaller catalog:
-
-- **It is per dataset, and only the tail's.** `pokemontcgio/sets` and
-  `pokemontcgio/cards` are `Incomplete::Partial`; every other dataset is
-  `Incomplete::Refuse` and still exits 1. A `tcgcsv/products` prefix holding 200
-  groups of an unknown 450 is exactly the quietly-smaller catalog the refusal
-  exists for. The table is `crates/dumpstar-lakehouse/src/partition.rs::
-  requirement`, exhaustive with no wildcard arm, so adding another exemption is
-  a decision somebody has to write down.
-- **The night still replays to the same catalog.** The URL the tail died on was
-  never landed, so the replay fails at exactly that request and the offline
-  derive's tail fails where the online one's did. `row_identical.rs::
-  a_night_short_only_in_the_tail_derives_and_says_so` is the gate: it lands a
-  dead-tail night, derives it with the shipped binary, and requires the result
-  to be row-identical to the catalog the online refresh built from the same
-  bytes.
-
-`raw_derivation` carries `complete` per dataset, so a partial night is
-identifiable afterwards rather than merely tolerated:
-
-```sql
-SELECT ingest_date, source, dataset, complete FROM raw_derivation
- WHERE complete = 0 ORDER BY ingest_date DESC;
-```
-
-**What to do about it:** nothing, usually. The catalog is serving and its prices
-are tonight's; the next whole night's tail supersedes the set list. The warning
-`deploy/derive.sh` pushes exists so a *run* of partial nights is visible — that
-is upstream being down for days, and a set published in that window will not
-appear until it ends.
-
 ### The clock
 
 Row-identity needs the derive to reproduce timestamps, not approximate them.
 `Manifest.started_at` is where the landing run wrote down the instant it read
-once; the derive reads it back and stamps the same values into
-`sets.ptcgio_fetched_at`, `tcgcsv_products.fetched_at`, `prices.observed_at` and
-`printings.deprecated_at`. A partition landed before that field existed is
+once; the derive reads it back and stamps the same values into every
+`fetched_at` column and into `prices.observed_at` and
+`sealed_prices.observed_at`. A partition landed before that field existed is
 **refused by name**, not defaulted — see `crates/dumpstar-derive/src/clock.rs`.
 
 Runs that disagree about it are refused too. A derive reproduces *one fetch*,
@@ -975,12 +713,9 @@ was added without landing it, or the upstream's origin moved. Re-land the date
 dumpstar-refresh@<instance>.service`, the landing half of the pair, or check that
 it ran at all — then derive again.
 Deriving a *different*, complete date is the other option — the catalog is a
-day behind rather than wrong. This is exit **1**, and the unit's
-`SuccessExitStatus=2` does not cover it, so it pages through `OnFailure=` —
+day behind rather than wrong. This is exit **1**, so it pages through `OnFailure=` —
 which is intended: a catalog that quietly skipped a price feed reads downstream
-as cards that do not exist. A URL the partition recorded as *failed* is a
-different thing and says so in its own words; that is the partial night above,
-and re-landing the date cannot help it.
+as cards that do not exist.
 
 Item 2 of the epic shipped a temporary fallback here — reach the live upstream,
 print `!! raw coverage has REGRESSED`, finish anyway — with
@@ -996,171 +731,20 @@ the failure would have surfaced on the day an upstream was down — the day the
 lake was bought for. Loudness mitigated that; it depended on somebody reading
 the log.
 
-**Set symbols are not an exception to this.** `symbols::normalize_all_symbols`
-still fetches PNGs from `images.pokemontcg.io` on the offline path, and always
-did: images are deliberately outside `raw/` (§1), so the phase never entered the
-replay layer at all — it has no `Wire` in its signature and builds its own HTTP
-client. A symbol fetch is therefore not a replay miss, and a derive on a box
-with no egress logs `WARN: symbol normalize <set>: …`, counts it, keeps the
-set's upstream URL (which still renders) and **succeeds**. See `pd-5w4n`, and
-`row_identical.rs::a_cold_derive_fetches_set_symbols_live_and_is_not_refused_for_it`
-— the gate that holds the two apart, on a catalog whose symbols have never been
-normalised.
+### Proving it
 
-### Proving it, on real data (pd-aer9)
-
-Three gates, and each proves something the other two cannot:
+Two gates, and each proves something the other cannot:
 
 | gate | upstream | what only it proves |
 | --- | --- | --- |
-| `crates/dumpstar-lakehouse/tests/row_identical.rs` | a fixture on loopback | row-identity, idempotence, every refusal, the loud fallback — hermetic, in CI |
+| `crates/dumpstar-lakehouse/tests/row_identical.rs` | a fixture on loopback | row-identity, idempotence, every refusal — hermetic, in CI |
 | `tests/lake/derive.sh` | none: an `--internal` network | the shipped image needs **no network** |
-| `tests/lake/real_upstream_derive.sh` | **the real tcgcsv.com and api.pokemontcg.io** | row-identity on **real payloads at real scale** |
-
-The third is not a CI gate and must not become one: it fetches ~1,350 real
-responses and takes a few minutes of somebody's evening. It exists because the
-first two have never seen a real byte, and a replay that got the 450-group
-Japanese catalog, set discovery or a real pagination edge subtly wrong would
-pass both.
-
-```bash
-cargo build --release -p dumpstar-cli -p dumpstar-lakehouse
-DUMPSTAR_REAL_DERIVE=1 bash tests/lake/real_upstream_derive.sh
-```
-
-It builds a baseline catalog, runs the real `dumpstar data refresh` into a
-landing zone **on local disk**, checks that the catalog it read is byte-
-identical afterwards, rebuilds that date from the partition with
-`--no-upstream-fallback`, and derives it a second time independently to diff
-the two row by row. It writes nothing to any bucket and touches no instance.
-
-Until `pd-lunn` its two sides were the online refresh's catalog and the
-replayed one. That comparison retired with the second builder — see "Proven on
-prod's own `raw/`" below for the run that made deleting it safe.
-
-**The run of 2026-08-13** (`ingest_date=2026-08-13`, `run=01KZWST5KCAXBK5JTGKNJ811AS`):
-1,345 parts landed, 85.3 MB uncompressed / 11 MB stored; the online refresh took
-**132s**, the offline rebuild from raw **35s**, and every one of the 1,345 URLs
-was answered from `raw/` (`raw coverage: complete`). All 21 tables compared
-equal, `raw_derivation` excluded and named:
-
-| table | rows | table | rows |
-| --- | --- | --- | --- |
-| `cards` | 47,640 | `printings` | 75,627 |
-| `sets` | 630 | `prices` | 289,255 |
-| `tcgcsv_products` | 57,716 | `latest_prices` | 289,255 |
-| `sealed_products` | 5,191 | `sealed_prices` | 4,136 |
-| `tcgplayer_groups` | 671 | `variants` | 290 |
-
-The clock was recovered from the manifests
-(`2026-08-13T05:34:09.516217300+00:00`) rather than read, which is what makes
-those `observed_at` and `fetched_at` columns compare equal at all.
-
-Two honest caveats, both visible in the run's own output:
-
-- **The symbol phase distinguished nothing here** — `0 processed, 0 cached, 175
-  overrides, 0 failed` on both sides. A warm catalog's `sets.symbol_url` values
-  already name `/sym/<set>.png`, so the http-prefix gate skips them. The gap in
-  the section below is real; this run does not exercise it.
-- **`pokemontcgio/cards` landed nothing**, because no set was new that night.
-  That is the ordinary case (the dataset is `Optional` for exactly this
-  reason), and it means the replay of *that* dataset is still only proven
-  against the fixture.
-
-### Proven on prod's own `raw/` (2026-08-25)
-
-This section used to say what was still missing, and the sequence it said could
-not be short-circuited has now run end to end:
-
-- **`pd-kncd` landed.** The `DUMPSTAR_LAND_RAW=1` drop-in went on
-  `dumpstar-refresh@prod` on 2026-08-24, and `raw/` has landed nightly since.
-- **A partition with a clock in it.** The 2026-08-25 manifests carry
-  `started_at: 2026-08-25T06:01:54.168387729+00:00`, `complete: true`, 674
-  parts — the field the hand-landed 2026-08-11 partition lacked, and the reason
-  that one is still correctly refused.
-- **The diff.** 2026-08-25 was derived into a VACUUM'd copy of prod's catalog
-  and compared against the catalog the same nightly refresh had built:
-
-  ```
-  raw coverage: complete — every upstream request was answered from raw/
-  provenance:   4 partition(s) recorded in raw_derivation for 2026-08-25
-  ROW-IDENTICAL: every compared table matches, row for row.
-  ```
-
-  Twenty tables, `raw_derivation` excluded and named. `prices` 12,598,388 rows,
-  `latest_prices` 299,918, `sealed_prices` 230,739, `printings` 70,462, `cards`
-  47,660. Nothing on prod was touched.
-
-That is what unblocked `pd-lunn`, and deleting the second builder is what it
-bought. It also means the comparison cannot be re-run: there is no longer an
-online catalog to diff against. What is held to at real scale from here is in
-`tests/lake/real_upstream_derive.sh` — a landing run that leaves its catalog
-byte-identical, a partition that answers every URL the derive asks for, and two
-independent derives of it that are row-identical.
-
-### Cut over on prod (2026-08-26, `pd-9bz7`)
-
-`dumpstar-derive@prod.timer` is **enabled** as of 2026-08-26 11:49 UTC. Before
-that it had never been on and `raw_derivation` was empty, so the catalog had
-exactly one builder and it was the half `pd-lunn` deleted.
-
-The comparison the section above says cannot be re-run got run once more, and
-the window is genuinely shut now. On the morning of the cutover the box was in
-the one state that allows it: the 06:11 refresh had run the **pre-`pd-lunn`**
-image and built the catalog inline, and the image was rebuilt at 11:05. So the
-derive replayed the very bytes that inline run had landed
-(`ingest_date=2026-08-26`, `run=01M0YB3P8GPPK909VGPHQPDNCM`, 1351 replayable
-URLs, 4 partitions all `complete`), and the two catalogs were compared with the
-shipped comparator:
-
-```
-raw coverage: complete — every upstream request was answered from raw/
-provenance:   4 partition(s) recorded in raw_derivation for 2026-08-26
-ROW-IDENTICAL: every compared table matches, row for row.
-```
-
-Twenty tables, `raw_derivation` excluded and named. `prices` 12,888,516 rows,
-`latest_prices` 300,059, `sealed_prices` 234,895, `printings` 70,490, `cards`
-47,671. The derive took **2m11s** and exited 0.
-
-Then the other half, the one that had never run on prod at all —
-`dumpstar-refresh@prod` under the new image, with the derive timer enabled so its
-guard passes:
-
-```
-Opening shared catalog READ-ONLY at /data/shared.sqlite
-Landing raw upstream responses in s3://…/ run=01M0YYP4T1GFRC97SRNHQ7NJZV
-  raw: pokemontcgio/sets — 1 part(s), complete
-  raw: tcgcsv/groups — 2 part(s), complete
-  raw: tcgcsv/products — 674 part(s), complete
-  raw: tcgcsv/prices — 674 part(s), complete
-Refresh complete: landed, not derived. The catalog is built by dumpstar-lake-derive.
-```
-
-2m22s, exit 0, and `shared.sqlite`'s mtime stayed at the derive's own finish —
-the landing run wrote no catalog byte, which is `pd-lunn`'s whole claim observed
-on the real box rather than in a fixture. The second `run=` ULID landing beside
-the first for the same `ingest_date` is the retry layout doing its job.
-
-Two things worth knowing before the next box:
-
-- **`Persistent=true` did not back-fill a run at `enable --now` time.** 07:00
-  had already passed that day and the timer still scheduled for tomorrow. If you
-  want the first cycle today, start the service by hand — which is also the only
-  way to watch it inside one sitting.
-- **`pokemontcgio/cards` landed nothing**, because no set was new. The derive
-  says `nothing landed (optional)` and carries on; it is the ordinary case, and
-  it means prod has still never exercised a replay of that dataset.
-
-The `DUMPSTAR_LAND_RAW=1` drop-in described in §4 was removed from
-`dumpstar-refresh@prod.service.d/` in the same sitting.
 
 ### Enabling it
 
 Installed for every instance. On any box that runs `dumpstar-refresh@`, **enable
 it** — it is the only thing that builds the catalog, and the refresh refuses to
-run while it is off. On prod that was done on 2026-08-26 (`pd-9bz7`, recorded
-above); this is what to do on the next box:
+run while it is off:
 
 ```bash
 # On the deployment box, as the dumpstar user. The derive FIRST: the refresh
@@ -1176,18 +760,8 @@ sqlite3 ~/.local/share/containers/storage/volumes/dumpstar-prod-data/_data/share
 ```
 
 Do not arm it before `dumpstar-refresh@prod` is provably landing raw (pd-kncd):
-a derive with nothing to read is a refusal every night, and the unit's
-`SuccessExitStatus=2` covers a partial night only — "nothing landed" is exit 1,
-so it will page. That has been true on prod since 2026-08-24.
-
-### The one phase a replay cannot supply
-
-`symbols::normalize_all_symbols` fetches PNGs from `images.pokemontcg.io`, and
-images are deliberately **not** landed — the retention arithmetic that justifies
-keeping `raw/` forever is for JSON only. On a box with no egress every symbol
-fetch fails, is counted, and the affected sets keep their upstream symbol URL
-(which still renders). The derive says so out loud rather than leaving it to be
-discovered from a row count. Filed as **pd-5w4n**.
+a derive with nothing to read is a refusal every night — "nothing landed" is
+exit 1, so it will page.
 
 ### It holds the catalog's write lock, and a deploy no longer loses to it
 
@@ -1288,7 +862,6 @@ bash tests/deploy/run.sh             # §10 the transform's scheduling — order
                                      #   after the refresh, 0/2/1, the derived
                                      #   calendar; §11 the derive's, plus the
                                      #   shipped wrapper its timer runs
-bash tests/refresh/tenant_bytes.sh   # and the refresh writing no tenant at all
 ```
 
 The `raw_landing` gate drives the real `reqwest` clients against a local
@@ -1326,17 +899,6 @@ before anything else is asked of it, while a second tenant who has never had a
 snapshot row must come out with his own, and a third whose database is missing
 must be skipped without taking the run down.
 
-`tenant_bytes.sh` is the mirror of that: it answers "and does the refresh still
-touch anybody?". A real `dumpstar data refresh` runs through the shipped image
-over a data directory holding two tenants provisioned by the real `dumpstar tenant
-create` — one of them `collection`, the handle `$DUMPSTAR_USER` defaults to and
-therefore the exact database the deleted step 7 wrote — and every tenant file,
-WAL and shared-memory sidecar included, has to come out byte-identical. Its
-upstream is `tests/refresh/upstream.py`, which publishes no sets and no groups,
-so the refresh completes in seconds without depending on anyone's uptime; §5
-asserts the derivation phases really ran, because a refresh that no-ops
-everything would also leave the tenants alone.
-
 Both Rust tiers are hermetic. `DUMPSTAR_LAKE_DIR` selects a directory-backed
 store instead of a bucket, which is what lets the landing zone's behaviour be
 asserted without credentials or a network; the Python reader honours the same
@@ -1348,8 +910,8 @@ variable for the same reason.
 
 Everything above shipped against fixtures, a directory-backed store, and a
 MinIO. `pd-fet2` ran it against the real bucket for the first time on
-2026-08-11. It worked — but three things are worth knowing before you run it
-yourself, and none of them were visible from a hermetic gate.
+2026-08-11. It worked — but one thing is worth knowing before you run it
+yourself, and it was not visible from a hermetic gate.
 
 ### `lake.env` must spell the keys `DUMPSTAR_LAKE_S3_*`
 
@@ -1363,37 +925,6 @@ first run.
 
 `DUMPSTAR_LAKE_S3_PREFIX` is a prefix *in front of* `raw/`. Setting it to `raw`
 lands everything at `raw/raw/…`. Leave it unset unless you mean it.
-
-### A flaky pokemontcg.io takes the whole night with it
-
-`acquire()` fetches the pokemontcg.io tail **first**, and no client here
-retries — errors propagate, by design. api.pokemontcg.io was answering 500/502
-to roughly 45% of requests that day, so most attempts died in their first
-second with nothing landed but a 728-byte manifest saying so. TCGCSV was never
-reached, so no prices landed at all; it took seven attempts to get one clean
-run.
-
-The manifest behaved exactly as designed. The ordering is the problem: prices
-are the dataset that cannot be re-fetched later, and they are behind the
-upstream most likely to be down. Tracked as `pd-nons`.
-
-### What one night is
-
-1,349 objects, 7.40 MB in the bucket, 85.3 MB uncompressed, on the night this
-section is about. §2 carries the same shape re-measured three weeks later.
-The acquisition phase took **3m38s** (1,345 fetches, each landed before it was
-parsed); the whole `dumpstar data refresh --land-raw`, derivation included, took
-**5m5s** on the deployment box. Landing costs about a PUT per fetch and does
-not measurably lengthen the run.
-
-Rebuilding `catalog.prices` for that day from those objects took **29s** and
-produced 305,648 rows, which reconcile exactly against the `shared.sqlite`
-written from the same responses: 289,327 single-card rows identical value for
-value, and every one of the 15,993 sealed prices SQLite kept present in the
-lake (the lake holds 328 more, being the sub-types `sealed_prices` cannot
-represent — §6). `shared.latest_prices` was 296,697 rows, of which exactly
-289,327 carry that day's `observed_at`; the remaining 7,370 are the most
-recent quote for products TCGCSV no longer lists.
 
 ## 11. The shared Nessie catalog is durable (sp-87nj2v)
 
@@ -1442,9 +973,8 @@ into an **empty scratch** version store, starts a scratch Nessie on the lake
 network, and for every table in the manifest requires: it loads, it points at the
 same `metadata.json`, and PyIceberg reads back the recorded row count. Any miss
 exits **5**; an empty manifest or a missing required namespace
-(`DUMPSTAR_NESSIE_DRILL_NAMESPACES`, default `catalog`; add `deckdumpster`) also
-fails. Deckdumpster's tables are covered automatically as they appear in the
-manifest. Run it once after enabling, and after any Nessie upgrade.
+(`DUMPSTAR_NESSIE_DRILL_NAMESPACES`, default `catalog`) also fails. Tables in
+any other namespace are covered automatically as they appear in the manifest. Run it once after enabling, and after any Nessie upgrade.
 
 ### Disaster recovery
 
@@ -1462,13 +992,13 @@ manifest. Run it once after enabling, and after any Nessie upgrade.
    tested; a run against a real warehouse is still owed (do it once, in a
    scratch Nessie, with the drill).
 
-### Sharing it (deckdumpster and others)
+### Sharing it with other projects
 
 * Endpoint (container network): `http://dumpstar-nessie-<instance>:19120/iceberg/`
   on the `dumpstar-lake-<instance>` podman network; host-side, loopback only.
   Nessie has no authentication — never publish it beyond 127.0.0.1.
-* **One namespace per project**: `catalog` (dumpstar), `deckdumpster`
-  (deckdumpster). Never write into another project's namespace.
+* **One namespace per project**: `catalog` is dumpstar's. Never write into
+  another project's namespace.
 * A project's job containers join `dumpstar-lake-<instance>` and set
   `DUMPSTAR_LAKE_NESSIE_URI` to the endpoint above; the warehouse and S3 settings
   are vended by the server.

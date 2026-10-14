@@ -37,7 +37,7 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
-use dumpstar_erase::verify::Check;
+use dumpster_kit_erase::verify::Check;
 
 /// The run finished and the deletion is not proven. See the module docs.
 const EXIT_NOT_PROVEN: i32 = 4;
@@ -180,17 +180,17 @@ fn resolve(name: &str) -> anyhow::Result<String> {
     if dumpstar_db::validate_database_id(name).is_ok() {
         return Ok(name.to_string());
     }
-    Err(dumpstar_erase::EraseError::NotATenant {
+    Err(dumpster_kit_erase::EraseError::NotATenant {
         name: name.to_string(),
     }
     .into())
 }
 
-fn stray_of(a: &StrayArgs) -> anyhow::Result<Option<dumpstar_erase::StrayCopy>> {
+fn stray_of(a: &StrayArgs) -> anyhow::Result<Option<dumpster_kit_erase::StrayCopy>> {
     let (Some(path), Some(key)) = (&a.stray, &a.stray_key) else {
         return Ok(None);
     };
-    Ok(Some(dumpstar_erase::StrayCopy::read(key, path)?))
+    Ok(Some(dumpster_kit_erase::StrayCopy::read(key, path)?))
 }
 
 fn do_delete(a: &DeleteArgs) -> anyhow::Result<i32> {
@@ -205,13 +205,14 @@ fn do_delete(a: &DeleteArgs) -> anyhow::Result<i32> {
     }
 
     let stray = stray_of(&a.stray)?;
-    let (zone, config) = dumpstar_lake::open_tenant_zone_purge()?;
-    let registry = dumpstar_keys::state::open()?;
+    let (zone, config) = dumpster_kit_lake::open_tenant_zone_purge(&dumpstar_ship::lake_env())?;
+    let registry = dumpstar_ship::registry()?;
 
     println!("==> deleting {database_id} from {}", zone.describe());
     let _ = std::io::stdout().flush();
 
-    let done = dumpstar_erase::delete(
+    let done = dumpster_kit_erase::delete(
+        &dumpstar_ship::key_env(),
         zone.as_ref(),
         &config,
         &registry,
@@ -264,11 +265,12 @@ fn do_delete(a: &DeleteArgs) -> anyhow::Result<i32> {
 fn do_verify(a: &VerifyArgs) -> anyhow::Result<i32> {
     let database_id = resolve(&a.scope.tenant)?;
     let stray = stray_of(&a.stray)?;
-    let (zone, config) = dumpstar_lake::open_tenant_zone_purge()?;
-    let registry = dumpstar_keys::state::open()?;
+    let (zone, config) = dumpster_kit_lake::open_tenant_zone_purge(&dumpstar_ship::lake_env())?;
+    let registry = dumpstar_ship::registry()?;
 
     println!("==> verifying {database_id} against {}", zone.describe());
-    let verdict = dumpstar_erase::verify(
+    let verdict = dumpster_kit_erase::verify(
+        &dumpstar_ship::key_env(),
         zone.as_ref(),
         &config,
         &registry,
@@ -293,8 +295,8 @@ fn do_verify(a: &VerifyArgs) -> anyhow::Result<i32> {
 
 fn do_list(a: &ScopeArgs) -> anyhow::Result<i32> {
     let database_id = resolve(&a.tenant)?;
-    let (zone, config) = dumpstar_lake::open_tenant_zone_purge()?;
-    let sweep = dumpstar_erase::Sweep::new(zone.as_ref(), &config, &database_id)?;
+    let (zone, config) = dumpster_kit_lake::open_tenant_zone_purge(&dumpstar_ship::lake_env())?;
+    let sweep = dumpster_kit_erase::Sweep::new(zone.as_ref(), &config, &database_id)?;
     let keys = sweep.list()?;
     if keys.is_empty() {
         println!("{} holds no objects.", sweep.prefix());
@@ -315,7 +317,7 @@ fn do_list(a: &ScopeArgs) -> anyhow::Result<i32> {
 
 /// One line per check. The detail is the whole point — a bare PASS/FAIL would
 /// be exactly the "asserted" this item exists to replace.
-fn report(verdict: &dumpstar_erase::Verdict) {
+fn report(verdict: &dumpster_kit_erase::Verdict) {
     for proof in &verdict.proofs {
         let mark = match (&proof.check, proof.held) {
             (Check::Machinery, true) => "ok   ",

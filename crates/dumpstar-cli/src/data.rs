@@ -101,7 +101,7 @@ fn refresh(args: RefreshCmdArgs) -> anyhow::Result<()> {
         None => dumpstar_db::shared_db_path()?,
     };
 
-    // The run's clock, read ONCE — see `dumpstar_derive::clock`. It picks the
+    // The run's clock, read ONCE — see `dumpster_kit_derive::clock`. It picks the
     // ingest_date partition and it is recorded in every manifest, which is
     // what lets the offline derive stamp the same fetched_at / observed_at
     // into the same rows from these bytes.
@@ -150,7 +150,7 @@ mod raw_coverage {
 
     use dumpstar_ingest::test_upstream::{FakeUpstream, Reply};
     use dumpstar_ingest::upstream::ENV_TCGCSV_BASE_URL;
-    use dumpstar_lake::{Dataset, DirStore, RawLanding};
+    use dumpster_kit_lake::{Dataset, DirStore, RawLanding};
 
     const INGEST_DATE: &str = "2026-09-20";
     const CLOCK_AT: &str = "2026-09-20T06:00:00Z";

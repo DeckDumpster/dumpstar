@@ -15,12 +15,12 @@
 //!
 //! **`backup` and `tombstone` are different paths and this file keeps them
 //! that way.** They share no argument type, no confirmation flag, no output
-//! shape and no helper here — `backup` reaches `dumpstar_keys::backup`, which
-//! cannot see the registry, and `tombstone` reaches `dumpstar_keys::destroy`,
+//! shape and no helper here — `backup` reaches `dumpster_kit_keys::backup`, which
+//! cannot see the registry, and `tombstone` reaches `dumpster_kit_keys::destroy`,
 //! which cannot see the key file. The reason is the property the whole item
 //! turns on: a lost key and a deleted tenant are cryptographically identical,
 //! so the operational distinction has to be structural. See
-//! `crates/dumpstar-keys/tests/separation.rs`.
+//! `crates/dumpster-kit-keys/tests/separation.rs in the kit`.
 //!
 //! Two things are deliberately awkward:
 //!
@@ -35,7 +35,16 @@
 //! as `dumpstar tenant` does. `deploy/keys.sh <instance>` is the wrapper that
 //! knows which per-instance file that is.
 
-use dumpstar_keys::{KeyState, backup, derive, destroy, master, state};
+use dumpster_kit_keys::master::KeyEnv;
+use dumpster_kit_keys::{KeyState, backup, derive, destroy, master, state};
+
+fn env() -> KeyEnv {
+    KeyEnv::new(dumpstar_db::app::app())
+}
+
+fn registry() -> dumpster_kit_keys::Result<rusqlite::Connection> {
+    state::open(dumpstar_db::app::app())
+}
 
 /// Arguments for `dumpstar keys`.
 #[derive(clap::Args)]
@@ -120,7 +129,7 @@ pub fn run(args: KeysArgs) -> anyhow::Result<()> {
 }
 
 fn init() -> anyhow::Result<()> {
-    let (path, fingerprint) = master::create()?;
+    let (path, fingerprint) = master::create(&env())?;
     println!("Master key written to {}", path.display());
     println!("  mode        {:o}", master::mode_of(&path)?);
     println!("  fingerprint {fingerprint}");
@@ -136,10 +145,10 @@ fn init() -> anyhow::Result<()> {
 }
 
 fn status() -> anyhow::Result<()> {
-    let Some(path) = master::key_path() else {
+    let Some(path) = env().key_path() else {
         anyhow::bail!(
             "cannot tell where the master key would be: neither {} nor HOME is set",
-            master::KEY_ENV_FILE
+            env().key_file_var
         );
     };
     println!("Master key file  {}", path.display());
@@ -154,14 +163,14 @@ fn status() -> anyhow::Result<()> {
     }
 
     println!("  mode           {:o}", master::mode_of(&path)?);
-    match derive::master_fingerprint() {
+    match derive::master_fingerprint(&env()) {
         Ok(fingerprint) => println!("  fingerprint    {fingerprint}"),
         Err(e) => println!("  status         UNUSABLE: {e}"),
     }
 
     // Key state is a different question about a different object, so it is
     // read separately and a failure here says nothing about the key above.
-    match state::open().and_then(|c| state::list(&c)) {
+    match registry().and_then(|c| state::list(&c)) {
         Ok(rows) => {
             let active = rows.iter().filter(|r| r.state == KeyState::Active).count();
             let tombstoned = rows.len() - active;
@@ -175,7 +184,7 @@ fn status() -> anyhow::Result<()> {
 /// THE BACKUP PATH. Nothing here touches the key-state registry.
 fn run_backup(a: BackupArgs) -> anyhow::Result<()> {
     if let Some(dest) = a.out {
-        let written = backup::export_to_file(&dest)?;
+        let written = backup::export_to_file(&env(), &dest)?;
         println!("Master key copied to {} (mode 600)", written.display());
         println!("Move it into your password manager and delete the copy.");
         return Ok(());
@@ -187,7 +196,7 @@ fn run_backup(a: BackupArgs) -> anyhow::Result<()> {
              scrollback. Either confirm with --yes, or write a mode-600 copy with -o <file>."
         );
     }
-    print!("{}", backup::export()?.as_str());
+    print!("{}", backup::export(&env())?.as_str());
     Ok(())
 }
 
@@ -196,7 +205,7 @@ fn run_restore(a: RestoreArgs) -> anyhow::Result<()> {
         Some(p) => std::fs::read_to_string(p)?,
         None => std::io::read_to_string(std::io::stdin())?,
     };
-    let (path, fingerprint) = backup::restore(&material)?;
+    let (path, fingerprint) = backup::restore(&env(), &material)?;
     println!("Master key restored to {}", path.display());
     println!("  mode        {:o}", master::mode_of(&path)?);
     println!("  fingerprint {fingerprint}");
@@ -208,14 +217,14 @@ fn run_restore(a: RestoreArgs) -> anyhow::Result<()> {
 }
 
 fn register(a: DatabaseIdArgs) -> anyhow::Result<()> {
-    let conn = state::open()?;
+    let conn = registry()?;
     let row = state::register(&conn, &a.database_id)?;
     println!("{} key state: {}", row.database_id, row.state.as_str());
     Ok(())
 }
 
 fn list() -> anyhow::Result<()> {
-    let conn = state::open()?;
+    let conn = registry()?;
     let rows = state::list(&conn)?;
     if rows.is_empty() {
         println!("No key state recorded on this box.");
@@ -242,8 +251,8 @@ fn list() -> anyhow::Result<()> {
 }
 
 fn derive_one(a: DatabaseIdArgs) -> anyhow::Result<()> {
-    let conn = state::open()?;
-    let key = derive::tenant_key(&conn, &a.database_id)?;
+    let conn = registry()?;
+    let key = derive::tenant_key(&env(), &conn, &a.database_id)?;
     println!(
         "{} key fingerprint {}",
         key.database_id(),
@@ -262,7 +271,7 @@ fn run_tombstone(a: TombstoneArgs) -> anyhow::Result<()> {
             a.database_id
         );
     }
-    let conn = state::open()?;
+    let conn = registry()?;
     let row = destroy::tombstone(&conn, &a.database_id, a.reason.as_deref())?;
     println!(
         "{} key REVOKED at {}",

@@ -1,0 +1,21 @@
+# Scenario: Clicking an aspect on the card page runs an aspect: catalog search, so other cards of that aspect appear, owned or not
+#
+# Related:
+#   issues: [sp-iszds1]
+#   pull_requests: []
+
+description: >
+  Clicking an aspect on the card page runs an aspect: catalog search, so other
+  cards of that aspect appear, owned or not.
+start_page: /card/SOR/100
+involves:
+  - "card detail page for the seeded unit (SOR 100), Aggression aspect"
+  - "aspect facet a.facet[title='Find all Aggression cards']"
+  - "lands on /collection with q=aspect:Aggression and all=1"
+fixture_data:
+  start_card: "Death Star Stormtrooper"
+  aspect: "Aggression"
+  other_aggression_card: "Wampa"
+notes: >
+  Click the Aggression aspect; assert the URL carries q=aspect and all=1, then
+  assert Wampa appears and Battlefield Marine (Command, Heroism) does not.

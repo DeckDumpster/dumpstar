@@ -4,11 +4,11 @@ involves:
   - "view toggle [data-testid=view-table] for text-based assertions"
   - "table rows showing card names (.cardname)"
 fixture_data:
-  query: "t:fire"
-  present_card: "Charizard"
-  absent_card: "Pikachu"
+  query: "aspect:Aggression"
+  present_card: "Wampa"
+  absent_card: "Battlefield Marine"
 notes: >
   Navigate to /collection (loads owned cards). Switch to table view via
-  [data-testid=view-table]. Type "t:fire" into [data-testid=search-input]
-  (debounced ~200ms). The table updates server-side to Fire cards —
-  Charizard/Charmander/Magmar — and excludes Lightning cards like Pikachu.
+  [data-testid=view-table]. Type "aspect:Aggression" into [data-testid=search-input]
+  (debounced ~200ms). The table updates server-side to Aggression cards
+  such as Wampa and excludes cards like Battlefield Marine.

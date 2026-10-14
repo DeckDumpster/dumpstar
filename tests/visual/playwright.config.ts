@@ -29,7 +29,11 @@ export default defineConfig({
 	fullyParallel: false,
 	workers: 1,
 	timeout: 90_000,
-	reporter: [['list'], ['html', { open: 'never', outputFolder: 'report' }]],
+	reporter: [
+		['list'],
+		['html', { open: 'never', outputFolder: 'report' }],
+		['json', { outputFile: 'results.json' }]
+	],
 	outputDir: 'test-results',
 	// One directory per viewport: baselines/desktop-1440/home.png.
 	snapshotPathTemplate: 'baselines/{projectName}/{arg}{ext}',

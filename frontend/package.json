@@ -4,9 +4,9 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"predev": "node scripts/sync-aspects.js",
+		"predev": "node scripts/sync-aspects.js && node scripts/sync-icons.js",
 		"dev": "vite dev",
-		"prebuild": "node scripts/sync-aspects.js",
+		"prebuild": "node scripts/sync-aspects.js && node scripts/sync-icons.js",
 		"build": "vite build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",

@@ -32,6 +32,9 @@ pub struct Card {
     pub traits: Option<String>,
     pub arenas: Option<String>,
     pub rules_text: Option<String>,
+    /// The official styled text (HTML with inline game icons) when the
+    /// catalog has it; the frontend sanitises it before render.
+    pub rules_html: Option<String>,
     pub rarity: Option<String>,
     pub artist: Option<String>,
     pub image_url: Option<String>,
@@ -85,9 +88,10 @@ pub fn get_card_detail(
         .prepare(
             "SELECT c.card_id, p.set_code, s.name, p.number, c.name, c.subtitle, c.card_type, \
                     c.cost, c.power, c.hp, c.aspects, c.traits, c.arenas, c.rules_text, \
-                    p.rarity, p.artist, p.image_url \
+                    t.html, p.rarity, p.artist, p.image_url \
                FROM printings p \
                JOIN cards c ON c.card_id = p.card_id \
+          LEFT JOIN card_text_styled t ON t.card_id = c.card_id \
                JOIN sets s ON s.set_code = p.set_code \
               WHERE p.set_code = ?1 AND p.number = ?2 \
               ORDER BY p.finish <> 'Normal', p.printing_id LIMIT 1",
@@ -108,9 +112,10 @@ pub fn get_card_detail(
                 traits: r.get(11)?,
                 arenas: r.get(12)?,
                 rules_text: r.get(13)?,
-                rarity: r.get(14)?,
-                artist: r.get(15)?,
-                image_url: r.get(16)?,
+                rules_html: r.get(14)?,
+                rarity: r.get(15)?,
+                artist: r.get(16)?,
+                image_url: r.get(17)?,
             })
         })
         .optional()?;

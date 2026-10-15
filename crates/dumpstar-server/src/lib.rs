@@ -265,6 +265,9 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
         // into the data volume (dumpstar_catalog::art) — never the publisher's
         // CDN at page load.
         .nest_service("/art", ServeDir::new(data_dir.join("art")))
+        // The official inline game icons, copied from data/remedial/
+        // inline-icons/ into the static build.
+        .nest_service("/icons", ServeDir::new(static_dir.join("icons")))
         .nest_service("/sym", ServeDir::new(data_dir.join("symbols")))
         .route_service("/robots.txt", ServeFile::new(static_dir.join("robots.txt")))
         .with_state(state)

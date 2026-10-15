@@ -1,0 +1,83 @@
+{
+  "provenance": "Remedial asset set: the inline game icons the official Star Wars: Unlimited cards API embeds as <img> tags in textStyled, deployBoxStyled and epicActionStyled (ffg-prod-uploads.s3.amazonaws.com). Kept in the repository and served as static assets; never fetched from the publisher's host at runtime. `alt` is the accessible text we render. Distinct from the aspect chips set in data/remedial/aspects (sp-6c26n2).",
+  "icons": [
+    {
+      "file": "icon_exhaust_0c450d09d4.png",
+      "alt": "Exhaust",
+      "source_url": "https://ffg-prod-uploads.s3.amazonaws.com/icon_exhaust_0c450d09d4.png",
+      "retrieved": "2026-10-14"
+    },
+    {
+      "file": "icon_cost_1_6878a6fe98.png",
+      "alt": "1 resource",
+      "source_url": "https://ffg-prod-uploads.s3.amazonaws.com/icon_cost_1_6878a6fe98.png",
+      "retrieved": "2026-10-14"
+    },
+    {
+      "file": "icon_cost_2_cd0914a233.png",
+      "alt": "2 resources",
+      "source_url": "https://ffg-prod-uploads.s3.amazonaws.com/icon_cost_2_cd0914a233.png",
+      "retrieved": "2026-10-14"
+    },
+    {
+      "file": "icon_cost_3_5b5918aa29.png",
+      "alt": "3 resources",
+      "source_url": "https://ffg-prod-uploads.s3.amazonaws.com/icon_cost_3_5b5918aa29.png",
+      "retrieved": "2026-10-14"
+    },
+    {
+      "file": "icon_cost_5_8d084f8bb2.png",
+      "alt": "5 resources",
+      "source_url": "https://ffg-prod-uploads.s3.amazonaws.com/icon_cost_5_8d084f8bb2.png",
+      "retrieved": "2026-10-14"
+    },
+    {
+      "file": "icon_unique_white_a08b37532f.png",
+      "alt": "Unique",
+      "source_url": "https://ffg-prod-uploads.s3.amazonaws.com//icon_unique_white_a08b37532f.png",
+      "retrieved": "2026-10-14"
+    },
+    {
+      "file": "icon_vigilance_cd5c27a54d.png",
+      "alt": "Vigilance",
+      "source_url": "https://ffg-prod-uploads.s3.amazonaws.com/icon_vigilance_cd5c27a54d.png",
+      "retrieved": "2026-10-14"
+    },
+    {
+      "file": "icon_command_7586b7d888.png",
+      "alt": "Command",
+      "source_url": "https://ffg-prod-uploads.s3.amazonaws.com/icon_command_7586b7d888.png",
+      "retrieved": "2026-10-14"
+    },
+    {
+      "file": "icon_aggression_847a987450.png",
+      "alt": "Aggression",
+      "source_url": "https://ffg-prod-uploads.s3.amazonaws.com/icon_aggression_847a987450.png",
+      "retrieved": "2026-10-14"
+    },
+    {
+      "file": "icon_cunning_9335911968.png",
+      "alt": "Cunning",
+      "source_url": "https://ffg-prod-uploads.s3.amazonaws.com/icon_cunning_9335911968.png",
+      "retrieved": "2026-10-14"
+    },
+    {
+      "file": "icon_villainy_ea34258f27.png",
+      "alt": "Villainy",
+      "source_url": "https://ffg-prod-uploads.s3.amazonaws.com/icon_villainy_ea34258f27.png",
+      "retrieved": "2026-10-14"
+    },
+    {
+      "file": "icon_heroism_895bfc1dc1.png",
+      "alt": "Heroism",
+      "source_url": "https://ffg-prod-uploads.s3.amazonaws.com/icon_heroism_895bfc1dc1.png",
+      "retrieved": "2026-10-14"
+    },
+    {
+      "file": "icon_heroism_99d152cb2d.png",
+      "alt": "Heroism",
+      "source_url": "https://ffg-prod-uploads.s3.amazonaws.com/icon_heroism_99d152cb2d.png",
+      "retrieved": "2026-10-14"
+    }
+  ]
+}

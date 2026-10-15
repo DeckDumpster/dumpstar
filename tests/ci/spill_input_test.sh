@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tests/ci/spill_input_test.sh — the force_spill dispatch input on ci.yml.
-# Exists, boolean, defaults false; provision's `spill:` is ec2-only only when it
-# is true and falls back to the unchanged `ec2` otherwise. Hermetic.
+# Exists, boolean, defaults false; provision's `spill:` is ec2-only always —
+# every test run goes to EC2 (Ryan 2026-10-15). Hermetic.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 wf=.github/workflows/ci.yml
@@ -16,7 +16,6 @@ check grep -q 'default: false' <<<"$in_block"
 spill="$(grep -E '^ +spill: ' "$wf")"
 check test "$(grep -c . <<<"$spill")" = 1
 expr="$(sed -E 's/^ +spill: +//' <<<"$spill")"
-check test "$expr" = "\${{ inputs.force_spill && 'ec2-only' || 'ec2' }}"
-check test "$(grep -c "'ec2-only'" "$wf")" = 1
+check test "$expr" = "ec2-only"
 [ "$fail" = 0 ] && echo "ok: force_spill shape"
 exit "$fail"

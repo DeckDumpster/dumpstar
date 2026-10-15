@@ -41,6 +41,10 @@ pub enum GroupKind {
     /// products are matched on name, with the parenthetical (`Top 8`) naming the
     /// finish. `variants` are the official variants the group lists.
     Promo,
+    /// A group of one official set whose numbers mean nothing to the official
+    /// catalog (convention exclusives, season promos): products are matched on
+    /// name and parenthetical, within that set only.
+    Listed,
 }
 
 #[derive(Debug, Clone)]
@@ -68,6 +72,7 @@ pub fn group_table() -> Vec<GroupRow> {
                 "weekly_play" => GroupKind::WeeklyPlay,
                 "hyperspace_only" => GroupKind::HyperspaceOnly,
                 "promo" => GroupKind::Promo,
+                "listed" => GroupKind::Listed,
                 _ => GroupKind::Main,
             };
             let variants = f
@@ -89,6 +94,55 @@ pub fn group_table() -> Vec<GroupRow> {
             })
         })
         .collect()
+}
+
+/// The set a Weekly Play Promos group (`SEC-WPP`, `ASHWPP`) belongs to, given the
+/// official set codes: `<set>P` when the official catalog files the promos in a
+/// set of their own, else a [`GroupKind::WeeklyPlay`] group of `<set>`.
+pub fn weekly_play_group(abbreviation: &str, is_set: &dyn Fn(&str) -> bool) -> Option<GroupInfo> {
+    let base = abbreviation.strip_suffix("WPP")?.trim_end_matches('-');
+    let own = format!("{base}P");
+    if is_set(&own) {
+        return Some(GroupInfo {
+            set_code: own,
+            kind: GroupKind::Main,
+            variants: vec![],
+        });
+    }
+    is_set(base).then(|| GroupInfo {
+        set_code: base.to_string(),
+        kind: GroupKind::WeeklyPlay,
+        variants: vec![],
+    })
+}
+
+/// Every group the join reads: the hand-kept table over groups whose
+/// abbreviation names an official set, and the Weekly Play Promos groups.
+pub fn group_infos(
+    rows: &[(i64, String, Option<String>)],
+    set_codes: &std::collections::BTreeSet<String>,
+) -> std::collections::BTreeMap<i64, GroupInfo> {
+    let is_set = |s: &str| set_codes.contains(s);
+    let mut groups = std::collections::BTreeMap::new();
+    for (id, _, abbr) in rows {
+        let Some(a) = abbr else { continue };
+        if let Some(info) = weekly_play_group(a, &is_set) {
+            groups.insert(*id, info);
+        } else if set_codes.contains(a) {
+            groups.insert(
+                *id,
+                GroupInfo {
+                    set_code: a.clone(),
+                    kind: GroupKind::Main,
+                    variants: vec![],
+                },
+            );
+        }
+    }
+    for row in group_table() {
+        groups.insert(row.group_id, row.info);
+    }
+    groups
 }
 
 /// The hand-kept row for one group, if there is one.

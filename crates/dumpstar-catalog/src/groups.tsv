@@ -20,3 +20,13 @@
 23452	*	promo	Prerelease Promo
 23453	*	promo	Prerelease Judge|SS Judge
 23455	*	promo	SS Participation|SS Top 8|SS Top 4|SS Finalist|SS Champion
+# Groups of one official set whose numbers the official catalog does not share:
+# matched on name and parenthetical, within that set.
+24790	C26	listed
+24385	C25	listed
+23572	C24	listed
+24487	P25	listed
+24854	P26	listed
+24784	P26	listed
+24272	GG	listed
+24547	G25	listed

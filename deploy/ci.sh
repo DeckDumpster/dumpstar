@@ -30,7 +30,8 @@
 #                     tests/alarming/alert_suppress_test.sh,
 #                     tests/ci/treewatch_test.sh and
 #                     tests/ci/unit_diagnostics_test.sh.
-#   2. Rust gates:     cargo test, cargo clippy --all-targets, cargo fmt --check.
+#   2. Rust gates:     cargo fmt --check, cargo clippy --all-targets, frontend
+#                      check, then cargo test (cheapest-first; sp-l2xovg).
 #   3. Frontend gate:  npm ci && npm test && npm run check && npm run build.
 #  3b. The image:      built ONCE, here. Five gates below need the shipped image
 #                      and each wants its own tag; they tag this one rather than
@@ -912,15 +913,38 @@ fi
 
 # --- 2. Rust gates ----------------------------------------------------------
 
+# Cheapest and likeliest-to-fail first (sp-l2xovg): a one-word lint used to
+# fail the run only after `cargo test` had spent ten minutes. clippy compiles
+# every target, so it also rejects a compile error; --profile test makes it
+# build what `cargo test` then REUSES (a plain clippy uses the dev profile and
+# recompiles every crate for the lint alone). The frontend's type check follows,
+# then the tests. `set -e` stops the run at the first failure.
+if tier rust; then
+    step "cargo clippy --all-targets"
+    ( cd "$REPO_DIR" && cargo clippy --all-targets --profile test -- -D warnings )
+fi
+
+# --- 2. Frontend gate (before cargo test) -------------------------------------------------------
+
+if tier frontend; then
+    step "Frontend: npm ci && npm test && npm run check && npm run build"
+    (
+        cd "$REPO_DIR/frontend"
+        npm ci
+        # Design-token gates: WCAG AA contrast for every declared pairing, the
+        # reference/semantic layer split, and the two ratchets — raw colour and
+        # raw dimension — which fail on any INCREASE in values chosen outside
+        # the token layer. Node's built-in runner, no extra deps.
+        npm test
+        npm run check
+        npm run build
+    )
+fi
+
+# --- 2. Rust tests ---
 if tier rust; then
     step "cargo test"
     ( cd "$REPO_DIR" && cargo test )
-
-    # --profile test so clippy REUSES what `cargo test` just built. Without it
-    # clippy defaults to the dev profile -- a different artifact set -- and
-    # recompiles all 352 crates for the lint alone (2m11s measured 2026-08-12).
-    step "cargo clippy --all-targets"
-    ( cd "$REPO_DIR" && cargo clippy --all-targets --profile test -- -D warnings )
 fi
 
 # --- 2a. Cross-tenant isolation gate (sp-c3fq3p) ------------------------------
@@ -990,23 +1014,6 @@ if tier deploy; then
     # unique to the run and removed on the way out.
     step "Container store: the image ships the binaries its own sources build"
     bash "$REPO_DIR/tests/store/cargo_cache.sh"
-fi
-
-# --- 3. Frontend gate -------------------------------------------------------
-
-if tier frontend; then
-    step "Frontend: npm ci && npm test && npm run check && npm run build"
-    (
-        cd "$REPO_DIR/frontend"
-        npm ci
-        # Design-token gates: WCAG AA contrast for every declared pairing, the
-        # reference/semantic layer split, and the two ratchets — raw colour and
-        # raw dimension — which fail on any INCREASE in values chosen outside
-        # the token layer. Node's built-in runner, no extra deps.
-        npm test
-        npm run check
-        npm run build
-    )
 fi
 
 # --- 3b. The image, once ----------------------------------------------------

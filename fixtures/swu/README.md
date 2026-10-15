@@ -7,3 +7,4 @@ Verbatim captures of the two data sources, retrieved 2026-10-12 by the Concierge
 - swu-groups.json, sor-products.json.gz, sor-prices.json: tcgcsv category 79
 - tcgcsv-swu-counts.txt: per-group product/price counts
 - off-sec-shared-standard.json: **synthetic**, not a capture (sp-5zcm06). Two official entries shaped like the real SEC pair Senator Chuchi `06361125` / `06371125`: same set, number, variant name (Standard) and finish, different serial variant codes (36, 37) and cardUids. The real load had 21 such pairs, all SEC.
+- tcgcsv-{set}-{group}-products.json.gz, tcgcsv-ash-24660-prices.json.gz, official-trim-*.json.gz (sp-9uiu2z): the six main sets JTL..HMW and the CST pair, for the TCGplayer-id coverage test; the official files are trimmed to the attributes the parser reads (see manifest.md)

@@ -16,7 +16,7 @@ use crate::error::{CatalogError, Result};
 use crate::landing::Provenance;
 use crate::record::{AlarmRecord, CatalogPayload, FORMAT};
 use crate::swu::{self, CrawlMarker};
-use crate::tcgcsv::{self, GroupInfo, GroupKind};
+use crate::tcgcsv;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ApplyReport {
@@ -330,6 +330,19 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
         )?;
     }
 
+    // A product is linked under the sub type its prices arrive as, which the
+    // join cannot know before the first day it is priced: join again once a
+    // sub type is new, so that day's prices land on the link they belong to.
+    let mut new_sub_type = false;
+    for pr in &p.prices {
+        new_sub_type |= tx.execute(
+            "INSERT OR IGNORE INTO tcgcsv_sub_types (product_id, sub_type_name) VALUES (?1,?2)",
+            params![pr.tcgcsv_product_id, pr.tcgcsv_sub_type_name],
+        )? > 0;
+    }
+    if new_sub_type {
+        rejoin(tx, &mut r)?;
+    }
     for pr in &p.prices {
         let printing: Option<String> = tx
             .query_row(
@@ -460,6 +473,9 @@ const JOIN_KINDS: &[&str] = &[
     "ambiguous_tcgcsv",
     "unmapped_group",
     "tcgcsv_unlisted_promo",
+    "base_listed_per_token",
+    "remedial_stale",
+    "remedial_conflict",
 ];
 
 /// Re-run the official <-> tcgcsv join over everything stored, so that a change
@@ -486,30 +502,12 @@ fn rejoin(tx: &Transaction, r: &mut ApplyReport) -> Result<()> {
         .prepare("SELECT set_code FROM sets")?
         .query_map([], |row| row.get(0))?
         .collect::<std::result::Result<_, _>>()?;
-    let mut group_names: BTreeMap<i64, String> = BTreeMap::new();
-    let mut groups: BTreeMap<i64, GroupInfo> = BTreeMap::new();
     let rows: Vec<(i64, String, Option<String>)> = tx
         .prepare("SELECT group_id, name, abbreviation FROM tcgcsv_groups")?
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
         .collect::<std::result::Result<_, _>>()?;
-    for (id, name, abbr) in rows {
-        group_names.insert(id, name);
-        if let Some(a) = abbr
-            && set_codes.contains(&a)
-        {
-            groups.insert(
-                id,
-                GroupInfo {
-                    set_code: a,
-                    kind: GroupKind::Main,
-                    variants: vec![],
-                },
-            );
-        }
-    }
-    for row in tcgcsv::group_table() {
-        groups.insert(row.group_id, row.info);
-    }
+    let group_names: BTreeMap<i64, String> = rows.iter().map(|(i, n, _)| (*i, n.clone())).collect();
+    let groups = tcgcsv::group_infos(&rows, &set_codes);
     let printings: Vec<OfficialPrinting> = tx
         .prepare(
             "SELECT p.printing_id, p.set_code, p.number, p.variant, p.variant_code, p.finish, c.name, c.subtitle
@@ -528,7 +526,20 @@ fn rejoin(tx: &Transaction, r: &mut ApplyReport) -> Result<()> {
             })
         })?
         .collect::<std::result::Result<_, _>>()?;
-    let joined = crosswalk::join(&printings, &products, &groups, &group_names);
+    let mut extra = crosswalk::Extra {
+        remedial: &crosswalk::remedial_table(),
+        ..Default::default()
+    };
+    for (product, sub_type) in tx
+        .prepare("SELECT product_id, sub_type_name FROM tcgcsv_sub_types")?
+        .query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?
+    {
+        extra.sub_types.entry(product).or_default().push(sub_type);
+    }
+    let joined = crosswalk::join_with(&printings, &products, &groups, &group_names, &extra);
     r.token_backs = joined.token_backs;
 
     let want: BTreeSet<(String, String, String)> = joined

@@ -75,9 +75,31 @@ fn run_source(
             r.applied
         );
     }
+    print_coverage(shared, name == "tcgcsv")?;
     // Format rules are data from the retrieved rules documents, not a payload.
     let mut catalog = dumpstar_catalog::Catalog::open_writer(shared)?;
     println!("formats seeded: {} rows changed", catalog.seed_formats()?);
+    Ok(())
+}
+
+/// Per-set tcgcsv id coverage and, after a price sync, every printing without
+/// one with the reason the join left it.
+fn print_coverage(shared: &std::path::Path, with_unmatched: bool) -> anyhow::Result<()> {
+    let catalog = Catalog::open_readonly(shared)?;
+    for c in check::set_coverage(catalog.conn())? {
+        println!(
+            "coverage {}: {}/{} ({}%)",
+            c.set_code,
+            c.linked,
+            c.printings,
+            c.percent()
+        );
+    }
+    if with_unmatched {
+        for line in check::unmatched(catalog.conn())? {
+            println!("unmatched {line}");
+        }
+    }
     Ok(())
 }
 
@@ -126,6 +148,15 @@ pub fn run(args: CatalogApplyArgs) -> anyhow::Result<()> {
 pub fn check(args: CatalogCheckArgs) -> anyhow::Result<()> {
     let catalog = Catalog::open_readonly(&shared_path(args.shared_db)?)?;
     let alarms = check::run(catalog.conn(), Utc::now())?;
+    for c in check::set_coverage(catalog.conn())? {
+        println!(
+            "coverage {}: {}/{} ({}%)",
+            c.set_code,
+            c.linked,
+            c.printings,
+            c.percent()
+        );
+    }
     for a in &alarms {
         println!("ALARM {} {}: {}", a.kind, a.key, a.detail);
     }

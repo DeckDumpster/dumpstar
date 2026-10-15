@@ -4,9 +4,11 @@
 	import { goto } from '$app/navigation';
 	import { api, SearchQueryError } from '$lib/api';
 	import { facetHref } from '$lib/facets';
+	import { sortAspects } from '$lib/aspects';
+	import AspectIcon from '$lib/components/AspectIcon.svelte';
 		import { CONDITIONS } from '$lib/conditions';
 	import { conditionMultiplier } from '$lib/conditions.svelte';
-	import { money, count, printingLabel, jsonList } from '$lib/format';
+	import { money, count, printingLabel, printingTag, jsonList } from '$lib/format';
 	import { stackOffsets, windowOf } from '$lib/virtual';
 
 	// Foil shimmer treatment for Foil-finish printings.
@@ -555,10 +557,6 @@
 		return [...map.values()];
 	}
 
-	/** "Vigilance · Heroism" — the aspects column's text. */
-	function aspectText(a: AggRow): string {
-		return jsonList(a.aspects).join(' · ');
-	}
 	/** "3/4" — power over hit points; either may be absent (Events, Bases). */
 	function powerHp(a: AggRow): string {
 		if (a.power == null && a.hp == null) return '';
@@ -1486,7 +1484,7 @@
 								</div>
 							</td>
 							<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}>{a.card_type ?? ''}</td>
-							<td class="fac" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', jsonList(a.aspects)[0])}>{aspectText(a)}</td>
+							<td class="fac" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', sortAspects(jsonList(a.aspects))[0])}>{#each sortAspects(jsonList(a.aspects)) as n (n)}<AspectIcon name={n} />{/each}</td>
 							<td class="num">{a.cost ?? ''}</td>
 							<td class="center">{powerHp(a)}</td>
 							<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}>{a.rarity ?? ''}</td>
@@ -1529,9 +1527,9 @@
 									</span>
 								{/if}
 								<span class="namebody"
-									><span class="cardname">{a.name}</span>{#if a.variant !== 'Standard' || a.finish === 'Foil'}<span
+									><span class="cardname">{a.name}</span>{#if printingTag(a.variant, a.finish, a.set_name)}<span
 											class="tag vtag"
-											title={printingLabel(a.variant, a.finish)}>{printingLabel(a.variant, a.finish)}</span
+											title={printingLabel(a.variant, a.finish)}>{printingTag(a.variant, a.finish, a.set_name)}</span
 										>{/if}{#if statusBadge(a.status)}<span
 											class="tag stag t-{a.status}"
 											title={a.status}>{statusBadge(a.status)}</span
@@ -1540,7 +1538,7 @@
 							</div>
 						</td>
 						<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}>{a.card_type ?? ''}</td>
-						<td class="fac" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', jsonList(a.aspects)[0])}>{aspectText(a)}</td>
+						<td class="fac" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', sortAspects(jsonList(a.aspects))[0])}>{#each sortAspects(jsonList(a.aspects)) as n (n)}<AspectIcon name={n} />{/each}</td>
 						<td class="num">{a.cost ?? ''}</td>
 						<td class="center">{powerHp(a)}</td>
 						<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}>{a.rarity ?? ''}</td>

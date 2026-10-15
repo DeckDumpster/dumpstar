@@ -1,0 +1,33 @@
+# The least share (whole percent) of a set's non-token printings that must carry
+# a tcgcsv product id. `catalog-check` raises `set_coverage_dropped` for a set
+# below its row; raise a row when coverage rises, lower one only with the reason
+# in the commit. A set with no row is reported but not checked.
+#
+# set	min percent
+ASH	100
+ASHP	100
+C24	100
+C25	100
+C26	100
+CST	100
+G25	100
+GG	100
+HMW	96
+HMWP	100
+IBH	100
+J24	83
+J25	42
+JTL	100
+JTLP	100
+LAW	100
+LAWP	100
+LOF	100
+LOFP	100
+P25	58
+P26	38
+SEC	100
+SECP	100
+SHD	99
+SOR	100
+TS26	100
+TWI	99

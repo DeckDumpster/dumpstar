@@ -47,3 +47,22 @@ test('after completion the same request may run again', async () => {
 	await l.run('k', async () => 1);
 	assert.deepEqual(await l.run('k', async () => 2), { stale: false, value: 2 });
 });
+
+test('a superseded request that fails is reported stale, not as an error', async () => {
+	const l = latestOnly();
+	const slow = deferred();
+	const first = l.run('page=1', () => slow.promise);
+	await l.run('page=2', async () => 'page 2');
+	slow.resolve(Promise.reject(new Error('aborted')));
+	assert.deepEqual(await first, { stale: true });
+});
+
+test('the newest request failing is surfaced', async () => {
+	const l = latestOnly();
+	await assert.rejects(
+		l.run('k', async () => {
+			throw new Error('boom');
+		}),
+		/boom/
+	);
+});

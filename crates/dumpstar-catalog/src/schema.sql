@@ -160,3 +160,10 @@ CREATE TABLE IF NOT EXISTS tcgcsv_products (
     number           TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_tcgcsv_products_group ON tcgcsv_products(group_id);
+-- The price sub types (`Normal`, `Foil`) tcgcsv has quoted for a product, kept
+-- so the join can link a product under the sub type its prices arrive as.
+CREATE TABLE IF NOT EXISTS tcgcsv_sub_types (
+    product_id       INTEGER NOT NULL,
+    sub_type_name    TEXT NOT NULL,
+    PRIMARY KEY (product_id, sub_type_name)
+) WITHOUT ROWID;

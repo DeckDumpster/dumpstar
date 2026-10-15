@@ -41,6 +41,41 @@ pub struct Link {
     pub sub_type_name: String,
 }
 
+/// A hand-resolved link (`remedial.tsv`): the printing the automatic join could
+/// not place unambiguously, and the TCGplayer product it is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Remedial {
+    pub printing_id: String,
+    pub product_id: i64,
+    pub source: String,
+    pub reason: String,
+}
+
+/// The hand-kept remedial crosswalk (`remedial.tsv`).
+pub fn remedial_table() -> Vec<Remedial> {
+    include_str!("remedial.tsv")
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+        .filter_map(|l| {
+            let mut f = l.split('\t');
+            Some(Remedial {
+                printing_id: f.next()?.trim().to_string(),
+                product_id: f.next()?.trim().parse().ok()?,
+                source: f.next()?.trim().to_string(),
+                reason: f.next()?.trim().to_string(),
+            })
+        })
+        .collect()
+}
+
+/// What the join needs besides the two catalogs.
+#[derive(Debug, Default)]
+pub struct Extra<'a> {
+    /// The price sub types (`Normal`, `Foil`) each product carries.
+    pub sub_types: BTreeMap<i64, Vec<String>>,
+    pub remedial: &'a [Remedial],
+}
+
 #[derive(Debug, Default)]
 pub struct Joined {
     pub links: Vec<Link>,
@@ -127,6 +162,61 @@ fn expected_qualifiers(variant: &str) -> Vec<String> {
     }
 }
 
+const MAIN_FAMILY: &[&str] = &[
+    "",
+    "foil",
+    "hyperspace",
+    "hyperspacefoil",
+    "prestige",
+    "prestigefoil",
+    "serialized",
+    "showcase",
+];
+
+/// The parenthetical(s) TCGplayer puts after a name for an official
+/// `(variant, finish)`. A foil of the main run is its own product (`(Foil)`,
+/// `(Hyperspace Foil)`, `(Prestige Foil)`), as is every Prestige and Serialized
+/// printing. An event variant (`GC Top 8`) is listed by its place alone.
+pub fn listing_qualifiers(variant: &str, finish: &str) -> Vec<String> {
+    let foil = finish == "Foil";
+    let q = |s: &str| vec![name_key(s)];
+    match variant {
+        "Standard" | "Weekly Play" => q(if foil { "Foil" } else { "" }),
+        "Hyperspace" => q(if foil {
+            "Hyperspace Foil"
+        } else {
+            "Hyperspace"
+        }),
+        "Standard Prestige" => q("Prestige"),
+        "Foil Prestige" => q("Prestige Foil"),
+        "Serialized Prestige" => q("Serialized"),
+        "Showcase" => q("Showcase"),
+        v => {
+            let mut out = vec![name_key(v), String::new()];
+            if let Some((prefix, rest)) = v.split_once(' ')
+                && prefix.len() == 2
+            {
+                out.push(name_key(rest));
+            }
+            if foil {
+                out.push(name_key("Foil"));
+            }
+            out
+        }
+    }
+}
+
+/// A product as the listing stage sees it: a name and the parenthetical after it.
+struct Listing<'a> {
+    product: &'a ProductRecord,
+    name: String,
+    qualifier: String,
+    set: Option<&'a str>,
+    weekly_play: bool,
+    /// The group is of the kind whose products carry no variant parenthetical.
+    listed: bool,
+}
+
 fn strip_variant(name: &str) -> (&str, Option<&str>) {
     for v in ["Hyperspace", "Showcase"] {
         if let Some(rest) = name.strip_suffix(&format!("({v})")) {
@@ -147,7 +237,11 @@ enum Class {
         qualifier: String,
     },
     Unmapped(i64),
-    TokenBack,
+    Qualified,
+    TokenBack {
+        key: Key,
+        name: String,
+    },
     Card {
         key: Key,
         name: String,
@@ -185,10 +279,23 @@ fn classify(p: &ProductRecord, groups: &BTreeMap<i64, GroupInfo>) -> Class {
     };
     let parts: Vec<&str> = number.split("//").collect();
     let first = parts[0].trim();
+    // `(Foil)`, `(Prestige)`, `(Costco Exclusive)`: a product of its own with a
+    // number of its own, never the printing that number names.
+    let (_, qual) = split_paren(&p.name);
+    if parts.len() == 1
+        && !qual.is_empty()
+        && !qual.starts_with(|c: char| c.is_ascii_digit())
+        && !matches!(qual, "Hyperspace" | "Showcase")
+    {
+        return Class::Qualified;
+    }
     let key = |n: &str| (set.clone(), variant.clone(), norm_number(n));
     if parts.len() > 1 {
         if !is_token_number(first) {
-            return Class::TokenBack;
+            return Class::TokenBack {
+                key: key(first),
+                name: name_key(base.split(" // ").next().unwrap_or(base)),
+            };
         }
         return Class::TokenCard {
             key: key(first),
@@ -196,9 +303,15 @@ fn classify(p: &ProductRecord, groups: &BTreeMap<i64, GroupInfo>) -> Class {
             name: name_key(base.split(" // ").next().unwrap_or(base)),
         };
     }
+    let (numbered, qual) = split_paren(base);
     Class::Card {
         key: key(first),
-        name: name_key(base),
+        // `(85/104)`: a second printing of the card, told apart by its number.
+        name: name_key(if qual.starts_with(|c: char| c.is_ascii_digit()) {
+            numbered
+        } else {
+            base
+        }),
     }
 }
 
@@ -208,15 +321,48 @@ pub fn join(
     groups: &BTreeMap<i64, GroupInfo>,
     group_names: &BTreeMap<i64, String>,
 ) -> Joined {
+    join_with(printings, products, groups, group_names, &Extra::default())
+}
+
+pub fn join_with(
+    printings: &[OfficialPrinting],
+    products: &[ProductRecord],
+    groups: &BTreeMap<i64, GroupInfo>,
+    group_names: &BTreeMap<i64, String>,
+    extra: &Extra,
+) -> Joined {
     let mut out = Joined::default();
+    let mut listings: Vec<Listing> = Vec::new();
+    let mut qualified: Vec<&ProductRecord> = Vec::new();
+    let mut token_backs: BTreeMap<Key, Vec<(&ProductRecord, String)>> = BTreeMap::new();
     let mut by_key: BTreeMap<Key, Vec<(&ProductRecord, String)>> = BTreeMap::new();
     let mut second_keys: BTreeSet<Key> = BTreeSet::new();
     let mut unmapped: BTreeSet<i64> = BTreeSet::new();
     let mut loose: Vec<(&ProductRecord, Key, String)> = Vec::new();
     let mut promos: Vec<(&ProductRecord, i64, String, String)> = Vec::new();
     for p in products {
+        let weekly_play = group_names
+            .get(&p.group_id)
+            .is_some_and(|n| n.contains("Weekly Play"));
+        // A Weekly Play promo may be listed with no Number at all.
+        if p.number
+            .as_deref()
+            .map_or(weekly_play, |n| !n.contains("//"))
+        {
+            let (base, qual) = split_paren(&p.name);
+            let info = groups.get(&p.group_id);
+            listings.push(Listing {
+                product: p,
+                name: name_key(base),
+                qualifier: name_key(qual),
+                set: info.map(|i| i.set_code.as_str()).filter(|s| *s != "*"),
+                weekly_play,
+                listed: info.is_some_and(|i| i.kind == GroupKind::Listed),
+            });
+        }
         match classify(p, groups) {
             Class::Sealed | Class::Ignored => {}
+            Class::Qualified => qualified.push(p),
             Class::Promo {
                 group,
                 name,
@@ -225,7 +371,10 @@ pub fn join(
             Class::Unmapped(g) => {
                 unmapped.insert(g);
             }
-            Class::TokenBack => out.token_backs += 1,
+            Class::TokenBack { key, name } => {
+                out.token_backs += 1;
+                token_backs.entry(key).or_default().push((p, name));
+            }
             Class::Card { key, name } => {
                 by_key
                     .entry(key.clone())
@@ -294,8 +443,27 @@ pub fn join(
         let Some(cands) = by_key.get(key) else {
             continue;
         };
+        // Two products can carry one number (a misprinted `83/64`); the name
+        // tells them apart when only one agrees with an official printing.
+        let named: Vec<&(&ProductRecord, String)> = cands
+            .iter()
+            .filter(|(_, n)| {
+                offs.iter().any(|o| {
+                    name_key(&format!(
+                        "{}{}",
+                        o.name,
+                        o.subtitle.as_deref().unwrap_or("")
+                    )) == *n
+                })
+            })
+            .collect();
+        let cands: Vec<(&ProductRecord, String)> = if cands.len() > 1 && named.len() == 1 {
+            vec![named[0].clone()]
+        } else {
+            cands.clone()
+        };
         if cands.len() > 1 {
-            for (p, _) in cands {
+            for (p, _) in &cands {
                 if ambiguous.insert(p.product_id) {
                     out.alarms.push(AlarmRecord::alarm(
                         "ambiguous_tcgcsv",
@@ -365,6 +533,53 @@ pub fn join(
         for o in ok {
             link(&mut out, o, p.product_id, false);
             linked.insert(&o.printing_id);
+        }
+    }
+
+    // A base with a token on its back is sold as one product per token
+    // (`Nevarro City, Restored // Mandalorian`, `// Advantage`, `// Shield`) and
+    // never alone: each is the same card, so the lowest productId stands for it
+    // and the rest stay counted token backs.
+    for (key, offs) in &off_by_key {
+        let Some(cands) = token_backs.get(key) else {
+            continue;
+        };
+        let ok: Vec<&&OfficialPrinting> = offs
+            .iter()
+            .filter(|o| !linked.contains(o.printing_id.as_str()))
+            .filter(|o| {
+                cands.iter().any(|(_, n)| {
+                    *n == name_key(&format!(
+                        "{}{}",
+                        o.name,
+                        o.subtitle.as_deref().unwrap_or("")
+                    ))
+                })
+            })
+            .collect();
+        let finishes: BTreeSet<&str> = ok.iter().map(|o| o.finish.as_str()).collect();
+        if ok.is_empty() || finishes.len() != ok.len() {
+            continue;
+        }
+        let Some((p, _)) = cands.iter().min_by_key(|(p, _)| p.product_id) else {
+            continue;
+        };
+        matched_products.insert(p.product_id);
+        for o in ok {
+            link(&mut out, o, p.product_id, false);
+            linked.insert(&o.printing_id);
+            out.alarms.push(AlarmRecord::info(
+                "base_listed_per_token",
+                o.printing_id.clone(),
+                format!(
+                    "{} {} #{}: sold as {} products, one per token; linked to the lowest, {}",
+                    o.set_code,
+                    o.name,
+                    o.number,
+                    cands.len(),
+                    p.product_id
+                ),
+            ));
         }
     }
 
@@ -442,6 +657,164 @@ pub fn join(
             linked.insert(&pr.printing_id);
         }
     }
+
+    // Fourth pass: what is listed under a name and a parenthetical rather than
+    // a number. TCGplayer files a foil, a Prestige or a Serialized printing as
+    // a product of its own, a promo under the group of the set it came from
+    // (a Costco Leia under Ashes of the Empire), so the candidates are every
+    // group of the printing's own set, plus -- for a variant only a promo has
+    // -- every group at all. One candidate, claimed by one printing, or none.
+    let sub_types_of = |product: i64, pr: &OfficialPrinting| -> Vec<String> {
+        match extra.sub_types.get(&product).map(Vec::as_slice) {
+            Some([only]) => vec![only.clone()],
+            Some(many) if many.contains(&pr.finish) => vec![pr.finish.clone()],
+            Some(many) if !many.is_empty() => many.to_vec(),
+            _ => {
+                // No price seen yet: the listing says which. A foil, a
+                // Serialized, a Showcase or a promo is quoted as Foil.
+                let foil = match listings.iter().find(|l| l.product.product_id == product) {
+                    Some(l) => !matches!(l.qualifier.as_str(), "" | "hyperspace" | "prestige"),
+                    None => pr.finish == "Foil",
+                };
+                vec![if foil { "Foil" } else { "Normal" }.into()]
+            }
+        }
+    };
+    let mut listed: BTreeMap<i64, Vec<&OfficialPrinting>> = BTreeMap::new();
+    for pr in printings
+        .iter()
+        .filter(|p| !linked.contains(p.printing_id.as_str()))
+    {
+        let name = name_key(&format!(
+            "{}{}",
+            pr.name,
+            pr.subtitle.as_deref().unwrap_or("")
+        ));
+        let quals = listing_qualifiers(&pr.variant, &pr.finish);
+        let weekly = pr.variant == "Weekly Play";
+        // TCGplayer lists a Weekly Play promo by its title alone.
+        let title = name_key(&pr.name);
+        let find = |tier: u8| -> Vec<&Listing> {
+            listings
+                .iter()
+                .filter(|l| {
+                    (l.name == name || (weekly && l.name == title))
+                        && (quals.contains(&l.qualifier)
+                            || (l.listed
+                                && l.qualifier.is_empty()
+                                && l.set == Some(pr.set_code.as_str())))
+                        && l.weekly_play == weekly
+                        && !matched_products.contains(&l.product.product_id)
+                        && if l.set == Some(pr.set_code.as_str()) {
+                            tier == 1
+                        } else if tier == 2 {
+                            // A prize group shared by many sets, read only when
+                            // the printing's own set has nothing by that name.
+                            l.set.is_none() && !weekly
+                        } else {
+                            // Only a name no main-run product carries is a promo's.
+                            !l.qualifier.is_empty()
+                                && !MAIN_FAMILY.contains(&l.qualifier.as_str())
+                                && quals.contains(&l.qualifier)
+                        }
+                })
+                .collect()
+        };
+        let mut cands = find(1);
+        if cands.is_empty() {
+            cands = find(2);
+        }
+        if let [only] = cands.as_slice() {
+            listed.entry(only.product.product_id).or_default().push(pr);
+        }
+    }
+    for (product, prs) in &listed {
+        let mut per: BTreeMap<Vec<String>, Vec<&OfficialPrinting>> = BTreeMap::new();
+        for pr in prs {
+            per.entry(sub_types_of(*product, pr)).or_default().push(pr);
+        }
+        if per.values().any(|v| v.len() > 1) {
+            if ambiguous.insert(*product) {
+                out.alarms.push(AlarmRecord::alarm(
+                    "ambiguous_tcgcsv",
+                    product.to_string(),
+                    format!(
+                        "{} official printings ({}) claim tcgcsv product {product} by name",
+                        prs.len(),
+                        prs.iter()
+                            .map(|p| format!(
+                                "{} {} {} #{}",
+                                p.set_code, p.variant, p.finish, p.number
+                            ))
+                            .collect::<Vec<_>>()
+                            .join("; ")
+                    ),
+                ));
+            }
+            continue;
+        }
+        matched_products.insert(*product);
+        for (subs, v) in per {
+            for sub in subs {
+                out.links.push(Link {
+                    printing_id: v[0].printing_id.clone(),
+                    product_id: *product,
+                    sub_type_name: sub,
+                });
+            }
+            linked.insert(&v[0].printing_id);
+        }
+    }
+
+    // The remedial crosswalk: printings no rule above places unambiguously.
+    let by_id: BTreeMap<&str, &OfficialPrinting> = printings
+        .iter()
+        .map(|p| (p.printing_id.as_str(), p))
+        .collect();
+    let product_ids: BTreeSet<i64> = products.iter().map(|p| p.product_id).collect();
+    for r in extra.remedial {
+        let Some(pr) = by_id.get(r.printing_id.as_str()) else {
+            continue;
+        };
+        if !product_ids.contains(&r.product_id) {
+            out.alarms.push(AlarmRecord::alarm(
+                "remedial_stale",
+                r.printing_id.clone(),
+                format!(
+                    "remedial crosswalk names tcgcsv product {} which tcgcsv no longer lists ({})",
+                    r.product_id, r.reason
+                ),
+            ));
+            continue;
+        }
+        if linked.contains(pr.printing_id.as_str()) {
+            let same = out
+                .links
+                .iter()
+                .any(|l| l.printing_id == r.printing_id && l.product_id == r.product_id);
+            if !same {
+                out.alarms.push(AlarmRecord::alarm(
+                    "remedial_conflict",
+                    r.printing_id.clone(),
+                    format!(
+                        "remedial crosswalk says product {} but the join placed this printing elsewhere",
+                        r.product_id
+                    ),
+                ));
+            }
+            continue;
+        }
+        for sub in sub_types_of(r.product_id, pr) {
+            out.links.push(Link {
+                printing_id: r.printing_id.clone(),
+                product_id: r.product_id,
+                sub_type_name: sub,
+            });
+        }
+        matched_products.insert(r.product_id);
+        ambiguous.remove(&r.product_id);
+        linked.insert(&pr.printing_id);
+    }
     for (p, ..) in &promos {
         if !matched_products.contains(&p.product_id) {
             out.alarms.push(AlarmRecord::info(
@@ -483,6 +856,20 @@ pub fn join(
                 "official_unlisted",
                 pr.printing_id.clone(),
                 format!("{what}: not listed by tcgcsv (promo or token)"),
+            ));
+        }
+    }
+    for p in &qualified {
+        if !matched_products.contains(&p.product_id) && !ambiguous.contains(&p.product_id) {
+            out.alarms.push(AlarmRecord::alarm(
+                "tcgcsv_without_official",
+                p.product_id.to_string(),
+                format!(
+                    "tcgcsv product {} {:?} #{} has no official printing",
+                    p.product_id,
+                    p.name,
+                    p.number.as_deref().unwrap_or("")
+                ),
             ));
         }
     }

@@ -1,0 +1,78 @@
+# The remedial crosswalk: printings no rule in crosswalk.rs places on a TCGplayer
+# product unambiguously, resolved by hand. Applied after every automatic rule,
+# so a row here never overrides a match the join makes; a row whose product
+# tcgcsv stops listing raises `remedial_stale`, one that disagrees with the join
+# raises `remedial_conflict`.
+#
+# printing_id	tcgplayer product id	source	reason
+6386443776	678656	manual	LAW Standard Normal: TCGplayer spells the name "K-2S0 - Locking the Vault"
+0201864172	678247	manual	LAW Standard Normal: TCGplayer spells the name "Adventurer's Sniper Rifle"
+2871790352	678250	manual	LAW Standard Normal: TCGplayer spells the name "Liberated Wookie"
+1925389607	670940	manual	LAW Standard Normal: TCGplayer spells the name "Jaunty Light Frieghter"
+7312232497	681382	manual	LAW Hyperspace Normal: TCGplayer spells the name "Millennium Falcon - Dodgin Patrols (Hyperspace)"
+1160042834	681393	manual	LAW Hyperspace Normal: TCGplayer spells the name "K-2S0 - Locking the Vault (Hyperspace)"
+6179581184	681440	manual	LAW Hyperspace Normal: TCGplayer spells the name "Adventurer's Sniper Rifle (Hyperspace)"
+1825214979	681457	manual	LAW Hyperspace Normal: TCGplayer spells the name "Liberated Wookie (Hyperspace)"
+9872027595	681461	manual	LAW Hyperspace Normal: TCGplayer spells the name "Jaunty Light Frieghter (Hyperspace)"
+1398634316	681616	manual	LAW Hyperspace Foil: TCGplayer spells the name "Cade Bane - Now It's My Turn (Hyperspace Foil)"
+9474530509	681652	manual	LAW Hyperspace Foil: TCGplayer spells the name "Millennium Falcon - Dodgin Patrols (Hyperspace Foil)"
+3311097018	681663	manual	LAW Hyperspace Foil: TCGplayer spells the name "K-2S0 - Locking the Vault (Hyperspace Foil)"
+6001267003	681710	manual	LAW Hyperspace Foil: TCGplayer spells the name "Adventurer's Sniper Rifle (Hyperspace Foil)"
+2612106802	681727	manual	LAW Hyperspace Foil: TCGplayer spells the name "Liberated Wookie (Hyperspace Foil)"
+6031987260	681731	manual	LAW Hyperspace Foil: TCGplayer spells the name "Jaunty Light Frieghter (Hyperspace Foil)"
+7207819909	682359	manual	LAW Standard Prestige Normal: TCGplayer spells the name "K-2S0 - Locking the Vault (Prestige)"
+6065697684	682398	manual	LAW Foil Prestige Normal: TCGplayer spells the name "K-2S0 - Locking the Vault (Prestige Foil)"
+0527533685	682414	manual	LAW Foil Prestige Normal: TCGplayer spells the name "Cade Bane - Now It's My Turn (Prestige Foil)"
+3329085095	678657	manual	LAW Serialized Prestige Normal: TCGplayer spells the name "K-2S0 - Locking the Vault (Serialized)"
+1622153405	686254	manual	LAWP Weekly Play Normal: TCGplayer spells the name "K-2S0 - Locking the Vault"
+0660025752	686255	manual	LAWP Weekly Play Foil: TCGplayer spells the name "K-2S0 - Locking the Vault (Foil)"
+3634566382	686461	manual	TS26 Standard Normal: TCGplayer spells the name "Fortune and Gory - Hondo's Luxury Yacht"
+5729664588	688694	manual	TS26 Standard Normal: TCGplayer spells the name "Tribunal - Grave of the 32nd"
+8168014484	679512	manual	TS26 Standard Normal: TCGplayer spells the name "Arena Rek - Lumbering Beast"
+7677772050	679517	manual	TS26 Standard Normal: TCGplayer spells the name "Separatist Counci - Quarrelsome Holdouts"
+2437821363	685610	manual	SEC Senator Chuchi #1125 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+9380836896	685611	manual	SEC Mina Bonteri #1126 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+1716415517	685612	manual	SEC Queen Amidala #1127 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+0350854125	685613	manual	SEC Mon Mothma #1128 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+6193101688	685614	manual	SEC Bail Organa #1129 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+8131446680	685615	manual	SEC Nute Gunray #1130 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+2007211053	685616	manual	SEC Sly Moore #1131 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+4523074239	685617	manual	SEC Major Partagaz #1132 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+0379589871	685618	manual	SEC Vice Admiral Rampart #1133 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+9875030870	685619	manual	SEC Mas Amedda #1134 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+9740702191	685620	manual	SEC Dedra Meero #1135 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+3427407378	685621	manual	SEC Director Krennic #1136 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+1692148344	685622	manual	SEC Syril Karn #1137 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+6823947149	685623	manual	SEC General Grievous #1138 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+8420193782	685624	manual	SEC Grand Moff Tarkin #1139 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+3297126779	685625	manual	SEC Grand Admiral Thrawn #1140 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+8077377466	685626	manual	SEC Lando Calrissian #1141 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+5934140686	685627	manual	SEC Chancellor Valorum #1142 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+0655943425	685628	manual	SEC Jar Jar Binks #1143 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+6667640816	685629	manual	SEC Orn Free Taa #1144 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+7299244261	685630	manual	SEC Chairman Papanoida #1145 variant code 36: official lists it as Standard; TCGplayer lists it as (Serialized) (Rose Gold)
+5372118662	685631	manual	SEC Senator Chuchi #1125 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+7292396057	685632	manual	SEC Mina Bonteri #1126 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+2272690579	685633	manual	SEC Queen Amidala #1127 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+3198747736	685634	manual	SEC Mon Mothma #1128 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+9574814443	685635	manual	SEC Bail Organa #1129 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+1423703899	685636	manual	SEC Nute Gunray #1130 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+0010250675	685637	manual	SEC Sly Moore #1131 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+4947083416	685638	manual	SEC Major Partagaz #1132 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+7337874410	685639	manual	SEC Vice Admiral Rampart #1133 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+9059832344	685640	manual	SEC Mas Amedda #1134 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+2680450638	685641	manual	SEC Dedra Meero #1135 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+2555342152	685642	manual	SEC Director Krennic #1136 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+6782768656	685643	manual	SEC Syril Karn #1137 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+0338895572	685644	manual	SEC General Grievous #1138 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+9564161362	685645	manual	SEC Grand Moff Tarkin #1139 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+7195047212	685646	manual	SEC Grand Admiral Thrawn #1140 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+3160202779	685647	manual	SEC Lando Calrissian #1141 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+7970358161	685648	manual	SEC Chancellor Valorum #1142 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+7851276374	685649	manual	SEC Jar Jar Binks #1143 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+9470423283	685650	manual	SEC Orn Free Taa #1144 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+5018678858	685651	manual	SEC Chairman Papanoida #1145 variant code 37: official lists it as Standard; TCGplayer lists it as (Serialized) (Gold)
+4308137497	622136	manual	JTL Hyperspace Normal: TCGplayer spells the name "Rio Durant - Wisecrack Wheelman (Hyperspace)"
+5156244285	622154	manual	JTL Showcase: TCGplayer spells the name "Rio Durant - Wisecrack Wheelman (Showcase)"
+6723800914	679504	manual	TS26 Standard Normal: TCGplayer lists "Ahsoka's Lightsabers" without the subtitle
+4781765221	679523	manual	TS26 Standard Normal: TCGplayer lists "Rex's DC-17s" without the subtitle

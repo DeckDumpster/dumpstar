@@ -112,9 +112,137 @@ pub fn coverage(conn: &Connection, day: &str) -> Result<Coverage> {
     })?)
 }
 
+/// How many of a set's printings carry a tcgcsv product id (tokens aside: a
+/// token is priced as the back of a base or not at all).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetCoverage {
+    pub set_code: String,
+    pub printings: i64,
+    pub linked: i64,
+}
+
+impl SetCoverage {
+    pub fn percent(&self) -> i64 {
+        if self.printings == 0 {
+            100
+        } else {
+            self.linked * 100 / self.printings
+        }
+    }
+}
+
+pub fn set_coverage(conn: &Connection) -> Result<Vec<SetCoverage>> {
+    let mut stmt = conn.prepare(
+        "SELECT p.set_code, COUNT(*),
+                COALESCE(SUM(EXISTS (SELECT 1 FROM printing_source_id s
+                    WHERE s.printing_id = p.printing_id AND s.source = 'tcgcsv')), 0)
+         FROM printings p
+         WHERE p.number NOT GLOB '[Tt][0-9]*'
+         GROUP BY p.set_code ORDER BY p.set_code",
+    )?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(SetCoverage {
+                set_code: r.get(0)?,
+                printings: r.get(1)?,
+                linked: r.get(2)?,
+            })
+        })?
+        .collect::<std::result::Result<_, _>>()?;
+    Ok(rows)
+}
+
+/// Each set's floor from `coverage_floor.tsv`.
+pub fn coverage_floors() -> Vec<(String, i64)> {
+    include_str!("coverage_floor.tsv")
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+        .filter_map(|l| {
+            let mut f = l.split('\t');
+            Some((f.next()?.trim().to_string(), f.next()?.trim().parse().ok()?))
+        })
+        .collect()
+}
+
+/// A set whose coverage has fallen below its floor.
+pub fn coverage_drops(conn: &Connection) -> Result<Vec<AlarmRecord>> {
+    let floors = coverage_floors();
+    Ok(set_coverage(conn)?
+        .into_iter()
+        .filter_map(|c| {
+            let floor = floors.iter().find(|(s, _)| *s == c.set_code)?.1;
+            (c.percent() < floor).then(|| {
+                AlarmRecord::alarm(
+                    "set_coverage_dropped",
+                    c.set_code.clone(),
+                    format!(
+                        "{}: {} of {} printings carry a tcgcsv product id ({}%, floor {floor}%)",
+                        c.set_code,
+                        c.linked,
+                        c.printings,
+                        c.percent()
+                    ),
+                )
+            })
+        })
+        .collect())
+}
+
+/// Every printing with no tcgcsv product id, and why the join left it: a token,
+/// or the alarm it raised.
+pub fn unmatched(conn: &Connection) -> Result<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT p.set_code, p.variant, p.finish, p.number, c.name, COALESCE(c.subtitle, ''),
+                p.printing_id,
+                COALESCE((SELECT a.kind FROM alarms a WHERE a.key = p.printing_id LIMIT 1), '')
+         FROM printings p JOIN cards c ON c.card_id = p.card_id
+         WHERE NOT EXISTS (SELECT 1 FROM printing_source_id s
+                WHERE s.printing_id = p.printing_id AND s.source = 'tcgcsv')
+         ORDER BY p.set_code, p.number, p.variant, p.finish",
+    )?;
+    let rows = stmt
+        .query_map([], |r| {
+            let (set, variant, finish, number, name, sub, id, kind): (
+                String,
+                String,
+                String,
+                String,
+                String,
+                String,
+                String,
+                String,
+            ) = (
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+                r.get(6)?,
+                r.get(7)?,
+            );
+            let title = if sub.is_empty() {
+                name
+            } else {
+                format!("{name} - {sub}")
+            };
+            let why = match kind.as_str() {
+                "" if number.starts_with(['t', 'T']) => "token",
+                "" => "no tcgcsv product",
+                k => k,
+            };
+            Ok(format!(
+                "{set} {variant} {finish} #{number} {title} [{id}]: {why}"
+            ))
+        })?
+        .collect::<std::result::Result<_, _>>()?;
+    Ok(rows)
+}
+
 pub fn run(conn: &Connection, now: DateTime<Utc>) -> Result<Vec<AlarmRecord>> {
     let mut out = stored(conn)?;
     out.extend(missing_price_days(conn, now)?);
+    out.extend(coverage_drops(conn)?);
     let latest: Option<String> = conn.query_row(
         "SELECT MAX(observed_on) FROM prices WHERE source = 'tcgcsv'",
         [],

@@ -442,6 +442,16 @@
 {:else if binder}
 	<div class="binderpage">
 		<header>
+			<div class="setart">
+				{#if binder.set.art_url}
+					<img class="setcrop" src={binder.set.art_url} alt="" />
+				{/if}
+				{#if binder.set.logo_url}
+					<img class="setlogo" src={binder.set.logo_url} alt="{binder.set.name} logo" />
+				{:else}
+					<span class="setname">{binder.set.name}</span>
+				{/if}
+			</div>
 			<a class="statslink" href="/browse/{binder.set.set_code}/stats">Set stats →</a>
 			<div class="stats">
 				<!-- tone="complete" on every meter here, not the primitive's
@@ -769,6 +779,27 @@
 		/collection and /sealed; filed as pd-5fki rather than grown into a
 		private variant here.
 	*/
+	/* Official art crop and logo, served from /art; the set's name stands in
+	   when no logo was retrieved. */
+	.setart {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		flex-basis: 100%;
+	}
+	.setcrop {
+		height: var(--space-16, 72px);
+		border-radius: var(--radius-sm);
+		object-fit: cover;
+	}
+	.setlogo {
+		max-height: var(--space-12, 56px);
+		object-fit: contain;
+	}
+	.setname {
+		font-weight: var(--weight-semibold);
+		color: var(--color-text-strong);
+	}
 	header {
 		display: flex;
 		gap: var(--space-8);

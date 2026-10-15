@@ -1,0 +1,194 @@
+{
+ "format": "dumpstar-set-art/1",
+ "sets": [
+  {
+   "set_code": "IC27",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "HMW",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "HMWP",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "P26",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "ASH",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "ASHWPP",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "C26",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "TS26",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "LAW",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "LAW-WPP",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "SEC",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "SECWPP",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "GFT",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "IBH",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "CE2025",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "LOF",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "LOFWPP",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "SN1",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "JTL",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "JTL-WPP",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "TWI",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "TWI-WPP",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "CE2024",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "SHD",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "SHD-WPP",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "EEP",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "JDG",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "OPP",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "SOR",
+   "logo": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com/xxsmall_SWH_01_005_Luke_Skywalker_Thumbnail_e92b37229f.png",
+    "file": "SOR-crop.png"
+   },
+   "none": "no official logo recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "SOR-WPP",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  },
+  {
+   "set_code": "PRE",
+   "logo": null,
+   "crop": null,
+   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+  }
+ ]
+}

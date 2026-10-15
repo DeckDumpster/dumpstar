@@ -15,6 +15,10 @@ pub struct BinderSetInfo {
     pub set_code: String,
     pub name: String,
     pub release_date: Option<String>,
+    /// The set's official logo and art crop, served from `/art`; filled by the
+    /// server, `null` when none was retrieved.
+    pub logo_url: Option<String>,
+    pub art_url: Option<String>,
 }
 
 /// One printing within a slot.
@@ -136,6 +140,8 @@ pub fn get_binder_page(
                 set_code: r.get(0)?,
                 name: r.get(1)?,
                 release_date: r.get(2)?,
+                logo_url: None,
+                art_url: None,
             })
         })
         .optional()?;

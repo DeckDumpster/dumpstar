@@ -6,6 +6,7 @@ use axum::{Json, Router};
 use serde::Deserialize;
 
 use dumpstar_db::DbError;
+use dumpstar_db::art;
 use dumpstar_db::binder::{self, BinderPage, BinderQuery};
 use dumpstar_db::sets::{self, SetAnalytics, SetSummary};
 
@@ -20,7 +21,12 @@ pub fn routes() -> Router<AppState> {
 }
 
 async fn list(State(state): State<AppState>) -> Result<Json<Vec<SetSummary>>, AppError> {
-    let summaries = blocking(&state, |c| sets::list_sets(c)).await?;
+    let mut summaries = blocking(&state, |c| sets::list_sets(c)).await?;
+    for s in &mut summaries {
+        let art = art::resolve(&state.art_dir(), &s.set_code);
+        s.logo_url = art.logo_url;
+        s.art_url = art.crop_url;
+    }
     Ok(Json(summaries))
 }
 
@@ -65,10 +71,13 @@ async fn binder_page(
         search: p.q.unwrap_or_default(),
         filter: p.filter.unwrap_or_else(|| "all".into()),
     };
-    let page = blocking(&state, move |c| {
+    let mut page = blocking(&state, move |c| {
         binder::get_binder_page(c, &code, &query)?
             .ok_or_else(|| DbError::NotFound(format!("set {code}")))
     })
     .await?;
+    let art = art::resolve(&state.art_dir(), &page.set.set_code);
+    page.set.logo_url = art.logo_url;
+    page.set.art_url = art.crop_url;
     Ok(Json(page))
 }

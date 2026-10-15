@@ -14,6 +14,7 @@
 //! hand-written [`source::FakeSource`] ships with the seam.
 
 pub mod apply;
+pub mod art;
 mod catalog;
 pub mod check;
 pub mod crosswalk;

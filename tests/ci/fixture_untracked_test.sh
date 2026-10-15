@@ -7,7 +7,14 @@
 # keeps a binary from creeping back in.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
-tracked="$(git ls-files 'tests/*.sqlite' 'tests/**/*.sqlite' 'tests/*.db' 'tests/**/*.db')"
+# CI runs from a copy that may not be a git checkout (git then exits 128); a
+# scan of the tree is the same check there, since nothing builds into tests/
+# before this step.
+if tracked="$(git ls-files 'tests/*.sqlite' 'tests/**/*.sqlite' 'tests/*.db' 'tests/**/*.db' 2>/dev/null)"; then
+    :
+else
+    tracked="$(find tests \( -name '*.sqlite' -o -name '*.db' \) -type f)"
+fi
 if [ -n "$tracked" ]; then
     echo "FAIL: binary databases tracked under tests/ (build them from text):" >&2
     echo "$tracked" >&2

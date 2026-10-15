@@ -48,6 +48,11 @@ pub struct BinderSlot {
     /// `base` (Standard) | `hyperspace` | `showcase` | `promo` (anything
     /// else: Promo, Weekly Play, …).
     pub section: String,
+    /// The catalog's card type (`Leader`, `Base`, `Unit`, …).
+    pub card_type: Option<String>,
+    /// Leaders and bases are printed landscape; the page lays them out apart
+    /// from the portrait cards.
+    pub landscape: bool,
     pub printings: Vec<SlotPrinting>,
 }
 
@@ -109,6 +114,15 @@ impl Default for BinderQuery {
     }
 }
 
+/// Position of a landscape card type in the top section: Leaders, then Bases.
+fn landscape_rank(card_type: Option<&str>) -> Option<u8> {
+    match card_type {
+        Some("Leader") => Some(0),
+        Some("Base") => Some(1),
+        _ => None,
+    }
+}
+
 fn section_of(variant: &str) -> &'static str {
     match variant {
         "Standard" => "base",
@@ -160,7 +174,7 @@ pub fn get_binder_page(
             "SELECT p.number, p.card_id, cd.name, cd.subtitle, p.rarity, p.image_url, \
                     p.variant, p.printing_id, p.finish, \
                     (SELECT count(*) FROM collection c WHERE c.printing_id = p.printing_id), \
-                    ",
+                    cd.card_type, ",
             crate::market_price_expr!(),
             " \
              FROM ",
@@ -180,6 +194,8 @@ pub fn get_binder_page(
                     rarity: r.get(4)?,
                     image_url: r.get(5)?,
                     section: section_of(&r.get::<_, String>(6)?).to_string(),
+                    card_type: r.get(10)?,
+                    landscape: false,
                     printings: Vec::new(),
                 },
                 SlotPrinting {
@@ -187,12 +203,13 @@ pub fn get_binder_page(
                     printing_id: r.get(7)?,
                     finish: r.get(8)?,
                     owned_count: r.get(9)?,
-                    market_price: r.get(10)?,
+                    market_price: r.get(11)?,
                 },
             ))
         })?;
         for row in rows {
-            let (slot, printing) = row?;
+            let (mut slot, printing) = row?;
+            slot.landscape = landscape_rank(slot.card_type.as_deref()).is_some();
             slots_by_number
                 .entry(slot.number.clone())
                 .or_insert(slot)
@@ -208,7 +225,7 @@ pub fn get_binder_page(
     });
 
     // Build every visible slot (all sections the include flags allow).
-    let mut visible: Vec<BinderSlot> = all
+    let visible: Vec<BinderSlot> = all
         .into_iter()
         .filter(|slot| match slot.section.as_str() {
             "hyperspace" => q.include_hyperspace,
@@ -234,6 +251,20 @@ pub fn get_binder_page(
     // Sort. Progress above is computed pre-sort/filter, so the bars always
     // reflect the whole section-included set rather than the current view.
     // `visible` arrives in collector-number order.
+    // Leaders and bases form their own top section whatever the sort: pulled
+    // out first, Leaders then Bases by collector number, and the chosen sort
+    // orders only the cards below.
+    let mut top: Vec<BinderSlot> = Vec::new();
+    let mut rest: Vec<BinderSlot> = Vec::new();
+    for s in visible {
+        if s.landscape {
+            top.push(s);
+        } else {
+            rest.push(s);
+        }
+    }
+    top.sort_by_key(|s| landscape_rank(s.card_type.as_deref()));
+    let mut visible = rest;
     let rank = |s: &BinderSlot| s.rarity.as_deref().map_or(-1, |r| tiers.rank(r));
     match q.sort.as_str() {
         "number_desc" => visible.reverse(),
@@ -253,6 +284,7 @@ pub fn get_binder_page(
         "rarity_asc" => visible.sort_by_key(|s| rank(s)),
         _ => {} // "number" — already collector-number ascending.
     }
+    visible.splice(0..0, top);
 
     // Filter: in-set name search, then the ownership tab.
     let search = q.search.trim().to_ascii_lowercase();
@@ -559,6 +591,75 @@ mod tests {
         // Out-of-range page clamps.
         let clamped = get_binder_page(&conn, "SOR", &q(99)).unwrap().unwrap();
         assert_eq!(clamped.page, 2);
+    }
+
+    #[test]
+    fn leaders_and_bases_head_the_page_in_every_sort() {
+        let dir = tempfile::tempdir().unwrap();
+        let shared = dir.path().join("shared.sqlite");
+        {
+            let c = open_shared(&shared).unwrap();
+            // Collector order interleaves types: base 1, leader 2, unit 3, ...
+            let rows = [
+                ("1", "Zeb Base", "Base"),
+                ("2", "Yoda Leader", "Leader"),
+                ("3", "Unit Echo", "Unit"),
+                ("4", "Unit Delta", "Unit"),
+                ("5", "Ahsoka Leader", "Leader"),
+                ("6", "Unit Charlie", "Unit"),
+                ("7", "Aldhani Base", "Base"),
+                ("8", "Unit Bravo", "Unit"),
+                ("9", "Unit Alpha", "Unit"),
+                ("10", "Unit Foxtrot", "Unit"),
+            ];
+            for (n, name, ty) in rows {
+                testkit::simple(&c, "SOR", n, name);
+                c.execute(
+                    "UPDATE cards SET card_type = ?1 WHERE card_id = ?2",
+                    rusqlite::params![ty, format!("SOR-{n}")],
+                )
+                .unwrap();
+            }
+        }
+        let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
+        for sort in [
+            "number",
+            "number_desc",
+            "name",
+            "name_desc",
+            "price",
+            "rarity",
+        ] {
+            let page = get_binder_page(
+                &conn,
+                "SOR",
+                &BinderQuery {
+                    sort: sort.into(),
+                    layout: 60,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .unwrap();
+            let nums: Vec<&str> = page.slots.iter().map(|s| s.number.as_str()).collect();
+            assert_eq!(&nums[..4], ["2", "5", "1", "7"], "sort {sort}");
+            assert!(page.slots[..4].iter().all(|s| s.landscape), "sort {sort}");
+            assert!(page.slots[4..].iter().all(|s| !s.landscape), "sort {sort}");
+            if sort == "name" {
+                let names: Vec<&str> = page.slots[4..].iter().map(|s| s.name.as_str()).collect();
+                assert_eq!(
+                    names,
+                    [
+                        "Unit Alpha",
+                        "Unit Bravo",
+                        "Unit Charlie",
+                        "Unit Delta",
+                        "Unit Echo",
+                        "Unit Foxtrot"
+                    ]
+                );
+            }
+        }
     }
 
     #[test]

@@ -219,7 +219,7 @@ pub fn get_binder_page(
     });
 
     // Build every visible slot (all sections the include flags allow).
-    let mut visible: Vec<BinderSlot> = all
+    let visible: Vec<BinderSlot> = all
         .into_iter()
         .filter(|slot| match slot.section.as_str() {
             "hyperspace" => q.include_hyperspace,

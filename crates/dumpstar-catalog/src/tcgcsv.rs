@@ -15,6 +15,8 @@ pub struct GroupRecord {
     pub group_id: i64,
     pub name: String,
     pub abbreviation: Option<String>,
+    /// `publishedOn` cut to its date (`YYYY-MM-DD`); None when absent or unreadable.
+    pub published_on: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -123,6 +125,21 @@ pub fn parse_groups(bytes: &[u8]) -> Result<Vec<GroupRecord>> {
                     .get("abbreviation")
                     .and_then(Value::as_str)
                     .filter(|s| !s.is_empty())
+                    .map(str::to_string),
+                published_on: g
+                    .get("publishedOn")
+                    .and_then(Value::as_str)
+                    .and_then(|d| d.get(..10))
+                    .filter(|d| {
+                        d.len() == 10
+                            && d.bytes().enumerate().all(|(i, b)| {
+                                if i == 4 || i == 7 {
+                                    b == b'-'
+                                } else {
+                                    b.is_ascii_digit()
+                                }
+                            })
+                    })
                     .map(str::to_string),
             })
         })

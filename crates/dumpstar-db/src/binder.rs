@@ -616,7 +616,14 @@ mod tests {
             }
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-        for sort in ["number", "number_desc", "name", "name_desc", "price", "rarity"] {
+        for sort in [
+            "number",
+            "number_desc",
+            "name",
+            "name_desc",
+            "price",
+            "rarity",
+        ] {
             let page = get_binder_page(
                 &conn,
                 "SOR",

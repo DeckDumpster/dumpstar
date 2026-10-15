@@ -505,7 +505,7 @@ fn stamp_release_dates(tx: &Transaction, r: &mut ApplyReport) -> Result<()> {
         }
     }
     for row in tcgcsv::group_table() {
-        if row.info.kind == GroupKind::Main
+        if row.info.kind == tcgcsv::GroupKind::Main
             && let Some((_, _, date)) = rows.iter().find(|x| x.0 == row.group_id)
         {
             dates.insert(row.info.set_code, date.clone());

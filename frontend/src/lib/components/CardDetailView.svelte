@@ -4,6 +4,7 @@
 	import { facetHref } from '$lib/facets';
 	import { breadcrumbs } from '$lib/breadcrumbs.svelte';
 	import { variantSortCmp } from '$lib/variants.svelte';
+	import { siblingsAt, shownPrinting, otherPrintings, seriesFor } from '$lib/printings';
 	import { CONDITIONS } from '$lib/conditions';
 	import { conditionMultiplier } from '$lib/conditions.svelte';
 	import { money as price, printingLabel, jsonList } from '$lib/format';
@@ -12,6 +13,7 @@
 	import type { Deck } from '$lib/types/Deck';
 	import type { PriceSeries } from '$lib/types/PriceSeries';
 	import PriceChart from './PriceChart.svelte';
+	import OtherPrintings from './OtherPrintings.svelte';
 	import ManualPriceModal from './ManualPriceModal.svelte';
 	import MissingVariantModal from './MissingVariantModal.svelte';
 	import { Badge, Button, EmptyState, SectionHeader } from '$lib/components/ui';
@@ -52,6 +54,9 @@
 	const isSaving = (key: string) => savingKeys.has(key);
 	let priceModalFor = $state<{ printing_id: string; label: string } | null>(null);
 	let missingVariantOpen = $state(false);
+	// The finish / user-added variant picked at this set + number; null shows
+	// the Normal one.
+	let pickedId = $state<string | null>(null);
 
 	const STATUSES = ['owned', 'ordered', 'listed', 'sold', 'removed', 'traded', 'gifted', 'lost'];
 
@@ -76,6 +81,7 @@
 	$effect(() => {
 		void setCode;
 		void number;
+		pickedId = null;
 		load();
 	});
 
@@ -158,12 +164,33 @@
 		return withBusy(() => api.moveCopy(copyId, assignBody(value)), `${copyId}:location`);
 	}
 
+	// Every printing of the card, ordered by variant then finish. The
+	// per-copy Variant dropdown keys off this; the page itself is about one.
+	const visiblePrintings = $derived(
+		(detail?.printings ?? [])
+			.slice()
+			.sort(
+				(a, b) =>
+					variantSortCmp(a.variant, b.variant) ||
+					Number(a.finish === 'Foil') - Number(b.finish === 'Foil') ||
+					a.set_code.localeCompare(b.set_code)
+			)
+	);
+	const siblings = $derived(siblingsAt(detail?.printings ?? [], setCode, number));
+	const shown = $derived(shownPrinting(detail?.printings ?? [], setCode, number, pickedId));
+	const others = $derived(otherPrintings(detail?.printings ?? [], setCode, number));
+	const shownCopies = $derived(
+		(detail?.copies ?? []).filter((c) => c.printing_id === shown?.printing_id)
+	);
+	// The shown printing's own price series, and nothing else.
+	const chartSeries = $derived(seriesFor(priceSeries, shown?.printing_id ?? null));
+
 	// --- Multi-select copies for bulk edit. The user often grades a stack of
 	//     the same card and wants to set condition/status/location across many
 	//     copies at once instead of row by row (dumpstar-0qu). Only shown
 	//     when the card has more than one owned copy. ---
 	let selectedCopies = $state<Set<number>>(new Set());
-	const copyIds = $derived((detail?.copies ?? []).map((c) => c.id));
+	const copyIds = $derived(shownCopies.map((c) => c.id));
 	const multiCopy = $derived(copyIds.length > 1);
 	const allCopiesChecked = $derived(
 		copyIds.length > 0 && copyIds.every((id) => selectedCopies.has(id))
@@ -226,35 +253,6 @@
 		return p.market_price * conditionMultiplier(copy.condition);
 	}
 
-	// Price chart: by default only plot the variants the user owns, so an
-	// unowned chase printing (e.g. a $500 Showcase Leader NM) doesn't dwarf the
-	// lines that matter (dumpstar-vgo). A toggle reveals the rest; if the
-	// user owns no priced variant, fall back to showing all so the chart isn't
-	// empty.
-	let showAllPrices = $state(false);
-	// Every printing of the card, ordered by variant then finish (Normal
-	// before Foil). The add-list, the per-copy Variant dropdown and the price
-	// chart all key off this.
-	const visiblePrintings = $derived(
-		(detail?.printings ?? [])
-			.slice()
-			.sort(
-				(a, b) =>
-					variantSortCmp(a.variant, b.variant) ||
-					Number(a.finish === 'Foil') - Number(b.finish === 'Foil') ||
-					a.set_code.localeCompare(b.set_code)
-			)
-	);
-	const visiblePrintingIds = $derived(new Set(visiblePrintings.map((p) => p.printing_id)));
-	const ownedPrintingIds = $derived(
-		new Set((detail?.printings ?? []).filter((p) => p.owned_count > 0).map((p) => p.printing_id))
-	);
-	const allSeries = $derived(priceSeries.filter((s) => visiblePrintingIds.has(s.printing_id)));
-	const ownedSeries = $derived(priceSeries.filter((s) => ownedPrintingIds.has(s.printing_id)));
-	const chartSeries = $derived(showAllPrices || ownedSeries.length === 0 ? allSeries : ownedSeries);
-	// Show the toggle only when there's something hidden to reveal.
-	const hasHiddenSeries = $derived(ownedSeries.length > 0 && allSeries.length > ownedSeries.length);
-
 	/** A printing as one line: `SOR #5 · Hyperspace Foil`. */
 	function printingTitle(p: { set_code: string; number: string; variant: string; finish: string }) {
 		return `${p.set_code.toUpperCase()} #${p.number} · ${printingLabel(p.variant, p.finish)}`;
@@ -274,8 +272,8 @@
 
 	<div class="detail">
 		<div class="art">
-			{#if card.image_url}
-				<img src={card.image_url} alt={card.name} />
+			{#if shown?.image_url ?? card.image_url}
+				<img src={shown?.image_url ?? card.image_url} alt={card.name} />
 			{:else}
 				<div class="noart">No image</div>
 			{/if}
@@ -340,19 +338,32 @@
 
 	{#if error}<p class="error">{error}</p>{/if}
 
-	<section>
-		<SectionHeader title="Printings" size="md" tone="accent">
-			{#snippet actions()}
-				<Button
-					variant="ghost"
-					size="sm"
-					onclick={() => (missingVariantOpen = true)}
-					title="Add a copy whose variant isn't yet in the catalog">+ Missing variant</Button
-				>
-			{/snippet}
-		</SectionHeader>
-		<ul class="printings">
-			{#each visiblePrintings as p (p.printing_id)}
+	{#if shown}
+		{@const p = shown}
+		<section>
+			<SectionHeader title="This printing" size="md" tone="accent">
+				{#snippet actions()}
+					<Button
+						variant="ghost"
+						size="sm"
+						onclick={() => (missingVariantOpen = true)}
+						title="Add a copy whose variant isn't yet in the catalog">+ Missing variant</Button
+					>
+				{/snippet}
+			</SectionHeader>
+			{#if siblings.length > 1}
+				<div class="finishes" role="group" aria-label="Variant and finish">
+					{#each siblings as s (s.printing_id)}
+						<Button
+							variant={s.printing_id === p.printing_id ? 'primary' : 'ghost'}
+							size="sm"
+							onclick={() => (pickedId = s.printing_id)}
+							aria-pressed={s.printing_id === p.printing_id}>{printingLabel(s.variant, s.finish)}</Button
+						>
+					{/each}
+				</div>
+			{/if}
+			<ul class="printings">
 				<li class:user-added={p.is_user_added}>
 					<div class="vlabel">
 						<div class="vline">
@@ -363,9 +374,7 @@
 									aria-label="User-added variant"
 								></span>
 							{/if}
-							<a class="facet variant" href={facetHref('variant', p.variant)} title="Find all {p.variant} printings">
-								{printingTitle(p)}
-							</a>
+							<span class="variant">{printingTitle(p)}</span>
 						</div>
 						{#if p.is_user_added && p.description}
 							<span class="provenance">{p.description}</span>
@@ -417,31 +426,29 @@
 						>+</button>
 					</div>
 				</li>
-			{/each}
-		</ul>
-	</section>
+			</ul>
+		</section>
+	{/if}
+
+	{#if others.length}
+		<section>
+			<SectionHeader title="Other printings" size="md" tone="accent" />
+			<OtherPrintings items={others} />
+		</section>
+	{/if}
 
 	<section>
-		<SectionHeader title="Price history" size="md" tone="accent">
-			{#snippet actions()}
-				{#if hasHiddenSeries}
-					<label class="showall">
-						<input type="checkbox" bind:checked={showAllPrices} />
-						Show all printings
-					</label>
-				{/if}
-			{/snippet}
-		</SectionHeader>
+		<SectionHeader title="Price history" size="md" tone="accent" />
 		<PriceChart series={chartSeries} />
 	</section>
 
 	<section>
-		<SectionHeader title="Your copies ({detail.copies.length})" size="md" tone="accent" />
-		{#if detail.copies.length === 0}
+		<SectionHeader title="Your copies ({shownCopies.length})" size="md" tone="accent" />
+		{#if shownCopies.length === 0}
 			<EmptyState
 				size="sm"
-				title="You don't own this card yet."
-				description="Register a printing above and each copy you own lands here as its own row, with its own condition and location."
+				title="You don't own this printing yet."
+				description="Add a copy above and each copy you own lands here as its own row, with its own condition and location."
 			/>
 		{:else}
 			{#snippet savedTick(key: string)}
@@ -519,7 +526,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each detail.copies as copy (copy.id)}
+					{#each shownCopies as copy (copy.id)}
 						<tr class="copyrow" class:picked={selectedCopies.has(copy.id)}>
 							{#if multiCopy}<td class="selcol"
 									><input
@@ -1020,16 +1027,12 @@
 		}
 	}
 
-	/* Price-history header's owned-only / show-all toggle, rendered into
-	   SectionHeader's `actions` slot. */
-	.showall {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-		color: var(--color-text-subtle);
-		font-size: var(--text-sm);
-		cursor: pointer;
-		white-space: nowrap;
+	/* Variant / finish picker for the printings at this set and number. */
+	.finishes {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+		margin-bottom: var(--space-3);
 	}
 
 	/* User-added printings (the missing-variant escape hatch) render

@@ -814,3 +814,60 @@ fn two_printings_sharing_set_number_variant_name_and_finish_both_apply() {
     };
     assert_eq!(rows, vec![row("9911251036", "36"), row("9911251037", "37")]);
 }
+
+// ---- release dates ----------------------------------------------------------
+
+#[test]
+fn the_recorded_load_carries_each_sets_release_date_and_names_a_set_without_one() {
+    let (e, _) = loaded();
+    let c = Catalog::open_readonly(&e.db).unwrap();
+    let date: Option<String> = c
+        .conn()
+        .query_row(
+            "SELECT release_date FROM sets WHERE set_code = 'SOR'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(date.as_deref(), Some("2024-03-08"));
+    assert_eq!(
+        count(
+            c.conn(),
+            "SELECT COUNT(*) FROM sets WHERE release_date IS NULL"
+        ),
+        0
+    );
+    assert!(alarms(c.conn(), "set_without_release_date").is_empty());
+
+    // A later official refresh (which carries no date) must not blank it.
+    let http = sor();
+    sync_official(&e, &http, at(14, 4));
+    let c = Catalog::open_readonly(&e.db).unwrap();
+    assert_eq!(
+        count(
+            c.conn(),
+            "SELECT COUNT(*) FROM sets WHERE release_date = '2024-03-08'"
+        ),
+        1
+    );
+
+    // A set no source dates is reported by name, not left silently NULL.
+    let w = Catalog::open_writer(&e.db).unwrap();
+    w.conn()
+        .execute(
+            "INSERT INTO sets (set_code, name, sort_order) VALUES ('ZZZ', 'Undated', 0)",
+            [],
+        )
+        .unwrap();
+    drop(w);
+    sync_tcgcsv(
+        &e,
+        &Recorded {
+            last_updated: "2026-10-15T00:00:00".into(),
+            ..sor()
+        },
+        at(15, 4),
+    );
+    let c = Catalog::open_readonly(&e.db).unwrap();
+    assert_eq!(alarms(c.conn(), "set_without_release_date"), vec!["ZZZ"]);
+}

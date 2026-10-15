@@ -191,16 +191,16 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
     let mut r = ApplyReport::default();
 
     let sql = format!(
-        "INSERT INTO sets (set_code, name, release_date, sort_order) VALUES (?1,?2,?3,?4)
+        "INSERT INTO sets (set_code, name, release_date, sort_order, category) VALUES (?1,?2,?3,?4,?5)
          ON CONFLICT(set_code) DO UPDATE SET name=excluded.name,
-           release_date=excluded.release_date, sort_order=excluded.sort_order
+           release_date=excluded.release_date, sort_order=excluded.sort_order, category=excluded.category
          WHERE {}",
-        differs(&["name", "release_date", "sort_order"])
+        differs(&["name", "release_date", "sort_order", "category"])
     );
     for s in &p.sets {
         r.sets += tx.execute(
             &sql,
-            params![s.set_code, s.name, s.release_date, s.sort_order],
+            params![s.set_code, s.name, s.release_date, s.sort_order, s.category],
         )?;
     }
 

@@ -1,5 +1,5 @@
 //! The SWU product category of each set. The official API states none, so the
-//! mapping is declared in `set_categories.tsv` and checked by the tests below
+//! mapping is declared in the remedial dataset `data/remedial/set-categories.csv` and checked by the tests below
 //! against the production set list (`fixtures/swu/production-sets.txt`).
 
 /// Categories in display order: main expansions first.
@@ -14,10 +14,14 @@ pub const CATEGORY_ORDER: &[&str] = &[
 ];
 
 fn table() -> impl Iterator<Item = (&'static str, &'static str)> {
-    include_str!("set_categories.tsv")
+    include_str!("../../../data/remedial/set-categories.csv")
         .lines()
-        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
-        .filter_map(|l| l.split_once('\t'))
+        .skip(1)
+        .filter(|l| !l.trim().is_empty())
+        .filter_map(|l| {
+            let mut f = l.splitn(3, ',');
+            Some((f.next()?, f.next()?))
+        })
 }
 
 /// The category of a set, or `None` for a set the mapping does not list.

@@ -214,7 +214,7 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
                 payload.alarms.push(AlarmRecord::alarm(
                     "unmapped_set_category",
                     set_code.clone(),
-                    "set has no product category in set_categories.tsv",
+                    "set has no product category in data/remedial/set-categories.csv",
                 ));
             }
             payload.sets.push(SetRecord {

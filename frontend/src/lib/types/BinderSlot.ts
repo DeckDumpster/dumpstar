@@ -10,4 +10,13 @@ export type BinderSlot = { card_id: string, number: string, name: string, subtit
  * `base` (Standard) | `hyperspace` | `showcase` | `promo` (anything
  * else: Promo, Weekly Play, …).
  */
-section: string, printings: Array<SlotPrinting>, };
+section: string, 
+/**
+ * The catalog's card type (`Leader`, `Base`, `Unit`, …).
+ */
+card_type: string | null, 
+/**
+ * Leaders and bases are printed landscape; the page lays them out apart
+ * from the portrait cards.
+ */
+landscape: boolean, printings: Array<SlotPrinting>, };

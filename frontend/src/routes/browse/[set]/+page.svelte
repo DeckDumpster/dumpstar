@@ -55,7 +55,7 @@
 	const layout = $derived(cols * 3);
 	let includeHyperspace = $state(urlBool('hyperspace', true));
 	let includeShowcase = $state(urlBool('showcase', true));
-	let includePromos = $state(urlBool('promos', false));
+	let includePromos = $state(urlBool('promos', true));
 
 	// Sort, in-set search, and the ownership tab — all server-side, since
 	// the binder is paginated (a client-side sort would only touch one page).
@@ -250,7 +250,7 @@
 		set('cols', String(cols), '3');
 		set('hyperspace', includeHyperspace ? '1' : '0', '1');
 		set('showcase', includeShowcase ? '1' : '0', '1');
-		set('promos', includePromos ? '1' : '0', '0');
+		set('promos', includePromos ? '1' : '0', '1');
 		set('sort', sort, 'number');
 		set('q', search, '');
 		set('missing', missingOnly ? '1' : '0', '0');
@@ -546,7 +546,7 @@
 				>
 			</div>
 			<!-- Section-include toggles: Hyperspace and Showcase printings sit
-			     in their own sections after the base cards; Promos are off by
+			     in their own sections after the base cards; Promos are on by
 			     default. Tucked into an overflow menu so they don't take a row
 			     of real estate. -->
 				<details class="overflow">
@@ -621,9 +621,23 @@
 				</EmptyState>
 			{:else}
 				<EmptyState
-					title="No cards in this view."
-					description="Every section this set has is switched off — turn Hyperspace, Showcase or Promos back on in the ⋯ menu."
-				/>
+					title="Your filters hide every card of this set."
+					description="Hyperspace, Showcase or Promos is switched off in the ⋯ menu, and this set has nothing outside those sections."
+				>
+					{#snippet action()}
+						<Button
+							variant="ghost"
+							onclick={() => (
+								(includeHyperspace = true),
+								(includeShowcase = true),
+								(includePromos = true),
+								resetPage()
+							)}
+						>
+							Clear filters
+						</Button>
+					{/snippet}
+				</EmptyState>
 			{/if}
 		{:else}
 			<div class="grid" style:grid-template-columns="repeat({cols}, 1fr)">

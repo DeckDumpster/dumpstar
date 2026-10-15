@@ -1,0 +1,10 @@
+# Scenario: The collection table's Aspects column is sized for icons, not names
+#
+# Related:
+#   issues: [sp-jwkqo6]
+#   pull_requests: []
+
+description: >
+  In the collection table view, the Aspects column is no wider than two aspect
+  icons plus cell padding, and a card with two aspects shows both icons fully
+  unclipped; the freed width goes to the Name column.

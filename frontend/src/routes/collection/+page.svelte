@@ -1417,8 +1417,8 @@
 				{#if selectMode}<col class="c-sel" />{/if}
 				<col class="c-qty" />
 				<col class="c-name" />
-				<col class="c-class" />
-				<col class="c-etype" />
+				<col class="c-type" />
+				<col class="c-aspects" />
 				<col class="c-cost" />
 				<col class="c-stats" />
 				<col class="c-rarity" />
@@ -2143,16 +2143,16 @@
 		   `min-width` below — declared in one place so the two can never
 		   disagree. The figures are what `table-layout: auto` settled each
 		   column on across a whole 50k-row catalog, rounded up a step. Where a
-		   column can want more than its share — Name and Class, the two that
+		   column can want more than its share — Name and Type, the two that
 		   carry prose — the cell ellipsises; both of them already did that
 		   before, at a width that moved. */
 		--col-sel: 2.25rem;
 		--col-qty: 2.5rem;
-		/* Card type ("Leader", "Upgrade"), the aspects text ("Vigilance ·
-		   Heroism" is the longest common pair; a third aspect ellipsises),
-		   resource cost, and power/HP. */
-		--col-class: 5.5rem;
-		--col-etype: 9rem;
+		/* Card type ("Leader", "Upgrade"), the aspect icons (a card carries
+		   at most two: 2 x 1.25em icon at this table's 0.9rem, plus the
+		   cell's 0.6rem padding each side), resource cost, and power/HP. */
+		--col-type: 5.5rem;
+		--col-aspects: 3.5rem;
 		--col-cost: 3.5rem;
 		--col-stats: 4.5rem;
 		--col-rarity: 5.5rem;
@@ -2179,8 +2179,8 @@
 		   except that it now happens at ONE width instead of a width that
 		   changed with whichever rows were rendered. */
 		min-width: calc(
-			var(--col-sel-used) + var(--col-qty) + var(--col-name-min) + var(--col-class) +
-				var(--col-etype) + var(--col-cost) + var(--col-stats) + var(--col-rarity) + var(--col-set) +
+			var(--col-sel-used) + var(--col-qty) + var(--col-name-min) + var(--col-type) +
+				var(--col-aspects) + var(--col-cost) + var(--col-stats) + var(--col-rarity) + var(--col-set) +
 				var(--col-number) + var(--col-price) * 2
 		);
 		/* The point of the exercise: widths come from the declarations above,
@@ -2207,11 +2207,11 @@
 	col.c-name {
 		width: auto;
 	}
-	col.c-class {
-		width: var(--col-class);
+	col.c-type {
+		width: var(--col-type);
 	}
-	col.c-etype {
-		width: var(--col-etype);
+	col.c-aspects {
+		width: var(--col-aspects);
 	}
 	col.c-cost {
 		width: var(--col-cost);
@@ -2461,8 +2461,8 @@
 			   drops with it. */
 			--col-sel: 1.75rem;
 			--col-qty: 2rem;
-			--col-class: 4.5rem;
-			--col-etype: 6.5rem;
+			--col-type: 4.5rem;
+			--col-aspects: 3rem;
 			--col-cost: 2.75rem;
 			--col-stats: 3.5rem;
 			--col-rarity: 4.25rem;

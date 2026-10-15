@@ -116,3 +116,50 @@ fn a_file_from_the_swu_schema_before_variant_code_is_rebuilt() {
     drop(catalog);
     assert!(!Catalog::open_writer(&path).unwrap().rebuilt_legacy);
 }
+
+/// sp-0mjd2y: adding a catalog column emptied production's catalog on deploy.
+/// A populated catalog lacking a column the schema gained keeps every row.
+#[test]
+fn a_populated_catalog_missing_a_new_column_keeps_its_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("shared.sqlite");
+    run_once(
+        &FakeSource,
+        &dir.path().join("raw"),
+        &path,
+        chrono::Utc::now(),
+    )
+    .unwrap();
+    let count = |conn: &Connection, t: &str| -> i64 {
+        conn.query_row(&format!("SELECT count(*) FROM {t}"), [], |r| r.get(0))
+            .unwrap()
+    };
+    let before: Vec<i64> = {
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch("ALTER TABLE sets DROP COLUMN category")
+            .unwrap();
+        assert!(!dumpstar_catalog::is_legacy(&conn).unwrap());
+        ["sets", "cards", "printings"]
+            .iter()
+            .map(|t| count(&conn, t))
+            .collect()
+    };
+    assert!(before.iter().all(|n| *n > 0));
+
+    let catalog = Catalog::open_writer(&path).unwrap();
+    assert!(!catalog.rebuilt_legacy);
+    let after: Vec<i64> = ["sets", "cards", "printings"]
+        .iter()
+        .map(|t| count(catalog.conn(), t))
+        .collect();
+    assert_eq!(before, after, "open_writer must not empty the catalog");
+    let has: bool = catalog
+        .conn()
+        .query_row(
+            "SELECT EXISTS (SELECT 1 FROM pragma_table_info('sets') WHERE name = 'category')",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert!(has);
+}

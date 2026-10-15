@@ -21,7 +21,7 @@
 image = "docker.io/library/rust:1.94-slim-bookworm"
 workdir = "/work"
 timeout = 1800
-default = ["lint", "rust", "frontend-check"]
+default = ["lint", "rust", "frontend-check", "ui"]
 
 [tier.lint]
 argv = ["bash", "-c", "apt-get update -qq && apt-get install -y -qq git curl jq sqlite3 python3 make >/dev/null && bash deploy/ci.sh"]
@@ -51,6 +51,14 @@ timeout = 900
 argv = ["bash", "deploy/ci.sh"]
 env = { DUMPSTAR_CI_TIERS = "frontend" }
 timeout = 900
+
+# The ui tier: tests/ui/run.sh builds dumpstar and the frontend from the branch and
+# runs every replay implementation in chromium. The rust image plus Node and
+# playwright's chromium libraries (apt), because a tier cannot name its own image
+# (sp-os47b4); a red here fails the member's local check.
+[tier.ui]
+argv = ["bash", "-c", "set -euo pipefail; apt-get update -qq && apt-get install -y -qq git curl jq sqlite3 python3 python3-cryptography python3-jwt make xz-utils ca-certificates >/dev/null; v=v22.21.1; curl -fsSL https://nodejs.org/dist/$v/node-$v-linux-x64.tar.xz | tar -xJ -C /usr/local --strip-components=1; bash tests/ui/run.sh"]
+timeout = 2400
 
 [tier.container]
 argv = ["bash", "deploy/ci.sh"]

@@ -269,6 +269,9 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
         // inline-icons/ into the static build.
         .nest_service("/icons", ServeDir::new(static_dir.join("icons")))
         .nest_service("/sym", ServeDir::new(data_dir.join("symbols")))
+        // Sealed-product pictures fetched at catalog refresh. Pages read these;
+        // nothing at runtime reaches the source CDN.
+        .nest_service("/sealed-img", ServeDir::new(data_dir.join("sealed-images")))
         .route_service("/robots.txt", ServeFile::new(static_dir.join("robots.txt")))
         .with_state(state)
         .fallback(get(spa))

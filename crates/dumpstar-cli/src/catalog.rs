@@ -38,6 +38,9 @@ pub struct CatalogApplyArgs {
     /// Origin of the official API (test-tier).
     #[arg(long, default_value = OFFICIAL_BASE)]
     official_base: String,
+    /// Sealed-product image store (default: ~/.dumpstar/sealed-images).
+    #[arg(long)]
+    image_dir: Option<PathBuf>,
     /// Origin of tcgcsv (test-tier).
     #[arg(long, default_value = TCGCSV_BASE)]
     tcgcsv_base: String,
@@ -158,6 +161,38 @@ pub fn run(args: CatalogApplyArgs) -> anyhow::Result<()> {
             }
         }
         Err(e) => eprintln!("set art: {e:#}"),
+    }
+    let images = match args.image_dir {
+        Some(p) => p,
+        None => dumpstar_db::dumpstar_home()?.join("sealed-images"),
+    };
+    match Catalog::open_writer(&shared)
+        .map_err(anyhow::Error::from)
+        .and_then(|c| {
+            Ok(dumpstar_catalog::images::fetch_pending(
+                &c,
+                &http,
+                &images,
+                &Utc::now().format("%Y-%m-%d").to_string(),
+            )?)
+        }) {
+        Ok(r) => {
+            println!(
+                "sealed images: stored {}, failed {}",
+                r.stored,
+                r.failed.len()
+            );
+            for f in &r.failed {
+                eprintln!("sealed image: {f}");
+            }
+            if !r.failed.is_empty() {
+                failed.push("sealed images");
+            }
+        }
+        Err(e) => {
+            eprintln!("sealed images: {e:#}");
+            failed.push("sealed images");
+        }
     }
     anyhow::ensure!(failed.is_empty(), "failed: {}", failed.join(", "));
     Ok(())

@@ -139,6 +139,14 @@ pub fn apply(catalog: &mut Catalog, bytes: &[u8], prov: &Provenance) -> Result<A
                      WHERE name IS NOT excluded.name OR abbreviation IS NOT excluded.abbreviation",
                     params![g.group_id, g.name, g.abbreviation],
                 )?;
+                if let Some(d) = &g.published_on {
+                    r.groups += tx.execute(
+                        "INSERT INTO tcgcsv_group_dates (group_id, published_on) VALUES (?1,?2)
+                         ON CONFLICT(group_id) DO UPDATE SET published_on=excluded.published_on
+                         WHERE published_on IS NOT excluded.published_on",
+                        params![g.group_id, d],
+                    )?;
+                }
             }
             rejoin(&tx, &mut r)?;
             r
@@ -193,9 +201,10 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
     let sql = format!(
         "INSERT INTO sets (set_code, name, release_date, sort_order) VALUES (?1,?2,?3,?4)
          ON CONFLICT(set_code) DO UPDATE SET name=excluded.name,
-           release_date=excluded.release_date, sort_order=excluded.sort_order
+           release_date=COALESCE(excluded.release_date, release_date), sort_order=excluded.sort_order
          WHERE {}",
-        differs(&["name", "release_date", "sort_order"])
+        "(name IS NOT excluded.name OR sort_order IS NOT excluded.sort_order \
+          OR (excluded.release_date IS NOT NULL AND release_date IS NOT excluded.release_date))"
     );
     for s in &p.sets {
         r.sets += tx.execute(
@@ -466,6 +475,75 @@ fn put_alarms(tx: &Transaction, alarms: &[AlarmRecord], replace: &[&str]) -> Res
     Ok(n)
 }
 
+/// Dates for sets no source carries (set_code, release_date, source), merged
+/// after the source dates and only into sets still undated.
+const REMEDIAL_RELEASE_DATES: &str = include_str!("../data/remedial/set-release-dates.csv");
+
+const DATE_KINDS: &[&str] = &["set_without_release_date"];
+
+/// Write each set's release date from the publish date of its main tcgcsv group
+/// (the official API carries none), and raise a named alarm for every set that
+/// still has no date, so it is never left silently NULL.
+fn stamp_release_dates(tx: &Transaction, r: &mut ApplyReport) -> Result<()> {
+    let set_codes: BTreeSet<String> = tx
+        .prepare("SELECT set_code FROM sets")?
+        .query_map([], |row| row.get(0))?
+        .collect::<std::result::Result<_, _>>()?;
+    let rows: Vec<(i64, Option<String>, String)> = tx
+        .prepare(
+            "SELECT g.group_id, g.abbreviation, d.published_on
+             FROM tcgcsv_groups g JOIN tcgcsv_group_dates d USING (group_id) ORDER BY g.group_id",
+        )?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+        .collect::<std::result::Result<_, _>>()?;
+    let mut dates: BTreeMap<String, String> = BTreeMap::new();
+    for (_, abbr, date) in &rows {
+        if let Some(a) = abbr
+            && set_codes.contains(a)
+        {
+            dates.insert(a.clone(), date.clone());
+        }
+    }
+    for row in tcgcsv::group_table() {
+        if row.info.kind == tcgcsv::GroupKind::Main
+            && let Some((_, _, date)) = rows.iter().find(|x| x.0 == row.group_id)
+        {
+            dates.insert(row.info.set_code, date.clone());
+        }
+    }
+    for (code, date) in &dates {
+        r.sets += tx.execute(
+            "UPDATE sets SET release_date = ?2 WHERE set_code = ?1 AND release_date IS NOT ?2",
+            params![code, date],
+        )?;
+    }
+    for line in REMEDIAL_RELEASE_DATES.lines().skip(1) {
+        let mut f = line.splitn(3, ',');
+        if let (Some(code), Some(date)) = (f.next(), f.next()) {
+            r.sets += tx.execute(
+                "UPDATE sets SET release_date = ?2 WHERE set_code = ?1 AND release_date IS NULL",
+                params![code.trim(), date.trim()],
+            )?;
+        }
+    }
+    let missing: Vec<(String, String)> = tx
+        .prepare("SELECT set_code, name FROM sets WHERE release_date IS NULL ORDER BY set_code")?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<std::result::Result<_, _>>()?;
+    let alarms: Vec<AlarmRecord> = missing
+        .into_iter()
+        .map(|(code, name)| {
+            AlarmRecord::alarm(
+                "set_without_release_date",
+                code,
+                format!("set {name:?} has no release date in any source"),
+            )
+        })
+        .collect();
+    r.alarms += put_alarms(tx, &alarms, DATE_KINDS)?;
+    Ok(())
+}
+
 const JOIN_KINDS: &[&str] = &[
     "official_without_tcgcsv",
     "official_unlisted",
@@ -482,6 +560,7 @@ const JOIN_KINDS: &[&str] = &[
 /// on either side re-joins the other. A catalog with no tcgcsv products stored
 /// (the fake, or before the first price sync) is left exactly as it is.
 fn rejoin(tx: &Transaction, r: &mut ApplyReport) -> Result<()> {
+    stamp_release_dates(tx, r)?;
     let products: Vec<tcgcsv::ProductRecord> = tx
         .prepare(
             "SELECT product_id, group_id, name, number FROM tcgcsv_products ORDER BY product_id",

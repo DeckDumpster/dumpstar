@@ -936,6 +936,7 @@ fi
 if tier rust; then
     step "cargo clippy --all-targets"
     ( cd "$REPO_DIR" && cargo clippy --all-targets --profile test -- -D warnings )
+    dumpstar_rust_cache_report "clippy"
 fi
 
 # --- 2. Frontend gate (before cargo test) -------------------------------------------------------
@@ -984,7 +985,7 @@ if tier rust; then
         step "cargo test"
         ( cd "$REPO_DIR" && cargo test )
     fi
-    dumpstar_rust_cache_report
+    dumpstar_rust_cache_report "cargo test"
 fi
 
 # --- 2a. Cross-tenant isolation gate (sp-c3fq3p) ------------------------------

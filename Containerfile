@@ -130,19 +130,25 @@ RUN --mount=type=bind,from=sccache-bin,source=/,target=/opt/sccache-ctx \
         find ${DUMPSTAR_SOURCES} -type f -exec touch {} +; \
     fi \
  && rm -f target/.dumpstar-source-stamp \
- && if [ -n "$SCCACHE_WEBDAV_ENDPOINT" ] && [ -x /opt/sccache-ctx/sccache ] \
-       && /opt/sccache-ctx/sccache --version >/dev/null 2>&1; then \
-        echo "==> rust cache: sccache -> $SCCACHE_WEBDAV_ENDPOINT"; \
-        export RUSTC_WRAPPER=/opt/sccache-ctx/sccache SCCACHE_WEBDAV_KEY_PREFIX=/ \
-               SCCACHE_IGNORE_SERVER_IO_ERROR=1 CARGO_INCREMENTAL=0; \
-        cache=on; \
+ && cache=off; why=; \
+    if [ -z "$SCCACHE_WEBDAV_ENDPOINT" ]; then why="no SCCACHE_WEBDAV_ENDPOINT build arg (the host's cache was off: see the 'rust cache:' line earlier in the run)"; \
+    elif [ ! -s /opt/sccache-ctx/sccache ]; then why="the sccache-bin build context is empty"; \
     else \
-        echo "==> rust cache: not in use for the image build — compiling cold"; cache=off; \
+        cp /opt/sccache-ctx/sccache /tmp/sccache && chmod 755 /tmp/sccache; \
+        if /tmp/sccache --version >/dev/null 2>&1; then cache=on; \
+        else why="the sccache binary does not execute here: $(/tmp/sccache --version 2>&1 | head -1)"; fi; \
+    fi \
+ && if [ "$cache" = on ]; then \
+        echo "==> rust cache: sccache -> $SCCACHE_WEBDAV_ENDPOINT"; \
+        export RUSTC_WRAPPER=/tmp/sccache SCCACHE_WEBDAV_KEY_PREFIX=/ \
+               SCCACHE_IGNORE_SERVER_IO_ERROR=1 CARGO_INCREMENTAL=0; \
+    else \
+        echo "==> rust cache: not in use for the image build — compiling cold: $why"; \
     fi \
  && cargo build --release --locked --bin dumpstar --bin dumpstar-lake-derive \
         --bin dumpstar-ship --bin dumpstar-erase \
  && if [ "$cache" = on ]; then echo "==> rust cache summary (image build):"; \
-        /opt/sccache-ctx/sccache --show-stats | grep -E '^Cache (hits|misses) '; fi \
+        /tmp/sccache --show-stats | grep -E '^Cache (hits|misses) |^Cache hits rate'; fi \
  && printf '%s\n' "$stamp" > target/.dumpstar-source-stamp \
  && mkdir -p /out \
  && cp target/release/dumpstar /out/dumpstar \

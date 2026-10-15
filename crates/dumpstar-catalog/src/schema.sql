@@ -153,6 +153,10 @@ CREATE TABLE IF NOT EXISTS tcgcsv_groups (
     name             TEXT NOT NULL,
     abbreviation     TEXT
 );
+CREATE TABLE IF NOT EXISTS tcgcsv_group_dates (
+    group_id         INTEGER PRIMARY KEY,
+    published_on     TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS tcgcsv_products (
     product_id       INTEGER PRIMARY KEY,
     group_id         INTEGER NOT NULL,

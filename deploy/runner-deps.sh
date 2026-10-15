@@ -552,6 +552,22 @@ trap phase_report EXIT
 
 note "installing dependencies for $(id -un) on $(hostname)"
 
+# FAST PATH FOR A BAKED IMAGE. A runner image/AMI that already carries the
+# toolchain passes every check, has the pinned Rust toolchain and has sccache:
+# there is nothing to install, so skip apt-get update, rustup and NodeSource
+# entirely (~4-10 min on a bare template). Anything missing falls through to
+# the install below, which is idempotent.
+phase "fast path: is everything already baked in?"
+_pinned="$(sed -n 's/^channel[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' rust-toolchain.toml 2>/dev/null)"
+if run_checks >/dev/null 2>&1 && [ ${#MISSING[@]} -eq 0 ] \
+   && { [ -z "$_pinned" ] || rustup toolchain list 2>/dev/null | grep -q "^${_pinned}"; } \
+   && { [ "$(uname -m)" != x86_64 ] || [ -x "${DUMPSTAR_SCCACHE_DIR:-$HOME/.cache/dumpstar-sccache-bin}/sccache" ]; }; then
+    note "everything already present -- nothing to install"
+    exit 0
+fi
+MISSING=()
+note "not fully baked -- installing what is missing"
+
 phase "apt: base packages (includes apt-get update)"
 apt_install "${BASE_PKGS[@]}"
 phase "apt: podman, network backend, chromium libraries, fonts"

@@ -525,9 +525,36 @@ if [ "$MODE" = check ]; then
 fi
 
 # --------------------------------- install ---------------------------------
+# PER-PHASE TIMING. The step runs 4 minutes on most VMs and 10.5 on some, and the
+# job log said only "Install runner dependencies", so a slow run could not name
+# its slow phase. phase() closes the open phase with a duration line and opens
+# the next; the EXIT trap closes the last one (also on failure) and prints the
+# table, so the slow phase is the last thing in the log whatever happened.
+PHASE_NAME=""; PHASE_T0=0; PHASE_LOG=()
+phase_end() {
+    [ -n "$PHASE_NAME" ] || return 0
+    local d=$(( SECONDS - PHASE_T0 ))
+    note "phase done: $PHASE_NAME ${d}s"
+    PHASE_LOG+=("$(printf '%5ss  %s' "$d" "$PHASE_NAME")")
+    PHASE_NAME=""
+}
+phase() {
+    phase_end
+    PHASE_NAME="$1"; PHASE_T0=$SECONDS
+    note "phase start: $PHASE_NAME ($(date -u +%H:%M:%SZ))"
+}
+phase_report() {
+    phase_end
+    note "phase timings (total ${SECONDS}s):"
+    printf 'runner-deps:   %s\n' "${PHASE_LOG[@]}"
+}
+trap phase_report EXIT
+
 note "installing dependencies for $(id -un) on $(hostname)"
 
+phase "apt: base packages (includes apt-get update)"
 apt_install "${BASE_PKGS[@]}"
+phase "apt: podman, network backend, chromium libraries, fonts"
 command -v podman >/dev/null 2>&1 || apt_install podman uidmap fuse-overlayfs
 # Separately from podman's own presence: a box that already had podman may still
 # lack pasta, and a bridge network is the only thing that notices.
@@ -537,6 +564,7 @@ apt_install "${CHROMIUM_LIBS[@]}"
 # third of its routes and reads as a CSS regression.
 apt_install "${FONT_PKGS[@]}"
 
+phase "rustup"
 # rustup, not the distro toolchain -- see check_rust. --no-modify-path because
 # this script puts ~/.cargo/bin on PATH itself and a profile edit would only
 # take effect in some future login shell, which a runner service never opens.
@@ -549,6 +577,7 @@ export PATH="$HOME/.cargo/bin:$PATH"
 
 # Materialise the pinned toolchain now rather than letting the first `cargo
 # test` do it mid-gate, where a download failure reads as a test failure.
+phase "rust pinned toolchain download"
 if command -v rustup >/dev/null 2>&1 && [ -f rust-toolchain.toml ]; then
     note "installing the toolchain pinned in rust-toolchain.toml"
     rustup show active-toolchain >/dev/null 2>&1 || true
@@ -561,6 +590,7 @@ fi
 # NodeSource rather than apt's `nodejs`. Skipped entirely when a new enough
 # node is already present, which is what makes it a no-op on a developer's
 # machine and on a template that has been baked with one.
+phase "node (NodeSource)"
 if ! check_node >/dev/null 2>&1; then
     note "installing Node ${NODE_MAJOR_INSTALL} from NodeSource"
     if [ -n "$SUDO" ]; then
@@ -573,6 +603,7 @@ if ! check_node >/dev/null 2>&1; then
     fi
 fi
 
+phase "podman/system configuration"
 # See check_podman for why. A machine property, so it is set here rather than
 # worked around in the suite; the durable home is the Proxmox template, and this
 # keeps a hand-built box and a developer's Ubuntu working too.
@@ -657,6 +688,7 @@ fi
 # Re-check and report. A partial install is a failure HERE rather than a
 # surprise three gates into ci.sh on a machine that no longer exists.
 printf '\n'
+phase "final re-check"
 run_checks
 if [ ${#MISSING[@]} -gt 0 ]; then
     printf '\nrunner-deps: still missing after install: %s\n' "${MISSING[*]}" >&2

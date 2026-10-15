@@ -2,7 +2,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { groupSets, UNCATEGORISED } from "$lib/setGroups";
 
-const s = (set_code, category) => ({ set_code, category, name: set_code });
+/**
+ * @param {string} set_code
+ * @param {string | null} category
+ * @returns {import("$lib/types/SetSummary").SetSummary}
+ */
+const s = (set_code, category) => ({
+  set_code,
+  category,
+  name: set_code,
+  release_date: null,
+  total_cards: 0,
+  owned_cards: 0,
+  total_printings: 0,
+  owned_printings: 0,
+});
 
 test("groupSets keeps the API order: categories as first seen, sets within them", () => {
   const groups = groupSets([

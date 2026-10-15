@@ -96,12 +96,12 @@
 # under its own tier guard and they are run together, two at a time, by step
 # 16 — see the "PARALLEL GATES" note below and deploy/ci-parallel.sh.
 #
-# The intents UI harness (tests/ui) is deliberately NOT part of this loop:
-# until the replay implementations are generated it needs an ANTHROPIC_API_KEY
-# for Vision mode, which makes it slow and non-deterministic. (The browser gate
-# in step 10 also drives Playwright, but offline and deterministically — that is
-# the difference, not the browser.) Run the intents harness on its own:
-#   (cd tests/ui && npx playwright install chromium && npx playwright test)
+# The intents UI harness (tests/ui) is the `ui` tier (sp-howojk): every replay
+# implementation, deterministically (Playwright + chromium against the server and
+# frontend built from the tree and the SWU fixture), through tests/ui/run.sh.
+# Intents with no implementation need Vision (an ANTHROPIC_API_KEY) and are listed
+# in tests/ui/vision-only.txt, skipped; that list only shrinks. Any change under
+# frontend/ or tests/ui/ selects it.
 #
 # Exits non-zero on the first failure of the sequential steps. Fast and
 # re-runnable.
@@ -856,6 +856,15 @@ if tier rust; then
     dumpstar_rust_cache_report "cargo test"
 fi
 
+# --- 2-ui. UI tier (sp-howojk) -----------------------------------------------
+# Every tests/ui replay implementation against the app built from this tree. A UI
+# fix whose own replay is red or never ran cannot pass: sp-mxm9dw landed a change
+# that did not fix the grid because this never ran. See tests/ui/run.sh.
+if tier ui; then
+    step "UI: tests/ui replay implementations (tests/ui/run.sh)"
+    bash "$REPO_DIR/tests/ui/run.sh"
+fi
+
 # --- 2a. Cross-tenant isolation gate (sp-c3fq3p) ------------------------------
 # Its own tier so a red names the property that broke, and so a caller can ask
 # for exactly it (DUMPSTAR_CI_TIERS=isolation): tenant B's valid JWT cannot read
@@ -1026,9 +1035,6 @@ if [ "$PAR_RC" -ne 0 ]; then
     exit "$PAR_RC"
 fi
 
-# The intents UI harness is intentionally not run here — see the header.
-echo ""
-echo "    (intents UI harness not run — see the note in this script's header)"
 
 # --- Done -------------------------------------------------------------------
 

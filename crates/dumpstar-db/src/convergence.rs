@@ -98,6 +98,10 @@ pub(crate) fn inputs() -> Vec<(&'static str, &'static str)> {
         ),
         ("data/rarities.json", crate::search_meta::RARITIES_SEED),
         ("data/search_flags.json", crate::search_meta::FLAGS_SEED),
+        (
+            "data/sealed-remedial.json",
+            crate::connection::SEALED_REMEDIAL,
+        ),
     ]
 }
 

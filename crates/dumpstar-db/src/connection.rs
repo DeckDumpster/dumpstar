@@ -214,6 +214,38 @@ fn backfill_sealed(conn: &Connection) -> Result<()> {
            JOIN tcgcsv_groups g ON g.group_id = t.group_id \
           WHERE t.number IS NULL",
     )?;
+    seed_sealed_remedial(conn, SEALED_REMEDIAL)
+}
+
+/// Sealed products tcgcsv lacks, kept as data (`data/sealed-remedial.json`): an
+/// array of `{product_id, set_code, name, image_url?}`. Insert if absent, like
+/// the backfill above; a given `image_url` is queued for the image store.
+pub(crate) const SEALED_REMEDIAL: &str = include_str!("../../../data/sealed-remedial.json");
+
+#[derive(serde::Deserialize)]
+struct RemedialSealed {
+    product_id: i64,
+    set_code: Option<String>,
+    name: String,
+    image_url: Option<String>,
+}
+
+fn seed_sealed_remedial(conn: &Connection, json: &str) -> Result<()> {
+    let rows: Vec<RemedialSealed> = serde_json::from_str(json)
+        .map_err(|e| crate::DbError::Env(format!("sealed-remedial: {e}")))?;
+    for r in rows {
+        conn.execute(
+            "INSERT OR IGNORE INTO sealed_products (product_id, set_code, name, category, fetched_at) \
+             VALUES (?1, (SELECT set_code FROM sets WHERE set_code = ?2), ?3, 'sealed', '')",
+            rusqlite::params![r.product_id, r.set_code, r.name],
+        )?;
+        if let Some(url) = r.image_url {
+            conn.execute(
+                "INSERT OR IGNORE INTO sealed_images (product_id, source_url) VALUES (?1, ?2)",
+                rusqlite::params![r.product_id, url],
+            )?;
+        }
+    }
     Ok(())
 }
 
@@ -1476,6 +1508,19 @@ mod tests {
         // An ordinary open runs it too, with the same outcome.
         let conn = open_shared(&path).unwrap();
         assert_eq!(count(&conn, "sealed_products"), 2);
+    }
+
+    /// The remedial dataset adds a sealed product tcgcsv lacks, once, and
+    /// queues its picture for the image store.
+    #[test]
+    fn remedial_sealed_products_are_inserted_if_absent() {
+        let conn = open_shared(&tempfile::tempdir().unwrap().path().join("shared.sqlite")).unwrap();
+        let json = r#"[{"product_id": 9, "set_code": null, "name": "Gift Box",
+                        "image_url": "https://example.test/9.jpg"}]"#;
+        seed_sealed_remedial(&conn, json).unwrap();
+        seed_sealed_remedial(&conn, json).unwrap();
+        assert_eq!(count(&conn, "sealed_products"), 1);
+        assert_eq!(count(&conn, "sealed_images"), 1);
     }
 
     /// An ordinary restart of the server asks one read-only question and is

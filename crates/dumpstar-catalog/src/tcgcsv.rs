@@ -156,6 +156,24 @@ pub fn parse_products(bytes: &[u8]) -> Result<Vec<ProductRecord>> {
         .collect()
 }
 
+/// `(productId, imageUrl)` of every sealed product (no `Number`) that has a
+/// picture.
+pub fn parse_sealed_images(bytes: &[u8]) -> Result<Vec<(i64, String)>> {
+    let numbered: std::collections::BTreeSet<i64> = parse_products(bytes)?
+        .into_iter()
+        .filter(|p| p.number.is_some())
+        .map(|p| p.product_id)
+        .collect();
+    Ok(results(bytes)?
+        .iter()
+        .filter_map(|p| {
+            let id = p.get("productId")?.as_i64()?;
+            let url = p.get("imageUrl")?.as_str()?.trim();
+            (!url.is_empty() && !numbered.contains(&id)).then(|| (id, url.to_string()))
+        })
+        .collect())
+}
+
 pub fn parse_prices(bytes: &[u8], observed_on: &str) -> Result<Vec<PriceRecord>> {
     results(bytes)?
         .iter()

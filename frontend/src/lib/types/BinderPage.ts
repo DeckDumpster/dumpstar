@@ -2,9 +2,6 @@
 import type { BinderSetInfo } from "./BinderSetInfo";
 import type { BinderSlot } from "./BinderSlot";
 
-/**
- * A single rendered binder page with master-set progress.
- */
 export type BinderPage = { set: BinderSetInfo, layout: number, page: number, total_pages: number, 
 /**
  * Standard-variant slot count, and how many of those the user owns.

@@ -76,6 +76,9 @@ pub struct SetRecord {
     pub release_date: Option<String>,
     #[serde(default)]
     pub sort_order: i64,
+    /// SWU product category; `None` for a set the declared mapping lacks.
+    #[serde(default)]
+    pub category: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

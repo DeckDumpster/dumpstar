@@ -24,3 +24,19 @@ export function splitLandscape(slots) {
 		portrait: slots.filter((s) => !s.landscape)
 	};
 }
+
+/** Rows per binder page; the page size is `cols * BROWSE_ROWS`. */
+export const BROWSE_ROWS = 3;
+/** Most cards per row. `MAX_COLS * BROWSE_ROWS` equals the backend's BINDER_MAX_LAYOUT. */
+export const MAX_COLS = 8;
+export const DEFAULT_COLS = 3;
+
+/**
+ * Clamp a cards-per-row value into 1..MAX_COLS; junk falls back to the default.
+ * @param {number} n
+ * @returns {number}
+ */
+export function clampCols(n) {
+	if (!Number.isFinite(n)) return DEFAULT_COLS;
+	return Math.min(MAX_COLS, Math.max(1, Math.trunc(n)));
+}

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseView, splitLandscape } from '$lib/browseView.js';
+import { readFileSync } from 'node:fs';
+import { parseView, splitLandscape, clampCols, MAX_COLS, BROWSE_ROWS } from '$lib/browseView.js';
 
 test('card view is the default; only view=binder selects binder', () => {
 	assert.equal(parseView(null), 'card');
@@ -20,4 +21,22 @@ test('splitLandscape keeps order within each group', () => {
 	const { landscape, portrait } = splitLandscape(s);
 	assert.deepEqual(landscape.map((x) => x.n), ['L1', 'B1']);
 	assert.deepEqual(portrait.map((x) => x.n), ['U1', 'U2']);
+});
+
+test('an out-of-range cols clamps to the maximum; junk falls back to 3', () => {
+	assert.equal(clampCols(10), MAX_COLS);
+	assert.equal(clampCols(9), MAX_COLS);
+	assert.equal(clampCols(0), 1);
+	assert.equal(clampCols(NaN), 3);
+	assert.equal(clampCols(MAX_COLS + 1), MAX_COLS);
+});
+
+test('the frontend page size maximum equals the backend BINDER_MAX_LAYOUT', () => {
+	const src = readFileSync(
+		new URL('../../crates/dumpstar-db/src/binder.rs', import.meta.url),
+		'utf8'
+	);
+	const m = src.match(/pub const BINDER_MAX_LAYOUT: i64 = (\d+);/);
+	assert.ok(m, 'BINDER_MAX_LAYOUT not found in binder.rs');
+	assert.equal(MAX_COLS * BROWSE_ROWS, Number(m[1]));
 });

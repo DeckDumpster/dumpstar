@@ -17,7 +17,7 @@
 		Toolbar
 	} from '$lib/components/ui';
 	import { printingLabel } from '$lib/format';
-	import { parseView, splitLandscape } from '$lib/browseView';
+	import { parseView, splitLandscape, clampCols, MAX_COLS, BROWSE_ROWS } from '$lib/browseView';
 	import type { ViewMode } from '$lib/browseView';
 	import { variantColor, variantSortCmp } from '$lib/variants.svelte';
 	import type { BinderPage } from '$lib/types/BinderPage';
@@ -51,13 +51,13 @@
 	// Cards per row is a pure UI choice — decoupled from binder pocket
 	// sizes. The backend's `layout` (cards per page) derives from cols:
 	// always 3 rows per page so denser grids → bigger pages.
-	let cols = $state(Math.min(10, Math.max(1, urlNum('cols', 3))));
+	let cols = $state(clampCols(urlNum('cols', 3)));
 	// 'card'   = image + metadata footer (collector #, name, rarity, owned);
 	//            the default.
 	// 'binder' = image + pips only, mimics a physical binder page; leaders
 	//            and bases are rotated to fill a portrait pocket.
 	let view = $state<ViewMode>(parseView(urlStr('view', 'card')));
-	const layout = $derived(cols * 3);
+	const layout = $derived(cols * BROWSE_ROWS);
 	let includeHyperspace = $state(urlBool('hyperspace', true));
 	let includeShowcase = $state(urlBool('showcase', true));
 	let includePromos = $state(urlBool('promos', true));
@@ -115,7 +115,7 @@
 	let missingOnly = $state(urlBool('missing', false));
 
 	function stepCols(delta: number) {
-		const next = Math.min(10, Math.max(1, cols + delta));
+		const next = clampCols(cols + delta);
 		if (next === cols) return;
 		cols = next;
 		pageNum = 1;
@@ -551,7 +551,7 @@
 					title="Card view — image + #, name, rarity, owned"
 				>Card</button>
 			</div>
-			<!-- Cards per row stepper. Pure UI choice (1..10) — page size
+			<!-- Cards per row stepper. Pure UI choice (1..MAX_COLS) — page size
 			     derives from it (cols × 3 rows per page) so the backend's
 			     pagination stays consistent at 3 visible rows. -->
 			<div class="cpr">
@@ -569,7 +569,7 @@
 					variant="ghost"
 					size="sm"
 					class="cpr-btn"
-					disabled={cols >= 10}
+					disabled={cols >= MAX_COLS}
 					onclick={() => stepCols(1)}
 					aria-label="More cards per row">+</Button
 				>

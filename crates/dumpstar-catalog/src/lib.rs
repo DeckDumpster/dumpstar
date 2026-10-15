@@ -26,6 +26,7 @@ pub mod landing;
 pub mod official;
 pub mod record;
 pub mod search;
+pub mod set_categories;
 pub mod source;
 pub mod swu;
 pub mod tcgcsv;

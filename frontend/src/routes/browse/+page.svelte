@@ -4,6 +4,7 @@
 	import { count } from '$lib/format';
 	import { Button, EmptyState, Field, Panel, ProgressBar, Toolbar } from '$lib/components/ui';
 	import type { SetSummary } from '$lib/types/SetSummary';
+	import { groupSets } from '$lib/setGroups';
 
 	let sets = $state<SetSummary[]>([]);
 	let loading = $state(true);
@@ -27,6 +28,8 @@
 			(c) => !q || c.name.toLowerCase().includes(q) || c.set_code.toLowerCase().includes(q)
 		);
 	});
+
+	const groups = $derived(groupSets(visible));
 </script>
 
 <svelte:head><title>Browse sets — Dumpstar</title></svelte:head>
@@ -72,8 +75,20 @@
 				/>
 			{/if}
 		{:else}
-			<div class="grid">
-				{#each visible as set (set.set_code)}
+			<div class="layout">
+				<nav class="categories" aria-label="Set categories">
+					{#each groups as g (g.category)}
+						<a href="#cat-{g.slug}"
+							>{g.category} <span class="n">{g.sets.length}</span></a
+						>
+					{/each}
+				</nav>
+				<div class="groups">
+					{#each groups as g (g.category)}
+						<section id="cat-{g.slug}">
+							<h2>{g.category}</h2>
+							<div class="grid">
+								{#each g.sets as set (set.set_code)}
 					<Panel class="tile" href="/browse/{set.set_code}">
 						{#if set.art_url}
 							<img class="crop" src={set.art_url} alt="" loading="lazy" />
@@ -108,7 +123,11 @@
 							/>
 						</div>
 					</Panel>
-				{/each}
+								{/each}
+							</div>
+						</section>
+					{/each}
+				</div>
 			</div>
 		{/if}
 	</div>
@@ -168,6 +187,45 @@
 	   of its tile, so the last bar lands on one line across the whole group
 	   whether a set shows one meter or two. Rows are gapped one step wider
 	   than columns: the eye reads a row as a row. */
+	.layout {
+		display: flex;
+		gap: var(--space-6);
+		align-items: flex-start;
+		margin-top: var(--space-4);
+	}
+	.categories {
+		position: sticky;
+		top: var(--space-4);
+		flex: 0 0 220px;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+	.categories a {
+		display: flex;
+		justify-content: space-between;
+		gap: var(--space-2);
+		padding: var(--space-1) var(--space-2);
+		border-radius: var(--radius-sm);
+		color: var(--color-text-strong);
+		text-decoration: none;
+	}
+	.categories a:hover {
+		background: var(--color-surface-inset);
+	}
+	.categories .n {
+		color: var(--color-text-subtle);
+	}
+	.groups {
+		flex: 1;
+		min-width: 0;
+	}
+	.groups h2 {
+		margin-top: var(--space-5);
+	}
+	.groups section:first-child h2 {
+		margin-top: 0;
+	}
 	.grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

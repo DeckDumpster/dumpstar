@@ -13,6 +13,10 @@ pub struct SetSummary {
     pub set_code: String,
     pub name: String,
     pub release_date: Option<String>,
+    /// SWU product category ("Main Expansions", "Weekly Play Promos"…); the
+    /// list arrives grouped by it, main expansions first. `null` only for a
+    /// set the catalog's declared mapping lacks (an alarm is raised for it).
+    pub category: Option<String>,
     /// Distinct cards printed in the set.
     #[ts(type = "number")]
     pub total_cards: i64,
@@ -30,11 +34,12 @@ pub struct SetSummary {
     pub art_url: Option<String>,
 }
 
-/// List every set, newest first, with card and owned-card counts. Requires a
+/// List every set grouped by category (main expansions first), each
+/// category newest first, with card and owned-card counts. Requires a
 /// user connection (the owned count joins the collection).
 pub fn list_sets(conn: &Connection) -> Result<Vec<SetSummary>> {
     let mut stmt = conn.prepare(
-        "SELECT s.set_code, s.name, s.release_date, \
+        "SELECT s.set_code, s.name, s.release_date, s.category, \
                 (SELECT count(DISTINCT p.card_id) FROM printings p WHERE p.set_code = s.set_code), \
                 (SELECT count(DISTINCT p.card_id) FROM collection c \
                    JOIN printings p ON c.printing_id = p.printing_id \
@@ -51,15 +56,19 @@ pub fn list_sets(conn: &Connection) -> Result<Vec<SetSummary>> {
             set_code: r.get(0)?,
             name: r.get(1)?,
             release_date: r.get(2)?,
-            total_cards: r.get(3)?,
-            owned_cards: r.get(4)?,
-            total_printings: r.get(5)?,
-            owned_printings: r.get(6)?,
+            category: r.get(3)?,
+            total_cards: r.get(4)?,
+            owned_cards: r.get(5)?,
+            total_printings: r.get(6)?,
+            owned_printings: r.get(7)?,
             logo_url: None,
             art_url: None,
         })
     })?;
-    Ok(rows.collect::<rusqlite::Result<_>>()?)
+    let mut sets: Vec<SetSummary> = rows.collect::<rusqlite::Result<_>>()?;
+    // Stable: within a category the newest-first order of the query holds.
+    sets.sort_by_key(|s| dumpstar_catalog::set_categories::category_rank(s.category.as_deref()));
+    Ok(sets)
 }
 
 /// One rarity tier within a set, with how many of its cards the user owns.
@@ -368,6 +377,42 @@ mod tests {
         assert_eq!(sets[0].owned_cards, 1);
         assert_eq!(sets[0].total_printings, 3);
         assert_eq!(sets[0].owned_printings, 1);
+    }
+
+    #[test]
+    fn list_sets_groups_by_category_main_expansions_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let shared = dir.path().join("shared.sqlite");
+        {
+            let c = open_shared(&shared).unwrap();
+            testkit::set_on(&c, "JTLP", "Jump to Lightspeed Weekly Play", "2025-04-01");
+            testkit::set_on(&c, "SOR", "Spark of Rebellion", "2024-03-08");
+            testkit::set_on(&c, "SHD", "Shadows of the Galaxy", "2024-07-12");
+            testkit::set_on(&c, "ZZZ", "Unmapped", "2026-01-01");
+            for code in ["JTLP", "SOR", "SHD"] {
+                let cat = dumpstar_catalog::set_categories::category_for(code).unwrap();
+                c.execute(
+                    "UPDATE sets SET category = ?2 WHERE set_code = ?1",
+                    rusqlite::params![code, cat],
+                )
+                .unwrap();
+            }
+        }
+        let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
+        let sets = list_sets(&conn).unwrap();
+        let got: Vec<(&str, Option<&str>)> = sets
+            .iter()
+            .map(|s| (s.set_code.as_str(), s.category.as_deref()))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("SHD", Some("Main Expansions")),
+                ("SOR", Some("Main Expansions")),
+                ("JTLP", Some("Weekly Play Promos")),
+                ("ZZZ", None),
+            ]
+        );
     }
 
     #[test]

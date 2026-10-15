@@ -702,7 +702,6 @@
 					class:missing={!ownedAny(slot)}
 					class:landscape={slot.landscape}
 					class:rotated={slot.landscape && view === 'binder'}
-					class:wide={slot.landscape && view !== 'binder' && cols > 1}
 					data-landscape={slot.landscape}
 				>
 					<button class="slot" onclick={() => (selectedSlot = slot)}>
@@ -1028,8 +1027,13 @@
 		gap: var(--space-3);
 		margin: var(--space-6) var(--space-0) var(--space-2);
 	}
+	.binderpage {
+		min-width: 0;
+		max-width: 100%;
+	}
 	.grid {
 		display: grid;
+		min-width: 0;
 		gap: var(--space-3);
 	}
 	/* The section label is a SectionHeader; the grid only says it spans. */
@@ -1047,12 +1051,6 @@
 		flex-direction: column;
 		gap: var(--space-1);
 		min-width: 0;
-	}
-	/* A landscape card spans two portrait columns, so a 7:5 image is about
-	   as tall as a 5:7 one and its row stays aligned; the grid never gets a
-	   cell wider than itself. Binder view keeps the portrait pocket. */
-	.slotwrap.wide {
-		grid-column: span 2;
 	}
 	.slot {
 		display: block;
@@ -1072,21 +1070,25 @@
 	.slotwrap.missing {
 		opacity: 0.82;
 	}
-	.slot img {
-		width: 100%;
-		display: block;
+	/* The button is the row-uniform box: its ratio, not the image's, sets the
+	   tile height, and the art is letterboxed inside it. */
+	.slot {
+		position: relative;
+		overflow: hidden;
+		min-width: 0;
 		aspect-ratio: 5 / 7;
-		object-fit: contain;
-		/* Card images have transparent rounded corners — let the body
-		   color show through instead of painting black behind them. */
-		background: transparent;
 	}
-	/* Leaders and bases are landscape art: in card view the cell is 7:5, so
-	   it takes about half a portrait cell's height and the pips follow
-	   straight below the image like any other card's. */
-	.slotwrap.landscape .slot img,
-	.slotwrap.landscape .noart {
+	.slotwrap.landscape:not(.rotated) .slot {
 		aspect-ratio: 7 / 5;
+	}
+	.slot img,
+	.slot .noart {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+		background: transparent;
 	}
 	/* Binder view: the pocket stays portrait and the card sits in it turned
 	   90° to the left, as the physical card would. The image is as wide as
@@ -1098,7 +1100,7 @@
 	}
 	.slotwrap.rotated .slot img,
 	.slotwrap.rotated .slot .noart {
-		position: absolute;
+		inset: auto;
 		top: 50%;
 		left: 50%;
 		width: 140%;
@@ -1106,7 +1108,6 @@
 		transform: translate(-50%, -50%) rotate(-90deg);
 	}
 	.noart {
-		aspect-ratio: 5 / 7;
 		display: flex;
 		align-items: center;
 		justify-content: center;

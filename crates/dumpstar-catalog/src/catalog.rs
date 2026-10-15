@@ -79,8 +79,8 @@ const LEGACY_COLUMNS: &[(&str, &str)] = &[
 /// whose table lacks one keeps the old shape (and the old constraints) forever
 /// unless it is rebuilt. `printings.variant_code` came with the natural key
 /// that tells apart two official printings sharing a display variant
-/// (sp-5zcm06).
-const REQUIRED_COLUMNS: &[(&str, &str)] = &[("printings", "variant_code")];
+/// (sp-5zcm06); `sets.category` is the product category the set nav groups by.
+const REQUIRED_COLUMNS: &[(&str, &str)] = &[("printings", "variant_code"), ("sets", "category")];
 
 /// Whether `conn` holds a catalog from the legacy card model, or from an
 /// earlier SWU schema whose shape the current one cannot be applied over.

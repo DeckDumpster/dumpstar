@@ -14,6 +14,8 @@
 		Toolbar
 	} from '$lib/components/ui';
 	import { printingLabel } from '$lib/format';
+	import { parseView, splitLandscape } from '$lib/browseView';
+	import type { ViewMode } from '$lib/browseView';
 	import { variantColor, variantSortCmp } from '$lib/variants.svelte';
 	import type { BinderPage } from '$lib/types/BinderPage';
 	import type { BinderSlot } from '$lib/types/BinderSlot';
@@ -47,11 +49,11 @@
 	// sizes. The backend's `layout` (cards per page) derives from cols:
 	// always 3 rows per page so denser grids → bigger pages.
 	let cols = $state(Math.min(10, Math.max(1, urlNum('cols', 3))));
-	// 'binder' = image + pips only, mimics a physical binder page.
-	// 'card'   = adds a metadata footer (collector #, name, rarity, owned).
-	type ViewMode = 'binder' | 'card';
-	const initialView = (urlStr('view', 'binder') === 'card' ? 'card' : 'binder') as ViewMode;
-	let view = $state<ViewMode>(initialView);
+	// 'card'   = image + metadata footer (collector #, name, rarity, owned);
+	//            the default.
+	// 'binder' = image + pips only, mimics a physical binder page; leaders
+	//            and bases are rotated to fill a portrait pocket.
+	let view = $state<ViewMode>(parseView(urlStr('view', 'card')));
 	const layout = $derived(cols * 3);
 	let includeHyperspace = $state(urlBool('hyperspace', true));
 	let includeShowcase = $state(urlBool('showcase', true));
@@ -254,7 +256,7 @@
 		set('sort', sort, 'number');
 		set('q', search, '');
 		set('missing', missingOnly ? '1' : '0', '0');
-		set('view', view, 'binder');
+		set('view', view, 'card');
 		// Persist via goto(replaceState:true), NOT $app/navigation's
 		// replaceState. replaceState(url, …) only repaints the address bar;
 		// it stashes page.url.href (SvelteKit's *current* URL, still stale)
@@ -337,6 +339,8 @@
 			error = e instanceof Error ? e.message : String(e);
 		}
 	}
+
+	const groups = $derived(splitLandscape(binder?.slots ?? []));
 
 	const sectionLabel: Record<string, string> = {
 		base: '',
@@ -640,9 +644,79 @@
 				</EmptyState>
 			{/if}
 		{:else}
-			<div class="grid" style:grid-template-columns="repeat({cols}, 1fr)">
-				{#each binder.slots as slot, i (slot.card_id)}
-					{@const prevSection = i > 0 ? binder.slots[i - 1].section : 'base'}
+			<!-- One colored pip per variant. In binder view pips sit alone
+			     below the image; in card view they share a row with the
+			     metadata (#, name, ×owned). The pip buttons live OUTSIDE
+			     the slot button so they don't produce nested-button
+			     invalid HTML. -->
+			{#snippet pips(slot: BinderSlot)}
+				<div class="vchips">
+					{#each slot.printings
+						.slice()
+						.sort((a, b) => variantSortCmp(a.variant, b.variant)) as p (p.printing_id)}
+						<button
+							class="vchip"
+							class:owned={p.owned_count > 0}
+							class:foil={p.finish === 'Foil'}
+							style:--c={variantColor(p.variant)}
+							title="{printingLabel(p.variant, p.finish)}{p.owned_count > 0
+								? ` ×${p.owned_count}`
+								: ''} — click to add"
+							aria-label="Add one {printingLabel(p.variant, p.finish)}{p.owned_count > 0
+								? ` (own ${p.owned_count})`
+								: ''}"
+							onclick={() => addToSlot(slot, p.printing_id)}
+						>
+							{#if p.owned_count > 1}<span class="vcount">{p.owned_count}</span>{/if}
+						</button>
+					{/each}
+				</div>
+			{/snippet}
+			{#snippet cell(slot: BinderSlot)}
+				<div
+					class="slotwrap"
+					class:missing={!ownedAny(slot)}
+					class:landscape={slot.landscape}
+					class:rotated={slot.landscape && view === 'binder'}
+					data-landscape={slot.landscape}
+				>
+					<button class="slot" onclick={() => (selectedSlot = slot)}>
+						{#if slot.image_url}
+							<img src={slot.image_url} alt={slot.name} loading="lazy" />
+						{:else}
+							<div class="noart">{slot.name}</div>
+						{/if}
+					</button>
+					{#if view === 'card'}
+						<div class="meta">
+							<span class="num">#{slot.number}</span>
+							<span class="name" title={slot.name}>{slot.name}</span>
+							{#if ownedTotal(slot) > 0}
+								<span class="own" title="Owned copies">×{ownedTotal(slot)}</span>
+							{/if}
+							{@render pips(slot)}
+						</div>
+					{:else}
+						{@render pips(slot)}
+					{/if}
+				</div>
+			{/snippet}
+
+			{#if groups.landscape.length > 0}
+				<SectionHeader class="sectionbreak-top" tone="accent" divider title="Leaders & Bases" />
+				<div
+					class="grid landscapegrid"
+					data-testid="landscape-grid"
+					style:grid-template-columns="repeat({cols}, 1fr)"
+				>
+					{#each groups.landscape as slot (slot.card_id)}
+						{@render cell(slot)}
+					{/each}
+				</div>
+			{/if}
+			<div class="grid" data-testid="portrait-grid" style:grid-template-columns="repeat({cols}, 1fr)">
+				{#each groups.portrait as slot, i (slot.card_id)}
+					{@const prevSection = i > 0 ? groups.portrait[i - 1].section : 'base'}
 					{#if slot.section !== prevSection && slot.section !== 'base'}
 						<SectionHeader
 							class="sectionbreak"
@@ -651,55 +725,7 @@
 							title={sectionLabel[slot.section]}
 						/>
 					{/if}
-					<!-- One colored pip per variant. In binder view pips sit alone
-					     below the image; in card view they share a row with the
-					     metadata (#, name, ×owned). The pip buttons live OUTSIDE
-					     the slot button so they don't produce nested-button
-					     invalid HTML. -->
-					{#snippet pips(slot: BinderSlot)}
-						<div class="vchips">
-							{#each slot.printings
-								.slice()
-								.sort((a, b) => variantSortCmp(a.variant, b.variant)) as p (p.printing_id)}
-								<button
-									class="vchip"
-									class:owned={p.owned_count > 0}
-									class:foil={p.finish === 'Foil'}
-									style:--c={variantColor(p.variant)}
-									title="{printingLabel(p.variant, p.finish)}{p.owned_count > 0
-										? ` ×${p.owned_count}`
-										: ''} — click to add"
-									aria-label="Add one {printingLabel(p.variant, p.finish)}{p.owned_count > 0
-										? ` (own ${p.owned_count})`
-										: ''}"
-									onclick={() => addToSlot(slot, p.printing_id)}
-								>
-									{#if p.owned_count > 1}<span class="vcount">{p.owned_count}</span>{/if}
-								</button>
-							{/each}
-						</div>
-					{/snippet}
-					<div class="slotwrap" class:missing={!ownedAny(slot)}>
-						<button class="slot" onclick={() => (selectedSlot = slot)}>
-							{#if slot.image_url}
-								<img src={slot.image_url} alt={slot.name} loading="lazy" />
-							{:else}
-								<div class="noart">{slot.name}</div>
-							{/if}
-						</button>
-						{#if view === 'card'}
-							<div class="meta">
-								<span class="num">#{slot.number}</span>
-								<span class="name" title={slot.name}>{slot.name}</span>
-								{#if ownedTotal(slot) > 0}
-									<span class="own" title="Owned copies">×{ownedTotal(slot)}</span>
-								{/if}
-								{@render pips(slot)}
-							</div>
-						{:else}
-							{@render pips(slot)}
-						{/if}
-					</div>
+					{@render cell(slot)}
 				{/each}
 			</div>
 
@@ -964,6 +990,12 @@
 	.grid :global(.sectionbreak) {
 		grid-column: 1 / -1;
 	}
+	.landscapegrid {
+		margin-bottom: var(--space-4);
+	}
+	.binderpage :global(.sectionbreak-top) {
+		margin-bottom: var(--space-2);
+	}
 	.slotwrap {
 		display: flex;
 		flex-direction: column;
@@ -995,6 +1027,30 @@
 		/* Card images have transparent rounded corners — let the body
 		   color show through instead of painting black behind them. */
 		background: transparent;
+	}
+	/* Leaders and bases are landscape art: in card view the cell is 7:5, so
+	   it takes about half a portrait cell's height and the pips follow
+	   straight below the image like any other card's. */
+	.slotwrap.landscape .slot img,
+	.slotwrap.landscape .noart {
+		aspect-ratio: 7 / 5;
+	}
+	/* Binder view: the pocket stays portrait and the card sits in it turned
+	   90° to the left, as the physical card would. The image is as wide as
+	   the pocket is tall (140%) and 7:5, so once turned it fills the pocket. */
+	.slotwrap.rotated .slot {
+		position: relative;
+		aspect-ratio: 5 / 7;
+		overflow: hidden;
+	}
+	.slotwrap.rotated .slot img,
+	.slotwrap.rotated .slot .noart {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		width: 140%;
+		height: auto;
+		transform: translate(-50%, -50%) rotate(-90deg);
 	}
 	.noart {
 		aspect-ratio: 5 / 7;

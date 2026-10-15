@@ -1,0 +1,14 @@
+start_page: /card/SOR/193
+involves:
+  - "card page for the Legendary SOR #193, rarity mark span[aria-label='Legendary']"
+  - "collection table rarity column with the same mark"
+fixture_data:
+  rarity: "Legendary"
+  character: "L"
+  color: "rgb(0, 200, 243)"
+notes: >
+  The mark's character, colour and sort order come from /api/rarities, which
+  the catalog apply fills from the official rarity record. Assert the card page
+  mark, then open /collection?q=rarity:legendary&all=1 and assert it there; then
+  sort by rarity and assert Special (sort value 1) and Legendary (5) sit at
+  opposite ends.

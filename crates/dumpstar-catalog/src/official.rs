@@ -16,7 +16,9 @@ use std::collections::BTreeMap;
 use serde_json::Value;
 
 use crate::error::{CatalogError, Result};
-use crate::record::{AlarmRecord, CardRecord, CatalogPayload, PrintingRecord, SetRecord};
+use crate::record::{
+    AlarmRecord, CardRecord, CatalogPayload, PrintingRecord, RarityRecord, SetRecord,
+};
 
 pub const PAGE_SIZE: u32 = 100;
 
@@ -70,6 +72,17 @@ fn rel_name(attrs: &Value, name: &str) -> Option<String> {
         .get("name")?
         .as_str()
         .map(str::to_string)
+}
+
+/// The rarity relation's mark, when the record carries all of it.
+fn rarity_mark(attrs: &Value) -> Option<RarityRecord> {
+    let r = rel(attrs, "rarity")?.get("attributes")?;
+    Some(RarityRecord {
+        name: r.get("name")?.as_str()?.to_string(),
+        character: r.get("character")?.as_str()?.to_string(),
+        color: r.get("color")?.as_str()?.to_string(),
+        sort_value: r.get("sortValue")?.as_i64()?,
+    })
 }
 
 fn rel_names(attrs: &Value, name: &str) -> Vec<String> {
@@ -295,6 +308,11 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
             // only stands in until one is seen.
             payload.cards.retain(|c| c.card_id != card_id);
             payload.cards.push(card);
+        }
+        if let Some(m) = rarity_mark(a)
+            && !payload.rarities.iter().any(|r| r.name == m.name)
+        {
+            payload.rarities.push(m);
         }
         payload.printings.push(PrintingRecord {
             printing_id: uid.clone(),

@@ -1109,6 +1109,21 @@ fn seed_catalog(conn: &Connection) -> anyhow::Result<()> {
         )?;
     }
 
+    // The official rarity marks, as the catalog apply stores them from the
+    // official API's rarity record (character, colour, sortValue).
+    for (name, character, color, sort_value) in [
+        ("Special", "S", "#000000", 1),
+        ("Common", "C", "#964d02", 2),
+        ("Uncommon", "U", "#d1d1d1", 3),
+        ("Rare", "R", "#f1c000", 4),
+        ("Legendary", "L", "#00c8f3", 5),
+    ] {
+        conn.execute(
+            "INSERT INTO rarity_marks (name, character, color, sort_value) VALUES (?1,?2,?3,?4)",
+            rusqlite::params![name, character, color, sort_value],
+        )?;
+    }
+
     // Printings, their prices and the crosswalk. A tcgcsv product id is
     // allocated per row that has at least one quote, and shared by the
     // printing's two finishes, as TCGplayer shares it.

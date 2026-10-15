@@ -3,192 +3,249 @@
  "sets": [
   {
    "set_code": "IC27",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com//small_SWH_ICONS_Logo_EN_05a50d2dc2.png",
+    "file": "IC27-logo.png"
+   },
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": null
   },
   {
    "set_code": "HMW",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com//small_SWH_09_Homeworlds_Logo_EN_a9a8a0d0df.png",
+    "file": "HMW-logo.png"
+   },
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": null
   },
   {
    "set_code": "HMWP",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com//small_SWH_09_Homeworlds_Logo_EN_a9a8a0d0df.png",
+    "file": "HMWP-logo.png"
+   },
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": null
   },
   {
    "set_code": "P26",
    "logo": null,
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
   },
   {
    "set_code": "ASH",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com//small_SWH_ASH_Logo_EN_eb103cdbf3.png",
+    "file": "ASH-logo.png"
+   },
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": null
   },
   {
    "set_code": "ASHWPP",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com//small_SWH_ASH_Logo_EN_eb103cdbf3.png",
+    "file": "ASHWPP-logo.png"
+   },
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": null
   },
   {
    "set_code": "C26",
    "logo": null,
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
   },
   {
    "set_code": "TS26",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com//small_SWHA_024_Product_Page_Logo_379cc080e8.png",
+    "file": "TS26-logo.png"
+   },
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": null
   },
   {
    "set_code": "LAW",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com//small_SWH_07_Logo_EN_126c1cc79e.png",
+    "file": "LAW-logo.png"
+   },
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": null
   },
   {
    "set_code": "LAW-WPP",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com//small_SWH_07_Logo_EN_126c1cc79e.png",
+    "file": "LAW-WPP-logo.png"
+   },
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": null
   },
   {
    "set_code": "SEC",
    "logo": null,
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": "the official Secrets of Power product record (admin.starwarsunlimited.com /api/products) carries key art but no logo media; reviewed 2026-10-15"
   },
   {
    "set_code": "SECWPP",
    "logo": null,
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": "Secrets of Power has no official logo media, so its weekly-play promos have none to borrow; reviewed 2026-10-15"
   },
   {
    "set_code": "GFT",
    "logo": null,
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
   },
   {
    "set_code": "IBH",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com//small_SWHA_002_Mechanics_Logo_EN_8e2b51a932.png",
+    "file": "IBH-logo.png"
+   },
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": null
   },
   {
    "set_code": "CE2025",
    "logo": null,
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
   },
   {
    "set_code": "LOF",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com//small_SWH_05_Logo_EN_5ae290dc7d.png",
+    "file": "LOF-logo.png"
+   },
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": null
   },
   {
    "set_code": "LOFWPP",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com//small_SWH_05_Logo_EN_5ae290dc7d.png",
+    "file": "LOFWPP-logo.png"
+   },
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": null
   },
   {
    "set_code": "SN1",
    "logo": null,
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
   },
   {
    "set_code": "JTL",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com//small_SWH_04en_Logo_8e5408a592.png",
+    "file": "JTL-logo.png"
+   },
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": null
   },
   {
    "set_code": "JTL-WPP",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com//small_SWH_04en_Logo_8e5408a592.png",
+    "file": "JTL-WPP-logo.png"
+   },
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": null
   },
   {
    "set_code": "TWI",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com//small_SWH_03_Twilight_of_the_Republic_Logo_e8e6d88851.png",
+    "file": "TWI-logo.png"
+   },
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": null
   },
   {
    "set_code": "TWI-WPP",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com//small_SWH_03_Twilight_of_the_Republic_Logo_e8e6d88851.png",
+    "file": "TWI-WPP-logo.png"
+   },
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": null
   },
   {
    "set_code": "CE2024",
    "logo": null,
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
   },
   {
    "set_code": "SHD",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com//small_shadows_of_the_galaxy_Logo_91948b8327.png",
+    "file": "SHD-logo.png"
+   },
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": null
   },
   {
    "set_code": "SHD-WPP",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com//small_shadows_of_the_galaxy_Logo_91948b8327.png",
+    "file": "SHD-WPP-logo.png"
+   },
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": null
   },
   {
    "set_code": "EEP",
    "logo": null,
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
   },
   {
    "set_code": "JDG",
    "logo": null,
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
   },
   {
    "set_code": "OPP",
    "logo": null,
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
   },
   {
    "set_code": "SOR",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com/small_Spark_of_Rebellion_Logo_Vert_v2_3419ebc4bd.png",
+    "file": "SOR-logo.png"
+   },
    "crop": {
     "source_url": "https://cdn.starwarsunlimited.com/xxsmall_SWH_01_005_Luke_Skywalker_Thumbnail_e92b37229f.png",
     "file": "SOR-crop.png"
    },
-   "none": "no official logo recorded yet; the tile shows the set name"
+   "none": null
   },
   {
    "set_code": "SOR-WPP",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com/small_Spark_of_Rebellion_Logo_Vert_v2_3419ebc4bd.png",
+    "file": "SOR-WPP-logo.png"
+   },
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": null
   },
   {
    "set_code": "PRE",
    "logo": null,
    "crop": null,
-   "none": "no official logo or art crop recorded yet; the tile shows the set name"
+   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
   }
  ]
 }

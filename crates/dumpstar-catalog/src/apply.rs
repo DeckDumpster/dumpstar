@@ -475,6 +475,10 @@ fn put_alarms(tx: &Transaction, alarms: &[AlarmRecord], replace: &[&str]) -> Res
     Ok(n)
 }
 
+/// Dates for sets no source carries (set_code, release_date, source), merged
+/// after the source dates and only into sets still undated.
+const REMEDIAL_RELEASE_DATES: &str = include_str!("../data/remedial/set-release-dates.csv");
+
 const DATE_KINDS: &[&str] = &["set_without_release_date"];
 
 /// Write each set's release date from the publish date of its main tcgcsv group
@@ -512,6 +516,15 @@ fn stamp_release_dates(tx: &Transaction, r: &mut ApplyReport) -> Result<()> {
             "UPDATE sets SET release_date = ?2 WHERE set_code = ?1 AND release_date IS NOT ?2",
             params![code, date],
         )?;
+    }
+    for line in REMEDIAL_RELEASE_DATES.lines().skip(1) {
+        let mut f = line.splitn(3, ',');
+        if let (Some(code), Some(date)) = (f.next(), f.next()) {
+            r.sets += tx.execute(
+                "UPDATE sets SET release_date = ?2 WHERE set_code = ?1 AND release_date IS NULL",
+                params![code.trim(), date.trim()],
+            )?;
+        }
     }
     let missing: Vec<(String, String)> = tx
         .prepare("SELECT set_code, name FROM sets WHERE release_date IS NULL ORDER BY set_code")?

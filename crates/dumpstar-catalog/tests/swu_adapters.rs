@@ -871,3 +871,35 @@ fn the_recorded_load_carries_each_sets_release_date_and_names_a_set_without_one(
     let c = Catalog::open_readonly(&e.db).unwrap();
     assert_eq!(alarms(c.conn(), "set_without_release_date"), vec!["ZZZ"]);
 }
+
+#[test]
+fn a_set_no_source_dates_takes_its_date_from_the_remedial_dataset() {
+    let (e, _) = loaded();
+    let w = Catalog::open_writer(&e.db).unwrap();
+    w.conn()
+        .execute(
+            "INSERT INTO sets (set_code, name, sort_order) VALUES ('SHD', 'Shadows of the Galaxy', 1)",
+            [],
+        )
+        .unwrap();
+    drop(w);
+    sync_tcgcsv(
+        &e,
+        &Recorded {
+            last_updated: "2026-10-15T00:00:00".into(),
+            ..sor()
+        },
+        at(15, 4),
+    );
+    let c = Catalog::open_readonly(&e.db).unwrap();
+    let date: Option<String> = c
+        .conn()
+        .query_row(
+            "SELECT release_date FROM sets WHERE set_code = 'SHD'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(date.as_deref(), Some("2024-07-12"));
+    assert!(alarms(c.conn(), "set_without_release_date").is_empty());
+}

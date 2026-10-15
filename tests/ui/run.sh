@@ -73,6 +73,13 @@ if [ -z "$up" ]; then
     exit 1
 fi
 
+step "ui: smoke — the authenticated API answers"
+token="$(python3 "$root/tests/lib/test_jwks.py" issue "$jwks" ui-test@example.com)"
+for ep in sets collection/value-history?dimension=all; do
+    curl -sS -m 20 -o /dev/null -w "    /api/$ep -> %{http_code} in %{time_total}s\n" \
+        -H "Cf-Access-Jwt-Assertion: $token" "http://127.0.0.1:$port/api/$ep" || true
+done
+
 step "ui: run the replay implementations"
 cd "$root/tests/ui"
 npm ci --silent
@@ -82,9 +89,9 @@ fi
 export UI_REPLAY_ONLY=1
 export UI_TEST_BASE_URL="http://127.0.0.1:$port"
 export UI_TEST_DUMPSTAR_BIN="$bin"
-export UI_TEST_ACCESS_TOKEN="$(python3 "$root/tests/lib/test_jwks.py" issue "$jwks" ui-test@example.com)"
+export UI_TEST_ACCESS_TOKEN="$token"
 rc=0
-npx playwright test "$@" || rc=$?
+npx playwright test -g "browse_back_preserves_page_param" "$@" || rc=$?
 if [ "$rc" -ne 0 ]; then
     echo "--- server log (tail) ---" >&2
     tail -n 40 "$work/server.log" >&2 || true

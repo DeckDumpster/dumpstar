@@ -34,6 +34,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import DeathStar from '$lib/components/DeathStar.svelte';
+	import CollectionSummary from '$lib/components/CollectionSummary.svelte';
 	import { api } from '$lib/api';
 	import { money, count } from '$lib/format';
 	import { Badge, Button, EmptyState, Panel, ProgressBar, SectionHeader } from '$lib/components/ui';
@@ -151,8 +152,12 @@
 	const marketValue = $derived((latest?.market_value ?? 0) + (sealedLatest?.market_value ?? 0));
 	const costBasis = $derived((latest?.cost_basis ?? 0) + (sealedLatest?.cost_basis ?? 0));
 	const unrealized = $derived(valuedOn == null ? null : marketValue - costBasis);
-	/** Nothing snapshotted, or nothing owned — a genuinely empty collection. */
-	const started = $derived(
+	/** Distinct cards owned, from ownership itself — the sets already loaded
+	 *  here — never from the valuation snapshot, which lags additions by up to
+	 *  a day. */
+	const ownedCards = $derived(sets.reduce((n, s) => n + s.owned_cards, 0));
+	/** A valuation snapshot exists and covers at least one owned item. */
+	const valued = $derived(
 		valuedOn != null && (latest?.card_count ?? 0) + (sealedLatest?.card_count ?? 0) > 0
 	);
 </script>
@@ -179,55 +184,19 @@
 	{/snippet}
 </SectionHeader>
 
-{#if started}
-	<div class="stats">
-		<Panel padding="md">
-			<div class="stat">
-				<span class="stat-label">Cards owned</span>
-				<strong class="stat-figure">{count(latest?.card_count ?? 0)}</strong>
-				<span class="stat-meta">{ownedMeta}</span>
-			</div>
-		</Panel>
-		<Panel padding="md">
-			<div class="stat">
-				<span class="stat-label">Market value</span>
-				<strong class="stat-figure">{money(marketValue)}</strong>
-				<span class="stat-meta">{valueMeta}</span>
-			</div>
-		</Panel>
-		<Panel padding="md">
-			<div class="stat">
-				<span class="stat-label">Cost basis</span>
-				<strong class="stat-figure">{money(costBasis)}</strong>
-				<span class="stat-meta">what you paid</span>
-			</div>
-		</Panel>
-		<Panel padding="md">
-			<div class="stat">
-				<span class="stat-label">Unrealised</span>
-				<span class="stat-figure">
-					{#if unrealized != null}
-						<Badge tone={unrealized < 0 ? 'danger' : 'success'}>
-							{unrealized < 0 ? '−' : '+'}{money(Math.abs(unrealized))}
-						</Badge>
-					{/if}
-				</span>
-				<span class="stat-meta">market less cost</span>
-			</div>
-		</Panel>
-	</div>
-{:else if !loading}
-	<Panel padding="md">
-		<EmptyState
-			title="No cards registered yet"
-			description="Import a CSV export from another tracker, or open a set as a binder page and click the cards you own."
-		>
-			{#snippet action()}
-				<Button href="/ingest/csv">Import a CSV</Button>
-			{/snippet}
-		</EmptyState>
-	</Panel>
-{/if}
+<CollectionSummary
+	{loading}
+	{valued}
+	{ownedCards}
+	valuedCards={count(latest?.card_count ?? 0)}
+	ownedLabel={count(ownedCards)}
+	{ownedMeta}
+	{valueMeta}
+	marketLabel={money(marketValue)}
+	costLabel={money(costBasis)}
+	{unrealized}
+	unrealizedLabel={money(Math.abs(unrealized ?? 0))}
+/>
 
 <div class="split">
 	<section>
@@ -355,41 +324,6 @@
 		color: var(--color-danger-text);
 	}
 
-	/* --- Headline figures --------------------------------------------------
-	   Four equal columns, never auto-fit: half the complaint about this page
-	   was that its tiles took whatever width the track algorithm handed them. */
-	.stats {
-		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-		gap: var(--space-3);
-	}
-	.stat {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
-	}
-	.stat-label {
-		font-size: var(--text-sm);
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: var(--color-text-subtle);
-	}
-	/* Fixed line box so the Badge in the "Unrealised" tile sits on the same
-	   baseline as the three plain figures beside it. */
-	.stat-figure {
-		display: flex;
-		align-items: center;
-		min-height: calc(var(--text-2xl) * var(--leading-tight));
-		font-size: var(--text-2xl);
-		font-weight: var(--weight-semibold);
-		line-height: var(--leading-tight);
-		color: var(--color-text-strong);
-	}
-	.stat-meta {
-		font-size: var(--text-md);
-		color: var(--color-text-subtle);
-	}
-
 	/* --- The two content columns ------------------------------------------ */
 	.split {
 		display: grid;
@@ -503,9 +437,6 @@
 	/* --- Narrower viewports ------------------------------------------------
 	   Explicit column counts at every step, for the same reason as above. */
 	@media (max-width: 1100px) {
-		.stats {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-		}
 		.split {
 			grid-template-columns: 1fr;
 			gap: var(--space-4);

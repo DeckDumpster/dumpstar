@@ -102,13 +102,37 @@ fn image(attrs: &Value) -> Option<String> {
 }
 
 /// `(set, variant, number)` of a serial code, number without leading zeros.
-pub fn split_serial(serial: &str) -> Option<(&str, &str, String)> {
+///
+/// A serial is the set's code, two variant characters and the number: `SS VV
+/// NNN` for the first sets, and for later ones the set's own code, which is as
+/// long as the expansion's (`CST110002`, `C2408001`) or, for promo runs whose
+/// code the expansion does not repeat, three or four characters (`i01010077`,
+/// `ic27010052`).
+pub fn split_serial<'a>(serial: &'a str, set_code: &str) -> Option<(&'a str, &'a str, String)> {
     if !serial.is_ascii() || serial.len() < 5 {
         return None;
     }
-    let number = serial[4..].trim_start_matches('0');
+    let own = set_code.len();
+    let prefix = if own > 2
+        && serial
+            .get(..own)
+            .is_some_and(|p| p.eq_ignore_ascii_case(set_code))
+    {
+        own
+    } else {
+        match serial.len() {
+            9 => 3,
+            10 => 4,
+            _ => 2,
+        }
+    };
+    let number = serial[prefix + 2..].trim_start_matches('0');
     let number = if number.is_empty() { "0" } else { number };
-    Some((&serial[..2], &serial[2..4], number.to_string()))
+    Some((
+        &serial[..prefix],
+        &serial[prefix..prefix + 2],
+        number.to_string(),
+    ))
 }
 
 pub fn parse_page(bytes: &[u8]) -> Result<Page> {
@@ -161,14 +185,6 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
                 ))
             )
         });
-        let Some((_, variant_code, number)) = split_serial(&serial) else {
-            payload.alarms.push(AlarmRecord::alarm(
-                "official_bad_record",
-                uid,
-                format!("unreadable serialCode {serial:?}"),
-            ));
-            continue;
-        };
         let Some(set_code) = rel(a, "expansion")
             .and_then(|e| e.pointer("/attributes/code"))
             .and_then(Value::as_str)
@@ -178,6 +194,14 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
                 "official_bad_record",
                 uid,
                 "no expansion",
+            ));
+            continue;
+        };
+        let Some((_, variant_code, number)) = split_serial(&serial, &set_code) else {
+            payload.alarms.push(AlarmRecord::alarm(
+                "official_bad_record",
+                uid,
+                format!("unreadable serialCode {serial:?}"),
             ));
             continue;
         };

@@ -1,0 +1,11 @@
+{
+  "provenance": "Remedial asset set: the six aspect icons as served by the official Star Wars: Unlimited card site's CDN (150x150 PNG; no official or open SVG set exists). Name, colour and sort_value are the official cards API's aspect relation (admin.starwarsunlimited.com/api/cards, populate aspects). Kept in the repository and served as static assets; never fetched from the publisher's CDN at runtime.",
+  "aspects": [
+    {"name": "Vigilance",  "file": "icon_vigilance_aebda7026f.png",  "source_url": "https://cdn.starwarsunlimited.com/icon_vigilance_aebda7026f.png",  "retrieved": "2026-10-14", "colour": "#4073d4", "sort_value": 1},
+    {"name": "Command",    "file": "icon_command_df837f32c6.png",    "source_url": "https://cdn.starwarsunlimited.com/icon_command_df837f32c6.png",    "retrieved": "2026-10-14", "colour": "#0b992d", "sort_value": 5},
+    {"name": "Aggression", "file": "icon_aggression_24cc746635.png", "source_url": "https://cdn.starwarsunlimited.com/icon_aggression_24cc746635.png", "retrieved": "2026-10-14", "colour": "#d30808", "sort_value": 10},
+    {"name": "Cunning",    "file": "icon_cunning_931f93ee4c.png",    "source_url": "https://cdn.starwarsunlimited.com/icon_cunning_931f93ee4c.png",    "retrieved": "2026-10-14", "colour": "#eb9f1c", "sort_value": 15},
+    {"name": "Villainy",   "file": "icon_villainy_eb77e7874b.png",   "source_url": "https://cdn.starwarsunlimited.com/icon_villainy_eb77e7874b.png",   "retrieved": "2026-10-14", "colour": "#000000", "sort_value": 20},
+    {"name": "Heroism",    "file": "icon_heroism_99d152cb2d.png",    "source_url": "https://cdn.starwarsunlimited.com/icon_heroism_99d152cb2d.png",    "retrieved": "2026-10-14", "colour": "#ffffff", "sort_value": 25}
+  ]
+}

@@ -1,0 +1,37 @@
+# Replay implementations that are RED on the tree today, run by the ui tier
+# (tests/ui/run.sh) as expected failures (Playwright test.fail): the tier stays
+# green while they are red, and goes RED the moment one passes, so its line has to
+# be deleted — THIS LIST ONLY SHRINKS. Never add a line for a UI change's own test:
+# fix the UI.
+#
+# UNFIXED UI DEFECTS — implementations written to guard a fix that does not hold;
+# they were never run before the ui tier existed (sp-howojk). Each fixing bead
+# deletes its line.
+browse_grid_fits_viewport
+card_detail_facet_aspect_search
+card_detail_swu_base_type
+card_detail_swu_leader_type
+card_detail_swu_unit_attributes
+#
+# STALE — written against the Pokémon fixture (sv8, base1, Blastoise, Energy type,
+# Pokémon JP sets) and failing on SWU fixture data, not on a regression. Rewrite
+# for Star Wars: Unlimited and delete the line.
+browse_back_preserves_page_param
+browse_japanese_set_add_first_copy
+browse_japanese_set_tile_not_provisional
+browse_pager_scrolls_to_top
+card_detail_bulk_condition_for_copies
+card_detail_condition_edit_no_chart_rebuild
+card_detail_facet_artist_search
+card_detail_facet_rarity_search
+collection_add_from_modal
+collection_add_second_card_no_refresh
+collection_all_cards_sort_interleaves
+collection_back_preserves_search
+collection_facet_from_modal_widens_to_catalog
+collection_search_autocomplete_keywords
+collection_search_help_page
+collection_search_unowned
+collection_value_history_breakdown_tabs
+collection_value_history_chart
+collectr_import_split_preview

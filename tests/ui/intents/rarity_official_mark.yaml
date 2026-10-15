@@ -1,0 +1,11 @@
+# Scenario: Rarity shows as the official mark from the catalog data
+#
+# Related:
+#   issues: [sp-kvga20]
+#   pull_requests: []
+
+description: >
+  A Legendary card shows its rarity as the official mark — the letter "L" in
+  the official colour (rgb(0, 200, 243)) with the accessible label
+  "Legendary" — on the card page and in the collection table, and sorting the
+  collection by rarity follows the catalog's sort values.

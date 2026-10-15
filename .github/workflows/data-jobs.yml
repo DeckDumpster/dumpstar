@@ -1,0 +1,29 @@
+name: Data jobs
+
+# Runs catalog-apply and then the price build on production, now, instead of at
+# the next timer (21:00 and 07:00 UTC). For an operator or the Concierge after a
+# fix to the catalog or the prices that deploy.sh did not run the jobs for.
+# Runs on the box, on the dumpstar-prod runner, from the production checkout.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dumpstar-deploy
+  cancel-in-progress: false
+
+jobs:
+  data-jobs:
+    runs-on: [self-hosted, dumpstar-prod]
+    timeout-minutes: 60
+    env:
+      PROD_CHECKOUT: $HOME/dumpstar
+    steps:
+      - name: Run catalog-apply then prices on prod
+        run: |
+          set -euo pipefail
+          checkout="$(eval echo "$PROD_CHECKOUT")"
+          bash "$checkout/deploy/data-jobs.sh" prod

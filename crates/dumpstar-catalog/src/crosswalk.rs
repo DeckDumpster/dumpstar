@@ -402,11 +402,6 @@ pub fn join_with(
             ),
         ));
     }
-    let sets: BTreeSet<&str> = groups
-        .values()
-        .map(|g| g.set_code.as_str())
-        .filter(|s| *s != "*")
-        .collect();
 
     let mut matched_products: BTreeSet<i64> = BTreeSet::new();
     let mut ambiguous: BTreeSet<i64> = BTreeSet::new();
@@ -829,7 +824,7 @@ pub fn join_with(
     }
 
     for pr in printings {
-        if linked.contains(pr.printing_id.as_str()) || !sets.contains(pr.set_code.as_str()) {
+        if linked.contains(pr.printing_id.as_str()) {
             continue;
         }
         let key = (

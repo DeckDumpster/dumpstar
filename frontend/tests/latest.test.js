@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import { latestOnly } from '../src/lib/latest.js';
 
 const deferred = () => {
-	let resolve;
+	/** @type {(v?: any) => void} */
+	let resolve = () => {};
+	/** @type {Promise<any>} */
 	const promise = new Promise((r) => (resolve = r));
-	return { promise, resolve };
+	return { promise, resolve: (/** @type {any} */ v) => resolve(v) };
 };
 
 test('a delayed earlier response cannot overwrite a newer page', async () => {
@@ -20,11 +22,12 @@ test('a delayed earlier response cannot overwrite a newer page', async () => {
 
 test('a superseded request is aborted', async () => {
 	const l = latestOnly();
+	/** @type {AbortSignal | undefined} */
 	let signal;
 	const slow = deferred();
 	void l.run('a', (s) => ((signal = s), slow.promise));
 	void l.run('b', async () => 1);
-	assert.equal(signal.aborted, true);
+	assert.equal(signal?.aborted, true);
 });
 
 test('an identical in-flight request is not issued twice', async () => {

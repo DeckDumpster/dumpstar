@@ -992,4 +992,28 @@ fn the_apply_job_stores_the_styled_text_and_updates_it_in_place() {
         .query_row("SELECT html FROM card_text_styled", [], |r| r.get(0))
         .unwrap();
     assert!(html.contains("Shield tokens"));
+
+fn apply_stores_the_official_mark_and_sort_value_of_every_rarity() {
+    let (e, _) = loaded();
+    let conn = Connection::open(&e.db).unwrap();
+    let mark = |name: &str| -> (String, String, i64) {
+        conn.query_row(
+            "SELECT character, color, sort_value FROM rarity_marks WHERE name = ?1",
+            [name],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap()
+    };
+    assert_eq!(mark("Legendary"), ("L".into(), "#00c8f3".into(), 5));
+    assert_eq!(mark("Common"), ("C".into(), "#964d02".into(), 2));
+    assert_eq!(mark("Special"), ("S".into(), "#000000".into(), 1));
+    assert_eq!(
+        count(
+            &conn,
+            "SELECT COUNT(DISTINCT rarity) FROM printings p
+             WHERE rarity IS NOT NULL AND NOT EXISTS (SELECT 1 FROM rarity_marks m WHERE m.name = p.rarity)"
+        ),
+        0,
+        "every rarity a printing carries has a mark"
+    );
 }

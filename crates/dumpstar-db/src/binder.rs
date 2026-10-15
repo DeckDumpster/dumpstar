@@ -265,7 +265,7 @@ pub fn get_binder_page(
     }
     top.sort_by_key(|s| landscape_rank(s.card_type.as_deref()));
     let mut visible = rest;
-    let rank = |s: &BinderSlot| s.rarity.as_deref().map_or(-1, |r| tiers.rank(r));
+    let rank = |s: &BinderSlot| s.rarity.as_deref().map_or(-1, |r| tiers.sort_value(r));
     match q.sort.as_str() {
         "number_desc" => visible.reverse(),
         "name" => visible.sort_by(|a, b| {

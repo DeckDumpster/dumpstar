@@ -5,6 +5,7 @@
 	import { api, SearchQueryError } from '$lib/api';
 	import { facetHref } from '$lib/facets';
 	import { sortAspects } from '$lib/aspects';
+	import RarityMark from '$lib/components/RarityMark.svelte';
 	import AspectIcon from '$lib/components/AspectIcon.svelte';
 		import { CONDITIONS } from '$lib/conditions';
 	import { conditionMultiplier } from '$lib/conditions.svelte';
@@ -1487,7 +1488,7 @@
 							<td class="fac" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', sortAspects(jsonList(a.aspects))[0])}>{#each sortAspects(jsonList(a.aspects)) as n (n)}<AspectIcon name={n} />{/each}</td>
 							<td class="num">{a.cost ?? ''}</td>
 							<td class="center">{powerHp(a)}</td>
-							<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}>{a.rarity ?? ''}</td>
+							<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}><RarityMark name={a.rarity} /></td>
 							<td class="center fac" title="Find all cards in this set" onclick={(e) => facetCell(e, 'set', a.set_code)}>
 								<span title={a.set_name}>{a.set_code.toUpperCase()}</span>
 							</td>
@@ -1541,7 +1542,7 @@
 						<td class="fac" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', sortAspects(jsonList(a.aspects))[0])}>{#each sortAspects(jsonList(a.aspects)) as n (n)}<AspectIcon name={n} />{/each}</td>
 						<td class="num">{a.cost ?? ''}</td>
 						<td class="center">{powerHp(a)}</td>
-						<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}>{a.rarity ?? ''}</td>
+						<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}><RarityMark name={a.rarity} /></td>
 						<td class="center fac" title="Find all cards in this set" onclick={(e) => facetCell(e, 'set', a.set_code)}>
 							<span title={a.set_name}>{a.set_code.toUpperCase()}</span>
 						</td>

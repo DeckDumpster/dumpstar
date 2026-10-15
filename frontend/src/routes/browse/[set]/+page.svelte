@@ -5,6 +5,7 @@
 	import { api } from '$lib/api';
 	import { latestOnly } from '$lib/latest';
 	import VariantModal from '$lib/components/VariantModal.svelte';
+	import RarityMark from '$lib/components/RarityMark.svelte';
 	import { breadcrumbs } from '$lib/breadcrumbs.svelte';
 	import {
 		Button,
@@ -714,6 +715,7 @@
 					{#if view === 'card'}
 						<div class="meta">
 							<span class="num">#{slot.number}</span>
+							{#if slot.rarity}<RarityMark name={slot.rarity} />{/if}
 							<span class="name" title={slot.name}>{slot.name}</span>
 							{#if ownedTotal(slot) > 0}
 								<span class="own" title="Owned copies">×{ownedTotal(slot)}</span>

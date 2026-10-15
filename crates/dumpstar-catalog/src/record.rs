@@ -15,6 +15,8 @@ pub struct CatalogPayload {
     #[serde(default)]
     pub printings: Vec<PrintingRecord>,
     #[serde(default)]
+    pub rarities: Vec<RarityRecord>,
+    #[serde(default)]
     pub prices: Vec<PriceRecord>,
     #[serde(default)]
     pub formats: Vec<FormatRecord>,
@@ -31,6 +33,7 @@ impl CatalogPayload {
             sets: vec![],
             cards: vec![],
             printings: vec![],
+            rarities: vec![],
             prices: vec![],
             formats: vec![],
             legality: vec![],
@@ -95,6 +98,17 @@ pub struct CardRecord {
     /// `card_text_styled` in schema.sql.
     #[serde(default)]
     pub rules_html: Option<String>,
+}
+
+/// One official rarity: the mark (a one-letter character in a colour) and the
+/// sort position the publisher gives it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RarityRecord {
+    pub name: String,
+    pub character: String,
+    /// `#rrggbb`, as the publisher spells it.
+    pub color: String,
+    pub sort_value: i64,
 }
 
 /// One official printing, finish included.

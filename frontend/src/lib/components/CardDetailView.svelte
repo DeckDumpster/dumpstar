@@ -5,6 +5,7 @@
 	import { sortAspects } from '$lib/aspects';
 	import AspectIcon from '$lib/components/AspectIcon.svelte';
 	import { cardTextHtml } from '$lib/cardtext';
+	import RarityMark from '$lib/components/RarityMark.svelte';
 	import { breadcrumbs } from '$lib/breadcrumbs.svelte';
 	import { variantSortCmp } from '$lib/variants.svelte';
 	import { siblingsAt, shownPrinting, otherPrintings, seriesFor } from '$lib/printings';
@@ -295,7 +296,7 @@
 				· #{card.number}{#if card.rarity}
 					·
 					<a class="facet" href={facetHref('rarity', card.rarity)} title="Find all {card.rarity} cards">
-						{card.rarity}
+						<RarityMark name={card.rarity} />
 					</a>{/if}
 				· <a class="facet binderlink" href="/browse/{card.set_code}" title="Open {card.set_name} binder">{card.set_name}</a>
 			</p>

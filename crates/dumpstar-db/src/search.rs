@@ -902,7 +902,7 @@ fn order_sql(order_by: Option<&str>) -> String {
         // set_code as the secondary set-level key so sets sharing a date stay
         // grouped.
         "set" => "s.release_date".to_string(),
-        "rarity" => "(SELECT rank FROM rarities WHERE name = p.rarity)".to_string(),
+        "rarity" => "(SELECT sort_value FROM rarity_marks WHERE name = p.rarity)".to_string(),
         "type" => "cd.card_type".to_string(),
         "cost" => "cd.cost".to_string(),
         "power" => "cd.power".to_string(),

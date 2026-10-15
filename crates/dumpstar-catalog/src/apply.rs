@@ -31,6 +31,7 @@ pub struct ApplyReport {
     /// carries. Counted, not dropped silently: the unmatched-printing alarm
     /// reads this.
     pub unmatched_prices: usize,
+    pub rarities: usize,
     pub formats: usize,
     pub format_rules: usize,
     pub legality: usize,
@@ -57,6 +58,7 @@ impl ApplyReport {
                 + self.crosswalk
                 + self.prices
                 + self.sealed_prices
+                + self.rarities
                 + self.formats
                 + self.format_rules
                 + self.legality
@@ -331,6 +333,16 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
         }
     }
 
+    for m in &p.rarities {
+        r.rarities += tx.execute(
+            "INSERT INTO rarity_marks (name, character, color, sort_value) VALUES (?1,?2,?3,?4)
+             ON CONFLICT(name) DO UPDATE SET character=excluded.character, color=excluded.color,
+               sort_value=excluded.sort_value
+             WHERE character IS NOT excluded.character OR color IS NOT excluded.color
+               OR sort_value IS NOT excluded.sort_value",
+            params![m.name, m.character, m.color, m.sort_value],
+        )?;
+    }
     for f in &p.formats {
         r.formats += tx.execute(
             "INSERT INTO formats (format_id, name) VALUES (?1,?2)

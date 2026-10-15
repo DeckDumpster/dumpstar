@@ -62,6 +62,16 @@ CREATE TABLE IF NOT EXISTS printings (
 CREATE INDEX IF NOT EXISTS idx_printings_card ON printings(card_id);
 CREATE INDEX IF NOT EXISTS idx_printings_set  ON printings(set_code);
 
+-- The official rarity mark: the one-letter character, its colour and the
+-- publisher's sort position, per rarity name. Written by the catalog apply;
+-- `printings.rarity` names a row by `name`.
+CREATE TABLE IF NOT EXISTS rarity_marks (
+    name             TEXT PRIMARY KEY,          -- 'Legendary'
+    character        TEXT NOT NULL,             -- 'L'
+    color            TEXT NOT NULL,             -- '#00c8f3'
+    sort_value       INTEGER NOT NULL
+);
+
 -- The crosswalk: how each upstream names a printing.
 --   source 'official': source_id = cardUid, sub_type_name = finish (a cardUid
 --                      is shared by a printing's Normal and Foil)

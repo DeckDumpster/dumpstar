@@ -123,7 +123,13 @@ fn a_file_from_the_swu_schema_before_variant_code_is_rebuilt() {
 fn a_populated_catalog_missing_a_new_column_keeps_its_rows() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("shared.sqlite");
-    run_once(&FakeSource, &dir.path().join("raw"), &path, chrono::Utc::now()).unwrap();
+    run_once(
+        &FakeSource,
+        &dir.path().join("raw"),
+        &path,
+        chrono::Utc::now(),
+    )
+    .unwrap();
     let count = |conn: &Connection, t: &str| -> i64 {
         conn.query_row(&format!("SELECT count(*) FROM {t}"), [], |r| r.get(0))
             .unwrap()

@@ -24,24 +24,5 @@
 *.sqlite-shm
 *.sqlite-wal
 
-# ...except the committed UI test fixtures (shared catalog + user
-# collection, rebuilt deterministically via `dumpstar seed-fixture`).
-!tests/ui/fixtures/shared.sqlite
-!tests/ui/fixtures/collection.sqlite
-
-# Reference clones — kept locally, not part of the project
-/_deckdumpster-src
-/_pokedex-src
-
-# Python bytecode — the lake jobs and the shell harnesses' fixture servers
-__pycache__/
-*.pyc
-
-# OS
-.DS_Store
-crates/dumpstar-db/tests/.ptcg_cache.sqlite
-/screenshots/
-
-# Beads is owned by Gas Town (rig database in the town dolt server);
-# backed up via `bd dolt push` to rgantt/dumpstar-beads.git, not tracked here.
-.beads/
+# The UI fixture pair is built from text at use time, never committed:
+# tests/ui/fixtures/build.sh (cached by the hash of its inputs).

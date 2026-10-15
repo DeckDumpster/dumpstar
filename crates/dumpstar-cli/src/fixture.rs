@@ -1763,15 +1763,34 @@ mod tests {
     use std::collections::BTreeMap;
     use std::path::Path;
 
-    /// The committed catalog fixture, addressed from the crate rather than
-    /// from whatever directory the test runner happens to stand in.
-    fn committed_shared() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/ui/fixtures/shared.sqlite")
+    /// One seeded fixture directory for the whole test binary. The fixture is
+    /// not committed (it is built from these sources), so the tests that
+    /// assert about its contents seed it themselves. `run` pins a process-wide
+    /// clock, so every seed in this module goes through `SEED_LOCK`.
+    static SEED_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn seeded_dir() -> &'static Path {
+        static DIR: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+        DIR.get_or_init(|| {
+            let dir = tempfile::tempdir().unwrap();
+            let _g = SEED_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            run(FixtureArgs {
+                out: dir.path().to_path_buf(),
+            })
+            .expect("seed-fixture");
+            dir
+        })
+        .path()
     }
 
-    /// The committed collection fixture, addressed the same way.
+    /// The seeded catalog fixture.
+    fn committed_shared() -> PathBuf {
+        seeded_dir().join("shared.sqlite")
+    }
+
+    /// The seeded collection fixture.
     fn committed_user() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/ui/fixtures/collection.sqlite")
+        seeded_dir().join("collection.sqlite")
     }
 
     /// The instant `tests/visual/stabilize.ts` freezes the browser at. It
@@ -1782,6 +1801,7 @@ mod tests {
 
     /// Seed a complete fixture into a fresh directory and return both files.
     fn seed_into(dir: &Path) -> (Vec<u8>, Vec<u8>) {
+        let _g = SEED_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         run(FixtureArgs {
             out: dir.to_path_buf(),
         })
@@ -1905,8 +1925,7 @@ mod tests {
             future.is_empty(),
             "the committed fixture is dated after {FROZEN_BROWSER_CLOCK}, the \
              instant tests/visual/stabilize.ts freezes the browser at — which \
-             is what a build timestamp looks like. Regenerate it: \
-             cargo run --bin dumpstar -- seed-fixture\n  {}",
+             is what a build timestamp looks like. Fix the seeder (fixture.rs).\n  {}",
             future.join("\n  "),
         );
     }
@@ -1999,7 +2018,7 @@ mod tests {
             missing.is_empty(),
             "tests/ui/fixtures/shared.sqlite is behind the schema open_shared \
              creates and is never repaired on open (it is ATTACHed read-only). \
-             Missing: {}. Regenerate it: cargo run --bin dumpstar -- seed-fixture",
+             Missing: {}. Fix the seeder (fixture.rs).",
             missing.join(", "),
         );
     }

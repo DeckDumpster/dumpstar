@@ -490,14 +490,27 @@ check_machine() {
     return $rc
 }
 
+# DUMPSTAR_RUNNER_DEPS_ONLY="base rust" checks just those groups (base podman
+# subid linger rust node chromium fonts machine). testenv runs the lint and rust
+# tiers in a bare rust image that has no podman, node or browser libraries and
+# never will; checking them there failed every run before the tier started.
+# Unset checks everything, which is what a CI runner needs.
 run_checks() {
     MISSING=()
-    check_base;   check_podman
-    check_subid;  check_linger
-    check_rust;   check_node
-    check_chromium_libs
-    check_fonts
-    check_machine
+    local g
+    for g in base podman subid linger rust node chromium fonts machine; do
+        case " ${DUMPSTAR_RUNNER_DEPS_ONLY:-$g} " in
+            *" $g "*) ;;
+            *) continue ;;
+        esac
+        case "$g" in
+            base) check_base ;;       podman) check_podman ;;
+            subid) check_subid ;;     linger) check_linger ;;
+            rust) check_rust ;;       node) check_node ;;
+            chromium) check_chromium_libs ;;
+            fonts) check_fonts ;;     machine) check_machine ;;
+        esac
+    done
 }
 
 if [ "$MODE" = check ]; then
@@ -616,6 +629,29 @@ if command -v loginctl >/dev/null 2>&1 && [ ! -d "/run/user/$(id -u)" ]; then
     [ -d "/run/user/$(id -u)" ] \
         && note "user manager up; /run/user/$(id -u) exists" \
         || note "WARNING: /run/user/$(id -u) still absent after enabling linger"
+fi
+
+# sccache, the shared Rust compile cache (sp-2i16qf; see deploy/rust-cache.sh).
+# The OFFICIAL static (musl) release, because the same binary is handed to the
+# image's bookworm builder, which a build linked against this host's newer glibc
+# would not run in. OPTIONAL: without it CI compiles cold and says so, so a failed
+# download is a note, never a failed install.
+SCCACHE_VERSION=0.10.0
+SCCACHE_BIN_DIR="${DUMPSTAR_SCCACHE_DIR:-$HOME/.cache/dumpstar-sccache-bin}"
+if [ ! -x "$SCCACHE_BIN_DIR/sccache" ] && [ "$(uname -m)" = x86_64 ]; then
+    note "installing sccache ${SCCACHE_VERSION} (static) into ${SCCACHE_BIN_DIR}"
+    _sc_dir="$(mktemp -d)"
+    _sc_name="sccache-v${SCCACHE_VERSION}-x86_64-unknown-linux-musl"
+    if curl -fsSL --retry 3 -o "$_sc_dir/sccache.tgz" \
+           "https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/${_sc_name}.tar.gz" \
+       && tar -xzf "$_sc_dir/sccache.tgz" -C "$_sc_dir" \
+       && mkdir -p "$SCCACHE_BIN_DIR" \
+       && install -m 0755 "$_sc_dir/${_sc_name}/sccache" "$SCCACHE_BIN_DIR/sccache"; then
+        note "sccache installed"
+    else
+        note "could not install sccache -- CI will compile Rust cold"
+    fi
+    rm -rf "$_sc_dir"
 fi
 
 # Re-check and report. A partial install is a failure HERE rather than a

@@ -59,7 +59,14 @@ dumpstar_image_ensure() {
 		# build-once-and-tag benefit the id exists for.
 		local scope
 		scope="$(printf '%s' "$repo_dir" | sha1sum | cut -c1-8)"
+		# The shared compile cache, when on (deploy/rust-cache.sh): the image's
+		# release build reads the same sccache store the host's cargo does.
+		local -a cache_args=()
+		if declare -F dumpstar_rust_cache_buildargs >/dev/null; then
+			mapfile -t cache_args < <(dumpstar_rust_cache_buildargs)
+		fi
 		dumpstar_image_build_collecting -t "$tag" \
+			"${cache_args[@]}" \
 			--build-arg "CARGO_TARGET_CACHE_SCOPE=${scope}" \
 			-f "${repo_dir}/Containerfile" "$repo_dir"
 		return

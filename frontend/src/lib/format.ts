@@ -28,6 +28,8 @@ export function printingLabel(variant: string, finish: string): string {
 	return finish === 'Normal' || !finish ? variant : `${variant} ${finish}`;
 }
 
+export { printingTag } from './printing-tag.js';
+
 /** Parse a JSON-array column (`aspects`, `traits`, `arenas`) the API passes
  *  through as a string. Anything that is not an array of strings is empty. */
 export function jsonList(raw: string | null | undefined): string[] {

@@ -45,3 +45,48 @@ fn an_entry_is_art_or_says_why_not() {
         );
     }
 }
+
+/// Sets with no official logo, each reviewed with a reason in `set_art.json`.
+/// This list only shrinks: a set that gains a logo leaves it, and a new set
+/// without one needs a reviewed reason and an entry here.
+const NO_LOGO_REVIEWED: &[&str] = &[
+    "P26", "C26", "SEC", "SECWPP", "GFT", "CE2025", "SN1", "CE2024", "EEP", "JDG", "OPP", "PRE",
+];
+
+#[test]
+fn a_set_without_a_logo_is_a_reviewed_exception() {
+    let mut unreviewed = vec![];
+    for s in art::sources() {
+        if s.logo.is_some() {
+            assert!(
+                !NO_LOGO_REVIEWED.contains(&s.set_code.as_str()),
+                "{} has a logo now: drop it from NO_LOGO_REVIEWED",
+                s.set_code
+            );
+            continue;
+        }
+        let reason = s.none.as_deref().unwrap_or("");
+        if !NO_LOGO_REVIEWED.contains(&s.set_code.as_str()) || reason.contains("recorded yet") {
+            unreviewed.push(s.set_code);
+        }
+    }
+    assert!(
+        unreviewed.is_empty(),
+        "sets with no logo and no reviewed reason: {unreviewed:?}"
+    );
+}
+
+#[test]
+fn every_logo_names_its_official_source() {
+    for s in art::sources() {
+        if let Some(l) = s.logo {
+            assert!(
+                l.source_url.starts_with("https://cdn.starwarsunlimited.com/"),
+                "{}: logo is not from the official CDN: {}",
+                s.set_code,
+                l.source_url
+            );
+            assert!(l.file.starts_with(&s.set_code), "{}: file {}", s.set_code, l.file);
+        }
+    }
+}

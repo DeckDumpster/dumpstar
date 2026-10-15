@@ -5,6 +5,7 @@
 	import { sortAspects } from '$lib/aspects';
 	import AspectIcon from '$lib/components/AspectIcon.svelte';
 	import { cardTextHtml } from '$lib/cardtext';
+	import SetLogo from '$lib/components/SetLogo.svelte';
 	import { breadcrumbs } from '$lib/breadcrumbs.svelte';
 	import { variantSortCmp } from '$lib/variants.svelte';
 	import { siblingsAt, shownPrinting, otherPrintings, seriesFor } from '$lib/printings';
@@ -290,7 +291,7 @@
 					href={facetHref('set', card.set_code)}
 					title="Find all cards in {card.set_name}"
 				>
-					<span>{card.set_code.toUpperCase()}</span>
+					<SetLogo code={card.set_code} name={card.set_name} /><span>{card.set_code.toUpperCase()}</span>
 				</a>
 				· #{card.number}{#if card.rarity}
 					·

@@ -6,6 +6,7 @@
 	import { facetHref } from '$lib/facets';
 	import { sortAspects } from '$lib/aspects';
 	import AspectIcon from '$lib/components/AspectIcon.svelte';
+	import SetLogo from '$lib/components/SetLogo.svelte';
 		import { CONDITIONS } from '$lib/conditions';
 	import { conditionMultiplier } from '$lib/conditions.svelte';
 	import { money, count, printingLabel, printingTag, jsonList } from '$lib/format';
@@ -1489,7 +1490,7 @@
 							<td class="center">{powerHp(a)}</td>
 							<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}>{a.rarity ?? ''}</td>
 							<td class="center fac" title="Find all cards in this set" onclick={(e) => facetCell(e, 'set', a.set_code)}>
-								<span title={a.set_name}>{a.set_code.toUpperCase()}</span>
+								<span title={a.set_name}><SetLogo code={a.set_code} name={a.set_name} />{a.set_code.toUpperCase()}</span>
 							</td>
 							<td class="num">{a.number}</td>
 							<td class="num">
@@ -1543,7 +1544,7 @@
 						<td class="center">{powerHp(a)}</td>
 						<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}>{a.rarity ?? ''}</td>
 						<td class="center fac" title="Find all cards in this set" onclick={(e) => facetCell(e, 'set', a.set_code)}>
-							<span title={a.set_name}>{a.set_code.toUpperCase()}</span>
+							<span title={a.set_name}><SetLogo code={a.set_code} name={a.set_name} />{a.set_code.toUpperCase()}</span>
 						</td>
 						<td class="num">{a.number}</td>
 						<td class="num">

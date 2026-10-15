@@ -9,10 +9,18 @@
 # and container need podman (and node, systemd) which this image does not carry,
 # so they are declared — CI runs them — but only work where those are reachable;
 # they are not in `default`.
+# frontend-check is the exception that needs only node: the frontend's unit tests
+# and svelte-check, which CI runs inside the frontend tier 35 minutes in. It is
+# not a ci.sh tier (the name has a hyphen, so select_test.sh's canonical-tier
+# check does not count it); it runs the same `npm ci && npm test && npm run
+# check`, so a type error fails the member's local check, not remote CI. The
+# image is the shared rust one with Node 22 fetched from nodejs.org, because a
+# tier cannot name its own image (sp-os47b4); the build and the podman UI stay
+# in the CI-only frontend tier.
 image = "docker.io/library/rust:1.94-slim-bookworm"
 workdir = "/work"
 timeout = 1800
-default = ["lint", "rust"]
+default = ["lint", "rust", "frontend-check"]
 
 [tier.lint]
 argv = ["bash", "-c", "apt-get update -qq && apt-get install -y -qq git curl jq sqlite3 python3 make >/dev/null && bash deploy/ci.sh"]
@@ -23,6 +31,10 @@ timeout = 600
 argv = ["bash", "-c", "apt-get update -qq && apt-get install -y -qq git curl jq sqlite3 python3 make >/dev/null && bash deploy/ci.sh"]
 env = { DUMPSTAR_CI_TIERS = "rust", DUMPSTAR_RUNNER_DEPS_ONLY = "base rust" }
 timeout = 1800
+
+[tier.frontend-check]
+argv = ["bash", "-c", "set -euo pipefail; apt-get update -qq && apt-get install -y -qq curl xz-utils ca-certificates >/dev/null; v=v22.11.0; curl -fsSL https://nodejs.org/dist/$v/node-$v-linux-x64.tar.xz | tar -xJ -C /usr/local --strip-components=1; cd frontend; npm ci; npm test; npm run check"]
+timeout = 900
 
 [tier.isolation]
 argv = ["bash", "deploy/ci.sh"]

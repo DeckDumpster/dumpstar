@@ -564,6 +564,80 @@ fn sealed_products_get_their_own_price_series_and_the_card_prices_are_unchanged(
     assert_eq!(again, stored, "a second sync of the same day adds nothing");
 }
 
+/// Serves a picture per URL and refuses any URL it was not told about.
+struct Pictures {
+    asked: RefCell<Vec<String>>,
+}
+
+impl Fetch for Pictures {
+    fn get(&self, url: &str) -> dumpstar_catalog::Result<Vec<u8>> {
+        self.asked.borrow_mut().push(url.to_string());
+        Ok(format!("jpeg bytes of {url}").into_bytes())
+    }
+}
+
+#[test]
+fn a_refresh_stores_each_sealed_products_picture_locally_with_its_source() {
+    let (e, _) = loaded();
+    let c = Catalog::open_writer(&e.db).unwrap();
+    let ids: Vec<i64> = c
+        .conn()
+        .prepare("SELECT product_id FROM tcgcsv_products WHERE number IS NULL AND group_id = 23405 ORDER BY 1")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(|r| r.unwrap())
+        .collect();
+    assert_eq!(ids.len(), 6, "the recorded SOR group's sealed products");
+    assert_eq!(
+        count(
+            c.conn(),
+            "SELECT COUNT(*) FROM sealed_images WHERE retrieved_on IS NULL"
+        ),
+        count(c.conn(), "SELECT COUNT(*) FROM sealed_images"),
+        "nothing is stored until the image pass runs"
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    let pics = Pictures {
+        asked: RefCell::new(vec![]),
+    };
+    let report =
+        dumpstar_catalog::images::fetch_pending(&c, &pics, dir.path(), "2026-10-13").unwrap();
+    assert!(report.failed.is_empty(), "{:?}", report.failed);
+    for id in &ids {
+        let file = dir.path().join(format!("{id}.jpg"));
+        assert!(file.exists(), "{id} is in the store");
+        let (url, on): (String, String) = c
+            .conn()
+            .query_row(
+                "SELECT source_url, retrieved_on FROM sealed_images WHERE product_id = ?1",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            url,
+            format!("https://tcgplayer-cdn.tcgplayer.com/product/{id}_200w.jpg")
+        );
+        assert_eq!(on, "2026-10-13");
+    }
+    assert_eq!(
+        count(
+            c.conn(),
+            "SELECT COUNT(*) FROM sealed_images s JOIN tcgcsv_products t USING (product_id)
+              WHERE t.number IS NOT NULL"
+        ),
+        0,
+        "card products have no sealed picture"
+    );
+
+    let again =
+        dumpstar_catalog::images::fetch_pending(&c, &pics, dir.path(), "2026-10-14").unwrap();
+    assert_eq!(again.stored, 0, "a stored picture is not fetched again");
+    assert_eq!(pics.asked.borrow().len(), report.stored);
+}
+
 fn edit_products(http: &mut Recorded, f: impl FnOnce(&mut Vec<Value>)) {
     let mut v: Value = serde_json::from_slice(&http.products[&23405]).unwrap();
     f(v["results"].as_array_mut().unwrap());

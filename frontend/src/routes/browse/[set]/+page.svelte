@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { page } from '$app/state';
 	import { goto, afterNavigate, beforeNavigate } from '$app/navigation';
 	import { api } from '$lib/api';
+	import { latestOnly } from '$lib/latest';
 	import VariantModal from '$lib/components/VariantModal.svelte';
 	import { breadcrumbs } from '$lib/breadcrumbs.svelte';
 	import {
@@ -147,6 +149,12 @@
 		]);
 	});
 
+	// Only the newest load may write `binder`: a slower earlier response
+	// (hydration, the debounced search, a re-run) must never overwrite a newer
+	// page, and a superseded request is aborted so it stops queueing behind
+	// the tenant's connection.
+	const latest = latestOnly();
+
 	async function load() {
 		const set = page.params.set;
 		if (!set) return;
@@ -154,34 +162,40 @@
 			sessionSet = set;
 			sessionBatchId = null;
 		}
+		const params = {
+			page: pageNum,
+			layout,
+			hyperspace: includeHyperspace,
+			showcase: includeShowcase,
+			promos: includePromos,
+			sort,
+			q: search,
+			filter: missingOnly ? 'need' : 'all'
+		};
+		const key = `${set}?${JSON.stringify(params)}`;
 		loading = true;
 		error = null;
 		selectedSlot = null;
+		let settled = false;
 		try {
-			binder = await api.binder(set, {
-				page: pageNum,
-				layout,
-				hyperspace: includeHyperspace,
-				showcase: includeShowcase,
-				promos: includePromos,
-				sort,
-				q: search,
-				filter: missingOnly ? 'need' : 'all'
-			});
+			const r = await latest.run(key, (signal) => api.binder(set, params, signal));
+			if (r.stale) return;
+			settled = true;
+			binder = r.value;
 		} catch (e) {
+			settled = true;
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
-			loading = false;
-			// A pager action asked to re-center at the top — do it now that the
-			// new page's slots are in the DOM. rAF gives layout one frame to
-			// settle so the scroll lands (mirrors the popstate restore above).
-			if (scrollTopPending && typeof window !== 'undefined') {
-				scrollTopPending = false;
-				// Instant jump (not smooth): a page advance swaps the whole grid,
-				// so animating a scroll through replaced content is both odd and
-				// leaves the page moving while the next interaction fires. Mirrors
-				// the popstate scroll restore below.
-				requestAnimationFrame(() => window.scrollTo(0, 0));
+			if (settled) {
+				loading = false;
+				// A pager action asked to re-center at the top — do it now that the
+				// new page's slots are in the DOM. rAF gives layout one frame to
+				// settle so the scroll lands (mirrors the popstate restore below).
+				if (scrollTopPending && typeof window !== 'undefined') {
+					scrollTopPending = false;
+					// Instant jump (not smooth): a page advance swaps the whole grid.
+					requestAnimationFrame(() => window.scrollTo(0, 0));
+				}
 			}
 		}
 	}
@@ -240,7 +254,7 @@
 	});
 
 	function syncUrl() {
-		if (typeof window === 'undefined' || !routerReady) return;
+		if (typeof window === 'undefined' || !untrack(() => routerReady)) return;
 		const url = new URL(window.location.href);
 		const set = (k: string, v: string, dflt: string) => {
 			if (v === dflt) url.searchParams.delete(k);

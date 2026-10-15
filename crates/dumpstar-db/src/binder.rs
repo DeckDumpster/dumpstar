@@ -631,8 +631,14 @@ mod tests {
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         // Collector-number sorts do not hoist: #1..#10 in order.
         for (sort, want) in [
-            ("number", ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]),
-            ("number_desc", ["10", "9", "8", "7", "6", "5", "4", "3", "2", "1"]),
+            (
+                "number",
+                ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
+            ),
+            (
+                "number_desc",
+                ["10", "9", "8", "7", "6", "5", "4", "3", "2", "1"],
+            ),
         ] {
             let page = get_binder_page(
                 &conn,
@@ -648,12 +654,7 @@ mod tests {
             let nums: Vec<&str> = page.slots.iter().map(|s| s.number.as_str()).collect();
             assert_eq!(nums, want, "sort {sort}");
         }
-        for sort in [
-            "name",
-            "name_desc",
-            "price",
-            "rarity",
-        ] {
+        for sort in ["name", "name_desc", "price", "rarity"] {
             let page = get_binder_page(
                 &conn,
                 "SOR",

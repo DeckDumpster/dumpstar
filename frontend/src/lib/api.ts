@@ -51,8 +51,8 @@ import type { NewManualPrice } from './types/NewManualPrice';
 import type { CreateMissingVariant } from './types/CreateMissingVariant';
 import type { CreateMissingVariantResult } from './types/CreateMissingVariantResult';
 import type { BackupStatus } from './types/BackupStatus';
-async function getJson<T>(url: string): Promise<T> {
-	const res = await fetch(url);
+async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+	const res = await fetch(url, { signal });
 	if (!res.ok) {
 		throw new Error(`${res.status} ${res.statusText} — ${url}`);
 	}
@@ -158,9 +158,13 @@ export const api = {
 		getJson<SetAnalytics>(`/api/sets/${encodeURIComponent(code)}/analytics`),
 
 	/** A binder page for a set. */
-	binder: (setCode: string, params: Record<string, string | number | boolean>) => {
+	binder: (
+		setCode: string,
+		params: Record<string, string | number | boolean>,
+		signal?: AbortSignal
+	) => {
 		const q = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]));
-		return getJson<BinderPage>(`/api/sets/${encodeURIComponent(setCode)}/binder?${q}`);
+		return getJson<BinderPage>(`/api/sets/${encodeURIComponent(setCode)}/binder?${q}`, signal);
 	},
 
 	/** Add a copy to the collection; returns the created display row. */

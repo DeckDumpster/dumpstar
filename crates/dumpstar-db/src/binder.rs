@@ -256,13 +256,15 @@ pub fn get_binder_page(
     // Sort. Progress above is computed pre-sort/filter, so the bars always
     // reflect the whole section-included set rather than the current view.
     // `visible` arrives in collector-number order.
-    // Leaders and bases form their own top section whatever the sort: pulled
-    // out first, Leaders then Bases by collector number, and the chosen sort
-    // orders only the cards below.
+    // Under any sort but collector number, leaders and bases form their own
+    // top section: pulled out first, Leaders then Bases by collector number,
+    // and the chosen sort orders only the cards below. Collector-number sorts
+    // list every card strictly by number, leaders and bases included.
     let mut top: Vec<BinderSlot> = Vec::new();
     let mut rest: Vec<BinderSlot> = Vec::new();
+    let by_number = matches!(q.sort.as_str(), "number" | "number_desc");
     for s in visible {
-        if s.landscape {
+        if s.landscape && !by_number {
             top.push(s);
         } else {
             rest.push(s);
@@ -599,7 +601,7 @@ mod tests {
     }
 
     #[test]
-    fn leaders_and_bases_head_the_page_in_every_sort() {
+    fn leaders_and_bases_head_the_page_in_every_non_number_sort() {
         let dir = tempfile::tempdir().unwrap();
         let shared = dir.path().join("shared.sqlite");
         {
@@ -627,9 +629,26 @@ mod tests {
             }
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
+        // Collector-number sorts do not hoist: #1..#10 in order.
+        for (sort, want) in [
+            ("number", ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]),
+            ("number_desc", ["10", "9", "8", "7", "6", "5", "4", "3", "2", "1"]),
+        ] {
+            let page = get_binder_page(
+                &conn,
+                "SOR",
+                &BinderQuery {
+                    sort: sort.into(),
+                    layout: 60,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .unwrap();
+            let nums: Vec<&str> = page.slots.iter().map(|s| s.number.as_str()).collect();
+            assert_eq!(nums, want, "sort {sort}");
+        }
         for sort in [
-            "number",
-            "number_desc",
             "name",
             "name_desc",
             "price",

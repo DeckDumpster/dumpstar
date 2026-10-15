@@ -354,7 +354,13 @@
 		}
 	}
 
-	const groups = $derived(splitLandscape(binder?.slots ?? []));
+	// Leaders and bases group on top under every sort except collector number,
+	// which lists every card strictly by number.
+	const groups = $derived(
+		sortKey === 'number'
+			? { landscape: [], portrait: binder?.slots ?? [] }
+			: splitLandscape(binder?.slots ?? [])
+	);
 
 	const sectionLabel: Record<string, string> = {
 		base: '',

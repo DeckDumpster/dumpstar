@@ -14,4 +14,9 @@ set_name: string, number: string, name: string, subtitle: string | null,
 /**
  * `Leader` | `Unit` | `Event` | `Upgrade` | `Base` | `Token`.
  */
-card_type: string | null, cost: number | null, power: number | null, hp: number | null, aspects: string | null, traits: string | null, arenas: string | null, rules_text: string | null, rarity: string | null, artist: string | null, image_url: string | null, };
+card_type: string | null, cost: number | null, power: number | null, hp: number | null, aspects: string | null, traits: string | null, arenas: string | null, rules_text: string | null, 
+/**
+ * The official styled text (HTML with inline game icons) when the
+ * catalog has it; the frontend sanitises it before render.
+ */
+rules_html: string | null, rarity: string | null, artist: string | null, image_url: string | null, };

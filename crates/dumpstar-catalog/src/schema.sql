@@ -29,6 +29,17 @@ CREATE TABLE IF NOT EXISTS cards (
 );
 CREATE INDEX IF NOT EXISTS idx_cards_name ON cards(name);
 
+-- The official styled card text (textStyled, deployBoxStyled and
+-- epicActionStyled, one <p> each, in that order), verbatim: HTML with the
+-- publisher's inline game icons as <img> tags. A table of its own, not a
+-- cards column, so a catalog written before it exists gains it by the next
+-- apply instead of being rebuilt. The frontend sanitises it to the
+-- icon/strong/em subset before render (sp-el3uaa).
+CREATE TABLE IF NOT EXISTS card_text_styled (
+    card_id          TEXT PRIMARY KEY REFERENCES cards(card_id),
+    html             TEXT NOT NULL
+);
+
 -- One row per official printing, finish included: the Standard Foil of a
 -- card is its own printing, as is its Hyperspace and Hyperspace Foil.
 -- A printing is what the official API calls one (a cardUid). Two official

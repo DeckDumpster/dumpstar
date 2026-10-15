@@ -265,6 +265,22 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
             )?;
         }
         r.cards += changed;
+        match &c.rules_html {
+            Some(html) => {
+                tx.execute(
+                    "INSERT INTO card_text_styled (card_id, html) VALUES (?1, ?2)
+                     ON CONFLICT(card_id) DO UPDATE SET html = excluded.html
+                     WHERE html IS NOT excluded.html",
+                    params![c.card_id, html],
+                )?;
+            }
+            None => {
+                tx.execute(
+                    "DELETE FROM card_text_styled WHERE card_id = ?1",
+                    [&c.card_id],
+                )?;
+            }
+        }
     }
 
     let cols = [

@@ -12,6 +12,7 @@
 /frontend/.svelte-kit
 /frontend/build
 /frontend/static/aspects
+/frontend/static/icons
 /frontend/dist
 
 # Tests

@@ -171,6 +171,8 @@ RUN npm ci
 COPY frontend/ ./
 # The remedial aspect icons; the build copies them into static/aspects/.
 COPY data/remedial/aspects/ ../data/remedial/aspects/
+# The remedial inline game icons; the build copies them into static/icons/.
+COPY data/remedial/inline-icons/ ../data/remedial/inline-icons/
 RUN npm run build
 
 LABEL dumpstar.build="1"

@@ -4,6 +4,7 @@
 	import { facetHref } from '$lib/facets';
 	import { sortAspects } from '$lib/aspects';
 	import AspectIcon from '$lib/components/AspectIcon.svelte';
+	import { cardTextHtml } from '$lib/cardtext';
 	import { breadcrumbs } from '$lib/breadcrumbs.svelte';
 	import { variantSortCmp } from '$lib/variants.svelte';
 	import { siblingsAt, shownPrinting, otherPrintings, seriesFor } from '$lib/printings';
@@ -334,7 +335,9 @@
 					</dd>{/if}
 			</dl>
 
-			{#if card.rules_text}<p class="cardText">{card.rules_text}</p>{/if}
+			{#if card.rules_html}
+				<div class="cardText">{@html cardTextHtml(card.rules_html)}</div>
+			{:else if card.rules_text}<p class="cardText">{card.rules_text}</p>{/if}
 		</div>
 	</div>
 
@@ -735,6 +738,14 @@
 		margin-top: var(--space-8);
 	}
 
+	.cardText :global(p) {
+		margin: 0 0 var(--space-2);
+	}
+	.cardText :global(.gameIcon) {
+		inline-size: 1.15em;
+		block-size: 1.15em;
+		vertical-align: text-bottom;
+	}
 	.cardText {
 		margin: 0.25rem 0 0;
 		color: var(--color-text-muted);

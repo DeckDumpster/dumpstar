@@ -91,6 +91,10 @@ pub struct CardRecord {
     #[serde(default)]
     pub arenas: Vec<String>,
     pub rules_text: Option<String>,
+    /// The official styled text as HTML, icons included; see
+    /// `card_text_styled` in schema.sql.
+    #[serde(default)]
+    pub rules_html: Option<String>,
 }
 
 /// One official printing, finish included.

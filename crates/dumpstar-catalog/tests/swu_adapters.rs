@@ -903,3 +903,93 @@ fn a_set_no_source_dates_takes_its_date_from_the_remedial_dataset() {
     assert_eq!(date.as_deref(), Some("2024-07-12"));
     assert!(alarms(c.conn(), "set_without_release_date").is_empty());
 }
+
+#[test]
+fn the_styled_text_keeps_the_official_inline_icons() {
+    let page = official::parse_page(&read("off-single-uid.json")).unwrap();
+    let html = page.payload.cards[0].rules_html.as_deref().unwrap();
+    assert!(html.contains("icon_exhaust"));
+    assert!(html.contains("icon_cost_1"));
+    assert!(html.contains("Epic Action:"));
+}
+
+/// Every icon the catalog's styled text references has a manifest entry whose
+/// file is in the repository's remedial asset set (sp-el3uaa).
+#[test]
+fn every_inline_icon_in_the_styled_text_has_a_manifest_entry() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/remedial/inline-icons");
+    let manifest: Value =
+        serde_json::from_slice(&std::fs::read(dir.join("manifest.json")).unwrap()).unwrap();
+    let mut entries = BTreeSet::new();
+    for e in manifest["icons"].as_array().unwrap() {
+        let file = e["file"].as_str().unwrap();
+        assert!(
+            dir.join(file).is_file(),
+            "{file} is in the manifest, not on disk"
+        );
+        assert!(!e["alt"].as_str().unwrap().is_empty());
+        assert!(e["source_url"].as_str().unwrap().ends_with(file));
+        assert!(!e["retrieved"].as_str().unwrap().is_empty());
+        entries.insert(file.to_string());
+    }
+
+    let mut fixtures_read = vec![
+        "off-single-uid.json".to_string(),
+        "off-cards-p2.json.gz".into(),
+    ];
+    for n in 1..=10 {
+        fixtures_read.push(format!("official-sor-pages/sor-page{n}.json.gz"));
+    }
+    // The captured bytes, localised entries included: every <img> in any
+    // styled-text field.
+    let mut referenced = BTreeSet::new();
+    for f in &fixtures_read {
+        let raw = String::from_utf8(read(f)).unwrap();
+        for part in raw.split("ffg-prod-uploads.s3.amazonaws.com/").skip(1) {
+            let file = part.split('"').next().unwrap().trim_start_matches('/');
+            let file = file.split('\\').next().unwrap();
+            referenced.insert(file.to_string());
+        }
+    }
+    assert!(referenced.contains("icon_exhaust_0c450d09d4.png"));
+    let missing: Vec<_> = referenced.difference(&entries).collect();
+    assert!(
+        missing.is_empty(),
+        "icons with no manifest entry: {missing:?}"
+    );
+}
+
+#[test]
+fn the_apply_job_stores_the_styled_text_and_updates_it_in_place() {
+    use dumpstar_catalog::landing::Provenance;
+    let e = env();
+    let mut catalog = Catalog::open_writer(&e.db).unwrap();
+    let bytes = read("off-single-uid.json");
+    let prov = |sha: &str| Provenance {
+        source: dumpstar_catalog::swu::SRC_OFFICIAL.into(),
+        url: "https://official.test/x".into(),
+        fetched_at: "2026-10-15T00:00:00Z".into(),
+        sha256: sha.into(),
+        bytes: 1,
+        as_of: None,
+    };
+    dumpstar_catalog::apply::apply(&mut catalog, &bytes, &prov("a")).unwrap();
+    let html: String = catalog
+        .conn()
+        .query_row("SELECT html FROM card_text_styled", [], |r| r.get(0))
+        .unwrap();
+    assert!(html.contains("icon_exhaust") && html.contains("icon_cost_1"));
+    let edited = String::from_utf8(bytes)
+        .unwrap()
+        .replace("Shield token", "Shield tokens");
+    dumpstar_catalog::apply::apply(&mut catalog, edited.as_bytes(), &prov("b")).unwrap();
+    assert_eq!(
+        count(catalog.conn(), "SELECT COUNT(*) FROM card_text_styled"),
+        1
+    );
+    let html: String = catalog
+        .conn()
+        .query_row("SELECT html FROM card_text_styled", [], |r| r.get(0))
+        .unwrap();
+    assert!(html.contains("Shield tokens"));
+}

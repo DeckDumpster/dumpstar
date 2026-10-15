@@ -270,6 +270,17 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
                         Some(parts.join("\n"))
                     }
                 },
+                rules_html: {
+                    let parts: Vec<String> = ["textStyled", "deployBoxStyled", "epicActionStyled"]
+                        .iter()
+                        .filter_map(|k| text(a, k))
+                        .collect();
+                    if parts.is_empty() {
+                        None
+                    } else {
+                        Some(parts.join("\n"))
+                    }
+                },
             };
             // The Standard non-foil entry defines the card; any other entry
             // only stands in until one is seen.

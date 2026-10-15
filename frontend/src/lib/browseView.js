@@ -25,6 +25,27 @@ export function splitLandscape(slots) {
 	};
 }
 
+/**
+ * Cut a page's slots, in the order given, into runs: each maximal run of
+ * consecutive Leaders is a `leaders` band, each of Bases a `bases` band, and
+ * everything between is a `portrait` run. Nothing is reordered or moved
+ * across a boundary; a run is only ever a contiguous slice.
+ * @template {{ landscape: boolean, card_type?: string | null }} T
+ * @param {T[]} slots
+ * @returns {{ kind: 'leaders' | 'bases' | 'portrait', slots: T[], start: number }[]}
+ */
+export function bandRuns(slots) {
+	/** @type {{ kind: 'leaders' | 'bases' | 'portrait', slots: T[], start: number }[]} */
+	const runs = [];
+	slots.forEach((s, i) => {
+		const kind = !s.landscape ? 'portrait' : s.card_type === 'Base' ? 'bases' : 'leaders';
+		const last = runs[runs.length - 1];
+		if (last && last.kind === kind) last.slots.push(s);
+		else runs.push({ kind, slots: [s], start: i });
+	});
+	return runs;
+}
+
 /** Rows per binder page; the page size is `cols * BROWSE_ROWS`. */
 export const BROWSE_ROWS = 3;
 /** Most cards per row. `MAX_COLS * BROWSE_ROWS` equals the backend's BINDER_MAX_LAYOUT. */

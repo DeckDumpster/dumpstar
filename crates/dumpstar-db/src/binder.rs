@@ -57,6 +57,11 @@ pub struct BinderSlot {
 }
 
 /// A single rendered binder page with master-set progress.
+/// Most cards a binder page holds: 8 per row (the set page's column maximum)
+/// times its 3 rows. The frontend's `MAX_COLS * ROWS` is pinned to this by
+/// `frontend/tests/browse-view.test.js`.
+pub const BINDER_MAX_LAYOUT: i64 = 24;
+
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
 #[ts(export)]
 pub struct BinderPage {
@@ -302,7 +307,7 @@ pub fn get_binder_page(
     });
 
     // Paginate the sorted, filtered view.
-    let layout = q.layout.clamp(1, 60);
+    let layout = q.layout.clamp(1, BINDER_MAX_LAYOUT);
     let visible_count = visible.len() as i64;
     let total_pages = ((visible_count + layout - 1) / layout).max(1);
     let page = q.page.clamp(1, total_pages);

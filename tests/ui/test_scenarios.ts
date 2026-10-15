@@ -109,6 +109,17 @@ function loadVisionOnly(): Set<string> {
   return new Set(names);
 }
 
+/** Names listed in known-red.txt: implementations expected to fail today. */
+function loadKnownRed(): Set<string> {
+  const file = path.join(here, "known-red.txt");
+  const names = fs
+    .readFileSync(file, "utf8")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l !== "" && !l.startsWith("#"));
+  return new Set(names);
+}
+
 // ── Session state, established in beforeAll ────────────────────────────────
 
 let baseUrl = "";
@@ -147,6 +158,7 @@ test.afterAll(async () => {
 // ── One test per discovered intent ─────────────────────────────────────────
 
 const VISION_ONLY = REPLAY_ONLY ? loadVisionOnly() : new Set<string>();
+const KNOWN_RED = REPLAY_ONLY ? loadKnownRed() : new Set<string>();
 
 for (const t of discoverTests()) {
   test(t.name, async ({ page }) => {
@@ -166,6 +178,11 @@ for (const t of discoverTests()) {
           `${t.name} has a replay implementation but is still listed in ` +
             `tests/ui/vision-only.txt: remove it from the list`,
         );
+      }
+      if (KNOWN_RED.has(t.name)) {
+        // Expected to fail: an unexpected pass is reported as a failure, which
+        // is what makes the list shrink.
+        test.fail(true, "known red (tests/ui/known-red.txt) — delete its line once it passes");
       }
       if (skipReason !== null) {
         // An unreachable server is a red, never a skip: a tier that skips

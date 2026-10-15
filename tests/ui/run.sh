@@ -18,6 +18,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 work="$(mktemp -d)"
+exec > >(tee -a "$root/.ui-run-debug.log") 2>&1
 pids=()
 cleanup() {
     for p in "${pids[@]:-}"; do [ -n "$p" ] && kill "$p" 2>/dev/null || true; done

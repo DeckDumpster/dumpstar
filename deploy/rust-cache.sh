@@ -39,8 +39,9 @@ dumpstar_rust_cache_enable() {
 		echo "==> rust cache: sccache not installed (bash deploy/runner-deps.sh) — compiling cold"
 		return 0
 	fi
-	if ! curl -sS -m 5 -o /dev/null "$endpoint/" 2>/dev/null; then
-		echo "==> rust cache: ${endpoint} unreachable — compiling cold (slower, still correct)"
+	local why
+	if ! why="$(curl -sS -m 5 -o /dev/null "$endpoint/" 2>&1)"; then
+		echo "==> rust cache: ${endpoint} unreachable — compiling cold (slower, still correct): ${why}"
 		return 0
 	fi
 	export SCCACHE_WEBDAV_ENDPOINT="$endpoint"
@@ -56,16 +57,27 @@ dumpstar_rust_cache_enable() {
 	echo "==> rust cache: sccache -> ${endpoint}"
 }
 
+# dumpstar_rust_cache_report [label]
+#
+# One line per compile: hits, misses and the hit rate, then the counters are
+# zeroed so the next report covers only the compile after it. A rate under 90%
+# on a run whose sources did not change is a cache that is not working.
 dumpstar_rust_cache_report() {
-	[ "$DUMPSTAR_RUST_CACHE_STATE" = on ] || { echo "==> rust cache summary: not in use (cold compile)"; return 0; }
-	local out hits misses
+	local label="${1:-host compiles}"
+	[ "$DUMPSTAR_RUST_CACHE_STATE" = on ] || { echo "==> rust cache summary (${label}): not in use (cold compile)"; return 0; }
+	local out hits misses rate
 	out="$(sccache --show-stats 2>&1)" || true
 	hits="$(printf '%s\n' "$out" | awk '/^Cache hits +[0-9]+/ {print $3; exit}')"
 	misses="$(printf '%s\n' "$out" | awk '/^Cache misses +[0-9]+/ {print $3; exit}')"
-	echo "==> rust cache summary (host compiles): hits=${hits:-?} misses=${misses:-?}"
+	rate="n/a"
+	if [ $(( ${hits:-0} + ${misses:-0} )) -gt 0 ]; then
+		rate="$(( 100 * ${hits:-0} / (${hits:-0} + ${misses:-0}) ))%"
+	fi
+	echo "==> rust cache summary (${label}): hits=${hits:-?} misses=${misses:-?} hit-rate=${rate}"
 	if [ "${hits:-0}" = 0 ] && [ "${misses:-0}" != 0 ]; then
 		echo "    clean cache: every crate compiled cold this run (slower); the next run reads what this one wrote"
 	fi
+	sccache --zero-stats >/dev/null 2>&1 || true
 }
 
 # Build args for `podman build`: the static sccache binary as a named build

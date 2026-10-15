@@ -957,8 +957,33 @@ fi
 
 # --- 2. Rust tests ---
 if tier rust; then
-    step "cargo test"
-    ( cd "$REPO_DIR" && cargo test )
+    # cargo test runs its test binaries one after another (~14 of CI's 43
+    # minutes, sp-7xm13h); cargo-nextest schedules every test of every binary
+    # across the vCPUs at once. It does not run doctests, so those follow.
+    # Without a nextest (and no way to fetch the prebuilt one) the run falls
+    # back to plain `cargo test`, slower but with the same verdicts.
+    if ! cargo nextest --version >/dev/null 2>&1; then
+        _nx_tmp="$(mktemp -d)"
+        if curl -fsSL --retry 3 https://get.nextest.rs/linux 2>/dev/null | tar -xz -C "$_nx_tmp" 2>/dev/null \
+            && mkdir -p "${CARGO_HOME:-$HOME/.cargo}/bin" \
+            && cp "$_nx_tmp/cargo-nextest" "${CARGO_HOME:-$HOME/.cargo}/bin/"; then
+            :
+        else
+            echo "NOTE: cargo-nextest unavailable; running cargo test serially" >&2
+        fi
+        rm -rf "$_nx_tmp"
+    fi
+    if cargo nextest --version >/dev/null 2>&1; then
+        _t0=$SECONDS
+        step "cargo nextest run (all test binaries in parallel)"
+        ( cd "$REPO_DIR" && cargo nextest run --profile ci --workspace --no-fail-fast )
+        echo "test execution wall time: $((SECONDS - _t0))s"
+        step "cargo test --doc"
+        ( cd "$REPO_DIR" && cargo test --doc --workspace )
+    else
+        step "cargo test"
+        ( cd "$REPO_DIR" && cargo test )
+    fi
     dumpstar_rust_cache_report
 fi
 

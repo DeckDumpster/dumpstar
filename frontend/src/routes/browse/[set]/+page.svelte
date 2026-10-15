@@ -702,6 +702,7 @@
 					class:missing={!ownedAny(slot)}
 					class:landscape={slot.landscape}
 					class:rotated={slot.landscape && view === 'binder'}
+					class:wide={slot.landscape && view !== 'binder' && cols > 1}
 					data-landscape={slot.landscape}
 				>
 					<button class="slot" onclick={() => (selectedSlot = slot)}>
@@ -731,14 +732,14 @@
 				<div
 					class="grid landscapegrid"
 					data-testid="landscape-grid"
-					style:grid-template-columns="repeat({cols}, 1fr)"
+					style:grid-template-columns="repeat({cols}, minmax(0, 1fr))"
 				>
 					{#each groups.landscape as slot (slot.card_id)}
 						{@render cell(slot)}
 					{/each}
 				</div>
 			{/if}
-			<div class="grid" data-testid="portrait-grid" style:grid-template-columns="repeat({cols}, 1fr)">
+			<div class="grid" data-testid="portrait-grid" style:grid-template-columns="repeat({cols}, minmax(0, 1fr))">
 				{#each groups.portrait as slot, i (slot.card_id)}
 					{@const prevSection = i > 0 ? groups.portrait[i - 1].section : 'base'}
 					{#if slot.section !== prevSection && slot.section !== 'base'}
@@ -1045,6 +1046,13 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-1);
+		min-width: 0;
+	}
+	/* A landscape card spans two portrait columns, so a 7:5 image is about
+	   as tall as a 5:7 one and its row stays aligned; the grid never gets a
+	   cell wider than itself. Binder view keeps the portrait pocket. */
+	.slotwrap.wide {
+		grid-column: span 2;
 	}
 	.slot {
 		display: block;
@@ -1118,6 +1126,8 @@
 		line-height: var(--leading-tight);
 		color: var(--color-text-muted);
 		min-width: 0;
+		min-height: 20px;
+		overflow: hidden;
 	}
 	.meta .num {
 		color: var(--color-text-subtle);

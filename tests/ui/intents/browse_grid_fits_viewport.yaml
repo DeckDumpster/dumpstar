@@ -1,0 +1,10 @@
+# Scenario: the set browse grid never exceeds the viewport
+#
+# Related:
+#   issues: [sp-mxm9dw]
+
+description: >
+  On a set's browse page the card grid stays within the viewport width at
+  every cards-per-row setting (minimum, default and maximum), at desktop
+  and phone widths, including on first load of a set with leaders. Cards in
+  one row render at equal heights.

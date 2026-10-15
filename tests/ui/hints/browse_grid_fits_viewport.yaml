@@ -1,0 +1,8 @@
+start_page: /browse/SOR
+involves:
+  - "set browse grid at 1280px and 390px, cols 1, 3 and 10"
+fixture_data:
+  set: SOR
+notes: >
+  Asserts scrollWidth <= clientWidth on every grid and equal slot image
+  heights within each row.

@@ -14,11 +14,12 @@
 # The default is a non-executable placeholder, which the build reads as "no cache".
 FROM docker.io/library/debian:bookworm-slim AS sccache-default
 RUN mkdir /out && : > /out/sccache
+LABEL dumpstar.build="1"
 FROM scratch AS sccache-bin
 COPY --from=sccache-default /out/ /
+LABEL dumpstar.build="1"
 
 FROM docker.io/library/rust:1.94-slim-bookworm AS builder
-COPY --from=sccache-bin / /opt/sccache-ctx/
 
 WORKDIR /app
 
@@ -119,7 +120,8 @@ ARG CARGO_TARGET_CACHE_SCOPE=unscoped
 # SCCACHE_WEBDAV_ENDPOINT is the store, empty meaning "no cache".
 ARG SCCACHE_WEBDAV_ENDPOINT=
 ENV DUMPSTAR_SOURCES="Cargo.toml Cargo.lock rust-toolchain.toml crates data"
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
+RUN --mount=type=bind,from=sccache-bin,source=/,target=/opt/sccache-ctx \
+    --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target,sharing=locked,id=dumpstar-target-bookworm-${CARGO_TARGET_CACHE_SCOPE} \
     stamp="$(find ${DUMPSTAR_SOURCES} -type f -exec sha256sum {} + \
              | LC_ALL=C sort | sha256sum | cut -d' ' -f1)" \

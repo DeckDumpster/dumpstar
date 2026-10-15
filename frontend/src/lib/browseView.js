@@ -40,3 +40,17 @@ export function clampCols(n) {
 	if (!Number.isFinite(n)) return DEFAULT_COLS;
 	return Math.min(MAX_COLS, Math.max(1, Math.trunc(n)));
 }
+
+/**
+ * The page that holds the first card of `page` at `oldLayout` cards per page,
+ * once the page size becomes `newLayout`. Changing cards per row keeps the
+ * reader at the same place in the set instead of resetting to page 1.
+ * @param {number} page
+ * @param {number} oldLayout
+ * @param {number} newLayout
+ * @returns {number}
+ */
+export function pageAfterResize(page, oldLayout, newLayout) {
+	const first = (Math.max(1, page) - 1) * oldLayout;
+	return Math.floor(first / newLayout) + 1;
+}

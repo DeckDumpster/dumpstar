@@ -16,7 +16,7 @@
 		Toolbar
 	} from '$lib/components/ui';
 	import { printingLabel } from '$lib/format';
-	import { parseView, splitLandscape, clampCols, MAX_COLS, BROWSE_ROWS } from '$lib/browseView';
+	import { parseView, splitLandscape, clampCols, MAX_COLS, BROWSE_ROWS, pageAfterResize } from '$lib/browseView';
 	import type { ViewMode } from '$lib/browseView';
 	import { variantColor, variantSortCmp } from '$lib/variants.svelte';
 	import type { BinderPage } from '$lib/types/BinderPage';
@@ -116,8 +116,8 @@
 	function stepCols(delta: number) {
 		const next = clampCols(cols + delta);
 		if (next === cols) return;
+		pageNum = pageAfterResize(pageNum, layout, next * BROWSE_ROWS);
 		cols = next;
-		pageNum = 1;
 	}
 
 	let selectedSlot = $state<BinderSlot | null>(null);

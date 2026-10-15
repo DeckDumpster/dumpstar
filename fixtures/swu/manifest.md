@@ -36,3 +36,11 @@ Added 2026-10-13 by sp-urhv3o (dumpstar 7), retrieved with User-Agent `dumpstar-
 | sor-wpp-prices.json | https://tcgcsv.com/tcgplayer/79/23451/prices | the same group's price rows |
 | last-updated.txt | https://tcgcsv.com/last-updated.txt | `2026-10-12T20:05:44+0000`, no trailing newline |
 | promo-23452/23453/23454/23455-products.json.gz, -prices.json.gz | https://tcgcsv.com/tcgplayer/79/{23452 PRE, 23453 JDG, 23454 EEP, 23455 OPP}/products and /prices | the promo groups the SOR event/prize printings are listed in: Prerelease Promo (PRE), Prerelease Judge and SS Judge (JDG), SS Participation/Top 8/Top 4/Finalist/Champion (OPP), and the Hyperspace Luke/Vader 1/2, 2/2 (EEP). Other sets' promos share these groups. |
+
+Added 2026-10-15 by sp-9uiu2z (TCGplayer ids for every printing TCGplayer sells), retrieved with User-Agent `dumpstar-sync/0.1 (+https://star.dumpster.cards)`:
+
+| File | source_url | Shows |
+|---|---|---|
+| tcgcsv-{jtl-23956,lof-24279,sec-24387,law-24572,ash-24660,hmw-24812}-products.json.gz | https://tcgcsv.com/tcgplayer/79/{groupId}/products | the six main sets' full product lists, `extendedData` cut to Number, Rarity and CardType and the description/image fields dropped. TCGplayer lists each foil, Prestige, Serialized and Gold printing as a product of its own (`(Foil)`, `(Hyperspace Foil)`, `(Prestige Foil)`, `(Serialized) (Rose Gold)`) with a number that is not the collector number, and a Costco exclusive (719791, Leia Organa - Vigilant for Danger) under the Ashes of the Empire group |
+| tcgcsv-ash-24660-prices.json.gz | https://tcgcsv.com/tcgplayer/79/24660/prices | Ashes of the Empire prices, 2026-10-15 retrieval; 719791 quotes `Foil` market 10.38 |
+| official-trim-{JTL,LOF,SEC,LAW,ASH,HMW,CST}.json.gz | https://admin.starwarsunlimited.com/api/cards?...filters[expansion][code][$eq]={set} | every official entry of the set, cut to the attributes the parser reads (title, subtitle, cardNumber, cardUid, serialCode, cardId, updatedAt, expansion, variantTypes, rarity, type), in one page each; `meta.pagination.pageCount` is 7, the number of files |

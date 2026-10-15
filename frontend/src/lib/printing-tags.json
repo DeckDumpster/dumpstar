@@ -1,0 +1,10 @@
+{
+	"_doc": "Collection printing tags. A variant is shown as its code here, and dropped entirely when every word of its program name already appears in the set's name (a Weekly Play printing in 'Jump to Lightspeed: Weekly Play Promos' is just its finish). An empty code means the variant is never shown.",
+	"variants": {
+		"Standard": "",
+		"Hyperspace": "Hyperspace",
+		"Showcase": "Showcase",
+		"Weekly Play": "WP",
+		"Promo": "Promo"
+	}
+}

@@ -60,7 +60,7 @@ async fn binder_page(
         layout: p.layout.unwrap_or(9),
         include_hyperspace: p.hyperspace.unwrap_or(true),
         include_showcase: p.showcase.unwrap_or(true),
-        include_promos: p.promos.unwrap_or(false),
+        include_promos: p.promos.unwrap_or(true),
         sort: p.sort.unwrap_or_else(|| "number".into()),
         search: p.q.unwrap_or_default(),
         filter: p.filter.unwrap_or_else(|| "all".into()),

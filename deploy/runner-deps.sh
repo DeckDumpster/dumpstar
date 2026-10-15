@@ -576,7 +576,7 @@ note "installing dependencies for $(id -un) on $(hostname)"
 phase "fast path: is everything already baked in?"
 _pinned="$(sed -n 's/^channel[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' rust-toolchain.toml 2>/dev/null)"
 if run_checks >/dev/null 2>&1 && [ ${#MISSING[@]} -eq 0 ] \
-   && { [ -z "$_pinned" ] || rustup toolchain list 2>/dev/null | grep -q "^${_pinned}"; } \
+   && { [ -z "$_pinned" ] || grep -q "^${_pinned}" <<<"$(rustup toolchain list 2>/dev/null)"; } \
    && { [ "$(uname -m)" != x86_64 ] || [ -x "${DUMPSTAR_SCCACHE_DIR:-$HOME/.cache/dumpstar-sccache-bin}/sccache" ]; }; then
     note "everything already present -- nothing to install"
     exit 0

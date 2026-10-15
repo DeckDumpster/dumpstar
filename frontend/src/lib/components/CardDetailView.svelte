@@ -2,6 +2,8 @@
 	import { fade } from 'svelte/transition';
 	import { api } from '$lib/api';
 	import { facetHref } from '$lib/facets';
+	import { sortAspects } from '$lib/aspects';
+	import AspectIcon from '$lib/components/AspectIcon.svelte';
 	import { breadcrumbs } from '$lib/breadcrumbs.svelte';
 	import { variantSortCmp } from '$lib/variants.svelte';
 	import { siblingsAt, shownPrinting, otherPrintings, seriesFor } from '$lib/printings';
@@ -306,8 +308,8 @@
 				{#if jsonList(card.aspects).length}
 					<dt>Aspects</dt>
 					<dd>
-						{#each jsonList(card.aspects) as a (a)}
-							<a class="facet chip" href={facetHref('aspect', a)} title="Find all {a} cards">{a}</a>
+						{#each sortAspects(jsonList(card.aspects)) as a (a)}
+							<a class="facet chip" href={facetHref('aspect', a)} title="Find all {a} cards"><AspectIcon name={a} /></a>
 						{/each}
 					</dd>
 				{/if}

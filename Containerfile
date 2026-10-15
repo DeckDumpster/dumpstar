@@ -144,6 +144,8 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
 COPY frontend/ ./
+# The remedial aspect icons; the build copies them into static/aspects/.
+COPY data/remedial/aspects/ ../data/remedial/aspects/
 RUN npm run build
 
 LABEL dumpstar.build="1"

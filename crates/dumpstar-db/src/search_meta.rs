@@ -35,6 +35,38 @@ pub struct Rarity {
     pub grp: Option<String>,
 }
 
+/// One rarity's official mark, as the catalog apply stored it in
+/// `rarity_marks`: the one-letter character, its colour and the publisher's
+/// sort position.
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
+pub struct RarityMark {
+    /// Official rarity name, e.g. `Legendary`; the accessible label.
+    pub name: String,
+    /// The official one-letter character, e.g. `L`.
+    pub character: String,
+    /// `#rrggbb`.
+    pub color: String,
+    #[ts(type = "number")]
+    pub sort_value: i64,
+}
+
+/// Every stored rarity mark, in the publisher's sort order.
+pub fn load_rarity_marks(conn: &Connection) -> Result<Vec<RarityMark>> {
+    let mut stmt = conn.prepare(
+        "SELECT name, character, color, sort_value FROM rarity_marks ORDER BY sort_value, name",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok(RarityMark {
+            name: r.get(0)?,
+            character: r.get(1)?,
+            color: r.get(2)?,
+            sort_value: r.get(3)?,
+        })
+    })?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
 /// One row of the `search_flags` table — an `is:` flag definition.
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct SearchFlag {
@@ -209,6 +241,7 @@ pub fn load_rarities(conn: &Connection) -> Result<Vec<Rarity>> {
 /// catalog already owns.
 pub struct RarityLookup {
     by_key: std::collections::HashMap<String, Rarity>,
+    sort_values: std::collections::HashMap<String, i64>,
 }
 
 impl RarityLookup {
@@ -218,7 +251,14 @@ impl RarityLookup {
             .into_iter()
             .map(|r| (normalize_rarity(&r.name), r))
             .collect();
-        Ok(Self { by_key })
+        let sort_values = load_rarity_marks(conn)?
+            .into_iter()
+            .map(|m| (normalize_rarity(&m.name), m.sort_value))
+            .collect();
+        Ok(Self {
+            by_key,
+            sort_values,
+        })
     }
 
     /// The table row for a raw catalog rarity, if the tier is ranked.
@@ -238,6 +278,15 @@ impl RarityLookup {
     /// not carry — which sorts every unknown tier after the known ones.
     pub fn rank(&self, raw: &str) -> i64 {
         self.get(raw).map_or(UNRANKED_RARITY, |r| r.rank)
+    }
+
+    /// The publisher's sort value for a rarity (`rarity_marks`), or
+    /// [`UNRANKED_RARITY`] for one the catalog gave no mark.
+    pub fn sort_value(&self, raw: &str) -> i64 {
+        self.sort_values
+            .get(&normalize_rarity(raw))
+            .copied()
+            .unwrap_or(UNRANKED_RARITY)
     }
 
     /// Group alias (`common`, `rare`, `legendary`…) — the key the stats page
@@ -401,5 +450,29 @@ mod tests {
         let foil = flags.iter().find(|f| f.flag == "foil").unwrap();
         assert_eq!(foil.kind, "finish");
         assert_eq!(foil.match_str.as_deref(), Some("Foil"));
+    }
+
+    #[test]
+    fn rarity_sort_follows_the_stored_official_sort_value() {
+        let (_d, mut conn) = shared();
+        reconcile(&mut conn).unwrap();
+        for (n, c, col, v) in [
+            ("Legendary", "L", "#00c8f3", 5),
+            ("Special", "S", "#000000", 1),
+        ] {
+            conn.execute(
+                "INSERT INTO rarity_marks (name, character, color, sort_value) VALUES (?1,?2,?3,?4)",
+                params![n, c, col, v],
+            )
+            .unwrap();
+        }
+        let marks = load_rarity_marks(&conn).unwrap();
+        assert_eq!(marks[0].name, "Special");
+        assert_eq!(marks[1].character, "L");
+        let tiers = RarityLookup::load(&conn).unwrap();
+        // The curated search rank puts Special above Legendary; the official
+        // sort value does not.
+        assert!(tiers.sort_value("Special") < tiers.sort_value("LEGENDARY"));
+        assert_eq!(tiers.sort_value("Mythic"), UNRANKED_RARITY);
     }
 }

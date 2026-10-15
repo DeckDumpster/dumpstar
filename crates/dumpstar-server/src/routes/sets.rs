@@ -8,6 +8,7 @@ use serde::Deserialize;
 use dumpstar_db::DbError;
 use dumpstar_db::art;
 use dumpstar_db::binder::{self, BinderPage, BinderQuery};
+use dumpstar_db::search_meta::{self, RarityMark};
 use dumpstar_db::sets::{self, SetAnalytics, SetSummary};
 
 use crate::{AppError, AppState, blocking};
@@ -15,9 +16,17 @@ use crate::{AppError, AppState, blocking};
 /// Build the set-catalog routes (mounted under `/api`).
 pub fn routes() -> Router<AppState> {
     Router::new()
+        .route("/rarities", get(rarities))
         .route("/sets", get(list))
         .route("/sets/{code}/binder", get(binder_page))
         .route("/sets/{code}/analytics", get(analytics))
+}
+
+/// The official rarity marks the catalog apply stored.
+async fn rarities(State(state): State<AppState>) -> Result<Json<Vec<RarityMark>>, AppError> {
+    Ok(Json(
+        blocking(&state, |c| search_meta::load_rarity_marks(c)).await?,
+    ))
 }
 
 async fn list(State(state): State<AppState>) -> Result<Json<Vec<SetSummary>>, AppError> {

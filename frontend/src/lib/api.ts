@@ -8,6 +8,7 @@ import type { CardDetail } from './types/CardDetail';
 import type { PriceSeries } from './types/PriceSeries';
 import type { NewCopy } from './types/NewCopy';
 import type { CopyEdit } from './types/CopyEdit';
+import type { RarityMark } from './types/RarityMark';
 import type { SetSummary } from './types/SetSummary';
 import type { SetAnalytics } from './types/SetAnalytics';
 import type { BinderPage } from './types/BinderPage';
@@ -151,6 +152,7 @@ export const api = {
 		),
 
 	/** Every set, with card and owned-card counts. */
+	rarities: () => getJson<RarityMark[]>('/api/rarities'),
 	sets: () => getJson<SetSummary[]>('/api/sets'),
 
 	/** Analytical breakdown for one set: completion, rarity split, value. */

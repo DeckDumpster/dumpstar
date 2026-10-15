@@ -40,7 +40,10 @@ adoption beyond tokens and primitives, and a Star Wars: Unlimited rework of the
 an SWU fixture; those two still name the Pokémon cards they were written for
 and are outside CI). Sealed products are filled from tcgcsv's numberless
 products at convergence; their daily prices are `sealed_prices`, written by the
-catalog apply job as a series apart from the card `prices`.
+catalog apply job as a series apart from the card `prices`. Their pictures are
+tcgcsv's `imageUrl`, recorded in `sealed_images` and fetched by `catalog-apply`
+into `$DUMPSTAR_HOME/sealed-images/`, served at `/sealed-img/`; pages never see
+the source URL. A product tcgcsv lacks is a row of `data/sealed-remedial.json`.
 
 ## Build and test
 

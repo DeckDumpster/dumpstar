@@ -165,6 +165,9 @@ seed_from_fixture() {
     local shared="${fixture_dir}/shared.sqlite"
     local collection="${fixture_dir}/collection.sqlite"
 
+    # Built from text sources, never committed (cached by input hash).
+    bash "${fixture_dir}/build.sh" >/dev/null
+
     if [ ! -f "$shared" ] || [ ! -f "$collection" ]; then
         echo "ERROR: fixture files not found under ${fixture_dir}"
         echo "    Expected shared.sqlite and collection.sqlite."

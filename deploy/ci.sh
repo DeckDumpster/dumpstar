@@ -842,6 +842,9 @@ if tier lint; then
     step "No pipeline into grep -q, which inverts under pipefail (tests/ci/grepq_test.sh)"
     bash "$REPO_DIR/tests/ci/grepq_test.sh"
 
+    step "No committed sqlite under tests/ (tests/ci/fixture_untracked_test.sh)"
+    bash "$REPO_DIR/tests/ci/fixture_untracked_test.sh"
+
     step "Nessie catalog backup: stale/corrupt alarm, restore-drill failures (tests/lake/nessie_backup_test.sh)"
     bash "$REPO_DIR/tests/lake/nessie_backup_test.sh"
 

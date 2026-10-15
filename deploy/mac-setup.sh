@@ -77,6 +77,7 @@ podman build -t "dumpstar:${INSTANCE}" -f "$REPO_DIR/Containerfile" "$REPO_DIR"
 
 if [ "$TEST" = true ]; then
     FIXTURE_DIR="$REPO_DIR/tests/ui/fixtures"
+    bash "$FIXTURE_DIR/build.sh" >/dev/null
     if [ ! -f "$FIXTURE_DIR/shared.sqlite" ] || [ ! -f "$FIXTURE_DIR/collection.sqlite" ]; then
         echo "ERROR: fixture files not found under ${FIXTURE_DIR}"
         exit 1

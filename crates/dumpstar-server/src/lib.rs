@@ -252,6 +252,9 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
         // rebuilds from upstream alongside shared.sqlite, not in the
         // baked-in image static dir.
         .nest_service("/sym", ServeDir::new(data_dir.join("symbols")))
+        // Sealed-product pictures fetched at catalog refresh. Pages read these;
+        // nothing at runtime reaches the source CDN.
+        .nest_service("/sealed-img", ServeDir::new(data_dir.join("sealed-images")))
         .route_service("/robots.txt", ServeFile::new(static_dir.join("robots.txt")))
         .with_state(state)
         .fallback(get(spa))

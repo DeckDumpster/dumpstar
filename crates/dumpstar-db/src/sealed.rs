@@ -84,16 +84,26 @@ pub struct SealedEdit {
     pub status: Option<String>,
 }
 
+/// A sealed product's picture: the file the refresh stored, or nothing. The
+/// source URL is provenance and is never handed to a page.
+macro_rules! sealed_image_expr {
+    () => {
+        "(SELECT '/sealed-img/' || si.file FROM sealed_images si \
+           WHERE si.product_id = sp.product_id AND si.retrieved_on IS NOT NULL)"
+    };
+}
+
 const ENTRY_COLS: &str = concat!(
     "sc.id, sc.product_id, sc.quantity, sc.condition, \
      sc.purchase_price, sc.sale_price, sc.purchase_date, sc.source, \
      sc.seller_name, sc.notes, sc.status, sc.added_at, \
-     sp.name, sp.category, sp.set_code, sp.image_url, ",
+     sp.name, sp.category, sp.set_code, ",
     // The ONE spelling of what a sealed lot is worth (`crate::prices`). The
     // value chart's `sealed` dimension spends the same macro, so a box on
     // this page and the same box on the chart cannot be priced by two rules.
     crate::sealed_market_price_expr!(),
-    " AS market_price"
+    " AS market_price, ",
+    sealed_image_expr!()
 );
 
 const ENTRY_FROM: &str = "FROM sealed_collection sc \
@@ -116,17 +126,19 @@ fn entry_from_row(r: &rusqlite::Row) -> rusqlite::Result<SealedEntry> {
         name: r.get(12)?,
         category: r.get(13)?,
         set_code: r.get(14)?,
-        image_url: r.get(15)?,
-        market_price: r.get(16)?,
+        market_price: r.get(15)?,
+        image_url: r.get(16)?,
     })
 }
 
 /// Search the sealed-product catalog by name.
 pub fn search_products(conn: &Connection, query: &str, limit: i64) -> Result<Vec<SealedProduct>> {
-    let mut stmt = conn.prepare(
-        "SELECT product_id, set_code, name, category, image_url, release_date \
-         FROM sealed_products WHERE name LIKE ?1 ORDER BY name LIMIT ?2",
-    )?;
+    let mut stmt = conn.prepare(concat!(
+        "SELECT sp.product_id, sp.set_code, sp.name, sp.category, ",
+        sealed_image_expr!(),
+        ", sp.release_date FROM sealed_products sp \
+             WHERE sp.name LIKE ?1 ORDER BY sp.name LIMIT ?2"
+    ))?;
     let like = format!("%{query}%");
     let rows = stmt.query_map(params![like, limit], |r| {
         Ok(SealedProduct {
@@ -244,6 +256,35 @@ mod tests {
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         (dir, conn)
+    }
+
+    /// A page is handed the stored file once the refresh has fetched it, and
+    /// never the source CDN URL before that.
+    #[test]
+    fn pages_get_the_stored_picture_never_the_source_url() {
+        let (d, conn) = conn();
+        let shared = d.path().join("shared.sqlite");
+        let w = open_shared(&shared).unwrap();
+        w.execute(
+            "INSERT INTO sealed_images (product_id, source_url) \
+             VALUES (5001, 'https://tcgplayer-cdn.tcgplayer.com/product/5001_200w.jpg')",
+            [],
+        )
+        .unwrap();
+        assert_eq!(
+            search_products(&conn, "Rebellion", 10).unwrap()[0].image_url,
+            None
+        );
+        w.execute(
+            "UPDATE sealed_images SET retrieved_on = '2026-10-15', file = '5001.jpg'",
+            [],
+        )
+        .unwrap();
+        let url = search_products(&conn, "Rebellion", 10).unwrap()[0]
+            .image_url
+            .clone();
+        assert_eq!(url.as_deref(), Some("/sealed-img/5001.jpg"));
+        assert!(!url.unwrap().contains("tcgplayer"));
     }
 
     #[test]

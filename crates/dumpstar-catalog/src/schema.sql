@@ -160,3 +160,14 @@ CREATE TABLE IF NOT EXISTS tcgcsv_products (
     number           TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_tcgcsv_products_group ON tcgcsv_products(group_id);
+
+-- Where a sealed product's picture came from and whether it is in the image
+-- store yet. `retrieved_on`/`file` are NULL until the refresh has fetched it;
+-- a changed `source_url` resets them so the new picture is fetched. The pages
+-- serve `file` from the store and never the source URL.
+CREATE TABLE IF NOT EXISTS sealed_images (
+    product_id       INTEGER PRIMARY KEY,
+    source_url       TEXT NOT NULL,
+    retrieved_on     TEXT,
+    file             TEXT
+);

@@ -153,6 +153,15 @@ pub fn apply(catalog: &mut Catalog, bytes: &[u8], prov: &Provenance) -> Result<A
                     params![p.product_id, p.group_id, p.name, p.number],
                 )?;
             }
+            for (id, url) in tcgcsv::parse_sealed_images(bytes)? {
+                tx.execute(
+                    "INSERT INTO sealed_images (product_id, source_url) VALUES (?1, ?2)
+                     ON CONFLICT(product_id) DO UPDATE
+                       SET source_url = excluded.source_url, retrieved_on = NULL, file = NULL
+                     WHERE source_url IS NOT excluded.source_url",
+                    params![id, url],
+                )?;
+            }
             rejoin(&tx, &mut r)?;
             r
         }

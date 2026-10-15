@@ -14,7 +14,8 @@
 # not a ci.sh tier (the name has a hyphen, so select_test.sh's canonical-tier
 # check does not count it); it runs the same `npm ci && npm test && npm run
 # check`, so a type error fails the member's local check, not remote CI. The
-# image is the shared rust one with Node 22 fetched from nodejs.org, because a
+# image is the shared rust one with Node 22.21 fetched from nodejs.org (the tests
+# import .ts directly, which needs 22.18+ type stripping), because a
 # tier cannot name its own image (sp-os47b4); the build and the podman UI stay
 # in the CI-only frontend tier.
 image = "docker.io/library/rust:1.94-slim-bookworm"
@@ -33,7 +34,7 @@ env = { DUMPSTAR_CI_TIERS = "rust", DUMPSTAR_RUNNER_DEPS_ONLY = "base rust" }
 timeout = 1800
 
 [tier.frontend-check]
-argv = ["bash", "-c", "set -euo pipefail; apt-get update -qq && apt-get install -y -qq curl xz-utils ca-certificates >/dev/null; v=v22.11.0; curl -fsSL https://nodejs.org/dist/$v/node-$v-linux-x64.tar.xz | tar -xJ -C /usr/local --strip-components=1; cd frontend; npm ci; npm test; npm run check"]
+argv = ["bash", "-c", "set -euo pipefail; apt-get update -qq && apt-get install -y -qq curl xz-utils ca-certificates >/dev/null; v=v22.21.1; curl -fsSL https://nodejs.org/dist/$v/node-$v-linux-x64.tar.xz | tar -xJ -C /usr/local --strip-components=1; cd frontend; npm ci; npm test; npm run check"]
 timeout = 900
 
 [tier.isolation]

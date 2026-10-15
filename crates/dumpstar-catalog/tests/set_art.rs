@@ -81,12 +81,18 @@ fn every_logo_names_its_official_source() {
     for s in art::sources() {
         if let Some(l) = s.logo {
             assert!(
-                l.source_url.starts_with("https://cdn.starwarsunlimited.com/"),
+                l.source_url
+                    .starts_with("https://cdn.starwarsunlimited.com/"),
                 "{}: logo is not from the official CDN: {}",
                 s.set_code,
                 l.source_url
             );
-            assert!(l.file.starts_with(&s.set_code), "{}: file {}", s.set_code, l.file);
+            assert!(
+                l.file.starts_with(&s.set_code),
+                "{}: file {}",
+                s.set_code,
+                l.file
+            );
         }
     }
 }

@@ -16,4 +16,9 @@ owned_cards: number,
 /**
  * Printings in the set (the master set), and how many are owned.
  */
-total_printings: number, owned_printings: number, };
+total_printings: number, owned_printings: number, 
+/**
+ * The set's official logo and art crop, served from `/art`. Filled by the
+ * server from the art store; `null` when none was retrieved.
+ */
+logo_url: string | null, art_url: string | null, };

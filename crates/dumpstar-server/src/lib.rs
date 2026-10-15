@@ -49,6 +49,13 @@ pub struct AppState {
     pub(crate) access: Arc<AccessState>,
 }
 
+impl AppState {
+    /// Where the catalog job keeps the retrieved set logos and art crops.
+    fn art_dir(&self) -> PathBuf {
+        self.data_dir.join("art")
+    }
+}
+
 /// An error rendered as an HTTP response. `DbError::NotFound` → 404,
 /// `DbError::Conflict` → 409, `DbError::Import` → 400, everything else → 500.
 #[derive(Debug)]
@@ -254,6 +261,10 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
         // The official aspect icons, copied from data/remedial/aspects/ into
         // the static build.
         .nest_service("/aspects", ServeDir::new(static_dir.join("aspects")))
+        // Official set logos and art crops, retrieved once by the catalog job
+        // into the data volume (dumpstar_catalog::art) — never the publisher's
+        // CDN at page load.
+        .nest_service("/art", ServeDir::new(data_dir.join("art")))
         .nest_service("/sym", ServeDir::new(data_dir.join("symbols")))
         .route_service("/robots.txt", ServeFile::new(static_dir.join("robots.txt")))
         .with_state(state)
@@ -745,6 +756,47 @@ mod tests {
         let (encoding, body) = get_encoding(&router, "/sym/SOR.png", Some("gzip, br"), None).await;
         assert_eq!(encoding, "");
         assert_eq!(body, png);
+    }
+
+    #[tokio::test]
+    async fn set_art_is_served_from_the_data_dir_and_named_in_the_set_list() {
+        let (dir, router, fx) = test_app().await;
+        let tok = fx.valid_token("u@example.com");
+        let listed = |router: Router, tok: String| async move {
+            let resp = router
+                .oneshot(request("GET", "/api/sets", Some(&tok), None))
+                .await
+                .unwrap();
+            serde_json::from_str::<serde_json::Value>(&body_string(resp).await).unwrap()
+        };
+
+        // Nothing retrieved: the tile falls back to the set name.
+        let sets = listed(router.clone(), tok.clone()).await;
+        assert_eq!(sets[0]["logo_url"], serde_json::Value::Null);
+        assert_eq!(sets[0]["art_url"], serde_json::Value::Null);
+
+        // Retrieve a crop the way the catalog job does, then read it back.
+        struct One;
+        impl dumpstar_catalog::fetch::Fetch for One {
+            fn get(&self, _: &str) -> dumpstar_catalog::Result<Vec<u8>> {
+                Ok(b"PNG".to_vec())
+            }
+        }
+        let list = dumpstar_catalog::art::sources()
+            .into_iter()
+            .filter(|s| s.set_code == "SOR")
+            .collect::<Vec<_>>();
+        dumpstar_catalog::art::fetch(
+            &dir.path().join("art"),
+            &One,
+            chrono::NaiveDate::from_ymd_opt(2026, 10, 15).unwrap(),
+            &list,
+        )
+        .unwrap();
+        let sets = listed(router.clone(), tok).await;
+        assert_eq!(sets[0]["art_url"], "/art/SOR-crop.png");
+        let (_, body) = get_encoding(&router, "/art/SOR-crop.png", None, None).await;
+        assert_eq!(body, b"PNG");
     }
 
     #[tokio::test]

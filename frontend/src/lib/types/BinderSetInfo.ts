@@ -3,4 +3,9 @@
 /**
  * Header shown above a binder.
  */
-export type BinderSetInfo = { set_code: string, name: string, release_date: string | null, };
+export type BinderSetInfo = { set_code: string, name: string, release_date: string | null, 
+/**
+ * The set's official logo and art crop, served from `/art`; filled by the
+ * server, `null` when none was retrieved.
+ */
+logo_url: string | null, art_url: string | null, };

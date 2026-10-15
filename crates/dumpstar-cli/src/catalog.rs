@@ -138,6 +138,24 @@ pub fn run(args: CatalogApplyArgs) -> anyhow::Result<()> {
         eprintln!("tcgcsv: {e:#}");
         failed.push("tcgcsv");
     }
+    // The set logos and art crops are retrieved once into the data dir's own
+    // store; no page ever reaches the publisher's CDN. A miss leaves the set
+    // showing its name, so it is reported but does not fail the job.
+    let art_dir = dumpstar_db::dumpstar_home()?.join("art");
+    match dumpstar_catalog::art::fetch(
+        &art_dir,
+        &http,
+        Utc::now().date_naive(),
+        &dumpstar_catalog::art::sources(),
+    ) {
+        Ok(r) => {
+            println!("set art: fetched {} already {}", r.fetched, r.already);
+            for f in r.failed {
+                eprintln!("set art: {f}");
+            }
+        }
+        Err(e) => eprintln!("set art: {e:#}"),
+    }
     anyhow::ensure!(failed.is_empty(), "failed: {}", failed.join(", "));
     Ok(())
 }

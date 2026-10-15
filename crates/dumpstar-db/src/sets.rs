@@ -24,6 +24,10 @@ pub struct SetSummary {
     pub total_printings: i64,
     #[ts(type = "number")]
     pub owned_printings: i64,
+    /// The set's official logo and art crop, served from `/art`. Filled by the
+    /// server from the art store; `null` when none was retrieved.
+    pub logo_url: Option<String>,
+    pub art_url: Option<String>,
 }
 
 /// List every set, newest first, with card and owned-card counts. Requires a
@@ -51,6 +55,8 @@ pub fn list_sets(conn: &Connection) -> Result<Vec<SetSummary>> {
             owned_cards: r.get(4)?,
             total_printings: r.get(5)?,
             owned_printings: r.get(6)?,
+            logo_url: None,
+            art_url: None,
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)

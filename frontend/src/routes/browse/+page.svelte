@@ -75,9 +75,16 @@
 			<div class="grid">
 				{#each visible as set (set.set_code)}
 					<Panel class="tile" href="/browse/{set.set_code}">
+						{#if set.art_url}
+							<img class="crop" src={set.art_url} alt="" loading="lazy" />
+						{/if}
 						<div class="ident">
 							<span class="symbol">
-								<span class="code">{set.set_code.toUpperCase()}</span>
+								{#if set.logo_url}
+									<img class="logo" src={set.logo_url} alt="{set.name} logo" loading="lazy" />
+								{:else}
+									<span class="code">{set.set_code.toUpperCase()}</span>
+								{/if}
 							</span>
 							<span class="names">
 								<span class="title">{set.name}</span>
@@ -201,6 +208,20 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-sm);
 		overflow: hidden;
+	}
+	.symbol .logo {
+		max-width: 100%;
+		max-height: 100%;
+		object-fit: contain;
+	}
+	/* The set's art crop — the illustration without the card frame — as a
+	   banner across the top of the tile, served from /art, never the CDN. */
+	.crop {
+		display: block;
+		width: 100%;
+		height: var(--space-16, 72px);
+		object-fit: cover;
+		border-radius: var(--radius-sm);
 	}
 	.symbol .code {
 		font-size: var(--text-xs);

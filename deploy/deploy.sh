@@ -140,3 +140,18 @@ else
     echo "==> No lakehouse installed for '${INSTANCE}' — lake job image skipped."
     echo "    (bash deploy/setup-lake.sh ${INSTANCE} installs one.)"
 fi
+
+# --- Data jobs the change affects (sp-g20aoh) --------------------------------
+#
+# Last, after the app and the lake image: a data job that fails must not leave
+# the new binary unrestarted. The deployed sha is recorded only when the jobs
+# were not needed or succeeded, so a failed run is retried by the next deploy.
+# shellcheck source=deploy/data-jobs-lib.sh
+. "$SCRIPT_DIR/data-jobs-lib.sh"
+if reason="$(dumpstar_data_jobs_needed "$REPO_DIR" "$INSTANCE")"; then
+    echo "==> Running the catalog and price jobs: ${reason}"
+    dumpstar_data_jobs_run "$INSTANCE"
+else
+    echo "==> Data jobs not run: ${reason}"
+fi
+dumpstar_record_deployed_sha "$REPO_DIR" "$INSTANCE"

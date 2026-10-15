@@ -73,7 +73,13 @@ bash "$REPO_DIR/deploy/setup.sh" "$INSTANCE" "$APP_PORT" --test
 
 PDH_JWKS_PORT="$JWKS_PORT" python3 -I "$REPO_DIR/tests/lib/test_jwks.py" serve "$WORK/jwks" >"$WORK/jwks.out" &
 JWKS_PID=$!
-wait_until 20 0.25 test -s "$WORK/jwks.out" || true
+# Key generation under a loaded runner outlasted the old 20 s (sp-g20aoh's gate
+# red); wait on the file the next line reads, and say so when it never appears.
+wait_until 120 0.25 test -s "$WORK/jwks/jwks.json" || {
+	echo "FAIL  the JWKS server never wrote $WORK/jwks/jwks.json" >&2
+	cat "$WORK/jwks.out" >&2 || true
+	exit 1
+}
 AUD="$(python3 -I -c 'import json,sys;print(json.load(open(sys.argv[1]))["aud"])' "$WORK/jwks/jwks.json")"
 
 # Real values, no leading '-' to lean on and no inline '#': this is the file the

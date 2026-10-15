@@ -910,6 +910,9 @@ if tier lint; then
     step "deploy.yml shape (tests/ci/deploy_workflow_test.sh)"
     bash "$REPO_DIR/tests/ci/deploy_workflow_test.sh"
 
+    step "deploy runs the data jobs a change affects (tests/deploy/data_jobs_test.sh)"
+    bash "$REPO_DIR/tests/deploy/data_jobs_test.sh"
+
     # A formatter check, not a compile — `cargo fmt` parses and never builds,
     # so it costs a second and belongs with the lint tier rather than behind
     # `cargo test`.

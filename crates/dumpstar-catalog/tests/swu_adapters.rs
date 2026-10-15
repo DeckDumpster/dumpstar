@@ -992,7 +992,9 @@ fn the_apply_job_stores_the_styled_text_and_updates_it_in_place() {
         .query_row("SELECT html FROM card_text_styled", [], |r| r.get(0))
         .unwrap();
     assert!(html.contains("Shield tokens"));
+}
 
+#[test]
 fn apply_stores_the_official_mark_and_sort_value_of_every_rarity() {
     let (e, _) = loaded();
     let conn = Connection::open(&e.db).unwrap();

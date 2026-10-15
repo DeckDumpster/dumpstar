@@ -74,13 +74,39 @@ const LEGACY_COLUMNS: &[(&str, &str)] = &[
     ("printings", "tcgplayer_product_id"),
 ];
 
-/// Columns the current schema added to a table an earlier SWU schema already
-/// had. `CREATE TABLE IF NOT EXISTS` skips a table that exists, so a file
-/// whose table lacks one keeps the old shape (and the old constraints) forever
-/// unless it is rebuilt. `printings.variant_code` came with the natural key
-/// that tells apart two official printings sharing a display variant
-/// (sp-5zcm06); `sets.category` is the product category the set nav groups by.
-const REQUIRED_COLUMNS: &[(&str, &str)] = &[("printings", "variant_code"), ("sets", "category")];
+/// Columns whose absence means the table has the shape of an earlier SWU
+/// schema that `ALTER TABLE` cannot bring up to date. `printings.variant_code`
+/// came with a new UNIQUE natural key (sp-5zcm06); the key cannot be changed
+/// in place, so a file without it is rebuilt. Never add a plain column here: it
+/// belongs in [`ADDITIVE_COLUMNS`], because emptying the catalog on a deploy
+/// served an empty site for half an hour (sp-0mjd2y).
+const REQUIRED_COLUMNS: &[(&str, &str)] = &[("printings", "variant_code")];
+
+/// Columns added to a table an earlier SWU schema already had, with the
+/// `ALTER TABLE` clause that adds them. `CREATE TABLE IF NOT EXISTS` skips a
+/// table that exists, so these are added in place; the rows keep their data and
+/// the next catalog apply backfills the new column. Every column of this kind
+/// that `schema.sql` gains is listed here too.
+const ADDITIVE_COLUMNS: &[(&str, &str, &str)] = &[
+    // The product category the set nav groups by.
+    ("sets", "category", "TEXT"),
+];
+
+/// Add every [`ADDITIVE_COLUMNS`] entry a populated table lacks. Tables that do
+/// not exist yet are left to the schema. Returns the columns added.
+pub fn add_missing_columns(conn: &Connection) -> Result<Vec<String>> {
+    let mut added = Vec::new();
+    let mut table_exists = conn.prepare("SELECT 1 FROM pragma_table_info(?1)")?;
+    let mut has_column = conn.prepare("SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2")?;
+    for (table, column, decl) in ADDITIVE_COLUMNS {
+        if table_exists.exists([table])? && !has_column.exists([table, column])? {
+            conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} {decl}"))?;
+            eprintln!("dumpstar-catalog: added column {table}.{column} in place (data kept)");
+            added.push(format!("{table}.{column}"));
+        }
+    }
+    Ok(added)
+}
 
 /// Whether `conn` holds a catalog from the legacy card model, or from an
 /// earlier SWU schema whose shape the current one cannot be applied over.
@@ -111,8 +137,13 @@ pub fn is_legacy(conn: &Connection) -> Result<bool> {
 /// skipped and the next statement would fail on a column it does not have.
 pub fn reset_if_legacy(conn: &Connection) -> Result<bool> {
     if !is_legacy(conn)? {
+        add_missing_columns(conn)?;
         return Ok(false);
     }
+    eprintln!(
+        "dumpstar-catalog: WARNING: the catalog holds a legacy card model or an old table \
+         shape; DROPPING EVERY TABLE (rebuilt only by the next catalog-apply)"
+    );
     // (kind, name), kind being the DROP keyword: a virtual table is listed as
     // 'table' by sqlite_master and is told apart by its SQL.
     let objects: Vec<(&'static str, String)> = {

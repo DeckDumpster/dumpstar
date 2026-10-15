@@ -30,7 +30,7 @@ and finish (Normal, Foil), and (set, number, finish) names one. Collection,
 deck, binder, wishlist and sealed rows reference `printing_id` / `card_id` from
 it. A `shared.sqlite` written by the Pokémon-shaped schema this repository was
 forked with is detected (`dumpstar_catalog::reset_if_legacy`) and emptied on the
-next read-write open or `catalog-apply`; it is derived data, tenant files are
+next read-write open or `catalog-apply`; a column the schema merely gains is added in place (`ADDITIVE_COLUMNS`), never by a reset (sp-0mjd2y), and a deploy fails and restores if sets/cards/printings counts change by more than 5%. The legacy file is derived data, tenant files are
 other files and are never touched.
 
 **Not here yet** (each is its own bead of the dumpstar design): authentication

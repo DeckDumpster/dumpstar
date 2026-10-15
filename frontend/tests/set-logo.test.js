@@ -11,7 +11,7 @@ test('SetLogo renders no <img> until the set has a retrieved logo', () => {
 });
 
 test('the collection Set cell, the card page and the /browse tile each show the set logo', () => {
-	const read = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
+	const read = (/** @type {string} */ f) => readFileSync(new URL(f, import.meta.url), 'utf8');
 	const collection = read('../src/routes/collection/+page.svelte');
 	assert.equal((collection.match(/<SetLogo code=\{a\.set_code\}/g) ?? []).length, 2);
 	assert.match(read('../src/lib/components/CardDetailView.svelte'), /<SetLogo code=\{card\.set_code\}/);

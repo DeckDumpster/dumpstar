@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS sets (
     set_code         TEXT PRIMARY KEY,          -- 'SOR'
     name             TEXT NOT NULL,
     release_date     TEXT,
-    sort_order       INTEGER NOT NULL DEFAULT 0
+    sort_order       INTEGER NOT NULL DEFAULT 0,
+    category         TEXT                       -- SWU product category; see set_categories
 );
 
 -- A game card: everything the rules text says, shared by all its printings.

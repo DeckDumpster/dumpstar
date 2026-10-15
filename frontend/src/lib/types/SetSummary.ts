@@ -6,6 +6,12 @@
  */
 export type SetSummary = { set_code: string, name: string, release_date: string | null, 
 /**
+ * SWU product category ("Main Expansions", "Weekly Play Promos"…); the
+ * list arrives grouped by it, main expansions first. `null` only for a
+ * set the catalog's declared mapping lacks (an alarm is raised for it).
+ */
+category: string | null, 
+/**
  * Distinct cards printed in the set.
  */
 total_cards: number, 

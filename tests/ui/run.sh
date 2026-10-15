@@ -43,6 +43,13 @@ bash "$root/tests/ui/fixtures/build.sh" "$work/fixture"
 cp "$work/fixture/shared.sqlite" "$home/shared.sqlite"
 cp "$work/fixture/collection.sqlite" "$home/tenants/collection.sqlite"
 
+# The fixture is a handle-named collection; the server only serves a tenant an
+# identity is bound to. Register it, and bind the identity the tests sign in as.
+export DUMPSTAR_HOME="$home"
+export DUMPSTAR_USER=collection
+"$bin" tenant migrate >/dev/null
+"$bin" tenant identity add collection --email ui-test@example.com >/dev/null
+
 step "ui: start the test Access JWKS and the server"
 jwks="$work/jwks"
 mkdir -p "$jwks"
@@ -91,7 +98,7 @@ export UI_TEST_BASE_URL="http://127.0.0.1:$port"
 export UI_TEST_DUMPSTAR_BIN="$bin"
 export UI_TEST_ACCESS_TOKEN="$token"
 rc=0
-npx playwright test -g "browse_back_preserves_page_param" "$@" || rc=$?
+npx playwright test "$@" || rc=$?
 if [ "$rc" -ne 0 ]; then
     echo "--- server log (tail) ---" >&2
     tail -n 40 "$work/server.log" >&2 || true

@@ -209,6 +209,14 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
             .and_then(|e| e.get("attributes"))
             .unwrap();
         if !payload.sets.iter().any(|s| s.set_code == set_code) {
+            let category = crate::set_categories::category_for(&set_code);
+            if category.is_none() {
+                payload.alarms.push(AlarmRecord::alarm(
+                    "unmapped_set_category",
+                    set_code.clone(),
+                    "set has no product category in data/remedial/set-categories.csv",
+                ));
+            }
             payload.sets.push(SetRecord {
                 set_code: set_code.clone(),
                 name: exp
@@ -218,6 +226,7 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
                     .to_string(),
                 release_date: None,
                 sort_order: exp.get("sortValue").and_then(Value::as_i64).unwrap_or(0),
+                category: category.map(str::to_string),
             });
         }
 

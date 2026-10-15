@@ -29,7 +29,9 @@ trap cleanup EXIT
 step() { printf '\n==> %s\n' "$*"; }
 
 step "ui: build dumpstar"
-(cd "$root" && cargo build --quiet -p dumpstar-cli)
+# Dependencies at opt-level 2: bundled SQLite compiled -O0 answered /api/sets in
+# six seconds on the fixture and pages sat at "Loading…" past the replay's timeouts.
+(cd "$root" && cargo build --quiet -p dumpstar-cli --config 'profile.dev.package."*".opt-level=2')
 bin="${CARGO_TARGET_DIR:-$root/target}/debug/dumpstar"
 [ -x "$bin" ] || { echo "ERROR: $bin was not built" >&2; exit 1; }
 

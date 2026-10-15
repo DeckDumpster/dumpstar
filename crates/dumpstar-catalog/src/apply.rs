@@ -574,6 +574,59 @@ const JOIN_KINDS: &[&str] = &[
     "remedial_conflict",
 ];
 
+/// The join's own inputs, hashed: its code, the hand-kept group table and the
+/// remedial crosswalk. A catalog joined under a different one is joined stale.
+fn crosswalk_rev() -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    for part in [
+        include_str!("crosswalk.rs"),
+        include_str!("groups.tsv"),
+        include_str!("remedial.tsv"),
+    ] {
+        h.update(part.as_bytes());
+        h.update([0]);
+    }
+    hex::encode(h.finalize())
+}
+
+const KEY_CROSSWALK_REV: &str = "crosswalk.rev";
+
+impl Catalog {
+    /// Join again when the join itself changed since the catalog was last joined.
+    /// A join otherwise runs only when a payload applies, so a deploy that
+    /// changed it on a day nothing upstream changed left every printing it
+    /// would now reach unlinked and unpriced until upstream next moved
+    /// (sp-ogwa3i). The day-keyed payloads are forgotten as applied and the
+    /// fetch marker cleared, so this sync fetches them again and prices the
+    /// newly linked printings. Returns whether it re-joined.
+    pub fn rejoin_if_stale(&mut self) -> Result<bool> {
+        let rev = crosswalk_rev();
+        if self.sync_state(KEY_CROSSWALK_REV)?.as_deref() == Some(rev.as_str()) {
+            return Ok(false);
+        }
+        let tx = self.conn.transaction()?;
+        let mut r = ApplyReport::default();
+        rejoin(&tx, &mut r)?;
+        // Every payload that describes a day (they are applied idempotently).
+        tx.execute(
+            "DELETE FROM applied_payloads WHERE instr(payload_hash, '@') > 0",
+            [],
+        )?;
+        tx.execute(
+            "DELETE FROM sync_state WHERE key = ?1",
+            [swu::KEY_TCGCSV_LAST_UPDATED],
+        )?;
+        tx.execute(
+            "INSERT INTO sync_state (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![KEY_CROSSWALK_REV, rev],
+        )?;
+        tx.commit()?;
+        Ok(true)
+    }
+}
+
 /// Re-run the official <-> tcgcsv join over everything stored, so that a change
 /// on either side re-joins the other. A catalog with no tcgcsv products stored
 /// (the fake, or before the first price sync) is left exactly as it is.

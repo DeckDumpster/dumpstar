@@ -113,6 +113,9 @@ pub fn run(args: CatalogApplyArgs) -> anyhow::Result<()> {
     if args.fake {
         return run_source("fake", &FakeSource, &raw, &shared);
     }
+    if Catalog::open_writer(&shared)?.rejoin_if_stale()? {
+        println!("crosswalk: the join changed since this catalog was joined; re-joined");
+    }
     let http = HttpFetch::new(PAUSE)?;
     let state = |key: &str| -> anyhow::Result<Option<String>> {
         Ok(Catalog::open_writer(&shared)?.sync_state(key)?)

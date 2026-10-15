@@ -336,3 +336,94 @@ fn every_row_of_the_remedial_crosswalk_names_a_source_and_a_reason() {
     ids.dedup();
     assert_eq!(ids.len(), n, "a printing is resolved once");
 }
+
+/// Production's state after sp-9uiu2z deployed: the catalog was last joined by
+/// the old code, nothing upstream has moved since, so no payload applies and
+/// no join runs (sp-ogwa3i).
+#[test]
+fn a_catalog_joined_by_older_code_is_rejoined_and_repriced_on_the_next_sync() {
+    use dumpstar_catalog::swu::KEY_TCGCSV_LAST_UPDATED;
+    let l = loaded();
+    {
+        let c = Catalog::open_writer(&l.db).unwrap();
+        let triggers = rows(
+            c.conn(),
+            "SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name='prices'",
+            |r| r.get::<_, String>(0).unwrap(),
+        );
+        for t in triggers {
+            c.conn().execute(&format!("DROP TRIGGER {t}"), []).unwrap();
+        }
+        for sql in [
+            "DELETE FROM printing_source_id WHERE source='tcgcsv' AND printing_id='8379900881'",
+            "DELETE FROM prices WHERE printing_id='8379900881'",
+            "UPDATE printings SET number='10002' WHERE printing_id='8379900881'",
+            "DELETE FROM sync_state WHERE key='crosswalk.rev'",
+        ] {
+            c.conn().execute(sql, []).unwrap();
+        }
+    }
+    let linked = |db: &PathBuf| -> usize {
+        let c = Catalog::open_readonly(db).unwrap();
+        rows(
+            c.conn(),
+            "SELECT 1 FROM printing_source_id WHERE source='tcgcsv' AND source_id='719791'",
+            |_| 1,
+        )
+        .len()
+    };
+    let sync = |db: &PathBuf| {
+        let c = Catalog::open_writer(db).unwrap();
+        let tcgcsv = TcgcsvSource {
+            http: &recorded(),
+            base: "https://tcgcsv.test".into(),
+            last_updated: c.sync_state(KEY_TCGCSV_LAST_UPDATED).unwrap(),
+        };
+        drop(c);
+        run_once(&tcgcsv, &l._dir.path().join("raw"), db, at(13, 5)).unwrap();
+    };
+    // Without the stale-join check, a sync with nothing new changes nothing.
+    sync(&l.db);
+    assert_eq!(linked(&l.db), 0);
+
+    assert!(
+        Catalog::open_writer(&l.db)
+            .unwrap()
+            .rejoin_if_stale()
+            .unwrap()
+    );
+    assert_eq!(linked(&l.db), 1);
+    sync(&l.db);
+    let c = Catalog::open_readonly(&l.db).unwrap();
+    let market: f64 = c
+        .conn()
+        .query_row(
+            "SELECT market FROM prices WHERE printing_id = '8379900881' AND source = 'tcgcsv'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(market, 10.38);
+    drop(c);
+    assert!(
+        !Catalog::open_writer(&l.db)
+            .unwrap()
+            .rejoin_if_stale()
+            .unwrap()
+    );
+}
+
+#[test]
+fn every_unlinked_printing_of_every_set_is_in_the_unmatched_report() {
+    let l = loaded();
+    let c = Catalog::open_readonly(&l.db).unwrap();
+    let left = rows(
+        c.conn(),
+        "SELECT p.printing_id FROM printings p
+         WHERE NOT EXISTS (SELECT 1 FROM printing_source_id s WHERE s.printing_id = p.printing_id AND s.source='tcgcsv')
+           AND NOT EXISTS (SELECT 1 FROM alarms a WHERE a.key = p.printing_id)
+           AND p.number NOT LIKE 'T%'",
+        |r| r.get::<_, String>(0).unwrap(),
+    );
+    assert!(left.is_empty(), "silently skipped: {left:?}");
+}

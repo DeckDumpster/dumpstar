@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { parseView, splitLandscape, clampCols, MAX_COLS, BROWSE_ROWS } from '$lib/browseView.js';
+import { parseView, splitLandscape, clampCols, MAX_COLS, BROWSE_ROWS, pageAfterResize } from '$lib/browseView.js';
 
 test('card view is the default; only view=binder selects binder', () => {
 	assert.equal(parseView(null), 'card');
@@ -39,4 +39,12 @@ test('the frontend page size maximum equals the backend BINDER_MAX_LAYOUT', () =
 	const m = src.match(/pub const BINDER_MAX_LAYOUT: i64 = (\d+);/);
 	assert.ok(m, 'BINDER_MAX_LAYOUT not found in binder.rs');
 	assert.equal(MAX_COLS * BROWSE_ROWS, Number(m[1]));
+});
+
+test('pageAfterResize keeps the first visible card on screen', () => {
+	// page 4 at 3 cols (9/page) starts at card 27; at 4 cols (12/page) that is page 3
+	assert.equal(pageAfterResize(4, 9, 12), 3);
+	assert.equal(pageAfterResize(4, 9, 6), 5);
+	assert.equal(pageAfterResize(1, 9, 30), 1);
+	assert.notEqual(pageAfterResize(4, 9, 12), 1);
 });

@@ -898,6 +898,9 @@ if tier lint; then
 
     # ci.yml has no concurrency: block, provisions through ephemeral-ci@v2 with
     # the 60s spill, and tears down under if: always().
+    step "Shared Rust compile cache wiring (tests/ci/rust_cache_test.sh)"
+    bash "$REPO_DIR/tests/ci/rust_cache_test.sh"
+
     step "ci.yml shape (tests/ci/workflow_test.sh)"
     bash "$REPO_DIR/tests/ci/workflow_test.sh"
 
@@ -912,6 +915,14 @@ if tier lint; then
 fi
 
 # --- 2. Rust gates ----------------------------------------------------------
+
+# Both Rust compiles in this run (here, and the image's release build below)
+# read and write the shared sccache store, so unchanged crates are fetched.
+# shellcheck source=deploy/rust-cache.sh
+. "$SCRIPT_DIR/rust-cache.sh"
+if tier -q rust || tier -q isolation || tier -q container; then
+    dumpstar_rust_cache_enable
+fi
 
 # Cheapest and likeliest-to-fail first (sp-l2xovg): a one-word lint used to
 # fail the run only after `cargo test` had spent ten minutes. clippy compiles
@@ -945,6 +956,7 @@ fi
 if tier rust; then
     step "cargo test"
     ( cd "$REPO_DIR" && cargo test )
+    dumpstar_rust_cache_report
 fi
 
 # --- 2a. Cross-tenant isolation gate (sp-c3fq3p) ------------------------------

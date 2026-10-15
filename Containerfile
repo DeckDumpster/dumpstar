@@ -11,7 +11,14 @@
 # is builder glibc <= runtime glibc, and the only thing that holds it is these
 # two FROM lines naming the same release. Change one, change the other — and
 # the target cache id below with them.
+# The default is a non-executable placeholder, which the build reads as "no cache".
+FROM docker.io/library/debian:bookworm-slim AS sccache-default
+RUN mkdir /out && : > /out/sccache
+FROM scratch AS sccache-bin
+COPY --from=sccache-default /out/ /
+
 FROM docker.io/library/rust:1.94-slim-bookworm AS builder
+COPY --from=sccache-bin / /opt/sccache-ctx/
 
 WORKDIR /app
 
@@ -106,6 +113,11 @@ COPY data/ data/
 # online server disagreeing about the shape of a database; splitting the images
 # is a deployment change to make when the machines actually split, not before.
 ARG CARGO_TARGET_CACHE_SCOPE=unscoped
+# The shared compile cache (sp-2i16qf). `sccache-bin` is a named build context
+# deploy/image-lib.sh supplies (the host's static sccache); without it the stage
+# below is an empty directory and the release build simply compiles cold.
+# SCCACHE_WEBDAV_ENDPOINT is the store, empty meaning "no cache".
+ARG SCCACHE_WEBDAV_ENDPOINT=
 ENV DUMPSTAR_SOURCES="Cargo.toml Cargo.lock rust-toolchain.toml crates data"
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target,sharing=locked,id=dumpstar-target-bookworm-${CARGO_TARGET_CACHE_SCOPE} \
@@ -116,8 +128,19 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
         find ${DUMPSTAR_SOURCES} -type f -exec touch {} +; \
     fi \
  && rm -f target/.dumpstar-source-stamp \
+ && if [ -n "$SCCACHE_WEBDAV_ENDPOINT" ] && [ -x /opt/sccache-ctx/sccache ] \
+       && /opt/sccache-ctx/sccache --version >/dev/null 2>&1; then \
+        echo "==> rust cache: sccache -> $SCCACHE_WEBDAV_ENDPOINT"; \
+        export RUSTC_WRAPPER=/opt/sccache-ctx/sccache SCCACHE_WEBDAV_KEY_PREFIX=/ \
+               SCCACHE_IGNORE_SERVER_IO_ERROR=1 CARGO_INCREMENTAL=0; \
+        cache=on; \
+    else \
+        echo "==> rust cache: not in use for the image build — compiling cold"; cache=off; \
+    fi \
  && cargo build --release --locked --bin dumpstar --bin dumpstar-lake-derive \
         --bin dumpstar-ship --bin dumpstar-erase \
+ && if [ "$cache" = on ]; then echo "==> rust cache summary (image build):"; \
+        /opt/sccache-ctx/sccache --show-stats | grep -E '^Cache (hits|misses) '; fi \
  && printf '%s\n' "$stamp" > target/.dumpstar-source-stamp \
  && mkdir -p /out \
  && cp target/release/dumpstar /out/dumpstar \

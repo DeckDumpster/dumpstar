@@ -32,7 +32,8 @@ pub mod swu;
 pub mod tcgcsv;
 
 pub use catalog::{
-    Catalog, LEGACY_ONLY_OBJECTS, LEGACY_SHAPE_DDL, SCHEMA, is_legacy, reset_if_legacy,
+    Catalog, LEGACY_ONLY_OBJECTS, LEGACY_SHAPE_DDL, SCHEMA, add_missing_columns, is_legacy,
+    reset_if_legacy,
 };
 pub use error::{CatalogError, Result};
 pub use source::{CatalogSource, FakeSource, RawPayload};

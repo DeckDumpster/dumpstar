@@ -16,6 +16,8 @@ const s = (set_code, category) => ({
   owned_cards: 0,
   total_printings: 0,
   owned_printings: 0,
+  logo_url: null,
+  art_url: null,
 });
 
 test("groupSets keeps the API order: categories as first seen, sets within them", () => {

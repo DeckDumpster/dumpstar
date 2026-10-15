@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { api } from '$lib/api';
 	import { count } from '$lib/format';
 	import { Button, EmptyState, Field, Panel, ProgressBar, Toolbar } from '$lib/components/ui';
@@ -29,7 +29,39 @@
 		);
 	});
 
-	const groups = $derived(groupSets(visible));
+	const groups = $derived(
+		groupSets(visible).map((g) => ({
+			...g,
+			total_cards: g.sets.reduce((n, x) => n + x.total_cards, 0),
+			owned_cards: g.sets.reduce((n, x) => n + x.owned_cards, 0)
+		}))
+	);
+
+	// Category headers open and close individually.
+	let collapsed = $state<Record<string, boolean>>({});
+
+	function pct(owned: number, total: number): number {
+		return total > 0 ? Math.round((owned / total) * 100) : 0;
+	}
+	function anchorId(slug: string): string {
+		return 'cat-' + slug;
+	}
+	function toggle(category: string) {
+		collapsed[category] = !collapsed[category];
+	}
+	function setAll(v: boolean) {
+		const next: Record<string, boolean> = {};
+		for (const g of groups) next[g.category] = v;
+		collapsed = next;
+	}
+	/** Jump-to click: force-open the category and scroll to its header. */
+	async function jumpTo(g: { category: string; slug: string }) {
+		collapsed[g.category] = false;
+		await tick();
+		document
+			.getElementById(anchorId(g.slug))
+			?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	}
 </script>
 
 <svelte:head><title>Browse sets — Dumpstar</title></svelte:head>
@@ -56,6 +88,9 @@
 				bind:value={search}
 			/>
 			<span class="counts">{visible.length} of {sets.length}</span>
+			<span class="spacer"></span>
+			<Button variant="ghost" size="sm" onclick={() => setAll(false)}>Expand all</Button>
+			<Button variant="ghost" size="sm" onclick={() => setAll(true)}>Collapse all</Button>
 		</Toolbar>
 
 		{#if visible.length === 0}
@@ -76,55 +111,88 @@
 			{/if}
 		{:else}
 			<div class="layout">
-				<nav class="categories" aria-label="Set categories">
-					{#each groups as g (g.category)}
-						<a href="#cat-{g.slug}"
-							>{g.category} <span class="n">{g.sets.length}</span></a
-						>
-					{/each}
-				</nav>
-				<div class="groups">
-					{#each groups as g (g.category)}
-						<section id="cat-{g.slug}">
-							<h2>{g.category}</h2>
-							<div class="grid">
-								{#each g.sets as set (set.set_code)}
-					<Panel class="tile" href="/browse/{set.set_code}">
-						{#if set.art_url}
-							<img class="crop" src={set.art_url} alt="" loading="lazy" />
-						{/if}
-						<div class="ident">
-							<span class="symbol">
-								{#if set.logo_url}
-									<img class="logo" src={set.logo_url} alt="{set.name} logo" loading="lazy" />
-								{:else}
-									<span class="code">{set.set_code.toUpperCase()}</span>
-								{/if}
-							</span>
-							<span class="names">
-								<span class="title">{set.name}</span>
-								{#if set.release_date}
-									<span class="series">{set.release_date}</span>
-								{/if}
-							</span>
-						</div>
-						<div class="meters">
-							<ProgressBar
-								tone="complete"
-								label="Cards {count(set.owned_cards)} / {count(set.total_cards)}"
-								value={set.owned_cards}
-								max={set.total_cards}
-							/>
-							<ProgressBar
-								tone="complete"
-								label="Master {count(set.owned_printings)} / {count(set.total_printings)}"
-								value={set.owned_printings}
-								max={set.total_printings}
-							/>
-						</div>
+				<aside class="navcol">
+					<Panel class="nav" padding="sm">
+						<div class="nav-label">Jump to</div>
+						<ul>
+							{#each groups as g (g.category)}
+								<li>
+									<button
+										class="navlink"
+										class:owned={g.owned_cards > 0}
+										onclick={() => jumpTo(g)}
+									>
+										<span class="dot" aria-hidden="true"></span>
+										<span class="name">{g.category}</span>
+										<span class="setn">{g.sets.length}</span>
+									</button>
+								</li>
+							{/each}
+						</ul>
 					</Panel>
-								{/each}
-							</div>
+				</aside>
+
+				<div class="main">
+					{#each groups as g (g.category)}
+						<section class="seriesgroup" id={anchorId(g.slug)}>
+							<button
+								class="grouphdr"
+								onclick={() => toggle(g.category)}
+								aria-expanded={!collapsed[g.category]}
+							>
+								<span class="caret" aria-hidden="true">{collapsed[g.category] ? '▸' : '▾'}</span>
+								<span class="ghname">{g.category}</span>
+								<span class="ghmeta">
+									{g.sets.length}
+									{g.sets.length === 1 ? 'set' : 'sets'}
+									{#if g.total_cards > 0}
+										· {count(g.owned_cards)} / {count(g.total_cards)} cards ({pct(
+											g.owned_cards,
+											g.total_cards
+										)}%)
+									{/if}
+								</span>
+							</button>
+							{#if !collapsed[g.category]}
+								<div class="grid">
+									{#each g.sets as set (set.set_code)}
+										<Panel class="tile" href="/browse/{set.set_code}">
+											{#if set.art_url}
+												<img class="crop" src={set.art_url} alt="" loading="lazy" />
+											{/if}
+											<div class="ident">
+												<span class="symbol">
+													{#if set.logo_url}
+														<img class="logo" src={set.logo_url} alt="{set.name} logo" loading="lazy" />
+													{:else}
+														<span class="code">{set.set_code.toUpperCase()}</span>
+													{/if}
+												</span>
+												<span class="names">
+													<span class="title">{set.name}</span>
+													{#if set.release_date}
+														<span class="series">{set.release_date}</span>
+													{/if}
+												</span>
+											</div>
+											<div class="meters">
+												<ProgressBar
+													tone="complete"
+													label="Cards {count(set.owned_cards)} / {count(set.total_cards)}"
+													value={set.owned_cards}
+													max={set.total_cards}
+												/>
+												<ProgressBar
+													tone="complete"
+													label="Master {count(set.owned_printings)} / {count(set.total_printings)}"
+													value={set.owned_printings}
+													max={set.total_printings}
+												/>
+											</div>
+										</Panel>
+									{/each}
+								</div>
+							{/if}
 						</section>
 					{/each}
 				</div>
@@ -187,44 +255,130 @@
 	   of its tile, so the last bar lands on one line across the whole group
 	   whether a set shows one meter or two. Rows are gapped one step wider
 	   than columns: the eye reads a row as a row. */
+	.spacer {
+		flex: 1;
+	}
+	/* Sticky Jump-to column beside the groups; on narrow viewports the list
+	   becomes a horizontal chip row above them. */
 	.layout {
-		display: flex;
-		gap: var(--space-6);
-		align-items: flex-start;
+		display: grid;
+		grid-template-columns: 200px 1fr;
+		gap: var(--space-5);
+		align-items: start;
 		margin-top: var(--space-4);
 	}
-	.categories {
+	.navcol {
 		position: sticky;
-		top: var(--space-4);
-		flex: 0 0 220px;
+		top: var(--space-2);
+	}
+	.navcol :global(.nav) {
+		max-height: calc(100vh - var(--space-4));
+		overflow-y: auto;
+	}
+	.nav-label {
+		text-transform: uppercase;
+		font-size: var(--text-xs);
+		letter-spacing: 0.06em;
+		color: var(--color-text-subtle);
+		padding: var(--space-1) var(--space-1) var(--space-2);
+	}
+	.navcol ul {
+		list-style: none;
+		padding: var(--space-0);
+		margin: var(--space-0);
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-1);
+		gap: var(--space-px);
 	}
-	.categories a {
+	.navlink {
 		display: flex;
-		justify-content: space-between;
+		align-items: center;
 		gap: var(--space-2);
-		padding: var(--space-1) var(--space-2);
-		border-radius: var(--radius-sm);
-		color: var(--color-text-strong);
-		text-decoration: none;
-	}
-	.categories a:hover {
-		background: var(--color-surface-inset);
-	}
-	.categories .n {
+		width: 100%;
+		background: none;
+		border: none;
 		color: var(--color-text-subtle);
+		padding: var(--space-1);
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+		font: inherit;
+		font-size: var(--text-md);
+		text-align: left;
 	}
-	.groups {
+	.navlink:hover {
+		background: var(--color-surface-hover);
+		color: var(--color-text-strong);
+	}
+	.navlink:focus-visible {
+		outline: none;
+		box-shadow: var(--shadow-focus);
+	}
+	.navlink.owned {
+		color: var(--color-text);
+	}
+	.dot {
+		width: var(--space-2);
+		height: var(--space-2);
+		border-radius: var(--radius-round);
+		background: var(--color-neutral);
+		flex-shrink: 0;
+	}
+	.navlink.owned .dot {
+		background: var(--color-success);
+	}
+	.navlink .name {
 		flex: 1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.navlink .setn {
+		color: var(--color-text-subtle);
+		font-variant-numeric: tabular-nums;
+		font-size: var(--text-sm);
+	}
+	.main {
 		min-width: 0;
 	}
-	.groups h2 {
-		margin-top: var(--space-5);
+	.seriesgroup {
+		margin-bottom: var(--space-6);
 	}
-	.groups section:first-child h2 {
-		margin-top: 0;
+	.grouphdr {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-2);
+		width: 100%;
+		background: none;
+		border: none;
+		border-bottom: 1px solid var(--color-border);
+		border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+		color: var(--color-text);
+		padding: var(--space-2);
+		font: inherit;
+		font-size: var(--text-lg);
+		cursor: pointer;
+		text-align: left;
+	}
+	.grouphdr:hover {
+		background: var(--color-surface-hover);
+	}
+	.grouphdr:focus-visible {
+		outline: none;
+		box-shadow: var(--shadow-focus);
+	}
+	.caret {
+		width: 1ch;
+		color: var(--color-text-decorative);
+		font-size: var(--text-sm);
+	}
+	.ghname {
+		font-weight: var(--weight-bold);
+		color: var(--color-text-strong);
+	}
+	.ghmeta {
+		color: var(--color-text-subtle);
+		font-size: var(--text-sm);
+		font-variant-numeric: tabular-nums;
 	}
 	.grid {
 		display: grid;
@@ -317,5 +471,31 @@
 		flex-direction: column;
 		gap: var(--space-2);
 		margin-top: auto;
+	}
+
+	@media (max-width: 720px) {
+		.layout {
+			grid-template-columns: 1fr;
+		}
+		.navcol {
+			position: static;
+		}
+		.navcol :global(.nav) {
+			max-height: none;
+		}
+		.navcol ul {
+			flex-direction: row;
+			overflow-x: auto;
+			gap: var(--space-1);
+		}
+		.navlink {
+			flex: 0 0 auto;
+			padding: var(--space-1) var(--space-2);
+			border: 1px solid var(--color-border);
+			border-radius: var(--radius-pill);
+		}
+		.navlink .setn {
+			display: none;
+		}
 	}
 </style>

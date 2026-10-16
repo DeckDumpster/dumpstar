@@ -2600,7 +2600,7 @@
 			--col-sel: 1.75rem;
 			--col-qty: 2rem;
 			--col-type: 4.5rem;
-			--col-traits: 8rem;
+			--col-traits: calc(var(--space-16) * 2);
 			--col-aspects: calc(var(--aspect-n) * 1.25em + 0.7rem + 1px);
 			--col-cost: 2.75rem;
 			--col-stats: 4.5rem;

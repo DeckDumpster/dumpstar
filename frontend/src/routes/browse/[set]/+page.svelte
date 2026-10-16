@@ -5,8 +5,7 @@
 	import { api } from '$lib/api';
 	import { latestOnly } from '$lib/latest';
 	import VariantModal from '$lib/components/VariantModal.svelte';
-	import RarityMark from '$lib/components/RarityMark.svelte';
-	import { breadcrumbs } from '$lib/breadcrumbs.svelte';
+		import { breadcrumbs } from '$lib/breadcrumbs.svelte';
 	import {
 		Button,
 		EmptyState,
@@ -17,9 +16,8 @@
 		Toolbar
 	} from '$lib/components/ui';
 	import { printingLabel } from '$lib/format';
-	import { parseView, splitLandscape, bandRuns, clampCols, MAX_COLS, BROWSE_ROWS, pageAfterResize } from '$lib/browseView';
-	import type { ViewMode } from '$lib/browseView';
-	import { variantColor, variantSortCmp } from '$lib/variants.svelte';
+	import { splitLandscape, bandRuns, clampCols, MAX_COLS, BROWSE_ROWS, pageAfterResize } from '$lib/browseView';
+		import { variantColor, variantSortCmp } from '$lib/variants.svelte';
 	import type { BinderPage } from '$lib/types/BinderPage';
 	import type { BinderSlot } from '$lib/types/BinderSlot';
 
@@ -52,11 +50,9 @@
 	// sizes. The backend's `layout` (cards per page) derives from cols:
 	// always 3 rows per page so denser grids → bigger pages.
 	let cols = $state(clampCols(urlNum('cols', 3)));
-	// 'card'   = image + metadata footer (collector #, name, rarity, owned);
-	//            the default.
-	// 'binder' = image + pips only, mimics a physical binder page; leaders
-	//            and bases are rotated to fill a portrait pocket.
-	let view = $state<ViewMode>(parseView(urlStr('view', 'card')));
+	// Leaders and bases are turned into a portrait pocket (as in a physical
+	// binder) unless the user unticks the box. A stale ?view= is never read.
+	let turnLandscape = $state(urlBool('turn', true));
 	const layout = $derived(cols * BROWSE_ROWS);
 	let includeHyperspace = $state(urlBool('hyperspace', true));
 	let includeShowcase = $state(urlBool('showcase', true));
@@ -271,7 +267,7 @@
 		set('sort', sort, 'number');
 		set('q', search, '');
 		set('missing', missingOnly ? '1' : '0', '0');
-		set('view', view, 'card');
+		set('turn', turnLandscape ? '1' : '0', '1');
 		// Persist via goto(replaceState:true), NOT $app/navigation's
 		// replaceState. replaceState(url, …) only repaints the address bar;
 		// it stashes page.url.href (SvelteKit's *current* URL, still stale)
@@ -300,10 +296,10 @@
 		load();
 	});
 
-	// View mode is a pure UI choice — persist it in the URL but don't
+	// Turning is a pure UI choice — persist it in the URL but don't
 	// refetch the binder data when it flips.
 	$effect(() => {
-		void view;
+		void turnLandscape;
 		syncUrl();
 	});
 
@@ -364,9 +360,6 @@
 			: splitLandscape(binder?.slots ?? [])
 	);
 	const runs = $derived(sortKey === 'number' ? bandRuns(binder?.slots ?? []) : []);
-	// A band tile takes one cell of a grid half as wide as the page's columns
-	// (a landscape card used to span two), so rows hold landscape tiles only.
-	const bandCols = $derived(view === 'binder' ? cols : Math.max(1, Math.ceil(cols / 2)));
 
 	const sectionLabel: Record<string, string> = {
 		base: '',
@@ -418,11 +411,6 @@
 	/** Whether the user owns at least one printing of this slot's card. */
 	function ownedAny(slot: BinderSlot): boolean {
 		return slot.printings.some((p) => p.owned_count > 0);
-	}
-
-	/** Total copies the user owns across all printings of this slot. */
-	function ownedTotal(slot: BinderSlot): number {
-		return slot.printings.reduce((s, p) => s + p.owned_count, 0);
 	}
 </script>
 
@@ -548,20 +536,12 @@
 				{@render sortBtn('number', '#')}
 				{@render sortBtn('price', 'Price')}
 			</Toolbar>
-			<!-- Binder view = image + pips only (mimics a physical binder).
-			     Card view = adds a metadata footer (#, name, rarity, owned). -->
-			<div class="viewtoggle" role="group" aria-label="View mode">
-				<button
-					class:active={view === 'binder'}
-					onclick={() => (view = 'binder')}
-					title="Binder view — image + variant pips only"
-				>Binder</button>
-				<button
-					class:active={view === 'card'}
-					onclick={() => (view = 'card')}
-					title="Card view — image + #, name, rarity, owned"
-				>Card</button>
-			</div>
+			<Field
+				inline
+				type="checkbox"
+				label="Turn leaders and bases"
+				bind:checked={turnLandscape}
+			/>
 			<!-- Cards per row stepper. Pure UI choice (1..MAX_COLS) — page size
 			     derives from it (cols × 3 rows per page) so the backend's
 			     pagination stays consistent at 3 visible rows. -->
@@ -680,9 +660,7 @@
 				</EmptyState>
 			{/if}
 		{:else}
-			<!-- One colored pip per variant. In binder view pips sit alone
-			     below the image; in card view they share a row with the
-			     metadata (#, name, ×owned). The pip buttons live OUTSIDE
+			<!-- One colored pip per variant. The pip buttons live OUTSIDE
 			     the slot button so they don't produce nested-button
 			     invalid HTML. -->
 			{#snippet pips(slot: BinderSlot)}
@@ -708,12 +686,12 @@
 					{/each}
 				</div>
 			{/snippet}
-			{#snippet cell(slot: BinderSlot, inBand: boolean = false)}
+			{#snippet cell(slot: BinderSlot)}
 				<div
 					class="slotwrap"
 					class:missing={!ownedAny(slot)}
 					class:landscape={slot.landscape}
-					class:rotated={slot.landscape && view === 'binder'}
+					class:rotated={slot.landscape && turnLandscape}
 					data-landscape={slot.landscape}
 				>
 					<button class="slot" onclick={() => (selectedSlot = slot)}>
@@ -723,19 +701,10 @@
 							<div class="noart">{slot.name}</div>
 						{/if}
 					</button>
-					{#if view === 'card'}
-						<div class="meta">
-							<span class="num">#{slot.number}</span>
-							{#if slot.rarity}<RarityMark name={slot.rarity} />{/if}
-							<span class="name" title={slot.name}>{slot.name}</span>
-							{#if ownedTotal(slot) > 0}
-								<span class="own" title="Owned copies">×{ownedTotal(slot)}</span>
-							{/if}
-							{@render pips(slot)}
-						</div>
-					{:else}
+					<div class="foot">
 						{@render pips(slot)}
-					{/if}
+						<span class="num">#{slot.number}</span>
+					</div>
 				</div>
 			{/snippet}
 
@@ -771,10 +740,10 @@
 							class="grid landscapegrid"
 							data-testid="landscape-band"
 							data-band={run.kind}
-							style:grid-template-columns="repeat({bandCols}, minmax(0, 1fr))"
+							style:grid-template-columns="repeat({cols}, minmax(0, 1fr))"
 						>
 							{#each run.slots as slot (slot.card_id)}
-								{@render cell(slot, true)}
+								{@render cell(slot)}
 							{/each}
 						</div>
 					{/if}
@@ -961,33 +930,6 @@
 		display: flex;
 		align-items: center;
 	}
-	/* Binder/Card view-mode segmented control. */
-	.viewtoggle {
-		display: inline-flex;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		overflow: hidden;
-	}
-	.viewtoggle button {
-		background: var(--color-surface-panel);
-		border: none;
-		color: var(--color-text-subtle);
-		padding: var(--space-1) var(--space-2);
-		font: inherit;
-		font-size: var(--text-md);
-		cursor: pointer;
-		border-radius: 0;
-	}
-	.viewtoggle button + button {
-		border-left: 1px solid var(--color-border);
-	}
-	.viewtoggle button:hover {
-		color: var(--color-text);
-	}
-	.viewtoggle button.active {
-		background: var(--color-accent);
-		color: var(--color-on-accent);
-	}
 	/* Cards-per-row stepper. */
 	.cpr {
 		display: inline-flex;
@@ -1158,52 +1100,35 @@
 		padding: var(--space-2);
 		text-align: center;
 	}
-	/* 'Card view' metadata row: collector #, name, owned count, pips —
-	   all on one line. The pips snippet drops in at the right edge as
-	   a flex-end cluster so taller tiles still feel binder-like. */
-	.meta {
+	/* Tile footer: the printing pips and the collector number, one line, never
+	   wrapping. Pips start at the left so the first sits at the same x on every
+	   tile; the number takes what is left and drops out when the tile is too
+	   narrow for both. Pips that do not fit are clipped (the modal lists them). */
+	.foot {
+		container-type: inline-size;
 		display: flex;
+		flex-wrap: nowrap;
 		align-items: center;
-		gap: var(--space-2);
+		gap: var(--space-1);
+		height: 24px;
+		min-width: 0;
+		overflow: hidden;
 		font-size: var(--text-sm);
-		line-height: var(--leading-tight);
-		color: var(--color-text-muted);
-		min-width: 0;
-		min-height: 20px;
-		overflow: hidden;
-		/* A narrow portrait tile cannot hold number, rarity, name and pips on
-		   one line: the pips take their own row beneath. */
-		flex-wrap: wrap;
-	}
-	.meta .num {
 		color: var(--color-text-subtle);
-		font-variant-numeric: tabular-nums;
-		flex-shrink: 0;
 	}
-	.meta .name {
-		color: var(--color-text);
-		overflow: hidden;
-		text-overflow: ellipsis;
+	.foot .num {
+		margin-left: auto;
+		flex-shrink: 0;
 		white-space: nowrap;
-		min-width: 0;
-		flex: 1 1 0;
-	}
-	.meta .own {
-		color: var(--color-success-text);
 		font-variant-numeric: tabular-nums;
-		font-weight: var(--weight-semibold);
-		flex-shrink: 0;
 	}
-	/* When pips share the meta row, anchor them to the right edge so
-	   the name column gets all available slack. */
-	.meta .vchips {
-		flex: 1 0 100%;
-		justify-content: flex-start;
-		min-width: 0;
-	}
-	.slotwrap.missing .meta .name,
-	.slotwrap.missing .meta .num {
+	.slotwrap.missing .foot .num {
 		color: var(--color-text-subtle);
+	}
+	@container (max-width: 95px) {
+		.foot .num {
+			display: none;
+		}
 	}
 	/* Color-coded printing chips centered below the card. Empty (border-
 	   only) when unowned, filled with the variant's color when owned;
@@ -1211,12 +1136,14 @@
 	   (the `variants` table), delivered as --c by the markup. */
 	.vchips {
 		display: flex;
-		justify-content: center;
+		justify-content: flex-start;
 		align-items: center;
 		gap: var(--space-1);
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
+		flex-shrink: 0;
 	}
 	.vchip {
+		flex-shrink: 0;
 		width: 24px;
 		height: 24px;
 		border-radius: var(--radius-round);

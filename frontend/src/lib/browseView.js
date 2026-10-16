@@ -1,15 +1,4 @@
-/** Set-page view mode and the leaders-and-bases split. */
-
-/** @typedef {'binder' | 'card'} ViewMode */
-
-/**
- * Card view is the default; only an explicit `view=binder` selects binder.
- * @param {string | null | undefined} raw
- * @returns {ViewMode}
- */
-export function parseView(raw) {
-	return raw === 'binder' ? 'binder' : 'card';
-}
+/** Set-page leaders-and-bases grouping and paging helpers. */
 
 /**
  * Split a page's slots into the landscape section (leaders, then bases — the

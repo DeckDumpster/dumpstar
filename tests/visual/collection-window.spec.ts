@@ -469,8 +469,8 @@ test('the endpoint refuses a sort it cannot satisfy, naming the ones it can', as
 
 /* ── The header is two rows at every width (sp-u08a8v) ─────────────────────
  *
- * Row 1 = logo + search (fills) + ?; row 2 = view toggle, All cards, the menu
- * and the "N cards, $X" status right-aligned. Ported from pokedumpster
+ * Row 1 = logo + search (fills) + ?; row 2 = view toggle, the ⋮ menu (which holds All cards),
+ * the "N cards, $X" status on one line, and the columns icon at the far right. Ported from pokedumpster
  * (sp-xew39v), which took it from deckdumpster. */
 for (const [width, height] of [
 	[390, 844],
@@ -490,10 +490,10 @@ for (const [width, height] of [
 		expect(Math.abs(logo - search)).toBeLessThanOrEqual(4);
 		expect(Math.abs(help - search)).toBeLessThanOrEqual(4);
 		const toggle = await mid('[data-testid="view-grid"]');
-		const all = await mid('[data-testid="all-cards-toggle"]');
+		const more = await mid('[data-testid="more-menu"]');
 		const status = await mid('[data-testid="collection-count"]');
 		expect(Math.abs(toggle - status)).toBeLessThanOrEqual(6);
-		expect(Math.abs(all - status)).toBeLessThanOrEqual(6);
+		expect(Math.abs(more - status)).toBeLessThanOrEqual(6);
 		expect(toggle).toBeGreaterThan(search + 10);
 		await page
 			.locator('.topbar')

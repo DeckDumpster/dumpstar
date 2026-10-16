@@ -470,7 +470,9 @@
 					<img class="setcrop" src={binder.set.art_url} alt="" />
 				{/if}
 				{#if binder.set.logo_url}
-					<img class="setlogo" src={binder.set.logo_url} alt="{binder.set.name} logo" />
+					<div class="logobox">
+						<img class="setlogo" src={binder.set.logo_url} alt="{binder.set.name} logo" />
+					</div>
 				{:else}
 					<span class="setname">{binder.set.name}</span>
 				{/if}
@@ -808,10 +810,25 @@
 		height: var(--space-16, 72px);
 		border-radius: var(--radius-sm);
 		object-fit: cover;
+		flex: none;
+		max-width: 40%;
+	}
+	/* The logo fills a fixed-height box beside the crop and is fitted to it,
+	   never sized by its intrinsic width (wide wordmarks used to run off the
+	   right edge). */
+	.logobox {
+		flex: 1 1 0;
+		min-width: 0;
+		height: var(--space-12, 56px);
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 	.setlogo {
-		max-height: var(--space-12, 56px);
+		width: 100%;
+		height: 100%;
 		object-fit: contain;
+		object-position: center;
 	}
 	.setname {
 		font-weight: var(--weight-semibold);

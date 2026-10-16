@@ -779,6 +779,12 @@
           "tier": "T4",
           "statement": "In multi-select mode on the Collection page I can check one or more copy rows and click the bulk Add to wishlist button. One wish is created per distinct card among the selection, so selecting two copies of the same c... (collection_wishlist_panel)",
           "covering_suites": []
+        },
+        {
+          "id": "UC-collection-45",
+          "tier": "T4",
+          "statement": "On the collection page in table view, I open Columns and untick Type. The Type column is gone from the table header. I reload the page and the table still has no Type column. The Columns list offers no Adjusted entry,... (collection_column_chooser)",
+          "covering_suites": []
         }
       ]
     },

@@ -63,7 +63,13 @@ test('card-view footer wraps its pips onto their own row, at a 24px tap target',
 // HMW-shaped set: Leaders #1-18, Bases #19-34, units 35-272, Hyperspace
 // Leaders #273-290, Hyperspace Bases #291-306, units to 782, Showcase
 // Leaders #783-800.
+/** @type {{ number: string, card_type: string, landscape: boolean }[]} */
 const hmw = [];
+/**
+ * @param {number} from
+ * @param {number} to
+ * @param {string} card_type
+ */
 const add = (from, to, card_type) => {
 	for (let n = from; n <= to; n++)
 		hmw.push({ number: String(n), card_type, landscape: card_type === 'Leader' || card_type === 'Base' });
@@ -75,11 +81,17 @@ add(273, 290, 'Leader');
 add(291, 306, 'Base');
 add(307, 782, 'Unit');
 add(783, 800, 'Leader');
+/**
+ * @param {number} cols
+ * @param {number} p
+ * @param {boolean} [desc]
+ */
 const pageOf = (cols, p, desc = false) => {
 	const all = desc ? [...hmw].reverse() : hmw;
 	const size = cols * BROWSE_ROWS;
 	return all.slice((p - 1) * size, p * size);
 };
+/** @param {{ kind: string, slots: { number: string }[] }[]} runs */
 const shape = (runs) => runs.map((r) => `${r.kind}:${r.slots[0].number}-${r.slots.at(-1).number}`);
 
 test('number sort at cols=6: page 1 is one Leaders band, page 2 Bases then portrait #35, #36', () => {
@@ -90,7 +102,7 @@ test('number sort at cols=6: page 1 is one Leaders band, page 2 Bases then portr
 test('number sort: the page holding #273 shows portrait cards, then a Leaders band from #273', () => {
 	const p = Math.floor(272 / 18) + 1;
 	const runs = bandRuns(pageOf(6, p));
-	assert.deepEqual(shape(runs), ['portrait:267-272', 'leaders:273-290']);
+	assert.deepEqual(shape(runs), ['portrait:271-272', 'leaders:273-288']);
 });
 
 test('number sort desc: runs follow the descending sequence, bands labelled by kind', () => {

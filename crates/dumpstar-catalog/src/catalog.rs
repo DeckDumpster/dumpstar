@@ -90,6 +90,8 @@ const REQUIRED_COLUMNS: &[(&str, &str)] = &[("printings", "variant_code")];
 const ADDITIVE_COLUMNS: &[(&str, &str, &str)] = &[
     // The product category the set nav groups by.
     ("sets", "category", "TEXT"),
+    // A leader printing's deployed side.
+    ("printings", "back_image_url", "TEXT"),
 ];
 
 /// Add every [`ADDITIVE_COLUMNS`] entry a populated table lacks. Tables that do

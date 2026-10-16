@@ -6,6 +6,7 @@
 	import { cardTextHtml } from '$lib/cardtext';
 	import RarityMark from '$lib/components/RarityMark.svelte';
 	import CostMark from '$lib/components/CostMark.svelte';
+	import StatFrame from '$lib/components/StatFrame.svelte';
 	import SetLogo from '$lib/components/SetLogo.svelte';
 	import { breadcrumbs } from '$lib/breadcrumbs.svelte';
 	import { variantSortCmp } from '$lib/variants.svelte';
@@ -306,8 +307,8 @@
 						<a class="facet" href={facetHref('type', card.card_type)}>{card.card_type}</a>
 					</dd>{/if}
 				{#if card.cost != null}<dt>Cost</dt><dd><CostMark cost={card.cost} /></dd>{/if}
-				{#if card.power != null}<dt>Power</dt><dd>{card.power}</dd>{/if}
-				{#if card.hp != null}<dt>HP</dt><dd>{card.hp}</dd>{/if}
+				{#if card.power != null}<dt>Power</dt><dd><StatFrame kind="power" value={card.power} /></dd>{/if}
+				{#if card.hp != null}<dt>HP</dt><dd><StatFrame kind="hp" value={card.hp} /></dd>{/if}
 				{#if jsonList(card.aspects).length}
 					<dt>Aspects</dt>
 					<dd>

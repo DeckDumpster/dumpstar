@@ -653,6 +653,43 @@ fn a_corrupted_payload_stops_the_derive_instead_of_deriving_from_it() {
     assert!(text(&out).contains("sha256"), "{}", text(&out));
 }
 
+/// **The derive needs no network.** `raw/` is not decorative: the offline job
+/// answers every request from landed bytes, so the upstream — up, on loopback,
+/// and handed to the job as its origin — is never asked for anything. A derive
+/// that quietly reached out for one missing piece would still be row-identical
+/// here, so identity alone cannot prove this; the upstream's own request log
+/// does. (Replaces the podman `--internal` network of the retired
+/// `tests/lake/derive.sh`.)
+#[test]
+fn the_offline_derive_never_asks_the_upstream_for_anything() {
+    let h = Harness::start();
+    let online = h.db("online");
+    let offline = h.db("offline");
+
+    h.day(1);
+    assert!(h.online(&online, DAY1, DAY1_CLOCK, false));
+    h.day(2);
+    assert!(h.online(&online, DAY2, DAY2_CLOCK, false));
+
+    let served = h.upstream.requests().len();
+    assert!(served > 0, "the fetching side never reached the upstream");
+
+    for date in [DAY1, DAY2] {
+        let out = h.derive(&offline, date, &[]);
+        assert!(out.status.success(), "derive {date}:\n{}", text(&out));
+        assert_eq!(
+            h.upstream.requests().len(),
+            served,
+            "deriving {date} sent a request to the upstream:\n{:?}",
+            h.upstream.requests()
+        );
+    }
+
+    let diff = h.diff(&online, &offline);
+    assert!(diff.status.success(), "{}", text(&diff));
+    assert!(text(&diff).contains("ROW-IDENTICAL"));
+}
+
 /// A date nobody landed is a refusal that names the date — never a rebuild
 /// from whatever else the lake happens to hold.
 #[test]

@@ -749,8 +749,8 @@ if tier lint; then
     # one. The orphan check needs the base ref; a checkout without it keeps the
     # gap check, which fails on the same deletion for every T0-T3 use case.
     step "Use-case coverage: headers, catalogue, gaps (tests/ci/plan.sh lint)"
-    bash "$REPO_DIR/tests/ci/plan_test.sh" > /tmp/pt.out 2>&1 || { echo "!! PLANTEST: $(head -c 700 /tmp/pt.out | tr "\n" ";")"; exit 1; }
-    bash "$REPO_DIR/tests/ci/plan.sh" lint > /tmp/pl.out 2>&1 || { echo "!! PLAN: $(head -c 600 /tmp/pl.out | tr "\n" ";")"; exit 1; }
+    bash "$REPO_DIR/tests/ci/plan_test.sh" > /tmp/pt.out 2>&1 || { step "PLANTEST $(head -c 700 /tmp/pt.out | tr "\n" ";")"; false; }
+    bash "$REPO_DIR/tests/ci/plan.sh" lint > /tmp/pl.out 2>&1 || { step "PLAN $(head -c 600 /tmp/pl.out | tr "\n" ";")"; false; }
     if git -C "$REPO_DIR" rev-parse --verify -q "${DUMPSTAR_PLAN_BASE:-origin/main}^{commit}" >/dev/null; then
         bash "$REPO_DIR/tests/ci/plan.sh" orphans "${DUMPSTAR_PLAN_BASE:-origin/main}"
     else

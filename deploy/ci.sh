@@ -1001,7 +1001,12 @@ fi
 
 PORT=""
 if tier container; then
-    : # prod_unit.sh (the only gate here) was deleted with its Python JWKS fixture, 2026-10-15
+    # The shipper against a real MinIO under the real tenant credential policy
+    # (sp-g1zv9j): a Rust binary driven by a shell harness, no Python. It builds
+    # nothing itself — dumpstar_image_ensure picks up DUMPSTAR_PREBUILT_IMAGE.
+    # The lake crates have no tier of their own: any path outside docs/ and
+    # frontend/ selects every tier, so a change to them runs this.
+    dumpstar_par_add shipper bash "$REPO_DIR/tests/lake/shipper.sh"
 fi
 
 # --- 5. Gates not armed yet --------------------------------------------------

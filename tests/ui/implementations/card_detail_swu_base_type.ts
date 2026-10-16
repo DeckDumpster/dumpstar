@@ -1,3 +1,4 @@
+// covers: UC-card-22
 /**
  * Guards sp-iszds1: a base shows its type and HP and nothing it lacks.
  */

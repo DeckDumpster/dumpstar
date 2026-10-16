@@ -1,4 +1,5 @@
 # Scenario: Add a sealed product and verify it appears in table view
+# Use case: UC-sealed-01
 #
 # Related:
 #   issues: []

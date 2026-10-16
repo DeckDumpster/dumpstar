@@ -1,4 +1,5 @@
 # Scenario: Create a binder and manage cards in it
+# Use case: UC-binders-02
 
 # Related: binders_create_with_all_fields, binders_add_cards_full_flow
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T1
+# covers: tests/lib/litestream.sh
 # Self-test + ratchet: "does this replica hold data?" has THREE answers, and no
 # harness may go back to asking it with two (pd-reyy, pd-nt1k).
 #

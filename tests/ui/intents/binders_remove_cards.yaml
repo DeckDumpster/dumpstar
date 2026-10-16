@@ -1,4 +1,5 @@
 # Scenario: Remove a card from a binder via the per-row Remove link
+# Use case: UC-binders-09
 
 # Related: binders_add_cards_full_flow, binders_edit_binder
 

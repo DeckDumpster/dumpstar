@@ -1,4 +1,5 @@
 # Scenario: A keyword query filters the collection server-side
+# Use case: UC-collection-28
 #
 # Related:
 #   issues: [dumpstar-idf.10]

@@ -1,4 +1,5 @@
 # Scenario: Committing an order with no resolved line shows validation error
+# Use case: UC-order-06
 #
 # Related:
 #   issues: []

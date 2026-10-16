@@ -1,4 +1,5 @@
 # Scenario: Deck tiles display content (name, state badge, owner, count)
+# Use case: UC-decks-08
 #
 # Prerequisites:
 #   Three fixture decks exist: "Luke Vigilance Midrange" (built, Ryan),

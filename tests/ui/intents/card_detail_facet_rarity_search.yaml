@@ -1,4 +1,5 @@
 # Scenario: Clicking a card's rarity runs a rarity: catalog search
+# Use case: UC-card-16
 #
 # Related:
 #   issues: [dumpstar-xj6]

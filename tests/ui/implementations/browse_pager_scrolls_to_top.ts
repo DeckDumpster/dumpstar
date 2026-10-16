@@ -1,3 +1,4 @@
+// covers: UC-browse-15
 /**
  * Hand-written fail-first regression for dumpstar-not: advancing a page in
  * binder browse should re-center the viewport at the top of the grid. The top

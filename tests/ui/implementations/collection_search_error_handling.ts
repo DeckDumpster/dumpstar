@@ -1,3 +1,4 @@
+// covers: UC-collection-25
 /**
  * Hand-written implementation for collection_search_error_handling.
  *

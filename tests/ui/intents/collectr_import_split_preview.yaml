@@ -1,4 +1,5 @@
 # Scenario: A Collectr export previews as separate cards / sealed / skipped panes
+# Use case: UC-collectr-04
 #
 # Related:
 #   issues: [dumpstar-0i9y]

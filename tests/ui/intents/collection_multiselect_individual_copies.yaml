@@ -1,4 +1,5 @@
 # Scenario: Multi-select mode operates on individual copies
+# Use case: UC-collection-18
 #
 # Prerequisites:
 #   The fixture owns multiple copies of "Vanquish" (SOR-P01); each is

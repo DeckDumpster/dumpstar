@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T2
+# covers: deploy/dumpstar-litestream.container
 # Container-tier gate (pd-fof4, pd-nd6w): the SHIPPED Litestream config
 # replicates every tenant AND the user registry, and the SHIPPED restore
 # addressing brings back the right one.

@@ -1,18 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f5c542" stroke-width="2">
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f5c542">
 	<title>Dumpstar</title>
-	<!--
-	  The same mark as src/lib/components/DeathStar.svelte, at the same geometry.
-	  A favicon is a static asset the browser fetches outside the document, so it
-	  cannot resolve a CSS custom property: #f5c542 is the gold-500 reference
-	  step spelled out, and this file is the one place in the project where that
-	  is the correct thing to do. Re-skinning the brand means editing this hex
-	  alongside the reference block in theme.css.
-
-	  (No double hyphen may appear in this comment. An SVG served as
-	  image/svg+xml is parsed as XML, which forbids it inside a comment, and the
-	  browser drops the whole image with no console error.)
-	-->
-	<path d="M2.15 13.74 A10 10 0 1 1 10.26 21.85" />
+	<path d="M2.15 13.74 A10 10 0 1 1 10.26 21.85" stroke-width="2" />
 	<path d="M2.15 13.74 L5.5 15 L7 13.2 M10.26 21.85 L9 18.5 L6.5 17.5 L5.5 15" stroke-width="1.5" />
 	<circle cx="15.5" cy="8.2" r="2.4" stroke-width="1.75" />
 	<line x1="8" y1="12" x2="22" y2="12" stroke-width="1.75" />

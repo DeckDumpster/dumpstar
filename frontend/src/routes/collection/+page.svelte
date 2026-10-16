@@ -1677,7 +1677,9 @@
 	   padding for this route so the bar can pin edge to edge; the gutter
 	   comes back here, where the content is. */
 	.content {
-		padding: var(--space-5) var(--space-6) var(--space-10);
+		--gutter-x: var(--space-6);
+		--gutter-top: var(--space-5);
+		padding: var(--gutter-top) var(--gutter-x) var(--space-10);
 	}
 	.brand {
 		display: inline-flex;
@@ -1847,10 +1849,12 @@
 		text-decoration: underline;
 	}
 	/* The table runs edge to edge: it cancels `.content`'s gutter on the
-	   sides and under the pinned bar. A bulk bar above it keeps the top gap. */
+	   sides and under the pinned bar, by the gutter the viewport actually has
+	   (cancelling the desktop one pushed the table off the left edge on a
+	   phone, clipping the first heading). A bulk bar above it keeps the top gap. */
 	.tableScroll {
 		overflow-x: auto;
-		margin: calc(-1 * var(--space-5)) calc(-1 * var(--space-6)) 0;
+		margin: calc(-1 * var(--gutter-top)) calc(-1 * var(--gutter-x)) 0;
 	}
 	.bulkbar ~ .tableScroll {
 		margin-top: 0;
@@ -2524,7 +2528,9 @@
 	   reflow yet (it would clash with click-to-sort headers). */
 	@media (max-width: 540px) {
 		.content {
-			padding: var(--space-3) var(--space-3) var(--space-8);
+			--gutter-x: var(--space-3);
+			--gutter-top: var(--space-3);
+			padding: var(--gutter-top) var(--gutter-x) var(--space-8);
 		}
 		table.dd {
 			font-size: var(--text-sm);

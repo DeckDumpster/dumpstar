@@ -1,4 +1,5 @@
 # Scenario: The create form requires a deck name
+# Use case: UC-decks-05
 #
 # Prerequisites:
 #   The /decks page loads with the inline create form visible

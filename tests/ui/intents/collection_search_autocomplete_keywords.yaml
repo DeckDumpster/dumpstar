@@ -1,4 +1,5 @@
 # Scenario: The search bar autocompletes keywords and is: flags
+# Use case: UC-collection-22
 #
 # Related:
 #   issues: [dumpstar-cx1]

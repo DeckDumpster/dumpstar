@@ -1,4 +1,5 @@
 # Scenario: Editing a copy's condition does not rebuild the price chart
+# Use case: UC-card-07
 #
 # Related:
 #   issues: [dumpstar-i5d]

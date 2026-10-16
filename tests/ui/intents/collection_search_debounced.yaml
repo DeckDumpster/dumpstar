@@ -1,4 +1,5 @@
 # Scenario: Search the collection by card name with a debounced filter
+# Use case: UC-collection-23
 #
 # Related:
 #   issues: []

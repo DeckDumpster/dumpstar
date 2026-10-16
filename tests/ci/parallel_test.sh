@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T1
+# covers: deploy/ci-parallel.sh
 # Parallel CI gate runner (pd-2nl9, item 4 of pd-6onp).
 #
 # deploy/ci-parallel.sh runs seventeen container gates two at a time (the default;

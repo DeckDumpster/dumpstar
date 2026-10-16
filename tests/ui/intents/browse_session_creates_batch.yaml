@@ -1,4 +1,5 @@
 # Scenario: The first add in a binder-browse visit creates a session batch
+# Use case: UC-browse-18
 
 # Related: browse_optimistic_ui_undo_toast, browse_variant_modal_add_increments_count
 

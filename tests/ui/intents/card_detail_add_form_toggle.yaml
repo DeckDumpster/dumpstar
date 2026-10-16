@@ -1,4 +1,5 @@
 # Scenario: Adding a copy from the card detail page does not require a form
+# Use case: UC-card-02
 #
 # Related:
 #   issues: []

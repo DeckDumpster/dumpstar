@@ -1,3 +1,4 @@
+// covers: UC-rarity-01
 /**
  * Hand-written implementation for rarity_official_mark (sp-kvga20).
  * The character, colour and sort order are catalog data served by

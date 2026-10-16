@@ -1,4 +1,5 @@
 # Scenario: Remove a resolved line before committing
+# Use case: UC-order-02
 #
 # Related:
 #   issues: []

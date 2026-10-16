@@ -1,4 +1,5 @@
 # Scenario: Multiple batches expand independently as an accordion
+# Use case: UC-recent-10
 
 # Related: recent_accordion_open_close, recent_batch_ingest
 

@@ -1,4 +1,5 @@
 # Scenario: Multiple purchases of the same sealed product show as separate rows
+# Use case: UC-sealed-07
 #
 # Related:
 #   issues: []

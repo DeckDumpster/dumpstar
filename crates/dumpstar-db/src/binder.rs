@@ -137,13 +137,29 @@ fn section_of(variant: &str) -> &'static str {
     }
 }
 
-/// A slot's price for sorting — the dearest market price across its
-/// printings; slots with no priced printing sort as 0.
-fn slot_price(slot: &BinderSlot) -> f64 {
-    slot.printings
-        .iter()
-        .filter_map(|p| p.market_price)
-        .fold(0.0_f64, f64::max)
+/// A slot's price for sorting: the price the tile shows (the frontend's `slotPrice`): the dearest *owned*
+/// printing's, else the dearest printing's; `None` when nothing is priced.
+fn slot_price(slot: &BinderSlot) -> Option<f64> {
+    let best = |owned_only: bool| {
+        slot.printings
+            .iter()
+            .filter(|p| !owned_only || p.owned_count > 0)
+            .filter_map(|p| p.market_price)
+            .reduce(f64::max)
+    };
+    best(true).or_else(|| best(false))
+}
+
+/// Order by price with unpriced slots last in either direction. Stable, so
+/// ties keep collector-number order.
+fn cmp_price(a: &BinderSlot, b: &BinderSlot, desc: bool) -> std::cmp::Ordering {
+    match (slot_price(a), slot_price(b)) {
+        (Some(x), Some(y)) if desc => y.total_cmp(&x),
+        (Some(x), Some(y)) => x.total_cmp(&y),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => std::cmp::Ordering::Equal,
+    }
 }
 
 /// Assemble a binder page for `set_code`. `None` if the set is unknown.
@@ -285,8 +301,8 @@ pub fn get_binder_page(
                 .to_ascii_lowercase()
                 .cmp(&a.name.to_ascii_lowercase())
         }),
-        "price" => visible.sort_by(|a, b| slot_price(b).total_cmp(&slot_price(a))),
-        "price_asc" => visible.sort_by(|a, b| slot_price(a).total_cmp(&slot_price(b))),
+        "price" => visible.sort_by(|a, b| cmp_price(a, b, true)),
+        "price_asc" => visible.sort_by(|a, b| cmp_price(a, b, false)),
         "rarity" => visible.sort_by_key(|s| std::cmp::Reverse(rank(s))),
         "rarity_asc" => visible.sort_by_key(|s| rank(s)),
         _ => {} // "number" — already collector-number ascending.
@@ -343,6 +359,10 @@ mod tests {
     /// (of card 1), Showcase #270 (of card 2) and a promo #P01. #1 has a
     /// Foil too, so its slot holds two printings.
     fn binder_conn() -> (tempfile::TempDir, Connection) {
+        binder_conn_priced(&[])
+    }
+
+    fn binder_conn_priced(prices: &[(&str, f64)]) -> (tempfile::TempDir, Connection) {
         let dir = tempfile::tempdir().unwrap();
         let shared = dir.path().join("shared.sqlite");
         {
@@ -380,6 +400,9 @@ mod tests {
                 "Promo",
                 "Normal",
             );
+            for (pid, v) in prices {
+                testkit::price(&c, pid, "2026-05-18", *v);
+            }
         }
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         (dir, conn)
@@ -684,6 +707,52 @@ mod tests {
                     ]
                 );
             }
+        }
+    }
+
+    #[test]
+    fn price_sort_orders_by_shown_price_unpriced_last() {
+        // Priced: #3 $5, #264 $20, #2 $1. Unpriced: #1, #270, #P01.
+        let (_d, conn) = binder_conn_priced(&[
+            ("SOR-3-normal", 5.0),
+            ("SOR-1-hyper", 20.0),
+            ("SOR-2-normal", 1.0),
+        ]);
+        let order = |sort: &str| -> Vec<String> {
+            get_binder_page(
+                &conn,
+                "SOR",
+                &BinderQuery {
+                    sort: sort.into(),
+                    layout: 60,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .unwrap()
+            .slots
+            .into_iter()
+            .filter(|s| !s.landscape)
+            .map(|s| s.number)
+            .collect()
+        };
+        let priced = |v: Vec<String>| -> Vec<String> {
+            v.into_iter()
+                .filter(|n| ["264", "3", "2"].contains(&n.as_str()))
+                .collect()
+        };
+        let desc = order("price");
+        let asc = order("price_asc");
+        assert_eq!(priced(desc.clone()), ["264", "3", "2"]);
+        assert_eq!(priced(asc.clone()), ["2", "3", "264"]);
+        for v in [&desc, &asc] {
+            let last_priced = v
+                .iter()
+                .rposition(|n| ["264", "3", "2"].contains(&n.as_str()));
+            let first_unpriced = v
+                .iter()
+                .position(|n| !["264", "3", "2"].contains(&n.as_str()));
+            assert!(last_priced < first_unpriced, "unpriced last: {v:?}");
         }
     }
 

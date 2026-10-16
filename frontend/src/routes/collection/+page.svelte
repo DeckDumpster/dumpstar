@@ -27,6 +27,7 @@
 	import type { SearchVocabulary } from '$lib/types/SearchVocabulary';
 	import type { Binder } from '$lib/types/Binder';
 	import type { Deck } from '$lib/types/Deck';
+	import StatFrame from '$lib/components/StatFrame.svelte';
 	import { COLUMNS, PHONE_MAX_WIDTH, anyAdjusted, parseHidden, visibleColumns } from '$lib/collectionColumns';
 
 	// Server-side search results (one row per printing, owned or not). The
@@ -578,12 +579,6 @@
 			}
 		}
 		return [...map.values()];
-	}
-
-	/** "3/4" — power over hit points; either may be absent (Events, Bases). */
-	function powerHp(a: AggRow): string {
-		if (a.power == null && a.hp == null) return '';
-		return `${a.power ?? '–'}/${a.hp ?? '–'}`;
 	}
 
 	// Unowned printings become qty-0 AggRows so owned and unowned draw the same
@@ -1562,7 +1557,7 @@
 							{#if showCol('type')}<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}>{a.card_type ?? ''}</td>{/if}
 							{#if showCol('aspects')}<td class="fac aspects" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', sortAspects(jsonList(a.aspects))[0])}>{#each sortAspects(jsonList(a.aspects)) as n (n)}<span class="fac-aspect" data-aspect={n} title="Find all {n} cards" onclick={(e) => facetCell(e, 'aspect', n)}><AspectIcon name={n} /></span>{/each}</td>{/if}
 							{#if showCol('cost')}<td class="center"><CostMark cost={a.cost} /></td>{/if}
-							{#if showCol('stats')}<td class="center">{powerHp(a)}</td>{/if}
+							{#if showCol('stats')}<td class="center stats"><StatFrame kind="power" value={a.power} /> <StatFrame kind="hp" value={a.hp} /></td>{/if}
 							{#if showCol('rarity')}<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}><RarityMark name={a.rarity} /></td>{/if}
 							{#if showCol('set')}<td class="center fac" title="Find all cards in this set" onclick={(e) => facetCell(e, 'set', a.set_code)}>
 								<span title={a.set_name}><SetLogo code={a.set_code} name={a.set_name} />{a.set_code.toUpperCase()}</span>
@@ -1616,7 +1611,7 @@
 						{#if showCol('type')}<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}>{a.card_type ?? ''}</td>{/if}
 						{#if showCol('aspects')}<td class="fac aspects" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', sortAspects(jsonList(a.aspects))[0])}>{#each sortAspects(jsonList(a.aspects)) as n (n)}<span class="fac-aspect" data-aspect={n} title="Find all {n} cards" onclick={(e) => facetCell(e, 'aspect', n)}><AspectIcon name={n} /></span>{/each}</td>{/if}
 						{#if showCol('cost')}<td class="center"><CostMark cost={a.cost} /></td>{/if}
-						{#if showCol('stats')}<td class="center">{powerHp(a)}</td>{/if}
+						{#if showCol('stats')}<td class="center stats"><StatFrame kind="power" value={a.power} /> <StatFrame kind="hp" value={a.hp} /></td>{/if}
 						{#if showCol('rarity')}<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}><RarityMark name={a.rarity} /></td>{/if}
 						{#if showCol('set')}<td class="center fac" title="Find all cards in this set" onclick={(e) => facetCell(e, 'set', a.set_code)}>
 							<span title={a.set_name}><SetLogo code={a.set_code} name={a.set_name} />{a.set_code.toUpperCase()}</span>
@@ -2256,7 +2251,7 @@
 		--aspect-n: 2;
 		--col-aspects: calc(var(--aspect-n) * 1.25em + 1.2rem + 1px);
 		--col-cost: 3.5rem;
-		--col-stats: 4.5rem;
+		--col-stats: 5.5rem;
 		--col-rarity: 5.5rem;
 		--col-set: 4.25rem;
 		--col-number: 3.75rem;
@@ -2575,7 +2570,7 @@
 			--col-type: 4.5rem;
 			--col-aspects: calc(var(--aspect-n) * 1.25em + 0.7rem + 1px);
 			--col-cost: 2.75rem;
-			--col-stats: 3.5rem;
+			--col-stats: 4.5rem;
 			--col-rarity: 4.25rem;
 			--col-set: 3.25rem;
 			--col-number: 3rem;

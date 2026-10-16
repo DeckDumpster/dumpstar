@@ -1201,6 +1201,7 @@ name = "dumpstar-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64",
  "chrono",
  "clap",
  "dumpstar-catalog",
@@ -1211,8 +1212,12 @@ dependencies = [
  "dumpstar-server",
  "dumpster-kit-keys",
  "dumpster-kit-lake",
+ "dumpster-kit-tenancy",
  "flate2",
+ "jsonwebtoken",
+ "rsa",
  "rusqlite",
+ "serde_json",
  "tar",
  "tempfile",
  "tokio",

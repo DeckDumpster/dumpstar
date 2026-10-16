@@ -19,7 +19,7 @@ const log = {
  * Per-action Playwright budget, and the default for the `wait_for_*` helpers.
  *
  * This was hard-coded to 500ms at every call site, which is below the floor
- * the app actually clears: card tiles load their art from images.pokemontcg.io,
+ * the app actually clears: card tiles load their art from a remote image host,
  * so the renderer stays busy for a beat after first paint and a plain
  * `page.click` on the collection toolbar acks in 230-500ms — right on the old
  * wall, failing roughly one run in ten. 5s matches the value the qa-finish

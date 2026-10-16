@@ -2,9 +2,9 @@
  * Hand-written implementation for collection_value_history_breakdown_tabs.
  *
  * The value dialog's three tabs each refetch a different dimension of
- * /api/collection/value-history (pd-0a30f178). The fixture spans three sets
- * and three binders, so switching tabs must take the chart from one line
- * ('all') to three ('set', then 'binder').
+ * /api/collection/value-history (pd-0a30f178). The fixture spans two sets
+ * and three binders, so switching tabs must take the chart from two lines
+ * ('all': cards + sealed) to two ('set') and then three ('binder').
  *
  * The assertion hangs off the chart container's `data-series-count`, not the
  * legend: Chart.js paints the legend into the canvas, so set and binder names
@@ -30,15 +30,15 @@ export async function steps(h: ReplayHarness) {
   await h.click_by_selector('button.countline');
   await h.wait_for_visible(DIALOG, 6000);
 
-  // Opens on Total: the loose cards as one line. A fixture holding sealed
-  // product would make this two (pd-bbv7) — the committed one holds none.
+  // Opens on Total: the cards line plus the sealed-product line (pd-bbv7),
+  // since the fixture holds sealed product.
   await h.assert_visible(`${tab('Total')}[aria-selected="true"]`);
-  await expectSeries(h, 1);
+  await expectSeries(h, 2);
 
   // By set — one line per set the collection touches.
   await h.click_by_selector(tab('By set'));
   await h.assert_visible(`${tab('By set')}[aria-selected="true"]`);
-  await expectSeries(h, 3);
+  await expectSeries(h, 2);
 
   // By binder — one line per binder holding cards.
   await h.click_by_selector(tab('By binder'));

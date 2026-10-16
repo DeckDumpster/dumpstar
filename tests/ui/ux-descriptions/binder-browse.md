@@ -1,7 +1,7 @@
 # Binder Browse Page UX Description
 
 **Source file:** `frontend/src/routes/browse/[set]/+page.svelte`
-**URL pattern:** `/browse/{set}` (e.g. `/browse/sv3pt5`)
+**URL pattern:** `/browse/{set}` (e.g. `/browse/SOR`)
 
 ---
 

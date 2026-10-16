@@ -4,11 +4,11 @@ involves:
   - "card detail Printings table with Variant, Owned, Market columns"
   - "the Market column shows the latest market price per variant"
 fixture_data:
-  card_name: "Charizard"
-  card_route: /card/base1/4
-  price_note: "every linked variant carries one market price row observed 2024-01-15"
+  card_name: "Luke Skywalker - Faithful Friend"
+  card_route: /card/SOR/005
+  price_note: "the normal ($4.60) and holo ($24.00) printings each carry one market price row observed 2024-01-15"
 notes: >
-  Navigate to /collection and wait for the table. Click the "Charizard"
-  Name link to open /card/base1/4. Wait for the Printings table. Verify
+  Navigate to /collection and wait for the table. Click the "Luke Skywalker - Faithful Friend"
+  Name link (the SOR #5 row) to open /card/SOR/005. Wait for the Printings table. Verify
   the table has a "Market" column and that the holo variant row shows a
   non-empty market price value.

@@ -6,12 +6,11 @@ involves:
   - "variants table with a '+ Add' button per variant row"
   - "variant row Owned count"
 fixture_data:
-  set_code: "base1"
-  collector_number: "7"
-  card_name: "Hitmonchan"
+  set_code: "SOR"
+  collector_number: "5"
+  card_name: "Luke Skywalker - Faithful Friend"
   variant: "holo"
 notes: >
-  base1/7 (Hitmonchan, Rare Holo) carries a single "holo" variant and is not
-  owned in the fixture. Navigate to /ingest/manual. Look up "base1" / "7".
+  SOR/005 (Luke Skywalker - Faithful Friend, Special) carries "normal" and "holo" variants; the holo one is already owned 5 times in the fixture. Navigate to /ingest/manual. Look up "SOR" / "5".
   Wait for the variants table. Click "+ Add" on the holo variant row. After
-  the post-add refetch, verify the holo row's Owned count shows 1.
+  the post-add refetch, verify the holo row's Owned count rises from 5 to 6.

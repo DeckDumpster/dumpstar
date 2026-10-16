@@ -8,13 +8,13 @@ involves:
   - "variant row Owned count"
   - "session log section with green 'Added ...' line"
 fixture_data:
-  set_code: "base1"
-  collector_number: "7"
-  card_name: "Hitmonchan"
+  set_code: "SOR"
+  collector_number: "5"
+  card_name: "Luke Skywalker - Faithful Friend"
   variant: "holo"
   condition: "Lightly Played"
 notes: >
   Navigate to /ingest/manual. Select "Lightly Played" from the Condition
-  select. Look up "base1" / "7". Wait for the variants table. Click "+ Add"
-  on the holo variant. Verify the holo row's Owned count shows 1 and the
-  session log shows "Added Hitmonchan · holo · Lightly Played".
+  select. Look up "SOR" / "5". Wait for the variants table. Click "+ Add"
+  on the holo variant. Verify the holo row's Owned count rises from 5 to 6 and the
+  session log shows "Added Luke Skywalker - Faithful Friend · holo · Lightly Played".

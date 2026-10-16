@@ -4,6 +4,6 @@
 
 description: >
   When I navigate to /binders, I see the three existing binders
-  ("Trade Binder", "Master Set: 151", and "Vintage Vault") rendered as
+  ("Trade Binder", "Master Set: Spark of Rebellion", and "Hyperspace Vault") rendered as
   tiles in the binder grid. Each tile shows the binder name and an
   "{n} cards" count. Clicking a binder tile takes me to its detail view.

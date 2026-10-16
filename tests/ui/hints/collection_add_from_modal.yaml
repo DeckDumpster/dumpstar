@@ -5,12 +5,12 @@ involves:
   - "the '+ Add' mutation adds a copy with source 'manual' and re-runs load()"
   - "'Your copies (N)' header and copies table on the card detail page"
 fixture_data:
-  card_name: "Pikachu"
-  card_route: /card/sv3pt5/25
+  card_name: "Vanquish"
+  card_route: /card/SOR/P01
   variant: "normal"
 notes: >
   1. Navigate to /collection and wait for the table. 2. Click the
-  "Pikachu" Name link (sv3pt5 #25 is owned in the fixture). 3. On the
+  "Vanquish" Name link (SOR #P01 is owned (3 copies) in the fixture). 3. On the
   card detail page wait for the Printings table. 4. Note the "Your
   copies (N)" count. 5. Click "+ Add" on the normal variant row.
   6. After the non-optimistic reload the "Your copies" count increments

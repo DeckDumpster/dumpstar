@@ -1,15 +1,15 @@
-start_page: /card/sv8/3
+start_page: /card/SOR/005
 involves:
   - 'a copy row in the "Your copies" table with a Variant <select>'
   - 'selecting a different variant calls changeVariant and triggers a reload'
   - 'after the reload the copy Variant <select> shows the new variant'
 fixture_data:
-  card_name: "Exeggcute"
+  card_name: "Luke Skywalker - Faithful Friend"
   from_variant: "normal"
-  to_variant: "reverse_holo"
+  to_variant: "holo"
 notes: >
-  sv8/3 (Exeggcute, Common) carries the "normal" and "reverse_holo"
-  variants. 1. Navigate to /card/sv8/3 and wait for the copies table to
-  load. 2. On a copy whose Variant <select> currently reads "normal",
-  select "reverse_holo". 3. After the non-optimistic reload, that copy's
-  Variant <select> shows "reverse_holo" selected.
+  SOR/005 (Luke Skywalker - Faithful Friend, Special) carries the "normal" and "holo"
+  variants. 1. Navigate to /card/SOR/005 and wait for the copies table to
+  load. 2. On a normal copy (e.g. copy 10, Near Mint) whose Variant <select> currently reads "normal",
+  select "holo". 3. After the non-optimistic reload, that copy's
+  Variant <select> shows "holo" selected.

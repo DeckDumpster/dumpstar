@@ -11,7 +11,8 @@
 	import SetLogo from '$lib/components/SetLogo.svelte';
 		import { CONDITIONS } from '$lib/conditions';
 	import { conditionMultiplier } from '$lib/conditions.svelte';
-	import { money, count, printingLabel, printingTag, jsonList } from '$lib/format';
+	import VariantBadges from '$lib/components/VariantBadges.svelte';
+	import { money, count, printingLabel, jsonList } from '$lib/format';
 	import { stackOffsets, windowOf } from '$lib/virtual';
 
 	// Foil shimmer treatment for Foil-finish printings.
@@ -1603,10 +1604,7 @@
 									</span>
 								{/if}
 								<span class="namebody"
-									><span class="cardname">{a.name}</span>{#if printingTag(a.variant, a.finish, a.set_name)}<span
-											class="tag vtag"
-											title={printingLabel(a.variant, a.finish)}>{printingTag(a.variant, a.finish, a.set_name)}</span
-										>{/if}{#if statusBadge(a.status)}<span
+									><span class="cardname">{a.name}</span><VariantBadges variant={a.variant} finish={a.finish} />{#if statusBadge(a.status)}<span
 											class="tag stag t-{a.status}"
 											title={a.status}>{statusBadge(a.status)}</span
 										>{/if}</span

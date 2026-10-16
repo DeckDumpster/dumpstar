@@ -13,14 +13,14 @@ export async function steps(h: ReplayHarness) {
 
   const firstNumber = () =>
     h.page.evaluate(
-      () => document.querySelector('[data-testid="portrait-grid"] .slotwrap .num')?.textContent ?? '',
+      () => document.querySelector('[data-testid="portrait-grid"] .card-tile .num')?.textContent ?? '',
     );
   // After a press: wait for the first tile to differ from `before`.
   const press = async (label: string, before: string) => {
     await h.page.locator('button.sortbtn', { hasText: label }).first().click();
     await h.page.waitForFunction(
       (b) =>
-        (document.querySelector('[data-testid="portrait-grid"] .slotwrap .num')?.textContent ?? '') !==
+        (document.querySelector('[data-testid="portrait-grid"] .card-tile .num')?.textContent ?? '') !==
         b,
       before,
       { timeout: 4000 },

@@ -17,7 +17,7 @@
 		Toolbar
 	} from '$lib/components/ui';
 	import { printingLabel } from '$lib/format';
-	import { parseView, splitLandscape, clampCols, MAX_COLS, BROWSE_ROWS, pageAfterResize } from '$lib/browseView';
+	import { parseView, splitLandscape, bandRuns, clampCols, MAX_COLS, BROWSE_ROWS, pageAfterResize } from '$lib/browseView';
 	import type { ViewMode } from '$lib/browseView';
 	import { variantColor, variantSortCmp } from '$lib/variants.svelte';
 	import type { BinderPage } from '$lib/types/BinderPage';
@@ -356,12 +356,17 @@
 	}
 
 	// Leaders and bases group on top under every sort except collector number,
-	// which lists every card strictly by number.
+	// which lists every card strictly by number: there each run of leaders or
+	// bases is a band of its own at the point it occurs, and nothing moves.
 	const groups = $derived(
 		sortKey === 'number'
-			? { landscape: [], portrait: binder?.slots ?? [] }
+			? { landscape: [], portrait: [] }
 			: splitLandscape(binder?.slots ?? [])
 	);
+	const runs = $derived(sortKey === 'number' ? bandRuns(binder?.slots ?? []) : []);
+	// A band tile takes one cell of a grid half as wide as the page's columns
+	// (a landscape card used to span two), so rows hold landscape tiles only.
+	const bandCols = $derived(view === 'binder' ? cols : Math.max(1, Math.ceil(cols / 2)));
 
 	const sectionLabel: Record<string, string> = {
 		base: '',
@@ -703,7 +708,7 @@
 					{/each}
 				</div>
 			{/snippet}
-			{#snippet cell(slot: BinderSlot)}
+			{#snippet cell(slot: BinderSlot, inBand: boolean = false)}
 				<div
 					class="slotwrap"
 					class:missing={!ownedAny(slot)}
@@ -734,32 +739,61 @@
 				</div>
 			{/snippet}
 
-			{#if groups.landscape.length > 0}
-				<SectionHeader class="sectionbreak-top" tone="accent" divider title="Leaders & Bases" />
-				<div
-					class="grid landscapegrid"
-					data-testid="landscape-grid"
-					style:grid-template-columns="repeat({cols}, minmax(0, 1fr))"
-				>
-					{#each groups.landscape as slot (slot.card_id)}
+			{#snippet portraitGrid(list: BinderSlot[], before: BinderSlot | null)}
+				<div class="grid" data-testid="portrait-grid" style:grid-template-columns="repeat({cols}, minmax(0, 1fr))">
+					{#each list as slot, i (slot.card_id)}
+						{@const prevSection = i > 0 ? list[i - 1].section : before ? before.section : 'base'}
+						{#if slot.section !== prevSection && slot.section !== 'base'}
+							<SectionHeader
+								class="sectionbreak"
+								tone="accent"
+								divider
+								title={sectionLabel[slot.section]}
+							/>
+						{/if}
 						{@render cell(slot)}
 					{/each}
 				</div>
-			{/if}
-			<div class="grid" data-testid="portrait-grid" style:grid-template-columns="repeat({cols}, minmax(0, 1fr))">
-				{#each groups.portrait as slot, i (slot.card_id)}
-					{@const prevSection = i > 0 ? groups.portrait[i - 1].section : 'base'}
-					{#if slot.section !== prevSection && slot.section !== 'base'}
+			{/snippet}
+
+			{#if sortKey === 'number'}
+				{#each runs as run, r (run.start)}
+					{#if run.kind === 'portrait'}
+						{@render portraitGrid(run.slots, r > 0 ? runs[r - 1].slots[runs[r - 1].slots.length - 1] : null)}
+					{:else}
 						<SectionHeader
-							class="sectionbreak"
+							class="sectionbreak-top"
 							tone="accent"
 							divider
-							title={sectionLabel[slot.section]}
+							title={run.kind === 'bases' ? 'Bases' : 'Leaders'}
 						/>
+						<div
+							class="grid landscapegrid"
+							data-testid="landscape-band"
+							data-band={run.kind}
+							style:grid-template-columns="repeat({bandCols}, minmax(0, 1fr))"
+						>
+							{#each run.slots as slot (slot.card_id)}
+								{@render cell(slot, true)}
+							{/each}
+						</div>
 					{/if}
-					{@render cell(slot)}
 				{/each}
-			</div>
+			{:else}
+				{#if groups.landscape.length > 0}
+					<SectionHeader class="sectionbreak-top" tone="accent" divider title="Leaders & Bases" />
+					<div
+						class="grid landscapegrid"
+						data-testid="landscape-grid"
+						style:grid-template-columns="repeat({cols}, minmax(0, 1fr))"
+					>
+						{#each groups.landscape as slot (slot.card_id)}
+							{@render cell(slot)}
+						{/each}
+					</div>
+				{/if}
+				{@render portraitGrid(groups.portrait, null)}
+			{/if}
 
 			{#if binder.total_pages > 1}
 				<div class="pager-bottom">
@@ -1137,6 +1171,9 @@
 		min-width: 0;
 		min-height: 20px;
 		overflow: hidden;
+		/* A narrow portrait tile cannot hold number, rarity, name and pips on
+		   one line: the pips take their own row beneath. */
+		flex-wrap: wrap;
 	}
 	.meta .num {
 		color: var(--color-text-subtle);
@@ -1149,7 +1186,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		min-width: 0;
-		flex: 1;
+		flex: 1 1 0;
 	}
 	.meta .own {
 		color: var(--color-success-text);
@@ -1160,7 +1197,9 @@
 	/* When pips share the meta row, anchor them to the right edge so
 	   the name column gets all available slack. */
 	.meta .vchips {
-		flex-shrink: 0;
+		flex: 1 0 100%;
+		justify-content: flex-start;
+		min-width: 0;
 	}
 	.slotwrap.missing .meta .name,
 	.slotwrap.missing .meta .num {
@@ -1178,8 +1217,8 @@
 		flex-wrap: wrap;
 	}
 	.vchip {
-		width: 20px;
-		height: 20px;
+		width: 24px;
+		height: 24px;
 		border-radius: var(--radius-round);
 		border: 2px solid var(--c, var(--color-chart-unknown));
 		background: transparent;

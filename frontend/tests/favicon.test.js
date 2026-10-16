@@ -89,10 +89,11 @@ test('the favicon is well-formed XML', () => {
 // by scripts/sync-favicon.js, so the two cannot drift.
 import { build, shapes } from '../scripts/sync-favicon.js';
 
-/** @param {Buffer} b @returns {{ ihdr: Buffer, pixels: Buffer }} */
+/** @param {Buffer} b @returns {{ ihdr: Uint8Array, pixels: Uint8Array }} */
 function decodePng(b) {
-	let ihdr = Buffer.alloc(0);
-	/** @type {Buffer[]} */
+	/** @type {Uint8Array} */
+	let ihdr = new Uint8Array(0);
+	/** @type {Uint8Array[]} */
 	const idat = [];
 	for (let o = 8; o < b.length; ) {
 		const len = b.readUInt32BE(o);
@@ -109,7 +110,7 @@ function decodePng(b) {
 function samePng(a, b) {
 	const x = decodePng(a);
 	const y = decodePng(b);
-	return x.ihdr.equals(y.ihdr) && x.pixels.equals(y.pixels);
+	return Buffer.compare(x.ihdr, y.ihdr) === 0 && Buffer.compare(x.pixels, y.pixels) === 0;
 }
 
 test('the favicon set is exactly what the header art generates', () => {

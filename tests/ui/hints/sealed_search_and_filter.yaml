@@ -4,14 +4,12 @@ involves:
   - "modal search input (>= 2 character minimum, live search)"
   - "modal result list narrowing as the query is refined"
 fixture_data:
-  broad_term: "151"
-  broad_results: 2
+  broad_term: "Spark"
+  broad_results: 3
   narrow_term: "Prerelease Kit"
   narrow_results: 1
 notes: >
-  Navigate to /sealed. Click "+ Add sealed" to open the modal. Type
-  "151" into the search input; verify the result list shows the two 151
-  sealed products (Spark of Rebellion Two-Player Starter and Spark of Rebellion Prerelease Kit). Refine
+  Navigate to /sealed. Click "+ Add sealed" to open the modal. Type "Spark" into the search input; verify the result list shows the three Spark of Rebellion sealed products (Booster Display, Two-Player Starter and Prerelease Kit). Refine
   the query to "Prerelease Kit"; verify the list narrows to just the
   "Spark of Rebellion Prerelease Kit" result. Clear the input back below 2 characters;
   verify the result list empties without firing a request.

@@ -7,14 +7,14 @@ involves:
   - '"Commit order" button enabled once a line is ready'
   - 'commit navigates to /orders/{id}'
 fixture_data:
-  order_text: "1x Charmander"
-  resolve_set: "sv3pt5"
-  resolve_number: "4"
-  resolved_card: "Charmander"
+  order_text: "1x Millennium Falcon - Piece of Junk"
+  resolve_set: "SOR"
+  resolve_number: "193"
+  resolved_card: "Millennium Falcon - Piece of Junk"
 notes: >
-  Navigate to /ingest/order. Paste "1x Charmander" and click "Parse".
-  In the appended line enter set sv3pt5 and number 4, then click
-  "Look up". Verify the line resolves to Charmander, shows a variant
+  Navigate to /ingest/order. Paste "1x Millennium Falcon - Piece of Junk" and click "Parse".
+  In the appended line enter set SOR and number 193, then click
+  "Look up". Verify the line resolves to Millennium Falcon - Piece of Junk, shows a variant
   select, gets a green border, and the Cards header shows 1 ready.
   Click "Commit order". Verify the page navigates to /orders/{id} and
   the new order detail loads.

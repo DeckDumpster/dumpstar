@@ -4,17 +4,17 @@ involves:
   - 'picker search box with placeholder "Search your collection…"'
   - picker results listed as checkbox rows
   - checking a row toggles its selection
-  - '"Add {n} to Pikachu ex Aggro" footer button assigns the copies'
+  - '"Add {n} to Vader Aggro" footer button assigns the copies'
   - deck card table updates with the new card
   - deck card count updates
 fixture_data:
   deck_id: 2
-  deck_name: "Pikachu ex Aggro"
-  search_term: "Snorlax"
-  card_name: "Snorlax"
+  deck_name: "Vader Aggro"
+  search_term: "Millennium Falcon"
+  card_name: "Millennium Falcon - Piece of Junk"
 notes: >
   Navigate to /decks/2. Wait for the deck to load. Click "+ Add cards".
-  Wait for the picker modal. Type "Snorlax" in the search box. Wait for
-  results. Check the Snorlax row. Click "Add 1 to Pikachu ex Aggro".
-  Wait for the modal to close. Verify Snorlax appears in the card table.
+  Wait for the picker modal. Type "Millennium Falcon" in the search box. Wait for
+  results. Check the Millennium Falcon row. Click "Add 1 to Vader Aggro".
+  Wait for the modal to close. Verify Millennium Falcon appears in the card table.
   Verify the card count increased. Take a screenshot.

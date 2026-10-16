@@ -11,11 +11,11 @@ involves:
 fixture_data:
   deck_name: "Test Deck"
   deck_owner: "Ryan"
-  search_term: "Charmander"
+  search_term: "Millennium Falcon - Piece of Junk"
 notes: >
   1. On /decks, fill in the name "Test Deck" and owner "Ryan", click
   "Create". 2. The new deck appears in the grid — click its tile to open
   the detail page. 3. Click "+ Add cards". 4. In the picker search box,
-  type "Charmander" and wait for results. 5. Check a result row to select
+  type "Millennium Falcon - Piece of Junk" and wait for results. 5. Check a result row to select
   it. 6. Click the "Add {n} to Test Deck" button to confirm. 7. The deck
   detail card table should now show the added card. Done.

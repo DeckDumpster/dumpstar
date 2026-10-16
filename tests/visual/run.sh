@@ -126,5 +126,8 @@ if [ -z "$PORT" ]; then
     exit 1
 fi
 
+# The instance verifies an Access JWT on every /api request against the JWKS
+# setup.sh --test wrote; stabilize.ts mints the page's token from that key.
 DUMPSTAR_BASE_URL="http://localhost:${PORT}" \
+UI_TEST_JWKS_DIR="${UI_TEST_JWKS_DIR:-${HOME}/.config/dumpstar/${INSTANCE}/test-jwks}" \
     bash "$SCRIPT_DIR/playwright.sh" "${PW_ARGS[@]}"

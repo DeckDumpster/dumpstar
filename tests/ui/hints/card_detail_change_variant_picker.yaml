@@ -1,15 +1,15 @@
-start_page: /card/sv8/3
+start_page: /card/SOR/005
 involves:
   - 'a copy row in the "Your copies" table with a Variant <select>'
   - 'the Variant <select> lists every variant of the card'
   - 'the copy current variant is the selected option'
   - 'the other variants appear as selectable options'
 fixture_data:
-  card_name: "Exeggcute"
+  card_name: "Luke Skywalker - Faithful Friend"
   variants_count: 2
 notes: >
-  sv8/3 (Exeggcute, Common) carries two variants — "normal" and
-  "reverse_holo". 1. Navigate to /card/sv8/3 and wait for the copies table
+  SOR/005 (Luke Skywalker - Faithful Friend, Special) carries two variants — "normal" and
+  "holo". 1. Navigate to /card/SOR/005 and wait for the copies table
   to load. 2. Locate a copy row's Variant <select>. 3. Confirm the
-  <select> exposes both the "normal" and "reverse_holo" options. 4. Confirm
+  <select> exposes both the "normal" and "holo" options. 4. Confirm
   the copy's current variant is the selected option.

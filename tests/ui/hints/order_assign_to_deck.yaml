@@ -5,13 +5,12 @@ involves:
   - 'variant select defaults to the first printing'
   - '"Commit order" button'
 fixture_data:
-  resolve_set: "base1"
-  resolve_number: "58"
-  resolved_card: "Pikachu"
-  variants: ["normal", "reverse_holo"]
+  resolve_set: "SOR"
+  resolve_number: "5"
+  resolved_card: "Luke Skywalker - Faithful Friend"
+  variants: ["normal", "holo"]
 notes: >
-  Navigate to /ingest/order. Add a line, enter set base1 and number 58,
-  click "Look up". Verify the line resolves to Pikachu and the variant
-  select offers normal and reverse_holo, defaulted to the first. Select
-  reverse_holo. Verify the line is still ready. Click "Commit order" and
+  Navigate to /ingest/order. Add a line, enter set SOR and number 5,
+  click "Look up". Verify the line resolves to Luke Skywalker - Faithful Friend and the variant
+  select offers normal and holo, defaulted to the first. Select holo. Verify the line is still ready. Click "Commit order" and
   verify navigation to the order detail page.

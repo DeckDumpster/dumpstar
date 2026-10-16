@@ -13,7 +13,7 @@ export const COLUMNS = [
 	{ key: 'rarity', label: 'Rarity' },
 	{ key: 'set', label: 'Set' },
 	{ key: 'number', label: '#' },
-	{ key: 'nm', label: 'NM' },
+	{ key: 'nm', label: 'Price' },
 	{ key: 'adj', label: 'Adjusted' }
 ];
 

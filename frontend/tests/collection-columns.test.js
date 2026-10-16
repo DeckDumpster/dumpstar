@@ -39,3 +39,18 @@ test('a phone starts with Name and Type only, the rest in the chooser', () => {
 	assert.deepEqual(parseHidden('garbage', true), hidden);
 	assert.deepEqual(parseHidden('[]', true), []);
 });
+
+test('Traits is its own column, hidden on a phone by default', () => {
+	assert.ok(visibleColumns([], false).includes('traits'));
+	assert.ok(!visibleColumns(parseHidden(null, true), true).includes('traits'));
+});
+
+test('a unit with an arena and three traits reads Type over arena, and one Traits line', async () => {
+	const { typeLines, traitsLine } = await import('../src/lib/format.ts');
+	assert.deepEqual(typeLines('Unit', '["Ground"]'), { type: 'Unit', arena: 'Ground' });
+	assert.deepEqual(typeLines('Base', null), { type: 'Base', arena: '' });
+	assert.equal(
+		traitsLine('["Underworld","Droid","Bounty Hunter"]'),
+		'Underworld · Droid · Bounty Hunter'
+	);
+});

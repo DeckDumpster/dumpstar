@@ -339,23 +339,53 @@ pub fn search_page(
     compiled: &CompiledSearch,
     slice: Slice,
 ) -> Result<SearchPage> {
+    search_page_timed(conn, compiled, slice).map(|(page, _)| page)
+}
+
+/// Wall time of each stage of [`search_page`], in milliseconds, for the
+/// `Server-Timing` header: `totals` (count + owned value), `rows` (the page
+/// query) and `copies` (the per-printing copy expansion).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SearchTimings {
+    pub totals_ms: f64,
+    pub rows_ms: f64,
+    pub copies_ms: f64,
+}
+
+/// [`search_page`] plus where its time went.
+pub fn search_page_timed(
+    conn: &Connection,
+    compiled: &CompiledSearch,
+    slice: Slice,
+) -> Result<(SearchPage, SearchTimings)> {
+    let ms = |t: std::time::Instant| t.elapsed().as_secs_f64() * 1000.0;
+    let t = std::time::Instant::now();
     let (total, total_value) = totals(conn, compiled)?;
+    let mut timings = SearchTimings {
+        totals_ms: ms(t),
+        ..Default::default()
+    };
     let page = match slice {
         Slice::Page { limit, offset } => Some((limit, offset)),
         Slice::All => None,
     };
-    let rows = run(conn, compiled, page)?;
+    let (rows, rows_ms, copies_ms) = run_timed(conn, compiled, page)?;
+    timings.rows_ms = rows_ms;
+    timings.copies_ms = copies_ms;
     let (limit, offset) = match slice {
         Slice::Page { limit, offset } => (limit, offset),
         Slice::All => (u32::try_from(rows.len()).unwrap_or(u32::MAX), 0),
     };
-    Ok(SearchPage {
-        rows,
-        total,
-        total_value,
-        limit,
-        offset,
-    })
+    Ok((
+        SearchPage {
+            rows,
+            total,
+            total_value,
+            limit,
+            offset,
+        },
+        timings,
+    ))
 }
 
 /// Everything the compiled query matches, ignoring any paging: how many rows,
@@ -382,6 +412,17 @@ fn run(
     compiled: &CompiledSearch,
     page: Option<(u32, u32)>,
 ) -> Result<Vec<SearchRow>> {
+    run_timed(conn, compiled, page).map(|(rows, _, _)| rows)
+}
+
+/// [`run`], also returning the milliseconds spent on the row query and on the
+/// copy expansion.
+fn run_timed(
+    conn: &Connection,
+    compiled: &CompiledSearch,
+    page: Option<(u32, u32)>,
+) -> Result<(Vec<SearchRow>, f64, f64)> {
+    let t = std::time::Instant::now();
     let sql = build_full_sql(compiled, page);
     // The paging bounds are bound parameters like every user value, appended
     // after the WHERE clause's own params in statement order.
@@ -394,10 +435,12 @@ fn run(
     let mut rows: Vec<SearchRow> = stmt
         .query_map(params_from_iter(params.iter()), row_from)?
         .collect::<rusqlite::Result<_>>()?;
+    let rows_ms = t.elapsed().as_secs_f64() * 1000.0;
+    let t = std::time::Instant::now();
     if !rows.is_empty() {
         attach_copies(conn, &mut rows)?;
     }
-    Ok(rows)
+    Ok((rows, rows_ms, t.elapsed().as_secs_f64() * 1000.0))
 }
 
 // ---------------------------------------------------------------------------

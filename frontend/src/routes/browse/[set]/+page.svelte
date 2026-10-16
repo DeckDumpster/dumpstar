@@ -8,6 +8,7 @@
 		import { breadcrumbs } from '$lib/breadcrumbs.svelte';
 	import {
 		Button,
+		CardTile,
 		EmptyState,
 		Field,
 		Panel,
@@ -16,7 +17,6 @@
 		Toolbar
 	} from '$lib/components/ui';
 	import { printingLabel, money } from '$lib/format';
-	import { rarityMarks } from '$lib/rarity.svelte';
 	import { slotPrice, ownedFoil } from '$lib/browseView';
 	import { splitLandscape, bandRuns, clampCols, MAX_COLS, BROWSE_ROWS, pageAfterResize } from '$lib/browseView';
 		import { variantColor, variantSortCmp } from '$lib/variants.svelte';
@@ -141,10 +141,6 @@
 	// "SOR → Spark of Rebellion" upgrade happens in the same frame as the data load
 	// since $effect.pre runs before the DOM updates. No unmount cleanup
 	// needed — the breadcrumbs store is path-keyed.
-	$effect(() => {
-		void rarityMarks.load();
-	});
-
 	$effect.pre(() => {
 		const setCode = page.params.set;
 		if (!setCode) return;
@@ -415,6 +411,25 @@
 	}
 
 	/** Whether the user owns at least one printing of this slot's card. */
+	const RARITY_TIERS = ['common', 'uncommon', 'rare', 'special'] as const;
+	/** The kit's rarity tier for an official rarity name; Legendary takes the top tier. */
+	function tileRarity(name: string | null | undefined) {
+		const n = name?.toLowerCase() ?? '';
+		if (n === 'legendary') return 'ultra' as const;
+		return RARITY_TIERS.find((t) => t === n) ?? ('unranked' as const);
+	}
+	function tilePips(slot: BinderSlot) {
+		return slot.printings
+			.slice()
+			.sort((a, b) => variantSortCmp(a.variant, b.variant))
+			.map((p) => ({
+				id: p.printing_id,
+				label: printingLabel(p.variant, p.finish),
+				color: variantColor(p.variant),
+				owned: p.owned_count
+			}));
+	}
+
 	function ownedAny(slot: BinderSlot): boolean {
 		return slot.printings.some((p) => p.owned_count > 0);
 	}
@@ -666,60 +681,21 @@
 				</EmptyState>
 			{/if}
 		{:else}
-			<!-- One colored pip per variant. The pip buttons live OUTSIDE
-			     the slot button so they don't produce nested-button
-			     invalid HTML. -->
-			{#snippet pips(slot: BinderSlot)}
-				<div class="vchips">
-					{#each slot.printings
-						.slice()
-						.sort((a, b) => variantSortCmp(a.variant, b.variant)) as p (p.printing_id)}
-						<button
-							class="vchip"
-							class:owned={p.owned_count > 0}
-							class:foil={p.finish === 'Foil'}
-							style:--c={variantColor(p.variant)}
-							title="{printingLabel(p.variant, p.finish)}{p.owned_count > 0
-								? ` ×${p.owned_count}`
-								: ''} — click to add"
-							aria-label="Add one {printingLabel(p.variant, p.finish)}{p.owned_count > 0
-								? ` (own ${p.owned_count})`
-								: ''}"
-							onclick={() => addToSlot(slot, p.printing_id)}
-						>
-							{#if p.owned_count > 1}<span class="vcount">{p.owned_count}</span>{/if}
-						</button>
-					{/each}
-				</div>
-			{/snippet}
 			{#snippet cell(slot: BinderSlot)}
-				<div
-					class="slotwrap"
-					class:missing={!ownedAny(slot)}
-					class:landscape={slot.landscape}
-					class:rotated={slot.landscape && turnLandscape}
-					data-landscape={slot.landscape}
-				>
-					<button
-						class="slot"
-						class:foil={ownedFoil(slot)}
-						data-rarity={slot.rarity ?? ''}
-						style:--rc={rarityMarks.get(slot.rarity)?.color}
-						onclick={() => (selectedSlot = slot)}
-					>
-						{#if slot.image_url}
-							<img src={slot.image_url} alt={slot.name} loading="lazy" />
-						{:else}
-							<div class="noart">{slot.name}</div>
-						{/if}
-						{#if slotPrice(slot) != null}
-							<span class="pricebadge">{money(slotPrice(slot))}</span>
-						{/if}
-					</button>
-					<div class="foot">
-						{@render pips(slot)}
-						<span class="num">#{slot.number}</span>
-					</div>
+				<div data-landscape={slot.landscape}>
+					<CardTile
+						name={slot.name}
+						image={slot.image_url}
+						number={slot.number}
+						rarity={tileRarity(slot.rarity)}
+						foil={ownedFoil(slot)}
+						price={slotPrice(slot) != null ? money(slotPrice(slot)) : null}
+						pips={tilePips(slot)}
+						rotate={slot.landscape && turnLandscape}
+						missing={!ownedAny(slot)}
+						onselect={() => (selectedSlot = slot)}
+						onpip={(pip) => addToSlot(slot, pip.id)}
+					/>
 				</div>
 			{/snippet}
 
@@ -1045,204 +1021,6 @@
 	.binderpage :global(.sectionbreak-top) {
 		margin-bottom: var(--space-2);
 	}
-	.slotwrap {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
-		min-width: 0;
-	}
-	.slot {
-		display: block;
-		width: 100%;
-		padding: var(--space-0);
-		background: transparent;
-		border: none;
-		color: var(--color-text);
-		text-align: left;
-		cursor: pointer;
-	}
-	/* Cards the user owns no printing of read as greyed-out. */
-	.slotwrap.missing img,
-	.slotwrap.missing .noart {
-		filter: grayscale(0.9) brightness(0.62);
-	}
-	.slotwrap.missing {
-		opacity: 0.82;
-	}
-	/* The button is the row-uniform box: its ratio, not the image's, sets the
-	   tile height, and the art is letterboxed inside it. */
-	.slot {
-		position: relative;
-		overflow: hidden;
-		min-width: 0;
-		aspect-ratio: 5 / 7;
-	}
-	/* Rarity outline: drawn inside the box, so it takes no space. */
-	.slot[style*='--rc'] {
-		outline: 2px solid var(--rc);
-		outline-offset: -2px;
-	}
-	/* Owned foil: a light streak sweeping across the art. */
-	.slot.foil::after {
-		content: '';
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		background: linear-gradient(
-			115deg,
-			transparent 35%,
-			color-mix(in srgb, var(--color-text-strong) 35%, transparent) 50%,
-			transparent 65%
-		);
-		background-size: 250% 100%;
-		animation: foil-streak 3.5s linear infinite;
-	}
-	@keyframes foil-streak {
-		from {
-			background-position: 150% 0;
-		}
-		to {
-			background-position: -50% 0;
-		}
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.slot.foil::after {
-			animation: none;
-			background-position: 50% 0;
-		}
-	}
-	/* Price layered on the art, bottom-right; takes no layout space. */
-	.pricebadge {
-		position: absolute;
-		right: var(--space-1);
-		bottom: var(--space-1);
-		padding: var(--space-0) var(--space-1);
-		border-radius: var(--radius-sm);
-		background: color-mix(in srgb, var(--color-surface-overlay) 80%, transparent);
-		color: var(--color-text-strong);
-		font-size: var(--text-xs);
-		font-weight: var(--weight-bold);
-		line-height: 1.3;
-		font-variant-numeric: tabular-nums;
-		pointer-events: none;
-	}
-	.slotwrap.landscape:not(.rotated) .slot {
-		aspect-ratio: 7 / 5;
-	}
-	.slot img,
-	.slot .noart {
-		position: absolute;
-		inset: 0;
-		width: 100%;
-		height: 100%;
-		object-fit: contain;
-		background: transparent;
-	}
-	/* Binder view: the pocket stays portrait and the card sits in it turned
-	   90° to the left, as the physical card would. The image is as wide as
-	   the pocket is tall (140%) and 7:5, so once turned it fills the pocket. */
-	.slotwrap.rotated .slot {
-		position: relative;
-		aspect-ratio: 5 / 7;
-		overflow: hidden;
-	}
-	.slotwrap.rotated .slot img,
-	.slotwrap.rotated .slot .noart {
-		inset: auto;
-		top: 50%;
-		left: 50%;
-		width: 140%;
-		height: auto;
-		transform: translate(-50%, -50%) rotate(-90deg);
-	}
-	.noart {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: var(--text-sm);
-		color: var(--color-text-subtle);
-		padding: var(--space-2);
-		text-align: center;
-	}
-	/* Tile footer: the printing pips and the collector number, one line, never
-	   wrapping. Pips start at the left so the first sits at the same x on every
-	   tile; the number takes what is left and drops out when the tile is too
-	   narrow for both. Pips that do not fit are clipped (the modal lists them). */
-	.foot {
-		container-type: inline-size;
-		display: flex;
-		flex-wrap: nowrap;
-		align-items: center;
-		gap: var(--space-1);
-		height: 24px;
-		min-width: 0;
-		overflow: hidden;
-		font-size: var(--text-sm);
-		color: var(--color-text-subtle);
-	}
-	.foot .num {
-		margin-left: auto;
-		flex-shrink: 0;
-		white-space: nowrap;
-		font-variant-numeric: tabular-nums;
-	}
-	.slotwrap.missing .foot .num {
-		color: var(--color-text-subtle);
-	}
-	@container (max-width: 95px) {
-		.foot .num {
-			display: none;
-		}
-	}
-	/* Color-coded printing chips centered below the card. Empty (border-
-	   only) when unowned, filled with the variant's color when owned;
-	   count badge appears when owned > 1. The fill is per-variant data
-	   (the `variants` table), delivered as --c by the markup. */
-	.vchips {
-		display: flex;
-		justify-content: flex-start;
-		align-items: center;
-		gap: var(--space-1);
-		flex-wrap: nowrap;
-		flex-shrink: 0;
-	}
-	.vchip {
-		flex-shrink: 0;
-		width: 24px;
-		height: 24px;
-		border-radius: var(--radius-round);
-		border: 2px solid var(--c, var(--color-chart-unknown));
-		background: transparent;
-		color: var(--color-text-strong);
-		padding: var(--space-0);
-		cursor: pointer;
-		font: inherit;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		transition: transform var(--dur-fast) var(--ease-standard);
-	}
-	.vchip.owned {
-		background: var(--c);
-	}
-	/* A foil printing is a dashed ring: same variant colour, told apart from
-	   its Normal printing by shape rather than by a second hue. */
-	.vchip.foil {
-		border-style: dashed;
-	}
-	.vchip:hover {
-		transform: scale(1.15);
-	}
-	.vcount {
-		font-size: var(--text-xs);
-		font-weight: var(--weight-bold);
-		line-height: 1;
-		/* Dark text on light fills (yellow/silver/light blue); white text
-		   on dark fills. Dark ink with a thin halo reads on both. */
-		color: var(--color-text-inverse);
-		text-shadow: var(--shadow-text-halo);
-	}
-
 	/* Larger tap targets on touch-sized viewports (PLAN §6.9). */
 	@media (max-width: 540px) {
 		.binderpage :global(.controls) {
@@ -1261,9 +1039,6 @@
 		/* Tighter binder so a full page fits — small gaps, thin borders,
 		   no foot padding eating the card. */
 		.grid {
-			gap: var(--space-1);
-		}
-		.slotwrap {
 			gap: var(--space-1);
 		}
 	}

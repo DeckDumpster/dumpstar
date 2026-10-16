@@ -1706,8 +1706,7 @@
 	   controls drop under it. The cap stops it from stretching into a
 	   1920-wide trough that no query ever fills. */
 	.searchwrap {
-		flex: 1 1 22rem;
-		max-width: 44rem;
+		flex: 1;
 		min-width: 0;
 		position: relative;
 		display: flex;
@@ -1718,7 +1717,7 @@
 		min-width: 0;
 		/* Extra right padding leaves room for the clear button without
 		   it overlapping typed text. */
-		padding: var(--space-2) var(--space-8) var(--space-2) var(--space-3);
+		padding: var(--space-3) var(--space-8) var(--space-3) var(--space-4);
 		background: var(--color-control-surface);
 		border: 1px solid var(--color-control-border);
 		border-radius: var(--radius-md);
@@ -1741,22 +1740,25 @@
 	.errpos {
 		color: var(--color-text-subtle);
 	}
+	/* deckdumpster's .syntax-help-btn: a 38px square, accent border and
+	   accent '?', filling with the accent on hover. */
 	.helplink {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 1.5rem;
-		height: 1.5rem;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-round);
-		color: var(--color-text-subtle);
-		text-decoration: none;
-		font-size: var(--text-md);
+		width: 2.375rem;
+		height: 2.375rem;
 		flex-shrink: 0;
+		background: var(--color-control-surface);
+		border: 1px solid var(--color-accent);
+		border-radius: var(--radius-md);
+		color: var(--color-accent);
+		text-decoration: none;
+		font-weight: var(--weight-semibold);
 	}
 	.helplink:hover {
-		color: var(--color-warning-text);
-		border-color: var(--color-warning);
+		background: var(--color-accent);
+		color: var(--color-on-accent);
 	}
 	.acmenu {
 		position: absolute;
@@ -1828,7 +1830,7 @@
 		background: var(--color-surface-selected);
 	}
 	.countline {
-		margin: var(--space-0) auto var(--space-0) var(--space-0);
+		margin: var(--space-0) var(--space-0) var(--space-0) auto;
 		white-space: nowrap;
 		min-width: 0;
 		overflow: hidden;
@@ -1859,46 +1861,57 @@
 		display: flex;
 	}
 	.viewtoggle button {
-		background: none;
-		border: 1px solid var(--color-border);
-		color: var(--color-text-subtle);
-		padding: 0.25rem 0.55rem;
-		font-size: var(--text-xl);
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		box-sizing: border-box;
+		height: 2.375rem;
+		padding: 0 var(--space-3);
+		background: var(--color-control-surface);
+		border: 1px solid var(--color-control-border);
+		color: var(--color-control-text);
 		line-height: 1;
 		cursor: pointer;
+	}
+	.viewtoggle button svg {
+		display: block;
 	}
 	.viewtoggle button:first-child {
 		border-radius: var(--radius-md) 0 0 var(--radius-md);
 	}
 	.viewtoggle button:last-child {
 		border-radius: 0 var(--radius-md) var(--radius-md) 0;
-		border-left: none;
+		margin-left: calc(-1 * var(--space-px));
 	}
 	.viewtoggle button.on {
+		position: relative;
+		z-index: 1;
 		background: var(--color-info-surface);
-		color: var(--color-text);
+		border-color: var(--color-accent);
 	}
 	.burger,
 	.colsbtn {
-		background: none;
-		border: 1px solid var(--color-border);
+		background: var(--color-control-surface);
+		border: 1px solid var(--color-control-border);
 		color: var(--color-text-subtle);
 		font-size: 1.3rem;
 		line-height: 1;
-		padding: 0.25rem 0.55rem;
+		box-sizing: border-box;
+		height: 2.375rem;
+		padding: 0 var(--space-3);
 		cursor: pointer;
 		border-radius: var(--radius-md);
 	}
 	.burger:hover,
 	.colsbtn:hover {
-		color: var(--color-text);
+		color: var(--color-accent);
+		border-color: var(--color-accent);
 	}
 	.colsbtn {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 2.2rem;
-		height: 2.2rem;
+		width: 2.375rem;
 		padding: 0;
 		flex-shrink: 0;
 	}

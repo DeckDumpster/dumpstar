@@ -16,6 +16,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { inflateSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -88,11 +89,36 @@ test('the favicon is well-formed XML', () => {
 // by scripts/sync-favicon.js, so the two cannot drift.
 import { build, shapes } from '../scripts/sync-favicon.js';
 
+/** @param {Buffer} b @returns {{ ihdr: Buffer, pixels: Buffer }} */
+function decodePng(b) {
+	let ihdr = Buffer.alloc(0);
+	/** @type {Buffer[]} */
+	const idat = [];
+	for (let o = 8; o < b.length; ) {
+		const len = b.readUInt32BE(o);
+		const type = b.toString('latin1', o + 4, o + 8);
+		const body = b.subarray(o + 8, o + 8 + len);
+		if (type === 'IHDR') ihdr = body;
+		else if (type === 'IDAT') idat.push(body);
+		o += 12 + len;
+	}
+	return { ihdr, pixels: inflateSync(Buffer.concat(idat)) };
+}
+
+/** @param {Buffer} a @param {Buffer} b */
+function samePng(a, b) {
+	const x = decodePng(a);
+	const y = decodePng(b);
+	return x.ihdr.equals(y.ihdr) && x.pixels.equals(y.pixels);
+}
+
 test('the favicon set is exactly what the header art generates', () => {
 	for (const [name, data] of Object.entries(build())) {
 		const onDisk = readFileSync(join(frontendRoot, 'static', name));
+		// deflate output differs across zlib versions, so a PNG is compared by its
+		// header and inflated pixels, never by its compressed bytes.
 		assert.ok(
-			onDisk.equals(Buffer.from(data)),
+			name.endsWith('.png') ? samePng(onDisk, Buffer.from(data)) : onDisk.equals(Buffer.from(data)),
 			`static/${name} is stale against DeathStar.svelte; run node scripts/sync-favicon.js`
 		);
 	}

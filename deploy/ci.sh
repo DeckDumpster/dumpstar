@@ -656,6 +656,12 @@ if tier lint; then
     step "Backup correspondence (tests/alarming/backup_correspondence_test.sh)"
     bash "$REPO_DIR/tests/alarming/backup_correspondence_test.sh"
 
+    # A layer that fires and says nothing: this proves what Layer 2 pushes is
+    # readable — the causal line first, no OCI metadata, no systemd boilerplate —
+    # against journal tails captured from the real units (pd-pwk8).
+    step "Alert page content (tests/alarming/journal_summary_test.sh)"
+    bash "$REPO_DIR/tests/alarming/journal_summary_test.sh"
+
     step "Alert gate (deploy/alert-gate.sh --self-test)"
     bash "$REPO_DIR/deploy/alert-gate.sh" --self-test
 

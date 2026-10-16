@@ -1405,7 +1405,7 @@
 			{@render sortBtn('rarity', 'Rarity')}
 			{@render sortBtn('set', 'Set')}
 			{@render sortBtn('number', '#')}
-			{@render sortBtn('price', 'NM')}
+			{@render sortBtn('price', 'Price')}
 		</div>
 		<!-- Sections are runs of `displayRows`, so tile order is exactly the
 		     server's sort order — owned and unowned printings still
@@ -1519,7 +1519,7 @@
 					{#if showCol('rarity')}{@render sortable('rarity', 'Rarity', 'center')}{/if}
 					{#if showCol('set')}{@render sortable('set', 'Set', 'center')}{/if}
 					{#if showCol('number')}{@render sortable('number', '#', 'num')}{/if}
-					{#if showCol('nm')}{@render sortable('price', 'NM', 'num', 'Near Mint market price (per copy)')}{/if}
+					{#if showCol('nm')}{@render sortable('price', 'Price', 'num', 'Near Mint market price (per copy)')}{/if}
 					<!-- The one price column that does not sort. Adj. is the
 					     copy's condition-adjusted price — the collection's
 					     market price joined to the tenant's own conditions
@@ -2246,9 +2246,9 @@
 		--col-stats: 4.5rem;
 		--col-rarity: 5.5rem;
 		--col-set: 4.25rem;
-		--col-number: 5.75rem;
-		--col-nm: 6.75rem;
-		--col-adj: 6.75rem;
+		--col-number: 3.75rem;
+		--col-nm: 4.75rem;
+		--col-adj: 5.5rem;
 		/* Not a column width — the narrowest the flex column may be squeezed
 		   to before the table stops shrinking and `.tableScroll` scrolls
 		   instead. Measured: the thumbnail (110px) plus its gap plus enough
@@ -2565,9 +2565,9 @@
 			--col-stats: 3.5rem;
 			--col-rarity: 4.25rem;
 			--col-set: 3.25rem;
-			--col-number: 4.5rem;
-			--col-nm: 5.5rem;
-			--col-adj: 5.5rem;
+			--col-number: 3rem;
+			--col-nm: 4rem;
+			--col-adj: 4.75rem;
 			--col-name-min: 9rem;
 		}
 		.cardthumb {

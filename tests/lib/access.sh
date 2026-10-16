@@ -27,9 +27,9 @@ ACCESS_AUD=""
 # Read the metadata test_jwks.py wrote, and derive the container-facing URL.
 access_load() { # access_load <dir>
 	local meta="$1/jwks.json" port
-	port="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['port'])" "$meta")"
-	ACCESS_AUD="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['aud'])" "$meta")"
-	ACCESS_ISSUER="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['issuer'])" "$meta")"
+	port="$(jq -r '.port' "$meta")"
+	ACCESS_AUD="$(jq -r '.aud' "$meta")"
+	ACCESS_ISSUER="$(jq -r '.issuer' "$meta")"
 	ACCESS_URL="http://host.containers.internal:${port}/cdn-cgi/access/certs"
 }
 

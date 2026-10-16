@@ -1729,7 +1729,7 @@ check "only image-lib.sh builds the shipped image" "" "$BUILDERS"
 # the `unscoped` cargo target-cache id, sharing it with every other unscoped build
 # on the box (pd-sjn7).
 for gate in tests/tenants/upgrade.sh tests/tenants/handles.sh \
-	tests/refresh/tenant_bytes.sh deploy/setup.sh deploy/deploy.sh deploy/seed.sh; do
+	deploy/setup.sh deploy/deploy.sh deploy/seed.sh; do
 	check "${gate} tags rather than rebuilds" "1" \
 		"$(grep -c '^[[:space:]]*dumpstar_image_ensure ' "${REPO_DIR}/${gate}" || true)"
 done

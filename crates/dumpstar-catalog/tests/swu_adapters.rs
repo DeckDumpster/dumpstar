@@ -638,6 +638,37 @@ fn a_refresh_stores_each_sealed_products_picture_locally_with_its_source() {
     assert_eq!(pics.asked.borrow().len(), report.stored);
 }
 
+struct Forbidden;
+
+impl Fetch for Forbidden {
+    fn get(&self, url: &str) -> dumpstar_catalog::Result<Vec<u8>> {
+        Err(dumpstar_catalog::CatalogError::Source(format!(
+            "source: {url}: HTTP 403 Forbidden"
+        )))
+    }
+}
+
+#[test]
+fn a_forbidden_sealed_picture_is_reported_and_alarmed_not_fatal() {
+    let (e, _) = loaded();
+    let c = Catalog::open_writer(&e.db).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let r =
+        dumpstar_catalog::images::fetch_pending(&c, &Forbidden, dir.path(), "2026-10-16").unwrap();
+    assert!(!r.failed.is_empty());
+    assert!(
+        r.coverage_line().contains("403 Forbidden"),
+        "{}",
+        r.coverage_line()
+    );
+    let alarms = dumpstar_catalog::check::missing_sealed_images(c.conn()).unwrap();
+    assert_eq!(
+        alarms.len(),
+        1,
+        "every picture refused crosses the threshold"
+    );
+}
+
 fn edit_products(http: &mut Recorded, f: impl FnOnce(&mut Vec<Value>)) {
     let mut v: Value = serde_json::from_slice(&http.products[&23405]).unwrap();
     f(v["results"].as_array_mut().unwrap());

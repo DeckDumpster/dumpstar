@@ -17,6 +17,23 @@ pub struct ImageReport {
     pub failed: Vec<String>,
 }
 
+impl ImageReport {
+    /// A missing picture never fails the sync (the page shows the product
+    /// without one); it is reported here and alarmed by `catalog-check`.
+    pub fn coverage_line(&self) -> String {
+        let mut line = format!(
+            "sealed images: stored {}, failed {}",
+            self.stored,
+            self.failed.len()
+        );
+        if let Some(first) = self.failed.first() {
+            let why = first.rsplit(": ").next().unwrap_or(first);
+            line.push_str(&format!(" ({why})"));
+        }
+        line
+    }
+}
+
 fn extension(url: &str) -> &str {
     let name = url.split(['?', '#']).next().unwrap_or(url);
     match name.rsplit_once('.').map(|(_, e)| e) {

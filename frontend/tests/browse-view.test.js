@@ -131,3 +131,30 @@ test('the set page renders bands only under the number sort', () => {
 	assert.match(src, /sortKey === 'number'\s*\?\s*\{ landscape: \[\], portrait: \[\] \}/);
 	assert.match(src, /data-testid="landscape-band"/);
 });
+
+import { slotPrice, ownedFoil } from '$lib/browseView.js';
+
+test('slotPrice prefers the dearest owned printing, else the dearest printing', () => {
+	const ps = [
+		{ owned_count: 1, market_price: 1.5, finish: 'Normal' },
+		{ owned_count: 0, market_price: 9, finish: 'Foil' }
+	];
+	assert.equal(slotPrice({ printings: ps }), 1.5);
+	assert.equal(slotPrice({ printings: ps.map((p) => ({ ...p, owned_count: 0 })) }), 9);
+	assert.equal(slotPrice({ printings: [{ owned_count: 0, market_price: null }] }), null);
+});
+
+test('ownedFoil is true only for an owned Foil printing', () => {
+	assert.equal(ownedFoil({ printings: [{ owned_count: 1, finish: 'Foil' }] }), true);
+	assert.equal(ownedFoil({ printings: [{ owned_count: 0, finish: 'Foil' }, { owned_count: 2, finish: 'Normal' }] }), false);
+});
+
+test('the browse tile outlines by rarity, shimmers on owned foil and layers price on the art', () => {
+	const src = readFileSync(new URL('../src/routes/browse/[set]/+page.svelte', import.meta.url), 'utf8');
+	assert.match(src, /outline: 2px solid var\(--rc\)/);
+	assert.match(src, /\.slot\.foil::after/);
+	const badge = src.match(/\.pricebadge \{[^}]*\}/)?.[0] ?? '';
+	assert.ok(badge);
+	assert.match(badge, /position: absolute/);
+	assert.match(src, /<span class="pricebadge">[\s\S]*?<\/button>/);
+});

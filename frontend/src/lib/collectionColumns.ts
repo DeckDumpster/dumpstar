@@ -18,7 +18,7 @@ export const COLUMNS = [
 ];
 
 /** Hidden until the reader asks for them. */
-export const DEFAULT_HIDDEN = ['adj'];
+export const DEFAULT_HIDDEN = ['qty', 'adj'];
 
 /** The stored value is the list of hidden keys; unknown keys are dropped. */
 export function parseHidden(raw: string | null): string[] {

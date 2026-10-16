@@ -2,9 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { anyAdjusted, parseHidden, visibleColumns } from '../src/lib/collectionColumns.ts';
 
-test('Adjusted starts hidden', () => {
-	assert.deepEqual(parseHidden(null), ['adj']);
-	assert.deepEqual(parseHidden('garbage'), ['adj']);
+test('Qty and Adjusted start hidden', () => {
+	assert.deepEqual(parseHidden(null), ['qty', 'adj']);
+	assert.deepEqual(parseHidden('garbage'), ['qty', 'adj']);
+	assert.ok(!visibleColumns(parseHidden(null), true).includes('qty'));
+});
+
+test('a stored choice that shows Qty wins over the default', () => {
+	assert.ok(visibleColumns(parseHidden('[]'), false).includes('qty'));
 });
 
 test('a stored choice survives a reload and drops unknown keys', () => {

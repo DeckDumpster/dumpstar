@@ -1,4 +1,5 @@
 # Scenario: Choose which columns the collection table shows
+# Use case: UC-collection-45
 
 description: >
   On the collection page in table view, I open "Columns" and untick

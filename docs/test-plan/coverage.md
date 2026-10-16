@@ -127,6 +127,7 @@ Generated from docs/test-plan/*.toml, every suite's # tier:/# covers: header, an
 | UC-collection-42 | T3 | When I click the {N} cards, {$X} total in the Collection page header, a Collection value over time dialog opens showing my collection's value plotted against time, with a market-value line and a cost-basis line. This ... (collection_value_history_chart) | tests/ui/implementations/collection_value_history_chart.ts | covered |
 | UC-collection-43 | T4 | On the Collection page I can click the Select button to switch into multi-select mode, which adds a checkbox column to the table and changes the toolbar button to Cancel. Clicking Cancel switches back to the normal ta... (collection_view_toggle) | — | **GAP** |
 | UC-collection-44 | T4 | In multi-select mode on the Collection page I can check one or more copy rows and click the bulk Add to wishlist button. One wish is created per distinct card among the selection, so selecting two copies of the same c... (collection_wishlist_panel) | — | **GAP** |
+| UC-collection-45 | T4 | On the collection page in table view, I open Columns and untick Type. The Type column is gone from the table header. I reload the page and the table still has no Type column. The Columns list offers no Adjusted entry,... (collection_column_chooser) | — | **GAP** |
 
 ## collectr
 

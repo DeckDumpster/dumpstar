@@ -13,7 +13,10 @@
 
 {#if name && shape}
 	<span class="rarity-mark" role="img" aria-label={name} title={name} style:color={mark?.color ?? shape.color}>
-		<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d={shape.path} fill="currentColor" fill-rule="evenodd" /></svg>
+		<svg viewBox="0 0 25 25" aria-hidden="true" focusable="false">
+			{#if shape.frame}<path d={shape.frame} fill="var(--color-text-strong)" />{/if}
+			<path d={shape.path} fill="currentColor" fill-rule="evenodd" />
+		</svg>
 	</span>
 {/if}
 
@@ -25,7 +28,5 @@
 	.rarity-mark svg {
 		width: 1.1em;
 		height: 1.1em;
-		/* A thin halo keeps the black Special mark legible on a dark theme. */
-		filter: drop-shadow(0 0 1px var(--color-border));
 	}
 </style>

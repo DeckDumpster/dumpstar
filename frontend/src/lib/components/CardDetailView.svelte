@@ -2,7 +2,6 @@
 	import { fade } from 'svelte/transition';
 	import { api } from '$lib/api';
 	import { facetHref } from '$lib/facets';
-	import { sortAspects } from '$lib/aspects';
 	import AspectIcon from '$lib/components/AspectIcon.svelte';
 	import { cardTextHtml } from '$lib/cardtext';
 	import RarityMark from '$lib/components/RarityMark.svelte';
@@ -312,7 +311,7 @@
 				{#if jsonList(card.aspects).length}
 					<dt>Aspects</dt>
 					<dd>
-						{#each sortAspects(jsonList(card.aspects)) as a (a)}
+						{#each jsonList(card.aspects) as a, i (i)}
 							<a class="facet chip" href={facetHref('aspect', a)} title="Find all {a} cards"><AspectIcon name={a} /></a>
 						{/each}
 					</dd>

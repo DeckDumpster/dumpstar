@@ -26,10 +26,3 @@ export function aspectOf(name: string): Aspect | undefined {
 export function aspectIconUrl(a: Aspect): string {
 	return `/aspects/${a.file}`;
 }
-
-/** Names in the official order; names the manifest lacks keep their order,
- *  after the known ones. */
-export function sortAspects(names: string[]): string[] {
-	const rank = (n: string) => aspectOf(n)?.sort_value ?? Number.MAX_SAFE_INTEGER;
-	return [...names].sort((a, b) => rank(a) - rank(b));
-}

@@ -273,6 +273,21 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
         // nothing at runtime reaches the source CDN.
         .nest_service("/sealed-img", ServeDir::new(data_dir.join("sealed-images")))
         .route_service("/robots.txt", ServeFile::new(static_dir.join("robots.txt")))
+        // The tab and home-screen icons. Without a route each fell through to
+        // the SPA fallback and answered 200 text/html, so the browser fetched
+        // the app shell as an image.
+        .route_service(
+            "/favicon.svg",
+            ServeFile::new(static_dir.join("favicon.svg")),
+        )
+        .route_service(
+            "/favicon-32.png",
+            ServeFile::new(static_dir.join("favicon-32.png")),
+        )
+        .route_service(
+            "/apple-touch-icon.png",
+            ServeFile::new(static_dir.join("apple-touch-icon.png")),
+        )
         .with_state(state)
         .fallback(get(spa))
         .layer(middleware::from_fn(api_responses_are_private))
@@ -614,6 +629,25 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
         let body = body_string(resp).await;
         assert!(body.contains("\"stale\":true"), "body: {body}");
+    }
+
+    #[tokio::test]
+    async fn icons_are_served_as_files() {
+        let (d, router, _fx) = test_app().await;
+        for (path, mime) in [
+            ("/favicon.svg", "image/svg+xml"),
+            ("/favicon-32.png", "image/png"),
+            ("/apple-touch-icon.png", "image/png"),
+        ] {
+            std::fs::write(d.path().join("static").join(&path[1..]), b"x").unwrap();
+            let r = router
+                .clone()
+                .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(r.status(), StatusCode::OK, "{path}");
+            assert_eq!(r.headers()["content-type"], mime, "{path} is not the file");
+        }
     }
 
     #[tokio::test]

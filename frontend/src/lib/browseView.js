@@ -64,3 +64,20 @@ export function pageAfterResize(page, oldLayout, newLayout) {
 	const first = (Math.max(1, page) - 1) * oldLayout;
 	return Math.floor(first / newLayout) + 1;
 }
+
+/** The price shown on a tile: the dearest owned printing's market price, else
+ *  the dearest printing's; null when nothing is priced.
+ *  @param {{ printings: { owned_count: number, market_price: number | null }[] }} slot */
+export function slotPrice(slot) {
+	const best = (/** @type {typeof slot.printings} */ ps) => {
+		const v = ps.map((p) => p.market_price).filter((n) => n != null);
+		return v.length ? Math.max(.../** @type {number[]} */ (v)) : null;
+	};
+	return best(slot.printings.filter((p) => p.owned_count > 0)) ?? best(slot.printings);
+}
+
+/** Whether the user owns a foil printing of the slot.
+ *  @param {{ printings: { owned_count: number, finish: string }[] }} slot */
+export function ownedFoil(slot) {
+	return slot.printings.some((p) => p.finish === 'Foil' && p.owned_count > 0);
+}

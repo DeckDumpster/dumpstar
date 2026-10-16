@@ -1173,58 +1173,40 @@
 		{#if searchRows.length > 0}
 			<div class="viewtoggle" role="group" aria-label="View">
 				<button
-					class:on={view === 'grid'}
-					data-testid="view-grid"
-					onclick={() => (view = 'grid')}
-					aria-label="Grid view"
-					title="Grid"
-				>▦</button>
-				<button
 					class:on={view === 'table'}
 					data-testid="view-table"
 					onclick={() => (view = 'table')}
 					aria-label="Table view"
 					title="Table"
-				>≡</button>
+				><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="1" y="2" width="14" height="2" rx=".5" /><rect x="1" y="7" width="14" height="2" rx=".5" /><rect x="1" y="12" width="14" height="2" rx=".5" /></svg></button>
+				<button
+					class:on={view === 'grid'}
+					data-testid="view-grid"
+					onclick={() => (view = 'grid')}
+					aria-label="Grid view"
+					title="Grid"
+				><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="1" y="1" width="6" height="6" rx="1" /><rect x="9" y="1" width="6" height="6" rx="1" /><rect x="1" y="9" width="6" height="6" rx="1" /><rect x="9" y="9" width="6" height="6" rx="1" /></svg></button>
 			</div>
-			{#if view === 'table'}
-				<div class="burgerWrap">
-					<button
-						class="burger colsbtn"
-						data-testid="columns-button"
-						onclick={() => (columnsOpen = !columnsOpen)}
-						aria-expanded={columnsOpen}
-						title="Choose columns"
-					>Columns</button>
-					{#if columnsOpen}
-						<div class="menu" role="group" aria-label="Columns" data-testid="columns-menu">
-							{#each COLUMNS as c (c.key)}
-								{#if c.key !== 'adj' || adjustedPresent}
-									<label class="menuItem">
-										<input
-											type="checkbox"
-											data-testid="column-{c.key}"
-											checked={!hiddenCols.includes(c.key)}
-											onchange={() => toggleColumn(c.key)}
-										/>
-										{c.label}
-									</label>
-								{/if}
-							{/each}
-						</div>
-					{/if}
-				</div>
-			{/if}
 			<div class="burgerWrap">
 				<button
 					class="burger"
+					data-testid="more-menu"
 					onclick={() => (menuOpen = !menuOpen)}
 					aria-label="Menu"
 					aria-expanded={menuOpen}
-					title="Menu"
-				>⋯</button>
+					title="More options"
+				>⋮</button>
 				{#if menuOpen}
-					<div class="menu" role="menu">
+					<div class="menu menuLeft" role="menu">
+						<label class="menuItem" title="Search the full card catalog, not just your collection">
+							<input
+								type="checkbox"
+								data-testid="all-cards-toggle"
+								checked={allCards}
+								onchange={toggleAllCards}
+							/>
+							All cards
+						</label>
 						<a class="menuItem" href="/api/export/csv" download onclick={closeMenu}>Export CSV (ManaBox)</a>
 						<a class="menuItem" href="/api/export/collectr/singles.csv" download onclick={closeMenu}>Export cards (Collectr)</a>
 						<a class="menuItem" href="/api/export/collectr/sealed.csv" download onclick={closeMenu}>Export sealed (Collectr)</a>
@@ -1242,15 +1224,6 @@
 				{/if}
 			</div>
 		{/if}
-		<label class="alltoggle" title="Search the full card catalog, not just your collection">
-			<input
-				type="checkbox"
-				data-testid="all-cards-toggle"
-				checked={allCards}
-				onchange={toggleAllCards}
-			/>
-			All cards
-		</label>
 		<!-- The count speaks for the whole result set, and so does the money
 		     beside it, because the endpoint answers both (pd-2g84). The money
 		     is the value of the OWNED copies among those rows — the same
@@ -1267,6 +1240,35 @@
 			{count(searchTotal)}
 			cards{#if searchTotalValue !== null}, {money(searchTotalValue)}{/if}
 		</button>
+		{#if searchRows.length > 0 && view === 'table'}
+			<div class="burgerWrap">
+				<button
+					class="colsbtn"
+					data-testid="columns-button"
+					onclick={() => (columnsOpen = !columnsOpen)}
+					aria-expanded={columnsOpen}
+					aria-label="Configure columns"
+					title="Configure columns"
+				><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 1h4v4H1zm5 0h4v4H6zm5 0h4v4H11zM1 6h4v4H1zm5 0h4v4H6zm5 0h4v4H11zM1 11h4v4H1zm5 0h4v4H6zm5 0h4v4H11z" /></svg></button>
+				{#if columnsOpen}
+					<div class="menu" role="group" aria-label="Columns" data-testid="columns-menu">
+						{#each COLUMNS as c (c.key)}
+							{#if c.key !== 'adj' || adjustedPresent}
+								<label class="menuItem">
+									<input
+										type="checkbox"
+										data-testid="column-{c.key}"
+										checked={!hiddenCols.includes(c.key)}
+										onchange={() => toggleColumn(c.key)}
+									/>
+									{c.label}
+								</label>
+							{/if}
+						{/each}
+					</div>
+				{/if}
+			</div>
+		{/if}
 	</Toolbar>
 	{#if searchError}
 		<div class="searcherr" data-testid="search-error" role="alert">
@@ -1821,20 +1823,12 @@
 		color: var(--color-text-accent);
 		background: var(--color-surface-selected);
 	}
-	.alltoggle {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.3rem;
-		color: var(--color-text-subtle);
-		font-size: var(--text-md);
-		white-space: nowrap;
-		cursor: pointer;
-	}
-	.alltoggle input {
-		cursor: pointer;
-	}
 	.countline {
-		margin: var(--space-0) var(--space-0) var(--space-0) auto;
+		margin: var(--space-0) auto var(--space-0) var(--space-0);
+		white-space: nowrap;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
 		font-size: var(--text-md);
 		background: none;
 		border: none;
@@ -1878,9 +1872,10 @@
 		background: var(--color-info-surface);
 		color: var(--color-text);
 	}
-	.burger {
+	.burger,
+	.colsbtn {
 		background: none;
-		border: 1px solid transparent;
+		border: 1px solid var(--color-border);
 		color: var(--color-text-subtle);
 		font-size: 1.3rem;
 		line-height: 1;
@@ -1888,9 +1883,23 @@
 		cursor: pointer;
 		border-radius: var(--radius-md);
 	}
-	.burger:hover {
+	.burger:hover,
+	.colsbtn:hover {
 		color: var(--color-text);
-		border-color: var(--color-border);
+	}
+	.colsbtn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.2rem;
+		height: 2.2rem;
+		padding: 0;
+		flex-shrink: 0;
+	}
+	.colsbtn svg {
+		width: 1rem;
+		height: 1rem;
+		fill: currentColor;
 	}
 
 	.menuBackdrop {
@@ -1923,6 +1932,10 @@
 		border-radius: var(--radius-lg);
 		padding: 0.3rem;
 		box-shadow: var(--shadow-md);
+	}
+	.menuLeft {
+		right: auto;
+		left: 0;
 	}
 	.menuItem {
 		background: none;

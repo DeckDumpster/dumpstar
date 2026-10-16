@@ -21,7 +21,7 @@ export const COLUMNS = [
 export const DEFAULT_HIDDEN = ['adj'];
 
 /** The stored value is the list of hidden keys; unknown keys are dropped. */
-export function parseHidden(raw) {
+export function parseHidden(raw: string | null): string[] {
 	if (raw == null) return [...DEFAULT_HIDDEN];
 	try {
 		const v = JSON.parse(raw);
@@ -37,12 +37,14 @@ export function parseHidden(raw) {
  * Whether any row's condition-adjusted price differs from its Near Mint one.
  * With none, Adjusted would only repeat NM.
  */
-export function anyAdjusted(rows) {
+export function anyAdjusted(
+	rows: readonly { nm_unit: number | null; market_unit: number | null }[]
+): boolean {
 	return rows.some((r) => r.market_unit != null && r.nm_unit != null && r.market_unit !== r.nm_unit);
 }
 
 /** Columns the table draws: not hidden, and Adjusted only when something is adjusted. */
-export function visibleColumns(hidden, adjusted) {
+export function visibleColumns(hidden: readonly string[], adjusted: boolean): string[] {
 	return COLUMNS.map((c) => c.key).filter(
 		(k) => !hidden.includes(k) && (k !== 'adj' || adjusted)
 	);

@@ -14,6 +14,7 @@
 	import { siblingsAt, shownPrinting, otherPrintings, seriesFor } from '$lib/printings';
 	import { CONDITIONS } from '$lib/conditions';
 	import { conditionMultiplier } from '$lib/conditions.svelte';
+	import VariantBadges from '$lib/components/VariantBadges.svelte';
 	import { money as price, printingLabel, jsonList } from '$lib/format';
 	import type { CardDetail } from '$lib/types/CardDetail';
 	import type { Binder } from '$lib/types/Binder';
@@ -286,7 +287,7 @@
 			{/if}
 		</div>
 		<div class="info">
-			<h1>{card.name}</h1>
+			<h1>{card.name}{#if shown}<VariantBadges variant={shown.variant} finish={shown.finish} />{/if}</h1>
 			{#if card.subtitle}<p class="subtitle">{card.subtitle}</p>{/if}
 			<p class="sub">
 				<a

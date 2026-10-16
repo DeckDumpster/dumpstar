@@ -393,7 +393,8 @@ object_store_ls "$SENTINEL_KEY" \
 surviving_version_of() { # surviving_version_of <key>
 	jq -r --arg want "$1" '
 		select((.isDeleteMarker // false) | not)
-		| select(.key == $want or ($want | endswith(.key // "")))
+		| (.key // "") as $k
+		| select($k == $want or ($k != "" and ($want | endswith($k))))
 		| select(.versionId != null and .versionId != "")
 		| .versionId' "${WORK}/versions.json" 2>/dev/null | head -1
 }

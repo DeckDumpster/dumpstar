@@ -111,17 +111,14 @@ suites_json() {
 
 # intent_rows -> "<name>\t<uc-id or ->\t<statement>" for every intent, from the working tree.
 intent_rows() {
-    local f n id st
-    for f in "$ROOT/$INTENTS"/*.yaml; do
-        n="$(basename "$f" .yaml)"
-        id="$(sed -nE '2s/^# Use case: ('"$UC_RE"') *$/\1/p' "$f")"
-        st="$(awk '
-            /^description:/ { on = 1; next }
-            on && /^[^ ]/ { exit }
-            on { sub(/^ +/, ""); s = s (s ? " " : "") $0 }
-            END { gsub(/[\\"]/, "", s); if (length(s) > 220) s = substr(s, 1, 217) "..."; print s }' "$f")"
-        printf '%s\t%s\t%s\n' "$n" "${id:--}" "$st"
-    done
+    (cd "$ROOT/$INTENTS" && awk -v re="^# Use case: ($UC_RE) *\$" '
+        function flush() { if (name != "") { gsub(/[\\"]/, "", s); if (length(s) > 220) s = substr(s, 1, 217) "..."; printf "%s\t%s\t%s\n", name, (id == "" ? "-" : id), s } }
+        FNR == 1 { flush(); name = FILENAME; sub(/\.yaml$/, "", name); id = ""; s = ""; on = 0 }
+        FNR == 2 && match($0, re) { id = $0; sub(/^# Use case: /, "", id); sub(/ +$/, "", id) }
+        /^description:/ { on = 1; next }
+        on && /^[^ ]/ { on = 0 }
+        on { sub(/^ +/, ""); s = s (s ? " " : "") $0 }
+        END { flush() }' *.yaml)
 }
 
 area_of() { local n="${1%%_*}"; printf '%s' "$n"; }
@@ -161,7 +158,7 @@ cmd_report() {
 }
 
 cmd_lint() {
-    local tp bad=0 suites f tier cov tok n id want tmp; tp="$(test_plan_bin)" || return 1
+    local tp bad=0 suites f tier cov tok n id want tmp rows; tp="$(test_plan_bin)" || return 1
     [ -d "$ROOT/$INTENTS" ] && [ -n "$(ls "$ROOT/$INTENTS")" ] || { echo "plan.sh: no intents — refusing to report clean" >&2; return 3; }
     tmp="$(mktemp -d -p "$WORK")"
 
@@ -186,9 +183,10 @@ cmd_lint() {
     done < <(cd "$ROOT" && find tests -name '*.sh' -not -path '*/node_modules/*' | sort)
 
     # 3. every replay implementation names exactly its own intent's use case.
+    rows="$(intent_rows)"
     for f in "$ROOT/$IMPLS"/*.ts; do
         n="$(basename "$f" .ts)"
-        id="$(intent_rows | awk -F'\t' -v n="$n" '$1 == n { print $2 }')"
+        id="$(printf '%s\n' "$rows" | awk -F'\t' -v n="$n" '$1 == n { print $2 }')"
         [ -n "$id" ] || { echo "$IMPLS/$n.ts: no intent $INTENTS/$n.yaml"; bad=1; continue; }
         grep -qE "^[[:space:]]*// covers:.*\\b$id\\b" "$f" || { echo "$IMPLS/$n.ts: missing '// covers: $id'"; bad=1; }
     done

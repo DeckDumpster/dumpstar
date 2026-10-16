@@ -32,11 +32,6 @@
 			"about": "Binder-page grid — the headline feature"
 		},
 		{
-			"id": "browse-set-shd",
-			"path": "/browse/SHD",
-			"about": "Binder page for the second set — a single-card page"
-		},
-		{
 			"id": "browse-set-stats",
 			"path": "/browse/SOR/stats",
 			"about": "Master-set completion stats — charts and progress meters"
@@ -45,11 +40,6 @@
 			"id": "card-detail",
 			"path": "/card/SOR/005",
 			"about": "Card detail with variants, prices and copies"
-		},
-		{
-			"id": "card-detail-ordered",
-			"path": "/card/SOR/521",
-			"about": "A card with an ordered copy in flight"
 		},
 		{
 			"id": "collection",

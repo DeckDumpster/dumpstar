@@ -225,6 +225,45 @@ test('the table runs edge to edge under the header', async ({ page }) => {
 	expect(table.y).toBe(header.y + header.height);
 });
 
+/** At phone width every column heading is whole (sp-r14a2h). The table is
+    wider than a phone and scrolls inside `.tableScroll`, so each heading is
+    scrolled to before it is measured: it must then sit inside the viewport and
+    its text must fit its cell. The first heading is the regression — the
+    scroller's negative margin once cancelled a gutter wider than the phone's
+    and pushed the table off the left edge, so QTY read as TY. */
+test.describe('phone width', () => {
+	test.use({ viewport: { width: 390, height: 844 } });
+	const ALL = ['qty', 'type', 'aspects', 'cost', 'stats', 'rarity', 'set', 'number', 'nm', 'adj'];
+	const configs: Record<string, string[]> = {
+		default: ['adj'],
+		'every column': [],
+		'name only': ALL,
+		'qty and adjusted only': ALL.filter((k) => k !== 'qty' && k !== 'adj')
+	};
+	for (const [name, hidden] of Object.entries(configs)) {
+		test(`table headings are fully visible: ${name}`, async ({ page }) => {
+			await page.addInitScript((h) => {
+				localStorage.setItem('collection.hiddenColumns', JSON.stringify(h));
+			}, hidden);
+			await openCollection(page, 'table');
+			const vw = page.viewportSize()!.width;
+			const heads = page.locator('table.dd thead th');
+			const n = await heads.count();
+			expect(n).toBeGreaterThan(0);
+			for (let i = 0; i < n; i++) {
+				const th = heads.nth(i);
+				await th.scrollIntoViewIfNeeded();
+				const label = ((await th.textContent()) ?? '').trim();
+				const box = (await th.boundingBox())!;
+				expect(box.x, `${label} starts inside the viewport`).toBeGreaterThanOrEqual(0);
+				expect(box.x + box.width, `${label} ends inside the viewport`).toBeLessThanOrEqual(vw);
+				const fits = await th.evaluate((el) => el.scrollWidth <= el.clientWidth);
+				expect(fits, `${label} is not truncated`).toBe(true);
+			}
+		});
+	}
+});
+
 /** Nothing anywhere on the page offers to move you a page at a time (pd-65um).
     Checked by every handle the deleted control had — its test ids, its
     landmark, and its wording — because "the pager is gone" has to mean gone,

@@ -1,0 +1,8 @@
+# Scenario: Choose which columns the collection table shows
+
+description: >
+  On the collection page in table view, I open "Columns" and untick
+  "Type". The Type column is gone from the table header. I reload the
+  page and the table still has no Type column. The Columns list offers
+  no "Adjusted" entry, and the table has no Adjusted column, because
+  none of my cards is in a condition other than Near Mint.

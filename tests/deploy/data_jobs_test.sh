@@ -23,6 +23,8 @@ fail=0
 check() { if eval "$2"; then echo "    ok   $1"; else echo "    FAIL $1"; fail=1; fi; }
 
 . "$REPO/deploy/data-jobs-lib.sh"
+# the lake check is stubbed: STUB_NO_LAKE=1 means this instance has no lakehouse
+dumpstar_lake_installed() { [ -z "${STUB_NO_LAKE:-}" ]; }
 r="$scratch/repo"; git init -q "$r"; git -C "$r" config user.email t@t; git -C "$r" config user.name t
 commit() { mkdir -p "$r/$(dirname "$1")"; echo "$RANDOM" >"$r/$1"; git -C "$r" add -A; git -C "$r" commit -qm "$1"; }
 # deploy_step mirrors the block at the foot of deploy.sh
@@ -58,6 +60,11 @@ STUB_FAIL=1 deploy_step >/dev/null 2>&1 && bad=1 || bad=0
 check "a failed job fails the step" "[ $bad = 0 ]"
 deploy_step >/dev/null
 check "the failed run is retried" "[ \$(wc -l <'$STUB_LOG') -eq 2 ]"
+
+echo "==> §5 no lakehouse: catalog-sync runs, the lake prices job is skipped"
+: >"$STUB_LOG"; STUB_NO_LAKE=1 dumpstar_data_jobs_run t >"$scratch/out5"
+check "only catalog-sync started" "[ \"\$(paste -sd' ' '$STUB_LOG')\" = '--wait dumpstar-catalog-sync@t.service' ]"
+check "the skip is said" "grep -q 'prices@t.service: no lakehouse installed' '$scratch/out5'"
 
 echo "==> §4 dispatch workflow"
 wf="$REPO/.github/workflows/data-jobs.yml"

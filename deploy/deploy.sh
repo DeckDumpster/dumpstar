@@ -128,3 +128,15 @@ else
     echo "==> Data jobs not run: ${reason}"
 fi
 dumpstar_record_deployed_sha "$REPO_DIR" "$INSTANCE"
+
+# --- Valuation (sp-msb7d1) ----------------------------------------------------
+# The collection page promises a daily valuation; the timer is what keeps that
+# promise, so a deploy arms it, and runs the job once so a tenant is never left
+# "not valued yet" until the next 07:30. A failed run pages through the unit's
+# OnFailure=; it must not fail a deploy whose app is already up.
+if systemctl --user cat "dumpstar-value-snapshots@${INSTANCE}.timer" >/dev/null 2>&1; then
+    echo "==> Enabling the daily valuation timer and valuing once now..."
+    systemctl --user enable --now "dumpstar-value-snapshots@${INSTANCE}.timer"
+    systemctl --user start --wait "dumpstar-value-snapshots@${INSTANCE}.service" \
+        || { echo "WARNING: dumpstar-value-snapshots@${INSTANCE}.service failed" >&2; dump_unit_diagnostics "dumpstar-value-snapshots@${INSTANCE}.service"; }
+fi

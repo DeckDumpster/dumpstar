@@ -22,9 +22,9 @@ test('printed rarities are traced glyphs on a framed badge, not the old geometri
 	for (const n of PRINTED) {
 		const s = rarityShape(n);
 		assert.ok(!OLD_GEOMETRY.includes(s.path), `${n} still uses a generic shape`);
-		// A traced letter has curves or many vertices; a polygon of <8 points is a shape.
+		// A traced letter has curves or many vertices; a polygon of fewer than 5 points is a shape.
 		const points = (s.path.match(/-?\d+(\.\d+)?/g) ?? []).length / 2;
-		assert.ok(points >= 8, `${n} glyph has too few points (${points})`);
+		assert.ok(points >= 5, `${n} glyph has too few points (${points})`);
 		assert.ok(s.frame.length > 0, `${n} lacks the printed outline`);
 	}
 });

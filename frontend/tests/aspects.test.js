@@ -83,7 +83,7 @@ test('no source file outside the manifest loader names an aspect colour', () => 
 	assert.deepEqual(offenders, []);
 });
 
-test('views show a card's aspects as printed, never re-sorted', () => {
+test('views show the aspects of a card as printed, never re-sorted', () => {
 	for (const f of ['src/routes/collection/+page.svelte', 'src/lib/components/CardDetailView.svelte']) {
 		assert.doesNotMatch(readFileSync(join(here, '..', f), 'utf8'), /sortAspects/, f);
 	}

@@ -1,4 +1,5 @@
 # Scenario: Collection page shows a loading state before data arrives
+# Use case: UC-collection-33
 #
 # Related:
 #   issues: []

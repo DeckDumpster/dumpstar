@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T0
+# covers: .github/workflows/ci.yml
 # tests/ci/spill_input_test.sh — the force_spill dispatch input on ci.yml.
 # Exists, boolean, defaults false; provision's `spill:` is ec2-only always —
 # every test run goes to EC2 (Ryan 2026-10-15). Hermetic.

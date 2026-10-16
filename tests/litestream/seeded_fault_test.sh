@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T2
+# covers: deploy/dumpstar-litestream.container
 # Seeded-fault proof for the three S4 acceptance claims (sp-rhwo4u): every
 # claim is run against the shipped tree (must hold) and then against a copy with
 # one fault seeded in (must be caught), so each check is seen to fail first.

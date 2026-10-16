@@ -1,3 +1,4 @@
+// covers: UC-card-07
 /**
  * Hand-written fail-first regression for the "price chart refreshes on every
  * copy edit" bug (dumpstar-i5d). Editing a copy's condition calls load(),

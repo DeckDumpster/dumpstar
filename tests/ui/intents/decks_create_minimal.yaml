@@ -1,4 +1,5 @@
 # Scenario: Create a deck with only a name (minimal input)
+# Use case: UC-decks-02
 #
 # Prerequisites:
 #   The /decks page loads with the inline create form visible

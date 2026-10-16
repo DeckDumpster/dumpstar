@@ -1,4 +1,5 @@
 # Scenario: The card page of a Star Wars: Unlimited unit shows its SWU attributes: type, cost, aspects, arena, power and HP
+# Use case: UC-card-24
 #
 # Related:
 #   issues: [sp-iszds1]

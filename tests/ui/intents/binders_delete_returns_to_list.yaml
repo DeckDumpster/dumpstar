@@ -1,4 +1,5 @@
 # Scenario: Delete a binder and return to the list
+# Use case: UC-binders-04
 
 # Related: binders_list_view_populated, binders_create_with_all_fields
 

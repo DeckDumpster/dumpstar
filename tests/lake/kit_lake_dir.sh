@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T1
+# covers: tests/lake/kit_lake_dir.sh Cargo.toml
 # Print the source directory of a kit crate (default: the lake crate) at the revision the
 # workspace pins. The lake layout (zones, key builders, tenant.rs) is the kit's;
 # the isolation guards read it from there, so a bump of the pin is what they

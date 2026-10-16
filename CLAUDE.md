@@ -97,3 +97,13 @@ right the first time.
 is deliberately **no `concurrency:` block** in that workflow: GitHub keeps one
 pending run per group and evicts the rest, so runs queue before the VM spill can
 act (deckdumpster sp-r4zvel). `tests/ci/workflow_test.sh` fails if one appears.
+
+## Use-case coverage
+
+The use-case catalogue is `tests/ui/intents/*.yaml` (id on line 2: `# Use case: UC-<area>-NN`);
+`docs/test-plan/*.toml` and `coverage.{json,md}` are generated from it (`bash tests/ci/plan.sh
+generate|report`). Every shell suite under `tests/` carries `# tier:` and `# covers:` headers, and a
+replay implementation carries `// covers: <its intent's UC id>`. The lint tier runs `tests/ci/plan.sh
+lint` and `orphans`: a use case with no covering suite, or whose last cover a change deleted, fails by
+name. A new intent needs `plan.sh assign` then `generate` and `report`. The binary is Spira's
+`test-plan` (`$SPIRA_TEST_PLAN_BIN`, or on PATH).

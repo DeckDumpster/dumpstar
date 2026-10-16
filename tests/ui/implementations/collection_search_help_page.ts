@@ -1,3 +1,4 @@
+// covers: UC-collection-26
 /**
  * Hand-written implementation for collection_search_help_page.
  *

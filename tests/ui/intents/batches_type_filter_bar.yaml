@@ -1,4 +1,5 @@
 # Scenario: Filter batches by type using the Type select
+# Use case: UC-batches-09
 
 # Related: batches_filter_empty_result, batches_homepage_nav_link
 

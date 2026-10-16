@@ -1,4 +1,5 @@
 # Scenario: Brand link in the header returns to the homepage
+# Use case: UC-homepage-01
 
 # Related: homepage_page_structure, homepage_nav_links_collection
 

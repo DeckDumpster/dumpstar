@@ -1,3 +1,4 @@
+// covers: UC-card-15
 /**
  * Guards sp-iszds1: the aspect facet searches by aspect across the catalog.
  */

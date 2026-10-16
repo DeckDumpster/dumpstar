@@ -20,19 +20,7 @@
 	--pd-gold-200: #fde8ae;
 	--pd-alpha-gold-08: rgba(245, 197, 66, 0.08);
 	--pd-alpha-gold-14: rgba(245, 197, 66, 0.14);
-	--pd-rarity-common: #964d02;
-	--pd-rarity-uncommon: #d1d1d1;
-	--pd-rarity-rare: #f1c000;
-	--pd-rarity-legendary: #00c8f3;
-	--pd-rarity-special: #000000;
-	--pd-rarity-neutral: #8a8f98;
 
-	--color-rarity-common: var(--pd-rarity-common);
-	--color-rarity-uncommon: var(--pd-rarity-uncommon);
-	--color-rarity-rare: var(--pd-rarity-rare);
-	--color-rarity-legendary: var(--pd-rarity-legendary);
-	--color-rarity-special: var(--pd-rarity-special);
-	--color-rarity-neutral: var(--pd-rarity-neutral);
 	--color-surface-selected: var(--pd-alpha-gold-14);
 	--color-surface-accent-wash: var(--pd-alpha-gold-08);
 	--color-border-accent: var(--pd-gold-500);

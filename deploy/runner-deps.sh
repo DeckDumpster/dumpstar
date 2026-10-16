@@ -306,10 +306,25 @@ check_linger() {
 # no rustup shim, so rust-toolchain.toml is silently ignored and `cargo fmt
 # --check` runs a formatter the repo was never formatted with.
 # ---------------------------------------------------------------------------
+# cargo-nextest runs the Rust tests across every binary at once (sp-7xm13h,
+# sp-0vmtef). Installed by cargo itself at a pinned version, never fetched by
+# curl (law-install-installs-every-dependency), and required: ci.sh has no
+# serial fallback, so a runner without it fails here, before any build.
+NEXTEST_VERSION=0.9.148
+
 check_rust() {
     command -v rustup >/dev/null 2>&1 || { lack rustup "rust-toolchain.toml pins the channel and only rustup honours it"; return 1; }
     command -v cargo  >/dev/null 2>&1 || { lack cargo "deploy/ci.sh runs cargo test, clippy and fmt"; return 1; }
     note "rust $(rustc --version 2>/dev/null || echo '(version unknown)')"
+}
+
+check_nextest() {
+    local nx
+    nx="$(cargo nextest --version 2>/dev/null | head -1)"
+    case "$nx" in
+        *" ${NEXTEST_VERSION}"*) note "$nx" ;;
+        *) lack "cargo-nextest ${NEXTEST_VERSION}" "deploy/ci.sh runs the Rust tests with cargo nextest (found: ${nx:-none}); install: cargo install --locked cargo-nextest --version ${NEXTEST_VERSION}"; return 1 ;;
+    esac
 }
 
 # ---------------------------------------------------------------------------
@@ -491,14 +506,14 @@ check_machine() {
 }
 
 # DUMPSTAR_RUNNER_DEPS_ONLY="base rust" checks just those groups (base podman
-# subid linger rust node chromium fonts machine). testenv runs the lint and rust
+# subid linger rust nextest node chromium fonts machine). testenv runs the lint and rust
 # tiers in a bare rust image that has no podman, node or browser libraries and
 # never will; checking them there failed every run before the tier started.
 # Unset checks everything, which is what a CI runner needs.
 run_checks() {
     MISSING=()
     local g
-    for g in base podman subid linger rust node chromium fonts machine; do
+    for g in base podman subid linger rust nextest node chromium fonts machine; do
         case " ${DUMPSTAR_RUNNER_DEPS_ONLY:-$g} " in
             *" $g "*) ;;
             *) continue ;;
@@ -506,7 +521,8 @@ run_checks() {
         case "$g" in
             base) check_base ;;       podman) check_podman ;;
             subid) check_subid ;;     linger) check_linger ;;
-            rust) check_rust ;;       node) check_node ;;
+            rust) check_rust ;;       nextest) check_nextest ;;
+            node) check_node ;;
             chromium) check_chromium_libs ;;
             fonts) check_fonts ;;     machine) check_machine ;;
         esac
@@ -584,6 +600,14 @@ if command -v rustup >/dev/null 2>&1 && [ -f rust-toolchain.toml ]; then
     rustup toolchain install --profile minimal --component rustfmt --component clippy \
         "$(sed -n 's/^channel[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' rust-toolchain.toml)" \
         || note "rustup could not preinstall the pinned toolchain -- cargo will fetch it on first use"
+fi
+
+phase "cargo-nextest ${NEXTEST_VERSION} (cargo install --locked)"
+_nx="$(cargo nextest --version 2>/dev/null || true)"
+if [[ "$_nx" != *" ${NEXTEST_VERSION}"* ]]; then
+    note "installing cargo-nextest ${NEXTEST_VERSION}"
+    cargo install --locked cargo-nextest --version "${NEXTEST_VERSION}" \
+        || { note "cargo install cargo-nextest ${NEXTEST_VERSION} failed"; exit 1; }
 fi
 
 # Node. The distro package is BELOW the floor (see check_node), so this takes

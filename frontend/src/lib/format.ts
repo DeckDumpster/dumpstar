@@ -41,3 +41,17 @@ export function jsonList(raw: string | null | undefined): string[] {
 		return [];
 	}
 }
+
+/** The Type cell's two lines: the card type, then its arena(s) beneath
+ *  (`Unit` / `Ground`). A card with no arena has the type alone. */
+export function typeLines(
+	cardType: string | null | undefined,
+	arenas: string | null | undefined
+): { type: string; arena: string } {
+	return { type: cardType ?? '', arena: jsonList(arenas).join(' \u00b7 ') };
+}
+
+/** The Traits column: every trait on one line, `Underworld · Droid · Bounty Hunter`. */
+export function traitsLine(traits: string | null | undefined): string {
+	return jsonList(traits).join(' \u00b7 ');
+}

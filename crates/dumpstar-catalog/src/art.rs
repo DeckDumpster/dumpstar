@@ -132,6 +132,49 @@ pub fn fetch(
     Ok(report)
 }
 
+/// What a set-art store holds against what the list promises.
+#[derive(Debug, Default, PartialEq)]
+pub struct Coverage {
+    /// Sets the list gives at least one asset.
+    pub expected: usize,
+    /// Of those, the sets with at least one asset on disk.
+    pub have: usize,
+    /// Listed assets (`<set>/<kind>`) not in the store.
+    pub missing: Vec<String>,
+}
+
+impl Coverage {
+    pub fn line(&self) -> String {
+        format!("set art: {}/{} sets", self.have, self.expected)
+    }
+}
+
+/// Count the sets of `list` with art in `art_dir`, and name every listed asset
+/// that is absent. A set reviewed as having none is not expected to have any.
+pub fn coverage(art_dir: &Path, list: &[SetSources]) -> Coverage {
+    let mut c = Coverage::default();
+    for set in list {
+        let art = resolve(art_dir, &set.set_code);
+        let wanted = [
+            ("logo", &set.logo, &art.logo_url),
+            ("crop", &set.crop, &art.crop_url),
+        ];
+        if wanted.iter().all(|(_, s, _)| s.is_none()) {
+            continue;
+        }
+        c.expected += 1;
+        if art.logo_url.is_some() || art.crop_url.is_some() {
+            c.have += 1;
+        }
+        for (kind, src, got) in wanted {
+            if src.is_some() && got.is_none() {
+                c.missing.push(format!("{}/{kind}", set.set_code));
+            }
+        }
+    }
+    c
+}
+
 /// A set's served art; each field is `None` when nothing was retrieved.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SetArt {
@@ -203,6 +246,21 @@ mod tests {
         // A second run does not re-take the logo.
         let again = fetch(dir.path(), &http, day(), &list()).unwrap();
         assert_eq!((again.fetched, again.already), (0, 1));
+    }
+
+    #[test]
+    fn coverage_reports_a_set_whose_art_is_not_in_the_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let before = coverage(dir.path(), &list());
+        assert_eq!((before.expected, before.have), (1, 0));
+        assert_eq!(before.missing, ["AAA/logo", "AAA/crop"]);
+        fetch(dir.path(), &Fake(Cell::new(0)), day(), &list()).unwrap();
+        let after = coverage(dir.path(), &list());
+        assert_eq!(
+            (after.have, after.missing.clone()),
+            (1, vec!["AAA/crop".into()])
+        );
+        assert_eq!(after.line(), "set art: 1/1 sets");
     }
 
     #[test]

@@ -207,6 +207,24 @@ test('the table renders a window too', async ({ page }) => {
 	await expectBounded(page.locator('table.dd tbody tr:not(.vspace)'));
 });
 
+/** The table has no negative space: it starts at the left viewport edge, its
+    scroller ends at the right one, and it begins where the header band ends
+    (sp-886poj). Run under both viewports of playwright.config.ts. The right
+    edge is the scroller's: below its declared minimum width the table is wider
+    than the viewport and scrolls inside it. */
+test('the table runs edge to edge under the header', async ({ page }) => {
+	await openCollection(page, 'table');
+	const box = async (sel: string) => (await page.locator(sel).first().boundingBox())!;
+	const vw = page.viewportSize()!.width;
+	const table = await box('table.dd');
+	const scroller = await box('.tableScroll');
+	const header = await box('.topbar');
+	expect(table.x).toBe(0);
+	expect(scroller.x).toBe(0);
+	expect(scroller.x + scroller.width).toBe(vw);
+	expect(table.y).toBe(header.y + header.height);
+});
+
 /** Nothing anywhere on the page offers to move you a page at a time (pd-65um).
     Checked by every handle the deleted control had — its test ids, its
     landmark, and its wording — because "the pager is gone" has to mean gone,

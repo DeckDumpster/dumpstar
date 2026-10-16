@@ -620,9 +620,20 @@ check "the published port is loopback-bound" "1" \
 # rewrites only the Quadlets would leave that advice permanently true.
 for U in dumpstar-alert@.service dumpstar-backup-check@.service dumpstar-backup-check@.timer \
 	dumpstar-refresh@.service dumpstar-refresh@.timer dumpstar-diskcheck.service dumpstar-diskcheck.timer \
-	dumpstar-derive@.service dumpstar-derive@.timer; do
+	dumpstar-derive@.service dumpstar-derive@.timer \
+	dumpstar-value-snapshots@.service dumpstar-value-snapshots@.timer; do
 	check "installs ${U}" "yes" "$([ -f "${UNITS}/${U}" ] && echo yes || echo no)"
 done
+# sp-msb7d1: installed is not enough — nothing armed the valuation for months.
+# A deploy enables the timer and runs the job once.
+check "a deploy enables the value-snapshots timer" "1" \
+	"$(grep -c '^SYSTEMCTL: --user enable --now dumpstar-value-snapshots@prod.timer$' "$SYSCTL_LOG" || true)"
+check "…and values once at deploy" "1" \
+	"$(grep -c '^SYSTEMCTL: --user start --wait dumpstar-value-snapshots@prod.service$' "$SYSCTL_LOG" || true)"
+check "the timer matches the 07:30 UTC the page promises" "1" \
+	"$(grep -c '^OnCalendar=\*-\*-\* 07:30:00 UTC$' "${REPO_DIR}/deploy/dumpstar-value-snapshots.timer" || true)"
+check "a failed valuation pages" "1" \
+	"$(grep -c '^OnFailure=dumpstar-alert@%n.service$' "${REPO_DIR}/deploy/dumpstar-value-snapshots.service" || true)"
 check "no {{REPO_DIR}} left unsubstituted" "0" \
 	"$(grep -rl '{{REPO_DIR}}' "$UNITS" "$QUADLET" 2>/dev/null | wc -l)"
 

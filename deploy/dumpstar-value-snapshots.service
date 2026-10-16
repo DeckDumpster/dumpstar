@@ -1,0 +1,23 @@
+[Unit]
+Description=Dumpstar per-tenant value snapshots (%i)
+# Values every active tenant's copies against the shared price series and writes
+# today's row of the value history. Nothing in the request path does this: until
+# this unit existed, no tenant was ever valued and the collection page said "Not
+# valued yet" indefinitely (sp-msb7d1).
+#
+# ── ORDERING: after the sync that writes the prices, never beside it ────────
+# An ordering dependency, not a Wants=: the sync is a oneshot without
+# RemainAfterExit, so a Wants= would re-run the whole catalog fetch.
+After=dumpstar-catalog-sync@%i.service
+After=network-online.target
+OnFailure=dumpstar-alert@%n.service
+
+[Service]
+Type=oneshot
+# 0 every tenant was valued; 2 the run completed and skipped a tenant (a
+# database that is absent or locked) — a normal partial run, not a page; 1 the
+# run never started. The command requires --date, so the unit passes today's
+# UTC date ($$ and %% are systemd's escapes for $ and %).
+SuccessExitStatus=2
+ExecStart=/bin/sh -c 'exec podman exec systemd-dumpstar-%i dumpstar value-snapshots --date "$$(date -u +%%F)"'
+TimeoutStartSec=1800

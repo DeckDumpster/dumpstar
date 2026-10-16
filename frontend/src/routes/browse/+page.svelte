@@ -440,7 +440,7 @@
 	/* A set with no retrieved crop keeps the banner's footprint, so tiles
 	   stay one height. */
 	.crop.placeholder {
-		background: var(--surface-2, rgba(127, 127, 127, 0.15));
+		background: var(--color-surface-sunken);
 	}
 	.symbol .code {
 		font-size: var(--text-xs);

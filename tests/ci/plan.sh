@@ -23,7 +23,8 @@
 #   plan.sh report               write docs/test-plan/coverage.{json,md}: every intent, its covering suites
 #   plan.sh suites [--ref <ref>] the suites as JSON, for test-plan
 #
-# The binary is `$SPIRA_TEST_PLAN_BIN`, else `test-plan` on PATH, else the installed Spira release.
+# The binary is `$SPIRA_TEST_PLAN_BIN`, else `test-plan` on PATH, else the installed Spira release, else
+# the pinned copy in tools/test-plan, built on first use (`plan.sh bin` prints the path).
 # It is never skipped: a missing binary is a failure, not a clean pass.
 #
 # tier: T1
@@ -40,8 +41,13 @@ test_plan_bin() {
     if [ -n "${SPIRA_TEST_PLAN_BIN:-}" ] && [ -x "$SPIRA_TEST_PLAN_BIN" ]; then printf '%s' "$SPIRA_TEST_PLAN_BIN"; return 0; fi
     command -v test-plan 2>/dev/null && return 0
     [ -x /home/ryan/spira/spira-releases/current/bin/test-plan ] && { printf '%s' /home/ryan/spira/spira-releases/current/bin/test-plan; return 0; }
-    echo "plan.sh: no test-plan binary (set SPIRA_TEST_PLAN_BIN, or put test-plan on PATH) — refusing to report clean" >&2
-    return 1
+    # None installed: build the pinned copy (tools/test-plan, UPSTREAM names the Spira commit).
+    local out="${DUMPSTAR_TOOLS_TARGET:-$ROOT/target/test-plan}"
+    if [ ! -x "$out/release/test-plan" ]; then
+        cargo build --release --locked -q --manifest-path "$ROOT/tools/test-plan/Cargo.toml" --target-dir "$out" >&2 || {
+            echo "plan.sh: cannot build tools/test-plan — refusing to report clean" >&2; return 1; }
+    fi
+    printf '%s' "$out/release/test-plan"
 }
 
 # Shell gates that are suites. A library sourced by gates is not one.
@@ -222,6 +228,7 @@ case "${1:-}" in
     generate) cmd_generate ;;
     assign) cmd_assign ;;
     report) cmd_report ;;
+    bin) test_plan_bin; echo ;;
     suites) if [ "${2:-}" = --ref ]; then suites_json "${3:?ref}"; else suites_json; fi ;;
     *) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
 esac

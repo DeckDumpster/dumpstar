@@ -10,6 +10,7 @@ fail=0
 ok()  { echo "ok   $1"; }
 bad() { echo "FAIL $1"; fail=1; }
 cd "$(dirname "$0")/../.."
+SPIRA_TEST_PLAN_BIN="$(bash tests/ci/plan.sh bin)" || exit 1; export SPIRA_TEST_PLAN_BIN
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 tar -cf - --exclude=.git --exclude=node_modules --exclude=target . | tar -xf - -C "$T"
 git init -q "$T" && git -C "$T" add -A && git -C "$T" -c user.name=t -c user.email=t@t commit -qm base

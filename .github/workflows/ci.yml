@@ -90,6 +90,10 @@ jobs:
           spill-after-seconds: '60'
           spill-max-instances: 2
           aws-role-to-assume: ${{ secrets.AWS_SPILL_ROLE_ARN }}
+          # Join the tailnet so the EC2 runner reaches the shared sccache; with
+          # 'false' every compile ran cold (PR 77: 'http://100.113.203.21:9431
+          # unreachable — compiling cold'), sp-ducjtr.
+          spill-tailnet:      'true'
 
   # NAMED `gate` BECAUSE THAT NAME IS A CONTRACT WITH SPIRA. Spira's merge queue
   # reads the status-check rollup for an entry whose name is exactly `gate`; the

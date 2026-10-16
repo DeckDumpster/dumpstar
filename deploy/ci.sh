@@ -1039,6 +1039,17 @@ if tier deploy; then
     # the whole container tier below it unrunnable (pd-h3wy). ~17s, pulls
     # nothing (its fixture is FROM scratch), and works only inside a throwaway
     # store it tears down.
+    # The two image-building store gates (~5.5 min together, two extra image
+    # builds) prove facts about podman and cargo that only change when the
+    # image build does. On a PR they run only when the paths that build the
+    # image changed (sp-ducjtr); with no changed-file list (push, manual run)
+    # they always run.
+    store_gates_due() {
+        [ -z "${DUMPSTAR_CI_CHANGED_FILES:-}" ] && return 0
+        grep -qE '^(Containerfile|deploy/image-lib\.sh|deploy/rust-cache\.sh|tests/store/)' \
+            < "$DUMPSTAR_CI_CHANGED_FILES"
+    }
+    if store_gates_due; then
     step "Container store: a build collects what the build before it orphaned"
     bash "$REPO_DIR/tests/store/orphans.sh"
 
@@ -1055,6 +1066,9 @@ if tier deploy; then
     # unique to the run and removed on the way out.
     step "Container store: the image ships the binaries its own sources build"
     bash "$REPO_DIR/tests/store/cargo_cache.sh"
+    else
+        echo "==> Container store image gates skipped: no change to Containerfile, image-lib.sh, rust-cache.sh or tests/store/ (sp-ducjtr)"
+    fi
 fi
 
 # --- 3b. The image, once ----------------------------------------------------

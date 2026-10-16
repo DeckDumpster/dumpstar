@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T1
+# covers: tests/lib/ports.sh
 # Unit test for tests/lib/ports.sh (pd-r0ri).
 #
 # Two halves, and the second is the point of the bead.

@@ -1,4 +1,5 @@
 # Scenario: Deck picker tags copies already assigned to decks or binders
+# Use case: UC-deck-10
 #
 # Prerequisites:
 #   Deck 1 "Luke Vigilance Midrange" has copies assigned (one is a

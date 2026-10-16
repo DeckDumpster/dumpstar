@@ -1,4 +1,5 @@
 # Scenario: An invalid query shows a parse error with its position
+# Use case: UC-collection-25
 #
 # Related:
 #   issues: [dumpstar-idf.10]

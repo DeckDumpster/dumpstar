@@ -1,4 +1,5 @@
 # Scenario: Creating a new deck makes it reachable at its detail page
+# Use case: UC-deck-08
 #
 # Related:
 #   issues: []

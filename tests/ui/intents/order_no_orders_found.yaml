@@ -1,4 +1,5 @@
 # Scenario: Pasting garbage order text yields no parsed lines
+# Use case: UC-order-07
 #
 # Related:
 #   issues: []

@@ -1,4 +1,5 @@
 # Scenario: Committing an order lands on its detail page with receive guidance
+# Use case: UC-order-03
 #
 # Related:
 #   issues: []

@@ -1,4 +1,5 @@
 # Scenario: Newly created binder detail view shows an empty card list
+# Use case: UC-binders-05
 
 # Related: binders_create_with_all_fields, binders_add_cards_full_flow
 

@@ -1,4 +1,5 @@
 # Scenario: Add copies from two different cards in succession without a refresh
+# Use case: UC-collection-02
 #
 # Related:
 #   issues: []

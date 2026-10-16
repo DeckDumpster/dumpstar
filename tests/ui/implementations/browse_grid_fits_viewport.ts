@@ -1,3 +1,4 @@
+// covers: UC-browse-02
 /**
  * Guards sp-mxm9dw: the set browse grid never overflows the viewport, and the
  * cards in one row share a height, at every cards-per-row setting.

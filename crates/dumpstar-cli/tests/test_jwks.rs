@@ -24,7 +24,11 @@ fn issue(dir: &std::path::Path, email: &str, forged: bool) -> String {
         c.arg("--forged");
     }
     let out = c.output().unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     String::from_utf8(out.stdout).unwrap().trim().to_string()
 }
 

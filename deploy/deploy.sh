@@ -127,5 +127,5 @@ if systemctl --user cat "dumpstar-value-snapshots@${INSTANCE}.timer" >/dev/null 
     echo "==> Enabling the daily valuation timer and valuing once now..."
     systemctl --user enable --now "dumpstar-value-snapshots@${INSTANCE}.timer"
     systemctl --user start --wait "dumpstar-value-snapshots@${INSTANCE}.service" \
-        || echo "WARNING: dumpstar-value-snapshots@${INSTANCE}.service failed; see journalctl --user -u dumpstar-value-snapshots@${INSTANCE}.service" >&2
+        || { echo "WARNING: dumpstar-value-snapshots@${INSTANCE}.service failed" >&2; dump_unit_diagnostics "dumpstar-value-snapshots@${INSTANCE}.service"; }
 fi

@@ -27,7 +27,7 @@ problems() {
     has 'DeckDumpster/ephemeral-ci/provision@v2' || echo "does not use provision@v2"
     has 'DeckDumpster/ephemeral-ci/teardown@v2' || echo "does not use teardown@v2"
     has "spill-after-seconds: '60'" || echo "spill-after-seconds is not '60'"
-    has '^ +spill: +\$\{\{ inputs.force_spill' || echo "spill: is not driven by force_spill"
+    has '^ +spill: +ec2-only$' || echo "spill: is not ec2-only (every test run goes to EC2, Ryan 2026-10-15)"
     # the teardown job must be conditional on always()
     body="$(awk '/^  teardown:/{f=1;next} f&&/^  [a-z]/{f=0} f' "$wf")"
     [ "$(grep -c -E '^ +if: always\(\)' <<<"$body")" -gt 0 ] \

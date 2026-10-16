@@ -125,14 +125,10 @@ dumpstar_units_real_dir() {
 DUMPSTAR_HOST_WIDE_UNIT_FILES=(
     dumpstar-refresh@.service          dumpstar-refresh@.timer
     dumpstar-derive@.service           dumpstar-derive@.timer
-    dumpstar-prices@.service           dumpstar-prices@.timer
     dumpstar-catalog-sync@.service     dumpstar-catalog-sync@.timer
     dumpstar-catalog-check@.service    dumpstar-catalog-check@.timer
-    dumpstar-value-snapshots@.service  dumpstar-value-snapshots@.timer
     dumpstar-ship@.service             dumpstar-ship@.timer
     dumpstar-backup-check@.service     dumpstar-backup-check@.timer
-    dumpstar-nessie-backup@.service    dumpstar-nessie-backup@.timer
-    dumpstar-nessie-backup-check@.service dumpstar-nessie-backup-check@.timer
     dumpstar-alert@.service
     dumpstar-diskcheck.service         dumpstar-diskcheck.timer
     dumpstar-tmpreap.service           dumpstar-tmpreap.timer
@@ -258,19 +254,6 @@ _dumpstar_units_install_host_wide() {
             -e "s|{{REPO_DIR}}|${repo_dir}|g"
     done
 
-    # --- The nightly catalog.prices build (pd-up36) -------------------------
-    # The middle of the chain: the landing unit above puts the day in the
-    # bucket, this turns it into a table, the transform below reads that table.
-    # Installed for every instance and enabled for none, like the two around it
-    # — the lakehouse itself is opt-in (deploy/setup-lake.sh), and the unit's
-    # ConditionPathExists on lake.env keeps an enabled timer inert on a box that
-    # has no lake.
-    for ext in service timer; do
-        _dumpstar_units_render "${systemd_user_dir}/dumpstar-prices@.${ext}" nostamp \
-            "$repo_dir/deploy/dumpstar-prices.${ext}" \
-            -e "s|{{REPO_DIR}}|${repo_dir}|g"
-    done
-
     # --- The SWU catalog sync and its alarm check (dumpstar 7) --------------
     # Installed for every instance, enabled for none: arming a timer that
     # fetches from two upstreams is an operator's act on an instance.
@@ -282,39 +265,11 @@ _dumpstar_units_install_host_wide() {
         done
     done
 
-    # --- The shared Nessie catalog's backup and its alarm (sp-87nj2v) -------
-    # Installed for every instance, enabled for none; inert without lake.env.
-    for unit in nessie-backup nessie-backup-check; do
-        for ext in service timer; do
-            _dumpstar_units_render "${systemd_user_dir}/dumpstar-${unit}@.${ext}" nostamp \
-                "$repo_dir/deploy/dumpstar-${unit}.${ext}" \
-                -e "s|{{REPO_DIR}}|${repo_dir}|g"
-        done
-    done
-
-    # --- The transform tier's nightly run (pd-8m5c) -------------------------
-    # Per-tenant value snapshots from the lake, ordered after the refresh above.
-    # Installed for every instance and enabled for none — the lakehouse itself is
-    # opt-in (deploy/setup-lake.sh), and the unit's ConditionPathExists on
-    # lake.env keeps an enabled timer inert on a box that has no lake.
-    #
-    # Installed HERE rather than by setup-lake.sh, with the rest of them, for the
-    # reason this file exists: a unit template only reaches an instance if
-    # something re-renders it on every deploy, and setup-lake.sh is run once.
-    for ext in service timer; do
-        _dumpstar_units_render "${systemd_user_dir}/dumpstar-value-snapshots@.${ext}" nostamp \
-            "$repo_dir/deploy/dumpstar-value-snapshots.${ext}" \
-            -e "s|{{REPO_DIR}}|${repo_dir}|g"
-    done
-
     # --- The ownership shipment (pd-dxn3) -----------------------------------
     # The outbox into the tenant zone, ordered after the transform above
     # because both open every tenant's database. Installed for every instance
-    # and enabled for none — `bash deploy/setup-lake.sh <instance>
-    # --arm-shipper` is the one place arming it is a deliberate act rather
-    # than a side effect, and it CHECKS the three preconditions (the tenant
-    # credential, the master key, and a completed backfill) rather than
-    # printing them.
+    # and enabled for none: arming it is an operator's deliberate act.
+    # (setup-lake.sh --arm-shipper went with the Python lake, sp-l74uk0.)
     for ext in service timer; do
         _dumpstar_units_render "${systemd_user_dir}/dumpstar-ship@.${ext}" nostamp \
             "$repo_dir/deploy/dumpstar-ship.${ext}" \

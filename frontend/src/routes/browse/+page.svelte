@@ -4,7 +4,7 @@
 	import { count } from '$lib/format';
 	import { Button, EmptyState, Field, Panel, ProgressBar, Toolbar } from '$lib/components/ui';
 	import type { SetSummary } from '$lib/types/SetSummary';
-	import { groupSets } from '$lib/setGroups';
+	import { groupSets, startsCollapsed, type SetGroup } from '$lib/setGroups';
 
 	let sets = $state<SetSummary[]>([]);
 	let loading = $state(true);
@@ -38,7 +38,11 @@
 	);
 
 	// Category headers open and close individually.
+	// A category the viewer has not toggled starts open only if they own a card in it.
 	let collapsed = $state<Record<string, boolean>>({});
+	function isCollapsed(g: { category: string; sets: SetSummary[] }): boolean {
+		return collapsed[g.category] ?? startsCollapsed(g as SetGroup);
+	}
 
 	function pct(owned: number, total: number): number {
 		return total > 0 ? Math.round((owned / total) * 100) : 0;
@@ -46,8 +50,8 @@
 	function anchorId(slug: string): string {
 		return 'cat-' + slug;
 	}
-	function toggle(category: string) {
-		collapsed[category] = !collapsed[category];
+	function toggle(g: { category: string; sets: SetSummary[] }) {
+		collapsed[g.category] = !isCollapsed(g);
 	}
 	function setAll(v: boolean) {
 		const next: Record<string, boolean> = {};
@@ -137,10 +141,10 @@
 						<section class="seriesgroup" id={anchorId(g.slug)}>
 							<button
 								class="grouphdr"
-								onclick={() => toggle(g.category)}
-								aria-expanded={!collapsed[g.category]}
+								onclick={() => toggle(g)}
+								aria-expanded={!isCollapsed(g)}
 							>
-								<span class="caret" aria-hidden="true">{collapsed[g.category] ? '▸' : '▾'}</span>
+								<span class="caret" aria-hidden="true">{isCollapsed(g) ? '▸' : '▾'}</span>
 								<span class="ghname">{g.category}</span>
 								<span class="ghmeta">
 									{g.sets.length}
@@ -153,7 +157,7 @@
 									{/if}
 								</span>
 							</button>
-							{#if !collapsed[g.category]}
+							{#if !isCollapsed(g)}
 								<div class="grid">
 									{#each g.sets as set (set.set_code)}
 										<Panel class="tile" href="/browse/{set.set_code}">

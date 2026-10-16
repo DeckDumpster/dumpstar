@@ -42,3 +42,18 @@ test("groupSets names an unmapped set rather than hiding it in another category"
   const groups = groupSets([s("SOR", "Main Expansions"), s("ZZZ", null)]);
   assert.equal(groups[1].category, UNCATEGORISED);
 });
+
+test("only groups whose sets hold an owned card start expanded", async () => {
+  const { startsCollapsed } = await import("$lib/setGroups");
+  const owned = (code, category, n) => ({ ...s(code, category), owned_cards: n });
+  const groups = groupSets([
+    owned("SOR", "Main", 0),
+    owned("LOF", "Main", 5),
+    owned("P1", "Promo", 0),
+    owned("T1", "Starter", 0),
+  ]);
+  assert.deepEqual(
+    groups.map((g) => [g.category, startsCollapsed(g)]),
+    [["Main", false], ["Promo", true], ["Starter", true]]
+  );
+});

@@ -96,3 +96,50 @@ fn every_logo_names_its_official_source() {
         }
     }
 }
+
+#[test]
+fn every_set_has_a_banner_crop_or_says_why_not() {
+    for s in art::sources() {
+        match s.crop {
+            Some(c) => {
+                assert!(
+                    c.source_url
+                        .starts_with("https://cdn.starwarsunlimited.com/"),
+                    "{}: crop is not from the official CDN: {}",
+                    s.set_code,
+                    c.source_url
+                );
+                assert_eq!(c.file, format!("{}-crop.png", s.set_code));
+            }
+            None => assert!(
+                s.crop_none.as_deref().is_some_and(|n| !n.is_empty()),
+                "{}: no crop and no `crop_none` reason",
+                s.set_code
+            ),
+        }
+    }
+}
+
+#[test]
+fn fetching_the_manifest_stores_a_crop_for_every_set_that_lists_one() {
+    use chrono::NaiveDate;
+    struct Ok_;
+    impl dumpstar_catalog::fetch::Fetch for Ok_ {
+        fn get(&self, _: &str) -> dumpstar_catalog::Result<Vec<u8>> {
+            Ok(b"png".to_vec())
+        }
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let list = art::sources();
+    let day = NaiveDate::from_ymd_opt(2026, 10, 16).unwrap();
+    let r = art::fetch(dir.path(), &Ok_, day, &list).unwrap();
+    assert!(r.failed.is_empty());
+    for s in &list {
+        assert_eq!(
+            art::resolve(dir.path(), &s.set_code).crop_url.is_some(),
+            s.crop.is_some(),
+            "{}",
+            s.set_code
+        );
+    }
+}

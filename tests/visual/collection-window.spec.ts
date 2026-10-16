@@ -462,3 +462,37 @@ test('the endpoint refuses a sort it cannot satisfy, naming the ones it can', as
 	const ok = await page.request.get('/api/collection/search?sort=price&limit=1');
 	expect(ok.status()).toBe(200);
 });
+
+/* ── The header is two rows at every width (sp-u08a8v) ─────────────────────
+ *
+ * Row 1 = logo + search (fills) + ?; row 2 = view toggle, All cards, the menu
+ * and the "N cards, $X" status right-aligned. Ported from pokedumpster
+ * (sp-xew39v), which took it from deckdumpster. */
+for (const [width, height] of [
+	[390, 844],
+	[1280, 800]
+]) {
+	test(`the header is two rows at ${width}x${height}`, async ({ page }, testInfo) => {
+		await openCollection(page, 'grid');
+		await page.setViewportSize({ width, height });
+		await page.waitForTimeout(250);
+		const mid = async (sel: string) => {
+			const b = (await page.locator(sel).first().boundingBox())!;
+			return b.y + b.height / 2;
+		};
+		const logo = await mid('.topbar a.brand');
+		const search = await mid('[data-testid="search-input"]');
+		const help = await mid('[data-testid="search-help-link"]');
+		expect(Math.abs(logo - search)).toBeLessThanOrEqual(4);
+		expect(Math.abs(help - search)).toBeLessThanOrEqual(4);
+		const toggle = await mid('[data-testid="view-grid"]');
+		const all = await mid('[data-testid="all-cards-toggle"]');
+		const status = await mid('[data-testid="collection-count"]');
+		expect(Math.abs(toggle - status)).toBeLessThanOrEqual(6);
+		expect(Math.abs(all - status)).toBeLessThanOrEqual(6);
+		expect(toggle).toBeGreaterThan(search + 10);
+		await page
+			.locator('.topbar')
+			.screenshot({ path: testInfo.outputPath(`header-${width}x${height}.png`) });
+	});
+}

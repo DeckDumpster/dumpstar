@@ -8,7 +8,8 @@
     "file": "IC27-logo.png"
    },
    "crop": null,
-   "none": null
+   "none": null,
+   "crop_none": "the official catalog API carries only blank placeholder thumbnails (or no cards) for this set; reviewed 2026-10-16"
   },
   {
    "set_code": "HMW",
@@ -16,7 +17,10 @@
     "source_url": "https://cdn.starwarsunlimited.com//small_SWH_09_Homeworlds_Logo_EN_a9a8a0d0df.png",
     "file": "HMW-logo.png"
    },
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_09010001_EN_Asajj_Ventress_Leader_Unit_Thumbnail_81e6bba9a9.png",
+    "file": "HMW-crop.png"
+   },
    "none": null
   },
   {
@@ -25,13 +29,19 @@
     "source_url": "https://cdn.starwarsunlimited.com//small_SWH_09_Homeworlds_Logo_EN_a9a8a0d0df.png",
     "file": "HMWP-logo.png"
    },
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_09_W600001_EN_Eravana_OP_Thumbnail_1f070ba206.png",
+    "file": "HMWP-crop.png"
+   },
    "none": null
   },
   {
    "set_code": "P26",
    "logo": null,
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_P26700062_EN_Chancellor_Palpatine_Participation_Thumbnail_b50d2c8b1e.png",
+    "file": "P26-crop.png"
+   },
    "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
   },
   {
@@ -40,7 +50,10 @@
     "source_url": "https://cdn.starwarsunlimited.com//small_SWH_ASH_Logo_EN_eb103cdbf3.png",
     "file": "ASH-logo.png"
    },
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_08010001_EN_The_Armorer_Leader_Unit_Thumbnail_848b266db7.png",
+    "file": "ASH-crop.png"
+   },
    "none": null
   },
   {
@@ -49,13 +62,19 @@
     "source_url": "https://cdn.starwarsunlimited.com//small_SWH_ASH_Logo_EN_eb103cdbf3.png",
     "file": "ASHWPP-logo.png"
    },
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_08010001_EN_The_Armorer_Leader_Unit_Thumbnail_848b266db7.png",
+    "file": "ASHWPP-crop.png"
+   },
    "none": null
   },
   {
    "set_code": "C26",
    "logo": null,
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_C26080003_EN_Zam_Wessel_Thumbnail_edf42dcf80.png",
+    "file": "C26-crop.png"
+   },
    "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
   },
   {
@@ -64,7 +83,10 @@
     "source_url": "https://cdn.starwarsunlimited.com//small_SWHA_024_Product_Page_Logo_379cc080e8.png",
     "file": "TS26-logo.png"
    },
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_TS_26010001_EN_Count_Dooku_Leader_Unit_Thumbnail_b63bf65c97.png",
+    "file": "TS26-crop.png"
+   },
    "none": null
   },
   {
@@ -73,7 +95,10 @@
     "source_url": "https://cdn.starwarsunlimited.com//small_SWH_07_Logo_EN_126c1cc79e.png",
     "file": "LAW-logo.png"
    },
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_07010001_EN_Saw_Gerrera_Leader_Unit_Thumbnail_6440df4ee6.png",
+    "file": "LAW-crop.png"
+   },
    "none": null
   },
   {
@@ -82,26 +107,36 @@
     "source_url": "https://cdn.starwarsunlimited.com//small_SWH_07_Logo_EN_126c1cc79e.png",
     "file": "LAW-WPP-logo.png"
    },
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_07010001_EN_Saw_Gerrera_Leader_Unit_Thumbnail_6440df4ee6.png",
+    "file": "LAW-WPP-crop.png"
+   },
    "none": null
   },
   {
    "set_code": "SEC",
    "logo": null,
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_06010001_EN_Chancellor_Palpatine_Leader_Unit_Thumbnail_dc5dc2dffd.png",
+    "file": "SEC-crop.png"
+   },
    "none": "the official Secrets of Power product record (admin.starwarsunlimited.com /api/products) carries key art but no logo media; reviewed 2026-10-15"
   },
   {
    "set_code": "SECWPP",
    "logo": null,
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_06010001_EN_Chancellor_Palpatine_Leader_Unit_Thumbnail_dc5dc2dffd.png",
+    "file": "SECWPP-crop.png"
+   },
    "none": "Secrets of Power has no official logo media, so its weekly-play promos have none to borrow; reviewed 2026-10-15"
   },
   {
    "set_code": "GFT",
    "logo": null,
    "crop": null,
-   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
+   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15",
+   "crop_none": "the official catalog API carries only blank placeholder thumbnails (or no cards) for this set; reviewed 2026-10-16"
   },
   {
    "set_code": "IBH",
@@ -109,14 +144,18 @@
     "source_url": "https://cdn.starwarsunlimited.com//small_SWHA_002_Mechanics_Logo_EN_8e2b51a932.png",
     "file": "IBH-logo.png"
    },
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_I01010001_EN_Leia_Organa_Leader_Unit_Thumbnail_24dcc12545.png",
+    "file": "IBH-crop.png"
+   },
    "none": null
   },
   {
    "set_code": "CE2025",
    "logo": null,
    "crop": null,
-   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
+   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15",
+   "crop_none": "the official catalog API carries only blank placeholder thumbnails (or no cards) for this set; reviewed 2026-10-16"
   },
   {
    "set_code": "LOF",
@@ -124,7 +163,10 @@
     "source_url": "https://cdn.starwarsunlimited.com//small_SWH_05_Logo_EN_5ae290dc7d.png",
     "file": "LOF-logo.png"
    },
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_05010001_EN_Kylo_Ren_Leader_Unit_Thumbnail_64b483126d.png",
+    "file": "LOF-crop.png"
+   },
    "none": null
   },
   {
@@ -133,14 +175,18 @@
     "source_url": "https://cdn.starwarsunlimited.com//small_SWH_05_Logo_EN_5ae290dc7d.png",
     "file": "LOFWPP-logo.png"
    },
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_05010001_EN_Kylo_Ren_Leader_Unit_Thumbnail_64b483126d.png",
+    "file": "LOFWPP-crop.png"
+   },
    "none": null
   },
   {
    "set_code": "SN1",
    "logo": null,
    "crop": null,
-   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
+   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15",
+   "crop_none": "the official catalog API carries only blank placeholder thumbnails (or no cards) for this set; reviewed 2026-10-16"
   },
   {
    "set_code": "JTL",
@@ -148,7 +194,10 @@
     "source_url": "https://cdn.starwarsunlimited.com//small_SWH_04en_Logo_8e5408a592.png",
     "file": "JTL-logo.png"
    },
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_04010001_EN_Asajj_Ventress_Leader_Unit_Thumbnail_b8448790fe.png",
+    "file": "JTL-crop.png"
+   },
    "none": null
   },
   {
@@ -157,7 +206,10 @@
     "source_url": "https://cdn.starwarsunlimited.com//small_SWH_04en_Logo_8e5408a592.png",
     "file": "JTL-WPP-logo.png"
    },
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_04010001_EN_Asajj_Ventress_Leader_Unit_Thumbnail_b8448790fe.png",
+    "file": "JTL-WPP-crop.png"
+   },
    "none": null
   },
   {
@@ -166,7 +218,10 @@
     "source_url": "https://cdn.starwarsunlimited.com//small_SWH_03_Twilight_of_the_Republic_Logo_e8e6d88851.png",
     "file": "TWI-logo.png"
    },
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_0301011_EN_Ahsoka_Tano_Leader_Unit_Thumbnail_cfb02a7be0.png",
+    "file": "TWI-crop.png"
+   },
    "none": null
   },
   {
@@ -175,14 +230,18 @@
     "source_url": "https://cdn.starwarsunlimited.com//small_SWH_03_Twilight_of_the_Republic_Logo_e8e6d88851.png",
     "file": "TWI-WPP-logo.png"
    },
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_0301011_EN_Ahsoka_Tano_Leader_Unit_Thumbnail_cfb02a7be0.png",
+    "file": "TWI-WPP-crop.png"
+   },
    "none": null
   },
   {
    "set_code": "CE2024",
    "logo": null,
    "crop": null,
-   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
+   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15",
+   "crop_none": "the official catalog API carries only blank placeholder thumbnails (or no cards) for this set; reviewed 2026-10-16"
   },
   {
    "set_code": "SHD",
@@ -190,7 +249,10 @@
     "source_url": "https://cdn.starwarsunlimited.com//small_shadows_of_the_galaxy_Logo_91948b8327.png",
     "file": "SHD-logo.png"
    },
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_0201007_EN_Moff_Gideon_Leader_Unit_Thumbnail_b444a1ad92.png",
+    "file": "SHD-crop.png"
+   },
    "none": null
   },
   {
@@ -199,26 +261,32 @@
     "source_url": "https://cdn.starwarsunlimited.com//small_shadows_of_the_galaxy_Logo_91948b8327.png",
     "file": "SHD-WPP-logo.png"
    },
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com//xxsmall_0201007_EN_Moff_Gideon_Leader_Unit_Thumbnail_b444a1ad92.png",
+    "file": "SHD-WPP-crop.png"
+   },
    "none": null
   },
   {
    "set_code": "EEP",
    "logo": null,
    "crop": null,
-   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
+   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15",
+   "crop_none": "the official catalog API carries only blank placeholder thumbnails (or no cards) for this set; reviewed 2026-10-16"
   },
   {
    "set_code": "JDG",
    "logo": null,
    "crop": null,
-   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
+   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15",
+   "crop_none": "the official catalog API carries only blank placeholder thumbnails (or no cards) for this set; reviewed 2026-10-16"
   },
   {
    "set_code": "OPP",
    "logo": null,
    "crop": null,
-   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
+   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15",
+   "crop_none": "the official catalog API carries only blank placeholder thumbnails (or no cards) for this set; reviewed 2026-10-16"
   },
   {
    "set_code": "SOR",
@@ -238,14 +306,18 @@
     "source_url": "https://cdn.starwarsunlimited.com/small_Spark_of_Rebellion_Logo_Vert_v2_3419ebc4bd.png",
     "file": "SOR-WPP-logo.png"
    },
-   "crop": null,
+   "crop": {
+    "source_url": "https://cdn.starwarsunlimited.com/xxsmall_SWH_01_005_Luke_Skywalker_Thumbnail_e92b37229f.png",
+    "file": "SOR-WPP-crop.png"
+   },
    "none": null
   },
   {
    "set_code": "PRE",
    "logo": null,
    "crop": null,
-   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15"
+   "none": "the official catalog API's expansion and product records carry no logo media for this promo/event set; reviewed 2026-10-15",
+   "crop_none": "the official catalog API carries only blank placeholder thumbnails (or no cards) for this set; reviewed 2026-10-16"
   }
  ]
 }

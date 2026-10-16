@@ -159,6 +159,8 @@
 										<Panel class="tile" href="/browse/{set.set_code}">
 											{#if set.art_url}
 												<img class="crop" src={set.art_url} alt="" loading="lazy" />
+											{:else}
+												<div class="crop placeholder" aria-hidden="true"></div>
 											{/if}
 											<div class="ident">
 												<span class="symbol">
@@ -434,6 +436,11 @@
 		height: var(--space-16, 72px);
 		object-fit: cover;
 		border-radius: var(--radius-sm);
+	}
+	/* A set with no retrieved crop keeps the banner's footprint, so tiles
+	   stay one height. */
+	.crop.placeholder {
+		background: var(--color-surface-sunken);
 	}
 	.symbol .code {
 		font-size: var(--text-xs);

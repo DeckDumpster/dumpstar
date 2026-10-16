@@ -119,6 +119,10 @@ pub fn run(args: CatalogApplyArgs) -> anyhow::Result<()> {
     if Catalog::open_writer(&shared)?.rejoin_if_stale()? {
         println!("crosswalk: the join changed since this catalog was joined; re-joined");
     }
+    let reapplied = Catalog::open_writer(&shared)?.reapply_landed(&raw)?;
+    if reapplied > 0 {
+        println!("derivation changed: re-applied {reapplied} landed payloads");
+    }
     let http = HttpFetch::new(PAUSE)?;
     let state = |key: &str| -> anyhow::Result<Option<String>> {
         Ok(Catalog::open_writer(&shared)?.sync_state(key)?)

@@ -1284,6 +1284,28 @@ jobs:
 The `ci` instance name and `--purge`-on-exit behavior in `ci.sh` already
 make it safe to run repeatedly on a shared runner.
 
+## Inspecting prod (read-only)
+
+The runtime image carries the `sqlite3` CLI and three read-only `dumpstar`
+subcommands, so "what is the data, and why is this slow" is answered in the
+container instead of on a copy of its files. All of them open the tenant file
+`SQLITE_OPEN_READ_ONLY`, attach `shared.sqlite` the way the server does (same
+read-only attach and TEMP VIEWs) and set `PRAGMA query_only`; a statement that
+writes is refused. `--tenant` is `current` (what `$DUMPSTAR_USER` resolves to),
+a handle, or a database id.
+
+```bash
+podman exec systemd-dumpstar-prod dumpstar db query --tenant current 'SELECT COUNT(*) FROM printings'
+podman exec systemd-dumpstar-prod dumpstar db explain --tenant current 'SELECT … '   # plan + wall time
+podman exec systemd-dumpstar-prod dumpstar search --tenant current 'is:owned' --sort set --timing
+```
+
+`dumpstar search` runs the server's own search path (same registry, compile
+and statements as `/api/collection/search`) and prints rows, the total and
+value, and with `--timing` the registry load, parse+compile, totals and row
+statement times. Options: `--dir`, `--include-unowned`, `--limit` (number or
+`all`), `--offset`.
+
 ## Troubleshooting
 
 ```bash

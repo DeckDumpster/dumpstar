@@ -27,7 +27,7 @@ test('every variant the catalog carries has a badge row', () => {
 
 test('every letter is named and unique per meaning', () => {
 	for (const letters of Object.values(badges.variants))
-		for (const l of letters) assert.ok(badges.letters[l], `letter ${l} is unnamed`);
+		for (const l of letters) assert.ok(/** @type {Record<string,string>} */ (badges.letters)[l], `letter ${l} is unnamed`);
 });
 
 test('badges carry full names', () => {

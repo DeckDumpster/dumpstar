@@ -707,7 +707,7 @@
 						onselect={() => (selectedSlot = slot)}
 						onpip={(pip) => addToSlot(slot, pip.id)}
 					/>
-					<span class="slotbadges">
+					<span class="tilebadges">
 						{#each slotBadgeVariants(slot) as p (p.variant + p.finish)}<VariantBadges variant={p.variant} finish={p.finish} />{/each}
 					</span>
 				</div>
@@ -793,7 +793,7 @@
 {/if}
 
 <style>
-	.slotbadges {
+	.tilebadges {
 		display: block;
 		min-height: 1.2em;
 		text-align: center;

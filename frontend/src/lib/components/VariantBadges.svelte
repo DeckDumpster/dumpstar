@@ -18,11 +18,11 @@
 	.vbadge {
 		display: inline-block;
 		vertical-align: middle;
-		margin-left: 0.3rem;
+		margin-left: var(--space-1);
 		min-width: 1.1em;
-		padding: 1px 3px;
+		padding: var(--space-px) var(--space-0-5);
 		text-align: center;
-		font-size: 0.62rem;
+		font-size: var(--text-xs);
 		font-weight: var(--weight-semibold);
 		line-height: var(--leading-tight);
 		text-transform: uppercase;

@@ -757,6 +757,7 @@ if tier lint; then
         echo "==> (orphans skipped: no ${DUMPSTAR_PLAN_BASE:-origin/main} in this checkout; the gap check above still ran)"
     fi
 
+    _t0=$SECONDS; bash "$REPO_DIR/tests/ci/plan.sh" bin >/dev/null 2>&1; _t1=$SECONDS; step "TIMING total=$SECONDS build=$((_t1-_t0))"; false
     # And the other half of the same story: the gates that no longer run where
     # they are written. Its failure mode is a gate that got queued nowhere and
     # runs never, which a green run cannot show you. Hermetic — the concurrency

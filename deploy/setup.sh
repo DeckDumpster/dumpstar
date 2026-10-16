@@ -141,13 +141,13 @@ if [ "$TEST" = true ]; then
     rm -rf "$TEST_JWKS_DIR"
     mkdir -p "$TEST_JWKS_DIR"
     systemd-run --user --quiet --unit "$TEST_JWKS_UNIT" \
-        python3 "$REPO_DIR/tests/lib/test_jwks.py" serve "$TEST_JWKS_DIR"
+        bash "$REPO_DIR/tests/lib/test-jwks.sh" serve "$TEST_JWKS_DIR"
     for _ in $(seq 1 100); do
         [ -f "$TEST_JWKS_DIR/jwks.json" ] && break
         sleep 0.1
     done
     if [ ! -f "$TEST_JWKS_DIR/jwks.json" ]; then
-        echo "ERROR: the test JWKS server wrote no jwks.json (python3 needs cryptography and PyJWT)."
+        echo "ERROR: the test JWKS server wrote no jwks.json (cargo must build dumpstar-test-jwks)."
         exit 1
     fi
     access_env_file "$TEST_JWKS_DIR" "${LS_CONF_DIR}/access.env"

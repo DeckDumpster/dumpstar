@@ -8,7 +8,7 @@ shared copy, `ATTACH`ed read-only per connection exactly as it always was.
 > serve` refuses to start unless all three Access settings are present; every
 > `/api` request must carry a valid token, and the verified email must be bound
 > to a tenant in the registry. CI and local development run a real test JWKS
-> server (`tests/lib/test_jwks.py`).
+> server (`tests/lib/test-jwks.sh`).
 
 ## Layout
 

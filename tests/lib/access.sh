@@ -6,7 +6,7 @@
 # access.rs) and has no bypass, so a harness that starts it without Access
 # configured is starting something production never runs. These functions give
 # every container-tier harness the same real path tests/tenants/handles.sh uses:
-# tests/lib/test_jwks.py serves a fresh key's JWKS on the host and signs tokens.
+# tests/lib/test-jwks.sh serves a fresh key's JWKS on the host and signs tokens.
 #
 #   access_start <dir>             serve a JWKS from <dir> in the background;
 #                                  sets ACCESS_PID, ACCESS_URL, ACCESS_ISSUER,
@@ -24,7 +24,7 @@ ACCESS_URL=""
 ACCESS_ISSUER=""
 ACCESS_AUD=""
 
-# Read the metadata test_jwks.py wrote, and derive the container-facing URL.
+# Read the metadata test-jwks.sh wrote, and derive the container-facing URL.
 access_load() { # access_load <dir>
 	local meta="$1/jwks.json" port
 	port="$(jq -r '.port' "$meta")"
@@ -36,7 +36,7 @@ access_load() { # access_load <dir>
 access_start() { # access_start <dir>
 	mkdir -p "$1"
 	rm -f "$1/jwks.json"
-	python3 "${ACCESS_LIB_DIR}/test_jwks.py" serve "$1" >/dev/null &
+	bash "${ACCESS_LIB_DIR}/test-jwks.sh" serve "$1" >/dev/null &
 	ACCESS_PID=$!
 	local i
 	for i in $(seq 1 100); do
@@ -44,7 +44,7 @@ access_start() { # access_start <dir>
 		sleep 0.1
 	done
 	if [[ ! -f "$1/jwks.json" ]]; then
-		echo "  ABORT: the test JWKS server wrote no $1/jwks.json (needs python3 with cryptography and PyJWT)."
+		echo "  ABORT: the test JWKS server wrote no $1/jwks.json (needs cargo to build dumpstar-test-jwks)."
 		return 1
 	fi
 	access_load "$1"
@@ -68,7 +68,7 @@ ENVEOF
 }
 
 access_token() { # access_token <dir> <email>
-	python3 "${ACCESS_LIB_DIR}/test_jwks.py" issue "$1" "$2"
+	bash "${ACCESS_LIB_DIR}/test-jwks.sh" issue "$1" "$2"
 }
 
 access_stop() {

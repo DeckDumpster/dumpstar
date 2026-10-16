@@ -19,6 +19,7 @@ const p = (id, set, number, variant, finish, price) => ({
 	finish,
 	rarity: null,
 	image_url: null,
+	back_image_url: null,
 	owned_count: 0,
 	market_price: price,
 	tcgplayer_product_id: null,

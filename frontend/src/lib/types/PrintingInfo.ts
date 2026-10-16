@@ -12,7 +12,11 @@ variant: string,
 /**
  * `Normal` or `Foil`.
  */
-finish: string, rarity: string | null, image_url: string | null, owned_count: number, market_price: number | null, 
+finish: string, rarity: string | null, image_url: string | null, 
+/**
+ * The deployed side of a leader printing; `None` for one-sided cards.
+ */
+back_image_url: string | null, owned_count: number, market_price: number | null, 
 /**
  * TCGplayer product id, used to deep-link a printing to its product page.
  */

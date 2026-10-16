@@ -1136,6 +1136,9 @@
 		min-width: 0;
 		min-height: 20px;
 		overflow: hidden;
+		/* A narrow portrait tile cannot hold number, rarity, name and pips on
+		   one line: the pips take their own row beneath. */
+		flex-wrap: wrap;
 	}
 	.meta .num {
 		color: var(--color-text-subtle);
@@ -1148,7 +1151,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		min-width: 0;
-		flex: 1;
+		flex: 1 1 0;
 	}
 	.meta .own {
 		color: var(--color-success-text);
@@ -1159,7 +1162,9 @@
 	/* When pips share the meta row, anchor them to the right edge so
 	   the name column gets all available slack. */
 	.meta .vchips {
-		flex-shrink: 0;
+		flex: 1 0 100%;
+		justify-content: flex-start;
+		min-width: 0;
 	}
 	.slotwrap.missing .meta .name,
 	.slotwrap.missing .meta .num {
@@ -1177,8 +1182,8 @@
 		flex-wrap: wrap;
 	}
 	.vchip {
-		width: 20px;
-		height: 20px;
+		width: 24px;
+		height: 24px;
 		border-radius: var(--radius-round);
 		border: 2px solid var(--c, var(--color-chart-unknown));
 		background: transparent;

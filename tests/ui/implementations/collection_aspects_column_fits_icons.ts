@@ -7,9 +7,9 @@
 import type { ReplayHarness } from '../replay';
 
 export async function steps(h: ReplayHarness) {
-  await h.wait_for_visible('[data-testid="search-input"]', 6000);
+  await h.wait_for_visible('[data-testid="search-input"]', 20000);
   await h.click_by_test_id('view-table');
-  await h.wait_for_visible('table.dd tbody tr', 6000);
+  await h.wait_for_visible('table.dd tbody tr', 20000);
 
   const m = await h.page.evaluate(() => {
     const ths = Array.from(document.querySelectorAll('table.dd thead th'));

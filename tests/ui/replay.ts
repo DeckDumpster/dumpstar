@@ -27,7 +27,7 @@ const log = {
  * flaky pass into a stable one; a genuinely failing step still fails, it just
  * takes longer to say so.
  */
-const ACTION_TIMEOUT_MS = 5_000;
+const ACTION_TIMEOUT_MS = 15_000;
 
 /** One recorded replay step, with its captured evidence. */
 export interface ReplayStep {
@@ -221,8 +221,13 @@ export class ReplayHarness {
 
   async assert_text_present(text: string): Promise<void> {
     this.record("assert_text_present", text);
-    const count = await this.page.getByText(text).count();
-    if (count === 0) {
+    // Retry: the text arrives after a request, and a loaded runner answers late.
+    const present = await this.page
+      .getByText(text)
+      .first()
+      .waitFor({ state: "attached", timeout: ACTION_TIMEOUT_MS })
+      .then(() => true, () => false);
+    if (!present) {
       await this.fail(`Expected text present: ${text}`);
     }
     await this.snap();

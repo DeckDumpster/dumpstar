@@ -196,3 +196,5 @@ set_value_select_set_and_analyze
 set_value_split_by_rarity
 set_value_summary_stats
 views_save_and_load
+# Added by sp-tp274s in the same batch as the ui tier; no replay implementation yet.
+collection_column_chooser

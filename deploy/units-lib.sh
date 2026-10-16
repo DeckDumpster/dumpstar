@@ -127,6 +127,7 @@ DUMPSTAR_HOST_WIDE_UNIT_FILES=(
     dumpstar-derive@.service           dumpstar-derive@.timer
     dumpstar-catalog-sync@.service     dumpstar-catalog-sync@.timer
     dumpstar-catalog-check@.service    dumpstar-catalog-check@.timer
+    dumpstar-value-snapshots@.service  dumpstar-value-snapshots@.timer
     dumpstar-ship@.service             dumpstar-ship@.timer
     dumpstar-backup-check@.service     dumpstar-backup-check@.timer
     dumpstar-alert@.service
@@ -289,7 +290,7 @@ _dumpstar_units_install_host_wide() {
     # --- The SWU catalog sync and its alarm check (dumpstar 7) --------------
     # Installed for every instance, enabled for none: arming a timer that
     # fetches from two upstreams is an operator's act on an instance.
-    for unit in catalog-sync catalog-check; do
+    for unit in catalog-sync catalog-check value-snapshots; do
         for ext in service timer; do
             _dumpstar_units_render "${systemd_user_dir}/dumpstar-${unit}@.${ext}" nostamp \
                 "$repo_dir/deploy/dumpstar-${unit}.${ext}" \

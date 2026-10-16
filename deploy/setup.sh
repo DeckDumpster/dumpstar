@@ -140,7 +140,11 @@ if [ "$TEST" = true ]; then
     systemctl --user stop "$TEST_JWKS_UNIT" 2>/dev/null || true
     rm -rf "$TEST_JWKS_DIR"
     mkdir -p "$TEST_JWKS_DIR"
+    # Build the issuer here, in the foreground: a cold cargo build inside the
+    # transient unit outlasts the wait below and no jwks.json would appear.
+    TEST_JWKS_BIN="$(bash "$REPO_DIR/tests/lib/test-jwks.sh" build)"
     systemd-run --user --quiet --unit "$TEST_JWKS_UNIT" \
+        --setenv=DUMPSTAR_TEST_JWKS_BIN="$TEST_JWKS_BIN" \
         bash "$REPO_DIR/tests/lib/test-jwks.sh" serve "$TEST_JWKS_DIR"
     for _ in $(seq 1 100); do
         [ -f "$TEST_JWKS_DIR/jwks.json" ] && break

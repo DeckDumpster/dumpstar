@@ -993,6 +993,13 @@ if tier container; then
     # The lake crates have no tier of their own: any path outside docs/ and
     # frontend/ selects every tier, so a change to them runs this.
     dumpstar_par_add shipper bash "$REPO_DIR/tests/lake/shipper.sh"
+    # The lake gates, Rust binaries driven by shell with no Python (sp-kepmpe): the
+    # tenant-zone policy boundary and the erase path on a versioned bucket. The
+    # lake crates have no tier of their own: any path outside docs/ and frontend/
+    # selects every tier, so a change to them runs these. Neither builds an image
+    # itself - dumpstar_image_ensure picks up DUMPSTAR_PREBUILT_IMAGE.
+    dumpstar_par_add tenant-zone bash "$REPO_DIR/tests/lake/tenant_zone.sh"
+    dumpstar_par_add deletion bash "$REPO_DIR/tests/lake/deletion.sh"
 fi
 
 # --- 5. Gates not armed yet --------------------------------------------------

@@ -19,7 +19,6 @@
 #                     on a tree that never existed. Hermetic and sub-second.
 #                     See tests/lib/diagnostics_test.sh, tests/lib/ports_test.sh,
 #                     tests/lib/wait_test.sh, tests/lib/objects_test.sh,
-#                     tests/lib/netrun_test.sh,
 #                     tests/lib/litestream_test.sh,
 #                     tests/lib/images_test.sh,
 #                     tests/container/base_images_test.sh,
@@ -82,59 +81,9 @@
 #                      disk has, prod's included — and assert every database is
 #                      adopted and serves; then assert one from the future is
 #                      refused. See tests/schema-version/run.sh.
-#  12. Lakehouse gate: stand up Nessie on a durable ROCKSDB store plus a
-#                      throwaway MinIO, and drive the shipped PyIceberg job
-#                      through write -> read -> commit -> TIME TRAVEL, then
-#                      restart the catalog and re-read. Time travel is the only
-#                      reason Iceberg + Nessie is here, and a stack that has
-#                      lost it looks perfectly healthy. See tests/lake/run.sh.
-#  13. Table gate:     build catalog.prices from the raw landing zone on a
-#                      podman --internal network — no route to any upstream,
-#                      asserted rather than assumed — and compare it row for
-#                      row against the shared.sqlite built from the SAME
-#                      upstream bytes. See tests/lake/prices.sh. And the same
-#                      claim for the whole CATALOG: shared.sqlite derived from
-#                      raw/ by the shipped image with egress provably blocked,
-#                      row-identical to a catalog built by fetching. See
-#                      tests/lake/derive.sh.
-#  14. Transform gate: value snapshots for EVERY registered tenant, computed
-#                      from that table. Byte-identical to what Rust's
-#                      snapshot_today produces for the same tenant and date —
-#                      and since pd-i08u that is asserted THROUGH the tenant
-#                      zone, because the online holdings read is gone and §4b
-#                      has to ship and read back before the transform has
-#                      anything to value. A second tenant who never had a
-#                      snapshot row gets one (pd-s5yn inverted), and a tenant
-#                      nobody can write to is skipped with the run exiting 2
-#                      rather than 0. §10 then drives the SHIPPED
-#                      deploy/value-snapshots.sh — the file the nightly timer
-#                      executes — over the same lake. See
-#                      tests/lake/value_snapshots.sh.
-#  14b.Tenant-zone gate: the tenant zone shares the lake's bucket and is
-#                      separated from it by a prefix — which is to say by two
-#                      credential policies and a lifecycle rule, and by nothing
-#                      else. Assert the boundary in BOTH directions against a
-#                      MinIO, then BREAK it deliberately and assert the same
-#                      checks go red; assert the 90-day retention is mechanical
-#                      and that no rule can reach raw/, whose retention is
-#                      indefinite by decision. See tests/lake/tenant_zone.sh.
-#  14e.Phase 3 gate:   a collection valued from the TENANT ZONE, which since
-#                      pd-i08u is the only way to value one — §5 also asserts
-#                      that neither --holdings nor --compare is still
-#                      reachable. §6 is the section that matters: a collection
-#                      changed WITHOUT shipping must leave the valuation
-#                      UNMOVED, and §6b requires shipping and reading back to
-#                      move it. A Phase 3 that quietly read the live table
-#                      fails the first half; one that is frozen or cached fails
-#                      the second. See tests/lake/phase3.sh.
-#  14f.Deletion gate:  a tenant erased from the zone, and PROVEN erased —
-#                      against a VERSIONED bucket, so the drop leaves a
-#                      noncurrent version of a really-shipped part behind and
-#                      that surviving copy is fetched back and proven
-#                      unopenable. Every check is run one step EARLIER too and
-#                      required to report the path OPEN: a proof only ever seen
-#                      passing is not known to prove anything. See
-#                      tests/lake/deletion.sh.
+#  12-14f. (deleted 2026-10-16, sp-l74uk0) The Python lake's gates: dumpstar
+#                      has no lakehouse in production and its Python lake never
+#                      ran there; the lake is rebuilt in Rust on dumpster-kit.
 #  15. Refresh gate:   the other half of that — a real `dumpstar data refresh`,
 #                      through the shipped image, over a data directory with
 #                      two provisioned tenants in it, must leave every tenant
@@ -735,22 +684,6 @@ if tier lint; then
     step "Harness object-listing self-test (tests/lib/objects_test.sh)"
     bash "$REPO_DIR/tests/lib/objects_test.sh"
 
-    # Same tier, same class one layer down: what a container gate may conclude
-    # when the container could not RESOLVE the peer it was launched to talk to.
-    # Seventeen gates run two at a time, each churning containers on its own
-    # user-defined network, and rootless podman serves every one of those names
-    # from a single aardvark-dns that is reconfigured on every container
-    # appearing or disappearing. A job that lands in that window gets EAI_AGAIN
-    # — no answer, as distinct from the NXDOMAIN a name that is really gone
-    # gives — and tests/lake/value_snapshots.sh reported it as "the 2026-08-09
-    # build failed" on 2026-09-05 (run 33994136151), three minutes after its own
-    # readiness probe had resolved the same name and 54 minutes after the same
-    # commit went green. The retry is narrow on purpose: these gates ASSERT that
-    # a partial run exits 2, so anything but the resolution signature is the
-    # job's own answer and is returned unretried. See tests/lib/netrun.sh.
-    step "A container that never resolved its peer (tests/lib/netrun_test.sh)"
-    bash "$REPO_DIR/tests/lib/netrun_test.sh"
-
     # And the question those polls ask. `litestream ltx` prints a column header
     # for a replica that holds NOTHING and prints nothing at all when it cannot
     # reach S3, so `ltx … | grep -q .` reads an empty replica as full and an
@@ -845,9 +778,6 @@ if tier lint; then
     step "No committed sqlite under tests/ (tests/ci/fixture_untracked_test.sh)"
     bash "$REPO_DIR/tests/ci/fixture_untracked_test.sh"
 
-    step "Nessie catalog backup: stale/corrupt alarm, restore-drill failures (tests/lake/nessie_backup_test.sh)"
-    bash "$REPO_DIR/tests/lake/nessie_backup_test.sh"
-
     # The force_spill dispatch input: default off, and only true yields ec2-only.
     step "force_spill dispatch input shape (tests/ci/spill_input_test.sh)"
     bash "$REPO_DIR/tests/ci/spill_input_test.sh"
@@ -858,30 +788,6 @@ if tier lint; then
     # commands, and is wired to every abort path (pd-rpgu).
     step "Unit startup evidence captured before exit (tests/ci/unit_diagnostics_test.sh)"
     bash "$REPO_DIR/tests/ci/unit_diagnostics_test.sh"
-
-
-    # The standing decision the whole lake design rests on — no tenant data ever
-    # enters it — existed only as comments in five files, so adding a tenant_id
-    # column to an Iceberg schema or opening a tenant SQLite in a lake job broke
-    # nothing (pd-cgi9). This is the missing mechanical half. It reads the tree
-    # and stands up no MinIO and no Nessie, so it runs HERE rather than in the
-    # two-minute lake tier it is named after — and a docs-only PR runs it too.
-    # See tests/lake/tenant_isolation_test.sh.
-    step "Tenant data stays out of the lake (tests/lake/tenant_isolation_test.sh)"
-    bash "$REPO_DIR/tests/lake/tenant_isolation_test.sh"
-
-    # And the half without which the one above is a guess. The inbound leg
-    # (pd-8lw7) gave that guard four new sections about a zone that did not
-    # exist when it was written, and a section whose corpus is empty passes
-    # forever — three gates went green that way in one day on this repo. This
-    # breaks the property on purpose, one violation at a time, and requires the
-    # SPECIFIC assertion to be the one that reddens; the last block is the
-    # opposite claim, that the tenant zone being legitimately tenant-keyed
-    # fires nothing. Hermetic — it copies the source trees to a temp dir — but
-    # it runs the guard once per case, so it is tens of seconds rather than
-    # sub-second. See tests/lake/tenant_isolation_selftest.sh.
-    step "That guard has been seen RED (tests/lake/tenant_isolation_selftest.sh)"
-    bash "$REPO_DIR/tests/lake/tenant_isolation_selftest.sh"
 
     # ci.yml has no concurrency: block, provisions through ephemeral-ci@v2 with
     # the 60s spill, and tears down under if: always().

@@ -1,4 +1,5 @@
 # Scenario: Home nav link returns to the homepage from another section
+# Use case: UC-homepage-05
 
 # Related: homepage_page_structure, homepage_image_display_setting
 

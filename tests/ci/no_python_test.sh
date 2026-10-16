@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T1
+# covers: tests/**/*.sh
 # Guard (sp-7y6mzt): test fixtures are Rust. No committed Python, no python3
 # in the test harnesses. The allowlist only shrinks.
 set -euo pipefail

@@ -1,4 +1,5 @@
 # Scenario: The Base and Master completion stats render in the header
+# Use case: UC-browse-11
 
 # Related: browse_loads_set_first_page, browse_slot_pips_reflect_ownership
 

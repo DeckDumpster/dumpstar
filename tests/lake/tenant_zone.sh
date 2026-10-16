@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T4
+# covers: tests/lake/tenant_zone.sh deploy/ci.sh
 # Container-tier gate (pd-uz8q): the TENANT ZONE is governed, not just described.
 #
 # Run by deploy/ci.sh. Standalone:

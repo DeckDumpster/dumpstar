@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T1
+# covers: deploy/ci-treewatch.sh
 # tests/ci/treewatch_test.sh — the guard that voids a run whose worktree moved.
 #
 # Hermetic, no container, sub-second. Runs in the LINT tier, so a docs-only

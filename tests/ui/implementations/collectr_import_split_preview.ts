@@ -1,3 +1,4 @@
+// covers: UC-collectr-04
 /**
  * Hand-written implementation for collectr_import_split_preview.
  *

@@ -1,4 +1,5 @@
 # Scenario: Re-expanding a batch does not re-fetch its cards
+# Use case: UC-recent-05
 
 # Related: recent_accordion_open_close, recent_batch_ingest
 

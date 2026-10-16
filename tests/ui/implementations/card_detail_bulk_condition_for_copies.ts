@@ -1,3 +1,4 @@
+// covers: UC-card-04
 /**
  * Hand-written test for dumpstar-0qu: multi-select copies on the card page
  * and bulk-set their condition. Luke Skywalker - Faithful Friend (SOR/005) has eight copies in the

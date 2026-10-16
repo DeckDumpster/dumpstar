@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T0
+# covers: Containerfile deploy/image-lib.sh
 # Ratchet: a container gate removes the image tag it named into existence
 # (pd-5aba).
 #

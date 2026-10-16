@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T1
+# covers: deploy/backup-check.sh deploy/alarm-status.sh
 # judge_correspondence — the tenant backup test, in isolation.
 #
 # Its verdict turns on the SIDECAR, and the case this file exists for is the one

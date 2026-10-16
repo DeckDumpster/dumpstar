@@ -1,3 +1,4 @@
+// covers: UC-collectr-02
 /**
  * Hand-written implementation for collectr_import_commit_both_sides.
  *

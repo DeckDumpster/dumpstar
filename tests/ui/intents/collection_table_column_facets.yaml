@@ -1,4 +1,5 @@
 # Scenario: In the collection table, only Name opens the card; other columns search
+# Use case: UC-collection-37
 #
 # Related:
 #   issues: [dumpstar-ozm]

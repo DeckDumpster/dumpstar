@@ -1,4 +1,5 @@
 # Scenario: Slot pips are filled for printings I already own
+# Use case: UC-browse-24
 
 # Related: browse_slot_renders_image_number_pips, browse_variant_modal_add_increments_count
 

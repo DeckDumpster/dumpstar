@@ -79,9 +79,35 @@ fn differs(cols: &[&str]) -> String {
         .join(" OR ")
 }
 
+/// What this build derives from a source's payload. Raise a source's number
+/// whenever `apply` starts writing something more from it: payloads already
+/// applied under the old number are applied again from landed raw
+/// ([`Catalog::reapply_landed`]).
+const DERIVATIONS: &[(&str, u32)] = &[
+    // 2: sealed_images rows (sp-ld1o9n).
+    (swu::SRC_PRODUCTS, 2),
+];
+
+pub fn derivation_version(source: &str) -> u32 {
+    DERIVATIONS
+        .iter()
+        .find(|(s, _)| *s == source)
+        .map_or(1, |(_, v)| *v)
+}
+
 pub fn apply(catalog: &mut Catalog, bytes: &[u8], prov: &Provenance) -> Result<ApplyReport> {
+    apply_at(catalog, bytes, prov, derivation_version(&prov.source))
+}
+
+/// [`apply`] as a build whose derivation of `prov.source` is `derivation`.
+pub fn apply_at(
+    catalog: &mut Catalog,
+    bytes: &[u8],
+    prov: &Provenance,
+    derivation: u32,
+) -> Result<ApplyReport> {
     let tx = catalog.conn.transaction()?;
-    let key = prov.applied_key();
+    let key = prov.applied_key_at(derivation);
     let seen = tx
         .prepare("SELECT 1 FROM applied_payloads WHERE payload_hash = ?1")?
         .exists([&key])?;
@@ -614,6 +640,66 @@ fn crosswalk_rev() -> String {
 const KEY_CROSSWALK_REV: &str = "crosswalk.rev";
 
 impl Catalog {
+    /// Apply again, from the raw already landed under `raw_root`, the newest
+    /// payload of each url of every source whose derivation version is past
+    /// the first, when it was applied under an older version. Nothing is
+    /// fetched; a payload already applied at the current version is left.
+    pub fn reapply_landed(&mut self, raw_root: &std::path::Path) -> Result<usize> {
+        let mut n = 0;
+        for (source, v) in DERIVATIONS {
+            n += self.reapply_landed_at(raw_root, source, *v)?;
+        }
+        Ok(n)
+    }
+
+    pub fn reapply_landed_at(
+        &mut self,
+        raw_root: &std::path::Path,
+        source: &str,
+        derivation: u32,
+    ) -> Result<usize> {
+        let mut newest: BTreeMap<String, Provenance> = BTreeMap::new();
+        let Ok(days) = std::fs::read_dir(raw_root.join(source)) else {
+            return Ok(0);
+        };
+        for day in days {
+            for f in std::fs::read_dir(day?.path())? {
+                let path = f?.path();
+                if !path.to_string_lossy().ends_with(".meta.json") {
+                    continue;
+                }
+                let prov: Provenance = serde_json::from_slice(&std::fs::read(&path)?)?;
+                let later = newest
+                    .get(&prov.url)
+                    .is_none_or(|o| o.fetched_at < prov.fetched_at);
+                if later {
+                    newest.insert(prov.url.clone(), prov);
+                }
+            }
+        }
+        let mut n = 0;
+        for prov in newest.into_values() {
+            let seen = self
+                .conn
+                .prepare("SELECT 1 FROM applied_payloads WHERE payload_hash = ?1")?
+                .exists([prov.applied_key_at(derivation)])?;
+            if seen {
+                continue;
+            }
+            let day = &prov.fetched_at[..10.min(prov.fetched_at.len())];
+            let path = raw_root
+                .join(source)
+                .join(day)
+                .join(format!("{}.json", prov.sha256));
+            let Ok(bytes) = std::fs::read(&path) else {
+                continue;
+            };
+            apply_at(self, &bytes, &prov, derivation)?;
+            n += 1;
+        }
+        Ok(n)
+    }
+
     /// Join again when the join itself changed since the catalog was last joined.
     /// A join otherwise runs only when a payload applies, so a deploy that
     /// changed it on a day nothing upstream changed left every printing it

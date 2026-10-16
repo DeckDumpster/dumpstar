@@ -667,7 +667,10 @@ mod tests {
         // Every other sort is one flat list: leaders and bases are not hoisted.
         for (sort, want) in [
             ("name", ["5", "7", "9", "8", "6", "4", "3", "10", "2", "1"]),
-            ("name_desc", ["1", "2", "10", "3", "4", "6", "8", "9", "7", "5"]),
+            (
+                "name_desc",
+                ["1", "2", "10", "3", "4", "6", "8", "9", "7", "5"],
+            ),
         ] {
             let page = get_binder_page(
                 &conn,

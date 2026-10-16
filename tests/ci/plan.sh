@@ -43,11 +43,11 @@ test_plan_bin() {
     [ -x /home/ryan/spira/spira-releases/current/bin/test-plan ] && { printf '%s' /home/ryan/spira/spira-releases/current/bin/test-plan; return 0; }
     # None installed: build the pinned copy (tools/test-plan, UPSTREAM names the Spira commit).
     local out="${DUMPSTAR_TOOLS_TARGET:-$ROOT/target/test-plan}"
-    if [ ! -x "$out/release/test-plan" ]; then
-        cargo build --release --locked -q --manifest-path "$ROOT/tools/test-plan/Cargo.toml" --target-dir "$out" >&2 || {
+    if [ ! -x "$out/debug/test-plan" ]; then
+        cargo build --locked -q --manifest-path "$ROOT/tools/test-plan/Cargo.toml" --target-dir "$out" >&2 || {
             echo "plan.sh: cannot build tools/test-plan — refusing to report clean" >&2; return 1; }
     fi
-    printf '%s' "$out/release/test-plan"
+    printf '%s' "$out/debug/test-plan"
 }
 
 # Shell gates that are suites. A library sourced by gates is not one.

@@ -49,13 +49,6 @@ const rule = (src, re) => {
 	return m[0];
 };
 
-test('the tile footer is one nowrap line with 24px pips', () => {
-	const src = pageSrc();
-	assert.match(rule(src, /\n\t\.foot \{[^}]*\}/), /flex-wrap:\s*nowrap/);
-	assert.match(rule(src, /\n\t\.vchips \{[^}]*\}/), /flex-wrap:\s*nowrap/);
-	assert.match(rule(src, /\n\t\.vchip \{[^}]*\}/), /width:\s*24px;\s*height:\s*24px/);
-});
-
 test('one render view: no Binder/Card control, no ?view=, a persisted turn checkbox', () => {
 	const src = pageSrc();
 	assert.doesNotMatch(src, /viewtoggle|parseView|['"]view['"]|class="meta"|\.meta\b/);
@@ -149,12 +142,8 @@ test('ownedFoil is true only for an owned Foil printing', () => {
 	assert.equal(ownedFoil({ printings: [{ owned_count: 0, finish: 'Foil' }, { owned_count: 2, finish: 'Normal' }] }), false);
 });
 
-test('the browse tile outlines by rarity, shimmers on owned foil and layers price on the art', () => {
-	const src = readFileSync(new URL('../src/routes/browse/[set]/+page.svelte', import.meta.url), 'utf8');
-	assert.match(src, /outline: 2px solid var\(--rc\)/);
-	assert.match(src, /\.slot\.foil::after/);
-	const badge = src.match(/\.pricebadge \{[^}]*\}/)?.[0] ?? '';
-	assert.ok(badge);
-	assert.match(badge, /position: absolute/);
-	assert.match(src, /<span class="pricebadge">[\s\S]*?<\/button>/);
+test('the browse tile is the kit CardTile, with no local tile CSS', () => {
+	const src = pageSrc();
+	assert.match(src, /<CardTile[\s\S]*?\/>/);
+	assert.doesNotMatch(src, /\.slot\b|\.vchips?\b|\.slotwrap|\.pricebadge|class="slot|class="vchip/);
 });

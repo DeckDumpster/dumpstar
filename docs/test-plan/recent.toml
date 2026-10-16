@@ -15,7 +15,7 @@ statement = "On the Recent page, when I expand a batch and click a card's name l
 [[use_case]]
 id = "UC-recent-03"
 tier = "T4"
-statement = "On the Recent page, the ManaBox export 2024-01 CSV import batch appears in the timeline with its 4 cards count. Expanding it lazily loads and lists the four sv8 cards that import added to the collection. (recent_batch_ingest)"
+statement = "On the Recent page, the CSV export 2025-06 CSV import batch appears in the timeline with its 4 cards count. Expanding it lazily loads and lists the four cards that import added to the collection. (recent_batch_ingest)"
 
 [[use_case]]
 id = "UC-recent-04"

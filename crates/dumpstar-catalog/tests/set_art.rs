@@ -50,7 +50,7 @@ fn an_entry_is_art_or_says_why_not() {
 /// This list only shrinks: a set that gains a logo leaves it, and a new set
 /// without one needs a reviewed reason and an entry here.
 const NO_LOGO_REVIEWED: &[&str] = &[
-    "P26", "C26", "SEC", "SECWPP", "GFT", "CE2025", "SN1", "CE2024", "EEP", "JDG", "OPP", "PRE",
+    "P26", "C26", "GFT", "CE2025", "SN1", "CE2024", "EEP", "JDG", "OPP", "PRE",
 ];
 
 #[test]

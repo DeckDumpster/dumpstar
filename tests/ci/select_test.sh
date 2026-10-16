@@ -138,7 +138,7 @@ check "lint is in every selection (unrecognised)" "lint" "$(select_for "x/y" | c
 # ---------------------------------------------------------------------------
 log "3. Frontend-only runs frontend + container (pd-tf4h)"
 
-FE="lint frontend container"
+FE="lint frontend ui container"
 check "a route file" "$FE" "$(select_for "frontend/src/routes/browse/+page.svelte")"
 
 # THE pd-tf4h REGRESSION CHECK. Baselines were once not re-recorded because the

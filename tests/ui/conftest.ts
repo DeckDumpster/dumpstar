@@ -39,6 +39,12 @@ const log = {
 export const INSTANCE_NAME = process.env.UI_TEST_INSTANCE ?? "integration-test";
 export const EXPLICIT_BASE_URL = process.env.UI_TEST_BASE_URL ?? null;
 
+//   UI_TEST_DUMPSTAR_BIN — a `dumpstar` binary on this host, for snapshot/restore
+//                          against a server started from the tree (tests/ui/run.sh,
+//                          the ui tier). $DUMPSTAR_HOME must name the server's data
+//                          dir. Unset: snapshot/restore go through podman exec.
+export const LOCAL_DUMPSTAR_BIN = process.env.UI_TEST_DUMPSTAR_BIN ?? null;
+
 //   UI_TEST_ACCESS_TOKEN — a ready Cloudflare Access JWT to present, or
 //   UI_TEST_JWKS_DIR     — the test JWKS directory to sign one from (default:
 //                          the one `deploy/setup.sh <instance> --test` writes)
@@ -176,6 +182,10 @@ async function urlResponds(baseUrl: string): Promise<boolean> {
 export async function snapshotDb(
   containerName: string | null,
 ): Promise<string | null> {
+  if (LOCAL_DUMPSTAR_BIN !== null) {
+    await execFileAsync(LOCAL_DUMPSTAR_BIN, ["db", "snapshot"]);
+    return LOCAL_DUMPSTAR_BIN;
+  }
   if (containerName === null) {
     return null;
   }
@@ -196,6 +206,10 @@ export async function snapshotDb(
  * No-op when running against a local server (containerName is null).
  */
 export async function restoreDb(containerName: string | null): Promise<void> {
+  if (LOCAL_DUMPSTAR_BIN !== null) {
+    await execFileAsync(LOCAL_DUMPSTAR_BIN, ["db", "restore"]);
+    return;
+  }
   if (containerName === null) {
     return;
   }
@@ -213,7 +227,7 @@ export async function restoreDb(containerName: string | null): Promise<void> {
 export async function cleanupSnapshot(
   containerName: string | null,
 ): Promise<void> {
-  if (containerName === null) {
+  if (LOCAL_DUMPSTAR_BIN !== null || containerName === null) {
     return;
   }
   try {

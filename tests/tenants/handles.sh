@@ -9,7 +9,7 @@
 # ── WHY THIS EXISTS ─────────────────────────────────────────────────────────
 # The auth layer (db-ae5u) changed multi-tenant resolution from a plain
 # x-dumpstar-tenant header to Cloudflare Access JWT verification. This gate
-# runs the shipped image against a TEST JWKS server (tests/lib/test_jwks.py)
+# runs the shipped image against a TEST JWKS server (tests/lib/test-jwks.sh)
 # that issues real RS256 tokens, so it exercises the actual JWT verification
 # path rather than a stub. The isolation claim rests on:
 #
@@ -181,12 +181,12 @@ check "bob's row survives, detached" "detached" \
 BEFORE_FILES="$(tenant_files)"
 
 log "3. JWKS server started; alice's email bound in the registry"
-# tests/lib/test_jwks.py generates a fresh RSA-2048 key pair, writes its JWKS
+# tests/lib/test-jwks.sh generates a fresh RSA-2048 key pair, writes its JWKS
 # to JWKS_DIR/jwks.json, and serves it at /cdn-cgi/access/certs on a random
 # port. It binds to 0.0.0.0 so the app container can reach it via
 # host.containers.internal (set by Podman in the container's /etc/hosts).
 mkdir -p "$JWKS_DIR"
-python3 "${REPO_DIR}/tests/lib/test_jwks.py" serve "$JWKS_DIR" &
+bash "${REPO_DIR}/tests/lib/test-jwks.sh" serve "$JWKS_DIR" &
 JWKS_PID=$!
 for i in $(seq 1 40); do
 	[[ -f "$JWKS_DIR/jwks.json" ]] && break
@@ -210,8 +210,8 @@ check "alice's email is bound" "1" \
 
 # Issue test tokens. ALICE_TOKEN is signed by the test JWKS key and carries
 # alice@example.com; UNBOUND_TOKEN carries an email nobody is registered under.
-ALICE_TOKEN=$(python3 "${REPO_DIR}/tests/lib/test_jwks.py" issue "$JWKS_DIR" alice@example.com)
-UNBOUND_TOKEN=$(python3 "${REPO_DIR}/tests/lib/test_jwks.py" issue "$JWKS_DIR" unbound@example.com)
+ALICE_TOKEN=$(bash "${REPO_DIR}/tests/lib/test-jwks.sh" issue "$JWKS_DIR" alice@example.com)
+UNBOUND_TOKEN=$(bash "${REPO_DIR}/tests/lib/test-jwks.sh" issue "$JWKS_DIR" unbound@example.com)
 
 log "4. WITHOUT Access vars the server refuses to start"
 # access::AccessConfig::from_env requires DUMPSTAR_ACCESS_TEAM_DOMAIN,

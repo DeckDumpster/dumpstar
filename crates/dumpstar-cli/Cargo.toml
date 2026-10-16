@@ -9,6 +9,16 @@ authors.workspace = true
 name = "dumpstar"
 path = "src/main.rs"
 
+# The test Cloudflare Access issuer replaces the old Python issuer. Off by
+# default: the shipped image carries `dumpstar` alone.
+[[bin]]
+name = "dumpstar-test-jwks"
+path = "src/bin_test_jwks.rs"
+required-features = ["test-jwks"]
+
+[features]
+test-jwks = ["dep:dumpster-kit-tenancy", "dep:serde_json"]
+
 [dependencies]
 dumpstar-catalog.workspace = true
 dumpstar-core.workspace = true
@@ -23,8 +33,11 @@ clap.workspace = true
 anyhow.workspace = true
 chrono.workspace = true
 tokio.workspace = true
+serde_json = { workspace = true, optional = true }
+dumpster-kit-tenancy = { workspace = true, features = ["testing"], optional = true }
 
 [dev-dependencies]
+dumpster-kit-tenancy.workspace = true
 # The raw-coverage gate in `data.rs` drives a whole acquisition phase, which
 # builds its own upstream clients — so it needs the in-process fake upstream
 # to point them at. Test tier only; the feature is off in the binary.
@@ -32,3 +45,7 @@ dumpstar-ingest = { workspace = true, features = ["test-support"] }
 tempfile.workspace = true
 flate2.workspace = true
 tar.workspace = true
+
+[[test]]
+name = "test_jwks"
+required-features = ["test-jwks"]

@@ -271,8 +271,8 @@ export async function accessToken(): Promise<string | null> {
   } catch {
     return null;
   }
-  const { stdout } = await execFileAsync("python3", [
-    path.join(REPO_ROOT, "tests", "lib", "test_jwks.py"),
+  const { stdout } = await execFileAsync("bash", [
+    path.join(REPO_ROOT, "tests", "lib", "test-jwks.sh"),
     "issue",
     dir,
     "ui-test@example.com",

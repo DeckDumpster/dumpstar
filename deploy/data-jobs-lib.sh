@@ -46,9 +46,20 @@ dumpstar_record_deployed_sha() {
 
 # dumpstar_data_jobs_run <instance>: catalog-apply, then prices. Each is its
 # systemd unit, so the run is journaled exactly as the timer's would be.
+# dumpstar_lake_installed lives in lake-lib.sh; deploy.sh sources it, data-jobs.sh may not.
+if ! declare -F dumpstar_lake_installed >/dev/null; then
+    # shellcheck source=deploy/lake-lib.sh
+    . "$(dirname "${BASH_SOURCE[0]}")/lake-lib.sh"
+fi
 dumpstar_data_jobs_run() {
     local instance="$1" unit
     for unit in "dumpstar-catalog-sync@${instance}.service" "dumpstar-prices@${instance}.service"; do
+        # The prices unit is a lake job; an instance with no lakehouse has nothing
+        # for it to run (deploy.sh skips the lake image for the same reason).
+        if [ "$unit" = "dumpstar-prices@${instance}.service" ] && ! dumpstar_lake_installed "$instance"; then
+            echo "==> data job ${unit}: no lakehouse installed for '${instance}'; skipped"
+            continue
+        fi
         if ! systemctl --user cat "$unit" >/dev/null 2>&1; then
             echo "==> data job ${unit}: not installed on this instance; skipped"
             continue

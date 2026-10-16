@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T1
+# covers: deploy/ci-select.sh deploy/ci.sh .spira/testenv.toml
 # CI tier selection gate (pd-s2mj, item 3 of pd-6onp).
 #
 # Selection makes CI cheaper by not running tiers a change cannot affect, so

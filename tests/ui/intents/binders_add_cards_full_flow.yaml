@@ -1,4 +1,5 @@
 # Scenario: Add cards to a binder via the collection picker
+# Use case: UC-binders-01
 
 # Related: binders_create_and_manage, binders_remove_cards
 

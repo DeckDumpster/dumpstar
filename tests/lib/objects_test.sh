@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T1
+# covers: tests/lib/objects.sh
 # Unit test for tests/lib/objects.sh (pd-cxq4).
 #
 # Two halves, and the second is what keeps the fix from decaying.

@@ -810,6 +810,28 @@ fi
 # read and write the shared sccache store, so unchanged crates are fetched.
 # shellcheck source=deploy/rust-cache.sh
 . "$SCRIPT_DIR/rust-cache.sh"
+# --- 1c. Use-case coverage tier -------------------------------------------------
+# The catalogue is the UI intents (tests/ui/intents); every suite declares
+# `# tier:` / `# covers:` and a replay implementation names its intent's
+# `UC-<area>-NN`. A use case nothing covers, or whose last cover a change deleted,
+# fails here by name. Spira's test-plan mechanism, not a second one; the binary is
+# Spira's if installed, else the pinned copy in tools/test-plan, which this tier
+# builds (its own tier because that build does not belong in the seconds-long lint
+# tier). The orphan check needs the base ref; a checkout without it keeps the gap
+# check, which fails on the same deletion for every T0-T3 use case.
+if tier plan; then
+    step "Use-case coverage seen to fail (tests/ci/plan_test.sh)"
+    bash "$REPO_DIR/tests/ci/plan_test.sh"
+    step "Use-case coverage: headers, catalogue, gaps (tests/ci/plan.sh lint)"
+    bash "$REPO_DIR/tests/ci/plan.sh" lint
+    if git -C "$REPO_DIR" rev-parse --verify -q "${DUMPSTAR_PLAN_BASE:-origin/main}^{commit}" >/dev/null; then
+        step "Use-case coverage: no orphaned use case (tests/ci/plan.sh orphans)"
+        bash "$REPO_DIR/tests/ci/plan.sh" orphans "${DUMPSTAR_PLAN_BASE:-origin/main}"
+    else
+        echo "==> (orphans skipped: no ${DUMPSTAR_PLAN_BASE:-origin/main} in this checkout; the gap check above still ran)"
+    fi
+fi
+
 if tier -q rust || tier -q isolation || tier -q container; then
     dumpstar_rust_cache_enable
 fi

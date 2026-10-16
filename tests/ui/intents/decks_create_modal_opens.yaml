@@ -1,4 +1,5 @@
 # Scenario: Add-cards picker modal opens with its expected controls
+# Use case: UC-decks-04
 #
 # Prerequisites:
 #   A deck exists; the deck detail page loads with a "+ Add cards" button

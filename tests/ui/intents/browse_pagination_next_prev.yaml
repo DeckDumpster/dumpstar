@@ -1,4 +1,5 @@
 # Scenario: Paging through a set with the Prev and Next buttons
+# Use case: UC-browse-16
 
 # Related: browse_loads_set_first_page, browse_url_state_persists
 

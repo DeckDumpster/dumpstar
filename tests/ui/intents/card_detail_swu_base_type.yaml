@@ -1,4 +1,5 @@
 # Scenario: The card page of a Star Wars: Unlimited base shows its type, Base, and HP, and no power, cost or arena
+# Use case: UC-card-22
 #
 # Related:
 #   issues: [sp-iszds1]

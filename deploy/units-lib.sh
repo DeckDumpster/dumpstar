@@ -221,6 +221,36 @@ _dumpstar_units_render() {
     fi
 }
 
+# Host-wide units this checkout no longer ships. The Python lake went with
+# sp-l74uk0 and took deploy/prices.sh with it, but a box that installed the
+# units before then kept dumpstar-prices@.service: its nightly run exec'd a
+# script that no longer exists and failed every night, and its OnFailure alert
+# failed with it (sp-104cjp). An install entitled to the host-wide units
+# retires them, so the unit directory is a copy of what the checkout ships.
+DUMPSTAR_RETIRED_HOST_UNIT_FILES=(
+    dumpstar-prices@.service           dumpstar-prices@.timer
+)
+
+# _dumpstar_units_retire_stale <systemd_user_dir>: stop, remove and clear the
+# failed state of every retired unit that is still installed, naming each in
+# DUMPSTAR_UNITS_CHANGED. systemctl is touched only for the real directory.
+_dumpstar_units_retire_stale() {
+    local dir="$1" u inst
+    for u in "${DUMPSTAR_RETIRED_HOST_UNIT_FILES[@]}"; do
+        [ -e "${dir}/${u}" ] || [ -L "${dir}/${u}" ] || continue
+        if dumpstar_units_real_dir && command -v systemctl >/dev/null 2>&1; then
+            for inst in $(systemctl --user list-units --all --plain --no-legend \
+                "${u%%@*}@*.${u##*.}" 2>/dev/null | awk '{print $1}'); do
+                systemctl --user disable --now "$inst" >/dev/null 2>&1 || true
+                systemctl --user reset-failed "$inst" "dumpstar-alert@${inst}.service" >/dev/null 2>&1 || true
+            done
+        fi
+        rm -f "${dir}/${u}"
+        rm -f "${dir}"/*.wants/"${u%%@*}@"*."${u##*.}" 2>/dev/null || true
+        DUMPSTAR_UNITS_CHANGED+=("${u} (removed)")
+    done
+}
+
 # _dumpstar_units_install_host_wide <repo_dir> <systemd_user_dir>
 #
 # The units there is ONE OF per box. See "HOST-WIDE UNITS" above for who may
@@ -228,6 +258,8 @@ _dumpstar_units_render() {
 _dumpstar_units_install_host_wide() {
     local repo_dir="$1" systemd_user_dir="$2"
     local ext
+
+    _dumpstar_units_retire_stale "$systemd_user_dir"
 
     # --- The nightly landing run (pd-1uem item 5, pd-lunn) ------------------
     # A %i TEMPLATE, which is one file backing every instance — see the header

@@ -40,23 +40,18 @@
 	}
 	.n {
 		position: relative;
-		color: #fff;
-		font-size: 0.85em;
-		text-shadow: 0 1px 1px rgb(0 0 0 / 0.6);
+		color: var(--color-on-danger);
 	}
 	.power .plate {
-		fill: #f1c27a;
+		fill: var(--color-danger-surface);
 	}
 	.power .rim {
-		fill: #b3261e;
+		fill: var(--color-danger);
 	}
 	.hp .plate {
-		fill: #bcd3ea;
+		fill: var(--color-info-surface);
 	}
 	.hp .rim {
-		fill: #1f5fa8;
-	}
-	.n {
-		margin-top: -0.05em;
+		fill: var(--color-info);
 	}
 </style>

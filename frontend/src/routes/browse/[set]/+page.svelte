@@ -55,6 +55,8 @@
 	// Leaders and bases are turned into a portrait pocket (as in a physical
 	// binder) unless the user unticks the box. A stale ?view= is never read.
 	let turnLandscape = $state(urlBool('turn', true));
+	// Unturned leaders and bases are landscape tiles, each as wide as two portrait columns.
+	const landscapeCols = $derived(turnLandscape ? cols : Math.max(1, Math.ceil(cols / 2)));
 	const layout = $derived(cols * BROWSE_ROWS);
 	let includeHyperspace = $state(urlBool('hyperspace', true));
 	let includeShowcase = $state(urlBool('showcase', true));
@@ -682,7 +684,7 @@
 			{/if}
 		{:else}
 			{#snippet cell(slot: BinderSlot)}
-				<div data-landscape={slot.landscape}>
+				<div data-landscape={slot.landscape} class:flat={slot.landscape && !turnLandscape}>
 					<CardTile
 						name={slot.name}
 						image={slot.image_url}
@@ -731,7 +733,7 @@
 							class="grid landscapegrid"
 							data-testid="landscape-band"
 							data-band={run.kind}
-							style:grid-template-columns="repeat({cols}, minmax(0, 1fr))"
+							style:grid-template-columns="repeat({landscapeCols}, minmax(0, 1fr))"
 						>
 							{#each run.slots as slot (slot.number)}
 								{@render cell(slot)}
@@ -745,7 +747,7 @@
 					<div
 						class="grid landscapegrid"
 						data-testid="landscape-grid"
-						style:grid-template-columns="repeat({cols}, minmax(0, 1fr))"
+						style:grid-template-columns="repeat({landscapeCols}, minmax(0, 1fr))"
 					>
 						{#each groups.landscape as slot (slot.number)}
 							{@render cell(slot)}
@@ -1017,6 +1019,10 @@
 	}
 	.landscapegrid {
 		margin-bottom: var(--space-4);
+	}
+	/* An unturned leader or base keeps its own 7:5 shape; the image fills the box, uncropped. */
+	.flat :global(.art) {
+		aspect-ratio: 7 / 5;
 	}
 	.binderpage :global(.sectionbreak-top) {
 		margin-bottom: var(--space-2);

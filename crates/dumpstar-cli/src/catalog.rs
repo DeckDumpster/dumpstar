@@ -181,22 +181,12 @@ pub fn run(args: CatalogApplyArgs) -> anyhow::Result<()> {
             )?)
         }) {
         Ok(r) => {
-            println!(
-                "sealed images: stored {}, failed {}",
-                r.stored,
-                r.failed.len()
-            );
+            println!("{}", r.coverage_line());
             for f in &r.failed {
                 eprintln!("sealed image: {f}");
             }
-            if !r.failed.is_empty() {
-                failed.push("sealed images");
-            }
         }
-        Err(e) => {
-            eprintln!("sealed images: {e:#}");
-            failed.push("sealed images");
-        }
+        Err(e) => eprintln!("sealed images: {e:#}"),
     }
     anyhow::ensure!(failed.is_empty(), "failed: {}", failed.join(", "));
     Ok(())

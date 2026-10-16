@@ -239,10 +239,31 @@ pub fn unmatched(conn: &Connection) -> Result<Vec<String>> {
     Ok(rows)
 }
 
+/// The share of sealed pictures still unstored above which `catalog-check`
+/// alarms; the apply job only reports them (sp-lgdp0x).
+pub const MAX_MISSING_SEALED_IMAGES: f64 = 0.25;
+
+pub fn missing_sealed_images(conn: &Connection) -> Result<Vec<AlarmRecord>> {
+    let (total, missing): (i64, i64) = conn.query_row(
+        "SELECT COUNT(*), COALESCE(SUM(retrieved_on IS NULL), 0) FROM sealed_images",
+        [],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    if total > 0 && missing as f64 / total as f64 > MAX_MISSING_SEALED_IMAGES {
+        return Ok(vec![AlarmRecord::alarm(
+            "sealed_images_missing",
+            "sealed_images".to_string(),
+            format!("{missing} of {total} sealed product pictures not stored"),
+        )]);
+    }
+    Ok(vec![])
+}
+
 pub fn run(conn: &Connection, now: DateTime<Utc>) -> Result<Vec<AlarmRecord>> {
     let mut out = stored(conn)?;
     out.extend(missing_price_days(conn, now)?);
     out.extend(coverage_drops(conn)?);
+    out.extend(missing_sealed_images(conn)?);
     let latest: Option<String> = conn.query_row(
         "SELECT MAX(observed_on) FROM prices WHERE source = 'tcgcsv'",
         [],

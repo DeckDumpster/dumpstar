@@ -24,8 +24,8 @@ const attrs = (tag) => Object.fromEntries([...tag.matchAll(/([\w-]+)="([^"]*)"/g
 
 /** @param {string} [svelte] @returns {Shapes} */
 export function shapes(svelte = readFileSync(SOURCE, 'utf8')) {
-	const svg = svelte.match(/<svg[\s\S]*?<\/svg>/)[0];
-	const viewBox = attrs(svg.match(/<svg[^>]*>/)[0]).viewBox.split(/\s+/).map(Number);
+	const svg = /** @type {RegExpMatchArray} */ (svelte.match(/<svg[\s\S]*?<\/svg>/))[0];
+	const viewBox = attrs(/** @type {RegExpMatchArray} */ (svg.match(/<svg[^>]*>/))[0]).viewBox.split(/\s+/).map(Number);
 	const els = [...svg.matchAll(/<(path|circle|line)\b[^>]*\/>/g)].map((m) => ({ tag: m[1], ...attrs(m[0]), src: m[0] }));
 	return { viewBox, els };
 }

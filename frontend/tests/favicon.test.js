@@ -83,3 +83,36 @@ test('the favicon is well-formed XML', () => {
 		'unbalanced angle brackets'
 	);
 });
+
+// The favicon is derived from the header's mark (src/lib/components/DeathStar.svelte)
+// by scripts/sync-favicon.js, so the two cannot drift.
+import { build, shapes } from '../scripts/sync-favicon.js';
+
+test('the favicon set is exactly what the header art generates', () => {
+	for (const [name, data] of Object.entries(build())) {
+		const onDisk = readFileSync(join(frontendRoot, 'static', name));
+		assert.ok(
+			onDisk.equals(Buffer.from(data)),
+			`static/${name} is stale against DeathStar.svelte; run node scripts/sync-favicon.js`
+		);
+	}
+});
+
+test('the favicon carries the header mark path data verbatim', () => {
+	for (const e of shapes().els) {
+		const attrsOf = e.src.replace(/\sfill="none"/, '');
+		assert.ok(favicon.includes(attrsOf), `favicon.svg lacks the header's ${attrsOf}`);
+	}
+});
+
+test('every page links the svg, 32px png and apple-touch icons', () => {
+	// One SPA shell: every served HTML page renders through this layout's <svelte:head>.
+	const layout = readFileSync(join(frontendRoot, 'src/routes/+layout.svelte'), 'utf8');
+	for (const href of ['/favicon.svg', '/favicon-32.png', '/apple-touch-icon.png']) {
+		assert.ok(layout.includes(`href="${href}"`), `+layout.svelte does not link ${href}`);
+	}
+	assert.match(layout, /rel="apple-touch-icon"[^>]*sizes="180x180"/);
+	const png = (n) => readFileSync(join(frontendRoot, 'static', n));
+	assert.equal(png('apple-touch-icon.png').readUInt32BE(16), 180);
+	assert.equal(png('favicon-32.png').readUInt32BE(16), 32);
+});

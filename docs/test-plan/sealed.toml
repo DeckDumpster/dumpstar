@@ -65,4 +65,4 @@ statement = "When I change the Status select on the Shadows of the Galaxy Booste
 [[use_case]]
 id = "UC-sealed-13"
 tier = "T4"
-statement = "I can open the add-sealed modal and type 151 into the search input to see the 151 sealed products. Typing a more specific term like Booster Bundle narrows the results to a single product, and clearing the input back b... (sealed_search_and_filter)"
+statement = "I can open the add-sealed modal and type Spark into the search input to see the Spark of Rebellion sealed products. Typing a more specific term like Prerelease Kit narrows the results to a single product, and clearing... (sealed_search_and_filter)"

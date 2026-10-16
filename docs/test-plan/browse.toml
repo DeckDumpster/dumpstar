@@ -5,7 +5,7 @@ area = "browse"
 [[use_case]]
 id = "UC-browse-01"
 tier = "T3"
-statement = "I page through a set's binder with the pager until I'm on a deeper page (page 3), open a card's variant modal, and follow its Full card details link to the card page. When I press the browser Back button I land back o... (browse_back_preserves_page_param)"
+statement = "I page through a set's binder with the pager until I'm on a deeper page (page 2), open a card's variant modal, and follow its Full card details link to the card page. When I press the browser Back button I land back o... (browse_back_preserves_page_param)"
 
 [[use_case]]
 id = "UC-browse-02"
@@ -13,49 +13,14 @@ tier = "T3"
 statement = "On a set's browse page the card grid stays within the viewport width at every cards-per-row setting (minimum, default and maximum), at desktop and phone widths, including on first load of a set with leaders. Cards in ... (browse_grid_fits_viewport)"
 
 [[use_case]]
-id = "UC-browse-03"
-tier = "T4"
-statement = "On a binder browse page the Promos checkbox is unchecked by default, so promo cards are excluded from the binder and no Promos section is shown. I check Promos; the page resets to Page 1 of N and, for a set with promo... (browse_include_promos_toggle)"
-
-[[use_case]]
-id = "UC-browse-04"
-tier = "T4"
-statement = "On the 151 binder browse page the Secret checkbox is checked by default, so the trailing Secret Rares section is visible and the Mew ex hyper-rare slot (#201) appears after the numbered cards. I uncheck Secret; the pa... (browse_include_secret_rares_toggle)"
-
-[[use_case]]
-id = "UC-browse-05"
-tier = "T4"
-statement = "On a binder browse page the Subset checkbox is checked by default. When a set has subset cards (e.g. Galaxy/Trainer Gallery printings marked as a subset), they render in a trailing Subset section under a Subset divide... (browse_include_subset_toggle)"
-
-[[use_case]]
-id = "UC-browse-06"
-tier = "T4"
-statement = "On the 151 binder browse page there is an Incomplete only filter pill. By default it is off and every slot on the page is shown. When I activate Incomplete only, slots whose pip row is completely filled — every varian... (browse_incomplete_only_filter)"
-
-[[use_case]]
-id = "UC-browse-07"
-tier = "T3"
-statement = "Starting from Browse sets I expand the Pokémon JP — Original Era series and open its one set, Mystery of the Fossils. The binder page loads at /browse/jp-23723 with the set name in the breadcrumb, a single page of six... (browse_japanese_set_add_first_copy)"
-
-[[use_case]]
-id = "UC-browse-08"
-tier = "T3"
-statement = "On the Browse sets page the Japanese era Pokémon JP — Original Era is listed as its own series and starts collapsed, because I own nothing in it. Expanding it reveals one tile, Mystery of the Fossils. The tile has no ... (browse_japanese_set_tile_not_provisional)"
-
-[[use_case]]
-id = "UC-browse-09"
-tier = "T4"
-statement = "On the 151 binder browse page the Layout selector defaults to 9-pocket and the slot grid shows three columns. I change the selector to 4-pocket. The grid re-renders with two columns, the pagination resets to Page 1 of... (browse_layout_toggle_9_to_4)"
-
-[[use_case]]
 id = "UC-browse-10"
 tier = "T4"
-statement = "From the Browse sets page I click the tile for the 151 set. The binder browse page loads at /browse/sv3pt5: I see the set name 151 as the page heading, a Set stats → link, the two completion progress bars (a Base bar ... (browse_loads_set_first_page)"
+statement = "From the Browse sets page I click the tile for the Spark of Rebellion set. The binder browse page loads at /browse/SOR: I see the set name Spark of Rebellion as the page heading, a Set stats → link, the two completion... (browse_loads_set_first_page)"
 
 [[use_case]]
 id = "UC-browse-11"
 tier = "T4"
-statement = "On the 151 binder browse page the header shows two completion stats side by side. The first reads Base {owned}/{total} with a progress bar — the count of card numbers I own at least one variant of, over the total numb... (browse_master_set_completion_stats_visible)"
+statement = "On the Spark of Rebellion binder browse page the header shows two completion stats side by side. The first reads Base {owned}/{total} with a progress bar — the count of card numbers I own at least one variant of, over... (browse_master_set_completion_stats_visible)"
 
 [[use_case]]
 id = "UC-browse-12"
@@ -63,14 +28,9 @@ tier = "T4"
 statement = "On a narrow phone-width viewport I open the variant modal from a binder slot. Instead of a centered dialog, it presents as a bottom sheet — pinned to the bottom edge of the screen, spanning the full width, with rounde... (browse_mobile_bottom_sheet)"
 
 [[use_case]]
-id = "UC-browse-13"
-tier = "T4"
-statement = "On the 151 binder browse page with the default 9-pocket layout, a wide desktop viewport shows the slot grid in three columns. When I narrow the viewport below 768px the grid drops to two columns, and below 480px it dr... (browse_mobile_breakpoints)"
-
-[[use_case]]
 id = "UC-browse-14"
 tier = "T4"
-statement = "On the 151 binder browse page I open the variant modal for Charmander #4 and click + Add on the Normal printing. The count optimistically jumps to 1 owned and a toast appears bottom-center reading Added Charmander · N... (browse_optimistic_ui_undo_toast)"
+statement = "On the Spark of Rebellion binder browse page I open the variant modal for Millennium Falcon - Piece of Junk #193 and click + Add on the Normal printing. The count optimistically jumps from 7 owned to 8 owned and a toa... (browse_optimistic_ui_undo_toast)"
 
 [[use_case]]
 id = "UC-browse-15"
@@ -80,84 +40,49 @@ statement = "When I advance from one page to the next in the binder/set browse v
 [[use_case]]
 id = "UC-browse-16"
 tier = "T4"
-statement = "On the 151 binder browse page the indicator reads Page 1 of N and the ← Prev button is disabled. I click Next →; the indicator advances to Page 2 of N, a new set of card slots loads, and ← Prev becomes enabled. I clic... (browse_pagination_next_prev)"
-
-[[use_case]]
-id = "UC-browse-17"
-tier = "T4"
-statement = "On the 151 binder browse page, with the Secret checkbox on, the numbered cards (#1 through #165) come first in set-number order. After the last numbered card a full-width Secret Rares divider appears, followed by the ... (browse_secret_rares_appended_after_numbered)"
+statement = "On the Spark of Rebellion binder browse page at one card per row the indicator reads Page 1 of 2 and the ← Prev button is disabled. I click Next →; the indicator advances to Page 2 of 2, a new set of card slots loads,... (browse_pagination_next_prev)"
 
 [[use_case]]
 id = "UC-browse-18"
 tier = "T4"
-statement = "When I open the 151 binder browse page and merely look around — paging, toggling sections — no batch is created. The moment I make my first add (clicking + Add in the variant modal), a single ingestion batch is create... (browse_session_creates_batch)"
+statement = "When I open the Spark of Rebellion binder browse page and merely look around — paging, switching views — no batch is created. The moment I make my first add (clicking + Add in the variant modal), a single ingestion ba... (browse_session_creates_batch)"
 
 [[use_case]]
 id = "UC-browse-19"
 tier = "T4"
-statement = "On the 151 set stats page every progress meter announces itself as a progress bar. The Completion card has three — Base set, Numbered set and Master set — and the Rarity split table has one per rarity row, named for i... (browse_set_stats_progress_bars_are_accessible)"
-
-[[use_case]]
-id = "UC-browse-20"
-tier = "T4"
-statement = "On the 151 set stats page the Rarity split table lists tiers from commonest to rarest — Common, Uncommon, Rare, Double Rare, Illustration Rare, Special Illustration Rare, Hyper Rare — not alphabetically and not in wha... (browse_set_stats_rarity_split_order)"
+statement = "On the Spark of Rebellion set stats page every progress meter announces itself as a progress bar. The Completion card has three — Base set, Numbered set and Master set — and the Rarity split table has one per rarity r... (browse_set_stats_progress_bars_are_accessible)"
 
 [[use_case]]
 id = "UC-browse-21"
 tier = "T4"
-statement = "On the 151 binder browse page I click the body of the Bulbasaur #1 slot. The variant modal opens, titled #1 · Bulbasaur, listing every printing of that card. The modal has a close × button and a Full card details → li... (browse_slot_click_opens_variant_modal)"
-
-[[use_case]]
-id = "UC-browse-22"
-tier = "T4"
-statement = "On the Base Set binder browse page the slot for a Rare Holo card such as Charizard #4 carries two inline quick-toggle checkboxes labelled Holo and RH — the two common variants for a holo rare. I click the Holo checkbo... (browse_slot_inline_checkbox_holo_rh)"
-
-[[use_case]]
-id = "UC-browse-23"
-tier = "T4"
-statement = "On the 151 binder browse page the slot for a Common card such as Bulbasaur #1 carries two inline quick-toggle checkboxes in its footer, labelled Reg and RH — the two most common variants for that rarity. I click the R... (browse_slot_inline_checkbox_reg_rh)"
+statement = "On the Spark of Rebellion binder browse page I click the body of the Luke Skywalker - Faithful Friend #5 slot. The variant modal opens, titled #5 · Luke Skywalker - Faithful Friend, listing every printing of that card... (browse_slot_click_opens_variant_modal)"
 
 [[use_case]]
 id = "UC-browse-24"
 tier = "T4"
-statement = "On the 151 binder browse page each slot's pip row shows my ownership at a glance. For a card whose printings I own at least one copy of, the matching pips render filled; for printings I do not own, the pips render emp... (browse_slot_pips_reflect_ownership)"
+statement = "On the Spark of Rebellion binder browse page each slot's pip row shows my ownership at a glance. For a card whose printings I own at least one copy of, the matching pips render filled; for printings I do not own, the ... (browse_slot_pips_reflect_ownership)"
 
 [[use_case]]
 id = "UC-browse-25"
 tier = "T4"
-statement = "On the 151 binder browse page each slot in the grid is a clickable button that shows the card's image at the top, and a footer row with the card number on the left and a row of pips on the right. There is one pip per ... (browse_slot_renders_image_number_pips)"
+statement = "On the Spark of Rebellion binder browse page each slot in the grid is a clickable button that shows the card's image at the top, and a footer row with the card number on the left and a row of pips on the right. There ... (browse_slot_renders_image_number_pips)"
 
 [[use_case]]
-id = "UC-browse-26"
-tier = "T4"
-statement = "On the 151 binder browse page the slots are ordered by set number by default — Bulbasaur #1, then Charmander #4, then Charizard ex #6, and so on in ascending numeric order. A sort-mode control lets me switch to rarity... (browse_sort_mode_change)"
-
-[[use_case]]
-id = "UC-browse-27"
-tier = "T4"
-statement = "On a binder browse page, with the Subset checkbox on, cards flagged as a subset (such as a Galaxy or Trainer Gallery sub-collection) render as a separate appended section. After the numbered set — and after any secret... (browse_subset_section_appended)"
+id = "UC-browse-32"
+tier = "T3"
+statement = "On a set's browse page, pressing # twice flips the collector-number order each time, and pressing Price twice flips between most and least expensive each time. The list on screen changes with every press, the page kee... (browse_sort_buttons_reorder)"
 
 [[use_case]]
 id = "UC-browse-28"
 tier = "T4"
-statement = "The binder browse page is addressable by set: navigating directly to /browse/sv3pt5 loads the 151 binder, while /browse/base1 loads the Base Set binder. The page reacts to the set route parameter — changing the set in... (browse_url_state_persists)"
+statement = "The binder browse page is addressable by set: navigating directly to /browse/SOR loads the Spark of Rebellion binder, while /browse/SHD loads the Shadows of the Galaxy binder. The page reacts to the set route paramete... (browse_url_state_persists)"
 
 [[use_case]]
 id = "UC-browse-29"
 tier = "T4"
-statement = "I open the variant modal for Charmander #4 in the 151 set. The Normal printing row shows 0 owned. I click its + Add button. The count immediately updates to 1 owned and turns green, the slot's matching pip fills behin... (browse_variant_modal_add_increments_count)"
-
-[[use_case]]
-id = "UC-browse-30"
-tier = "T4"
-statement = "In the variant modal for a card I own, each printing row offers an Edit copies… affordance. When I expand it, per-copy controls appear — one set per physical copy — letting me change a copy's condition, language, note... (browse_variant_modal_edit_copies)"
+statement = "I open the variant modal for Millennium Falcon - Piece of Junk #193 in the Spark of Rebellion set. The Normal printing row shows 7 owned. I click its + Add button. The count immediately updates to 8 owned and turns gr... (browse_variant_modal_add_increments_count)"
 
 [[use_case]]
 id = "UC-browse-31"
 tier = "T4"
-statement = "I open the variant modal for Bulbasaur #1 in the 151 set. The modal lists one row per printing of the card: each row shows the variant label (e.g. Normal, Reverse Holo), an {n} owned count that turns green when I own ... (browse_variant_modal_lists_all_variants)"
-
-[[use_case]]
-id = "UC-browse-32"
-tier = "T4"
-statement = "I open the variant modal for a printing I already own and use the modal's per-variant remove control to take one copy off. The {n} owned count decreases by one, and when it reaches zero it loses its green styling and ... (browse_variant_modal_remove_decrements_count)"
+statement = "I open the variant modal for Luke Skywalker - Faithful Friend #5 in the Spark of Rebellion set. The modal lists one row per printing of the card: each row shows the variant label (e.g. Normal, Foil), an {n} owned coun... (browse_variant_modal_lists_all_variants)"

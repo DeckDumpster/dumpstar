@@ -115,21 +115,27 @@
   },
   {
    "set_code": "SEC",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com//small_Secrets_of_Power_Logo_EN_33306066e0.png",
+    "file": "SEC-logo.png"
+   },
    "crop": {
     "source_url": "https://cdn.starwarsunlimited.com//xxsmall_06010001_EN_Chancellor_Palpatine_Leader_Unit_Thumbnail_dc5dc2dffd.png",
     "file": "SEC-crop.png"
    },
-   "none": "the official Secrets of Power product record (admin.starwarsunlimited.com /api/products) carries key art but no logo media; reviewed 2026-10-15"
+   "none": null
   },
   {
    "set_code": "SECWPP",
-   "logo": null,
+   "logo": {
+    "source_url": "https://cdn.starwarsunlimited.com//small_Secrets_of_Power_Logo_EN_33306066e0.png",
+    "file": "SECWPP-logo.png"
+   },
    "crop": {
     "source_url": "https://cdn.starwarsunlimited.com//xxsmall_06010001_EN_Chancellor_Palpatine_Leader_Unit_Thumbnail_dc5dc2dffd.png",
     "file": "SECWPP-crop.png"
    },
-   "none": "Secrets of Power has no official logo media, so its weekly-play promos have none to borrow; reviewed 2026-10-15"
+   "none": null
   },
   {
    "set_code": "GFT",

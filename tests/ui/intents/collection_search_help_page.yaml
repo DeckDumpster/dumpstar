@@ -1,4 +1,5 @@
 # Scenario: The search help link opens the data-driven syntax reference
+# Use case: UC-collection-26
 #
 # Related:
 #   issues: [dumpstar-idf.10]

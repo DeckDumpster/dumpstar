@@ -1,4 +1,5 @@
 # Scenario: "All cards" surfaces unowned printings as dimmed tiles
+# Use case: UC-collection-30
 #
 # Related:
 #   issues: [dumpstar-idf.10]

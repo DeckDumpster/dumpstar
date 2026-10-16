@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T2
+# covers: crates/dumpstar-db/* crates/dumpstar-catalog/*
 # Container-tier gate (pd-ja38): the schema-version gate, exercised against a
 # PROD-SHAPED instance — the shipped image's own entrypoint
 # (`dumpstar serve --host 0.0.0.0 --port 8080`), the shipped Quadlet unit, a real

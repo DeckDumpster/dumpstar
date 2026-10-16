@@ -742,6 +742,21 @@ if tier lint; then
     step "CI tier selection fails closed (tests/ci/select_test.sh)"
     bash "$REPO_DIR/tests/ci/select_test.sh"
 
+    # Use-case coverage. The catalogue is the UI intents; every suite declares
+    # `# tier:` / `# covers:` and a replay implementation names its intent's
+    # `UC-<area>-NN`. A use case nothing covers, or whose last cover a change
+    # deleted, fails here by name. Spira's test-plan mechanism, not a second
+    # one. The orphan check needs the base ref; a checkout without it keeps the
+    # gap check, which fails on the same deletion for every T0-T3 use case.
+    step "Use-case coverage: headers, catalogue, gaps (tests/ci/plan.sh lint)"
+    bash "$REPO_DIR/tests/ci/plan_test.sh"
+    bash "$REPO_DIR/tests/ci/plan.sh" lint
+    if git -C "$REPO_DIR" rev-parse --verify -q "${DUMPSTAR_PLAN_BASE:-origin/main}^{commit}" >/dev/null; then
+        bash "$REPO_DIR/tests/ci/plan.sh" orphans "${DUMPSTAR_PLAN_BASE:-origin/main}"
+    else
+        echo "==> (orphans skipped: no ${DUMPSTAR_PLAN_BASE:-origin/main} in this checkout; the gap check above still ran)"
+    fi
+
     # And the other half of the same story: the gates that no longer run where
     # they are written. Its failure mode is a gate that got queued nowhere and
     # runs never, which a green run cannot show you. Hermetic — the concurrency

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T2
+# covers: deploy/dumpstar-litestream.container
 # Container-tier gate (pd-lhih): EXECUTABLE PROOF that pd-pm7b is closed —
 # a recreated handle cannot inherit its predecessor's replica.
 #

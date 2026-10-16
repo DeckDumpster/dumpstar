@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T1
+# covers: deploy/diagnostics-lib.sh tests/lib/diagnostics.sh
 # tests/ci/unit_diagnostics_test.sh — deploy scripts capture unit evidence before teardown.
 #
 # When systemctl --user start/restart fails, the caller is about to exit or

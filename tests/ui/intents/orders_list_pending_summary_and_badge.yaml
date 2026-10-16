@@ -1,4 +1,5 @@
 # Scenario: Orders list surfaces both received and in-transit orders
+# Use case: UC-orders-01
 #
 # Related:
 #   issues: []

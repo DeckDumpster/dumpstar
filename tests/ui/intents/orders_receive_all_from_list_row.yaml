@@ -1,4 +1,5 @@
 # Scenario: Receiving an open order flips its ordered cards to owned
+# Use case: UC-orders-02
 #
 # Related:
 #   issues: []

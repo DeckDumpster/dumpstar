@@ -1,4 +1,5 @@
 # Scenario: Adding a variant from the modal increments its owned count
+# Use case: UC-browse-29
 
 # Related: browse_variant_modal_lists_all_variants, browse_optimistic_ui_undo_toast, browse_slot_pips_reflect_ownership
 

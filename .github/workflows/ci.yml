@@ -86,7 +86,7 @@ jobs:
           pve-ca-cert:        ${{ vars.PVE_CA_CERT }}
           pve-node:           ${{ vars.PVE_NODE }}
           template-vmid:      ${{ vars.TEMPLATE_VMID }}
-          spill:              ${{ inputs.force_spill && 'ec2-only' || 'ec2' }}
+          spill:              ec2-only
           spill-after-seconds: '60'
           spill-max-instances: 2
           aws-role-to-assume: ${{ secrets.AWS_SPILL_ROLE_ARN }}
@@ -133,6 +133,12 @@ jobs:
     # `${XDG_RUNTIME_DIR:-/run/user/$(id -u)}` default — which is correct on any
     # box — never got a chance to apply. Leaving it unset is what lets it.
     steps:
+      # Setup-phase clock (sp-tph9b0): started before checkout, read before
+      # deploy/ci.sh, so the log states how long checkout + dependencies + tier
+      # selection took. Target: under 90 s before '==> CI tiers'.
+      - name: Start setup clock
+        run: echo "SETUP_T0=$(date +%s)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
         with:
           # fetch-depth: 0 so the PR's base commit is present locally and the
@@ -227,6 +233,9 @@ jobs:
       # the step above set it. Unset means every tier; ci.sh prints the plan it
       # is running either way, so a PR log always states which tiers were
       # skipped and why.
+      - name: Report setup time
+        run: echo "setup (checkout, runner dependencies, tier selection) took $(( $(date +%s) - SETUP_T0 ))s -- target < 90s"
+
       - name: deploy/ci.sh
         run: bash deploy/ci.sh
 

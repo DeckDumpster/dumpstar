@@ -4,8 +4,8 @@
 # Two halves, and the second is the point of the bead.
 #
 #   §1-§5 the library does what it claims — the port it hands back is real,
-#         free, and outside the range the kernel hands out unasked. (§4, a
-#         live listener fixture, was deleted with the repo's Python, 2026-10-15.)
+#         free, and outside the range the kernel hands out unasked. (§4, the live
+#         listener, is crates/dumpstar-cli/tests/free_port_listener.rs.)
 #   §6-§8 THE RATCHET. A picked host port has now been found and fixed in five
 #         files (deploy/ci.sh, tests/tenants/handles.sh, and all three of
 #         tests/litestream/). Each fix was correct and each time the next file

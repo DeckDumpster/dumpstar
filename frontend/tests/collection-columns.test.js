@@ -27,3 +27,10 @@ test('anyAdjusted compares adjusted to Near Mint', () => {
 	assert.equal(anyAdjusted([{ nm_unit: 1, market_unit: 1 }, { nm_unit: null, market_unit: null }]), false);
 	assert.equal(anyAdjusted([{ nm_unit: 1, market_unit: 0.8 }]), true);
 });
+
+test('a phone starts with Name and Type only, the rest in the chooser', () => {
+	const hidden = parseHidden(null, true);
+	assert.deepEqual(visibleColumns(hidden, true), ['type']);
+	assert.deepEqual(parseHidden('garbage', true), hidden);
+	assert.deepEqual(parseHidden('[]', true), []);
+});

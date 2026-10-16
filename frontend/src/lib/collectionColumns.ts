@@ -20,16 +20,26 @@ export const COLUMNS = [
 /** Hidden until the reader asks for them. */
 export const DEFAULT_HIDDEN = ['adj'];
 
+/** At or under this width the table is the phone layout (see the page's CSS). */
+export const PHONE_MAX_WIDTH = 540;
+
+/**
+ * What a phone starts with: Name and Type, as deckdumpster's mobile table.
+ * Everything else is one tap away in the column chooser.
+ */
+export const PHONE_HIDDEN = COLUMNS.map((c) => c.key).filter((k) => k !== 'type');
+
 /** The stored value is the list of hidden keys; unknown keys are dropped. */
-export function parseHidden(raw: string | null): string[] {
-	if (raw == null) return [...DEFAULT_HIDDEN];
+export function parseHidden(raw: string | null, phone = false): string[] {
+	const fallback = phone ? PHONE_HIDDEN : DEFAULT_HIDDEN;
+	if (raw == null) return [...fallback];
 	try {
 		const v = JSON.parse(raw);
-		if (!Array.isArray(v)) return [...DEFAULT_HIDDEN];
+		if (!Array.isArray(v)) return [...fallback];
 		const known = new Set(COLUMNS.map((c) => c.key));
 		return v.filter((k) => known.has(k));
 	} catch {
-		return [...DEFAULT_HIDDEN];
+		return [...fallback];
 	}
 }
 

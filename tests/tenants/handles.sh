@@ -193,9 +193,9 @@ for i in $(seq 1 40); do
 	sleep 0.1
 done
 check "JWKS server is ready" "1" "$([[ -f "$JWKS_DIR/jwks.json" ]] && echo 1 || echo 0)"
-JWKS_PORT=$(python3 -c "import json; print(json.load(open('$JWKS_DIR/jwks.json'))['port'])")
-JWKS_AUD=$(python3 -c "import json; print(json.load(open('$JWKS_DIR/jwks.json'))['aud'])")
-JWKS_ISSUER=$(python3 -c "import json; print(json.load(open('$JWKS_DIR/jwks.json'))['issuer'])")
+JWKS_PORT=$(jq -r '.port' "$JWKS_DIR/jwks.json")
+JWKS_AUD=$(jq -r '.aud' "$JWKS_DIR/jwks.json")
+JWKS_ISSUER=$(jq -r '.issuer' "$JWKS_DIR/jwks.json")
 # The URL the container uses: host.containers.internal is Podman's name for the
 # host machine, present in every container's /etc/hosts.
 JWKS_URL="http://host.containers.internal:${JWKS_PORT}/cdn-cgi/access/certs"

@@ -11,7 +11,7 @@
 # ── THE RULE ────────────────────────────────────────────────────────────────
 #
 #   docs      (**.md, docs/**, wiki/**)  -> nothing beyond the always-on tiers
-#   frontend  (frontend/**)              -> frontend + container
+#   frontend  (frontend/**)              -> frontend + ui + container
 #   anything else                        -> EVERYTHING
 #
 # Each changed path contributes its requirement and the requirements are
@@ -73,7 +73,7 @@
 # single source of truth for the names; ci.sh is asserted against it by
 # tests/ci/select_test.sh, so a tier renamed here and not there fails in a
 # second rather than silently never running.
-DUMPSTAR_CI_ALL_TIERS="lint rust isolation deploy frontend container"
+DUMPSTAR_CI_ALL_TIERS="lint rust isolation deploy frontend ui container"
 
 # Always, whatever changed. Hermetic, no compilation, seconds: the shell-harness
 # self-tests and `cargo fmt --check`. These are the "lint tiers only" a
@@ -83,7 +83,7 @@ DUMPSTAR_CI_ALWAYS_TIERS="lint"
 
 # What a change under frontend/ can reach. See the pd-tf4h note above before
 # taking anything out of this list.
-DUMPSTAR_CI_FRONTEND_TIERS="frontend container"
+DUMPSTAR_CI_FRONTEND_TIERS="frontend ui container"
 
 # Print the canonical list, one tier per line.
 dumpstar_ci_all_tiers() {

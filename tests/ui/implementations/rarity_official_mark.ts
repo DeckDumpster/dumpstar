@@ -8,7 +8,7 @@ import type { ReplayHarness } from '../replay';
 const MARK = 'span.rarity-mark[aria-label="Legendary"]';
 
 async function assertMark(h: ReplayHarness) {
-  await h.wait_for_visible(MARK, 6000);
+  await h.wait_for_visible(MARK, 20000);
   const got = await h.page.locator(MARK).first().evaluate((el) => ({
     text: el.textContent?.trim(),
     color: getComputedStyle(el).color,

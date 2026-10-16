@@ -167,7 +167,8 @@ cmd_lint() {
         $2 != "-" && seen[$2]++ { print "intent " $1 ": duplicate id " $2; bad = 1 } END { exit bad }' && :
     [ $? = 0 ] || bad=1
     if cmd_generate "$tmp/cat" 2> "$tmp/err"; then
-        diff -rq "$tmp/cat" "$CAT" 2>/dev/null | grep -v 'coverage\.' | grep -q . && {
+        drift="$(diff -rq "$tmp/cat" "$CAT" 2>/dev/null | grep -v 'coverage\.' || true)"
+        [ -n "$drift" ] && {
             echo "docs/test-plan/*.toml has drifted from tests/ui/intents/ — run: bash tests/ci/plan.sh generate"; bad=1; }
     else cat "$tmp/err"; bad=1; fi
 

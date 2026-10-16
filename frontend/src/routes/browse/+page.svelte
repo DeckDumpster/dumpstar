@@ -262,7 +262,7 @@
 	   becomes a horizontal chip row above them. */
 	.layout {
 		display: grid;
-		grid-template-columns: 200px 1fr;
+		grid-template-columns: 200px minmax(0, 1fr);
 		gap: var(--space-5);
 		align-items: start;
 		margin-top: var(--space-4);
@@ -474,8 +474,12 @@
 	}
 
 	@media (max-width: 720px) {
+		/* `minmax(0, 1fr)`, not `1fr`: a bare 1fr track has an automatic
+		   minimum of its content's min-content, and the chip row's nowrap
+		   chips add up to wider than a phone, so the track grew to fit them
+		   and the tile grid below fitted 7 columns into it. */
 		.layout {
-			grid-template-columns: 1fr;
+			grid-template-columns: minmax(0, 1fr);
 		}
 		.navcol {
 			position: static;

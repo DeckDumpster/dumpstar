@@ -573,7 +573,7 @@ write_phase early
 # sqlite3 rather than the app for the same reason the tenant databases are: the
 # drill exercises the BACKUP layer and should not need a build to run.
 sqlite3 "$(registry_file)" 'PRAGMA journal_mode=WAL;' >/dev/null
-kit_manifest="$(cd "${REPO_DIR}" && cargo metadata --format-version 1 --locked 2>/dev/null \
+kit_manifest="$(cd "${REPO_DIR}" && cargo metadata --format-version 1 2>/dev/null \
     | jq -r 'first(.packages[] | select(.name == "dumpster-kit-tenancy") | .manifest_path)')"
 sqlite3 "$(registry_file)" < "$(dirname "${kit_manifest}")/src/schema_registry.sql"
 # RFC3339, with no space in it, because that is what `registry::insert` writes —

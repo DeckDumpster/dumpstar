@@ -84,7 +84,7 @@ fn package_dir(name: &str) -> PathBuf {
     let meta = META.get_or_init(|| {
         let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
         let out = Command::new(cargo)
-            .args(["metadata", "--format-version", "1", "--locked"])
+            .args(["metadata", "--format-version", "1"])
             .current_dir(repo())
             .output()
             .expect("run cargo metadata");

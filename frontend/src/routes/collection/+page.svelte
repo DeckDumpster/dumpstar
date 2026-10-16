@@ -420,6 +420,7 @@
 		'cost',
 		'power',
 		'hp',
+		'aspects',
 		'price',
 		'qty',
 		'added'
@@ -1401,6 +1402,7 @@
 			{/snippet}
 			{@render sortBtn('name', 'Name')}
 			{@render sortBtn('type', 'Type')}
+			{@render sortBtn('aspects', 'Aspects')}
 			{@render sortBtn('cost', 'Cost')}
 			{@render sortBtn('rarity', 'Rarity')}
 			{@render sortBtn('set', 'Set')}
@@ -1513,7 +1515,7 @@
 					{#if showCol('qty')}{@render sortable('qty', 'Qty', 'num qty')}{/if}
 					{@render sortable('name', 'Name', '')}
 					{#if showCol('type')}{@render sortable('type', 'Type', '')}{/if}
-					{#if showCol('aspects')}<th>Aspects</th>{/if}
+					{#if showCol('aspects')}{@render sortable('aspects', 'Aspects', '')}{/if}
 					{#if showCol('cost')}{@render sortable('cost', 'Cost', 'num')}{/if}
 					{#if showCol('stats')}<th class="center" title="Power / HP">Pwr/HP</th>{/if}
 					{#if showCol('rarity')}{@render sortable('rarity', 'Rarity', 'center')}{/if}

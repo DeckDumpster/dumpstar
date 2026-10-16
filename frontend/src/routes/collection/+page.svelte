@@ -758,6 +758,11 @@
 		stackOffsets(view === 'table' ? displayRows.length : 0, () => rowH, 0)
 	);
 	const tableWindow = $derived(windowOf(tableOffsets, 0, winTop, winBottom));
+	// The Aspects column is sized for the card with the most aspects in the
+	// whole result, not the rows the virtual window happens to hold.
+	const maxAspects = $derived(
+		Math.max(1, ...displayRows.map((r) => jsonList(r.aspects).length)),
+	);
 	const tableVisible = $derived(displayRows.slice(tableWindow.start, tableWindow.end));
 	/** Columns a spacer row has to span. */
 	const tableCols = $derived(selectMode ? 12 : 11);
@@ -1405,7 +1410,7 @@
 			</th>
 		{/snippet}
 		<div class="tableScroll">
-		<table class="dd" class:selecting={selectMode}>
+		<table class="dd" class:selecting={selectMode} style="--aspect-n: {maxAspects}">
 			<!-- Every column's width is DECLARED here, and `table-layout: fixed`
 			     (below) makes the browser believe it. It cannot be derived from
 			     content, because this table renders a virtual WINDOW of the
@@ -1487,7 +1492,7 @@
 								</div>
 							</td>
 							<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}>{a.card_type ?? ''}</td>
-							<td class="fac" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', sortAspects(jsonList(a.aspects))[0])}>{#each sortAspects(jsonList(a.aspects)) as n (n)}<AspectIcon name={n} />{/each}</td>
+							<td class="fac aspects" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', sortAspects(jsonList(a.aspects))[0])}>{#each sortAspects(jsonList(a.aspects)) as n (n)}<AspectIcon name={n} />{/each}</td>
 							<td class="num">{a.cost ?? ''}</td>
 							<td class="center">{powerHp(a)}</td>
 							<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}><RarityMark name={a.rarity} /></td>
@@ -1541,7 +1546,7 @@
 							</div>
 						</td>
 						<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}>{a.card_type ?? ''}</td>
-						<td class="fac" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', sortAspects(jsonList(a.aspects))[0])}>{#each sortAspects(jsonList(a.aspects)) as n (n)}<AspectIcon name={n} />{/each}</td>
+						<td class="fac aspects" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', sortAspects(jsonList(a.aspects))[0])}>{#each sortAspects(jsonList(a.aspects)) as n (n)}<AspectIcon name={n} />{/each}</td>
 						<td class="num">{a.cost ?? ''}</td>
 						<td class="center">{powerHp(a)}</td>
 						<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}><RarityMark name={a.rarity} /></td>
@@ -2146,7 +2151,8 @@
 		   at most two: 2 x 1.25em icon at this table's 0.9rem, plus the
 		   cell's 0.6rem padding each side), resource cost, and power/HP. */
 		--col-type: 5.5rem;
-		--col-aspects: 3.5rem;
+		--aspect-n: 2;
+		--col-aspects: calc(var(--aspect-n) * 1.25em + 1.2rem + 1px);
 		--col-cost: 3.5rem;
 		--col-stats: 4.5rem;
 		--col-rarity: 5.5rem;
@@ -2206,6 +2212,9 @@
 	}
 	col.c-aspects {
 		width: var(--col-aspects);
+	}
+	table.dd td.aspects {
+		white-space: nowrap;
 	}
 	col.c-cost {
 		width: var(--col-cost);
@@ -2456,7 +2465,7 @@
 			--col-sel: 1.75rem;
 			--col-qty: 2rem;
 			--col-type: 4.5rem;
-			--col-aspects: 3rem;
+			--col-aspects: calc(var(--aspect-n) * 1.25em + 0.7rem + 1px);
 			--col-cost: 2.75rem;
 			--col-stats: 3.5rem;
 			--col-rarity: 4.25rem;

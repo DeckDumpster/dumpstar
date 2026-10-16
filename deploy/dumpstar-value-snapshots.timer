@@ -1,0 +1,16 @@
+[Unit]
+Description=Daily Dumpstar per-tenant value snapshots (%i)
+#
+# The collection page promises "daily at 07:30 UTC"
+# (frontend/src/lib/components/CollectionSummary.svelte); change one, change the
+# other. The prices it reads are written by dumpstar-catalog-sync@ at 21:00 UTC
+# the evening before, so by 07:30 they are long in.
+
+[Timer]
+OnCalendar=*-*-* 07:30:00 UTC
+# Persistent, because each run writes exactly the date it is asked for: a missed
+# day is a hole in every tenant's chart unless the box runs it on return.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

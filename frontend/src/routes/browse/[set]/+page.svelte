@@ -16,6 +16,8 @@
 		SectionHeader,
 		Toolbar
 	} from '$lib/components/ui';
+	import VariantBadges from '$lib/components/VariantBadges.svelte';
+	import { printingBadges } from '$lib/printing-badges.js';
 	import { printingLabel, money } from '$lib/format';
 	import { slotPrice, ownedFoil } from '$lib/browseView';
 	import { bandRuns, clampCols, MAX_COLS, BROWSE_ROWS, pageAfterResize } from '$lib/browseView';
@@ -428,6 +430,17 @@
 			}));
 	}
 
+	/** One printing per distinct badge set, so a slot shows each treatment once. */
+	function slotBadgeVariants(slot: BinderSlot) {
+		const seen = new Set<string>();
+		return slot.printings.filter((p) => {
+			const key = printingBadges(p.variant, p.finish).map((b) => b.letter).join('');
+			if (!key || seen.has(key)) return false;
+			seen.add(key);
+			return true;
+		});
+	}
+
 	function ownedAny(slot: BinderSlot): boolean {
 		return slot.printings.some((p) => p.owned_count > 0);
 	}
@@ -694,6 +707,9 @@
 						onselect={() => (selectedSlot = slot)}
 						onpip={(pip) => addToSlot(slot, pip.id)}
 					/>
+					<span class="slotbadges">
+						{#each slotBadgeVariants(slot) as p (p.variant + p.finish)}<VariantBadges variant={p.variant} finish={p.finish} />{/each}
+					</span>
 				</div>
 			{/snippet}
 
@@ -777,6 +793,11 @@
 {/if}
 
 <style>
+	.slotbadges {
+		display: block;
+		min-height: 1.2em;
+		text-align: center;
+	}
 	/*
 		Only layout and geometry are left here — where a box sits, how wide it
 		is, what shape it holds. Surfaces, fills, rules, text colour, radius,

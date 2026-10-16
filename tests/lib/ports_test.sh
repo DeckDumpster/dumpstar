@@ -4,8 +4,8 @@
 # Two halves, and the second is the point of the bead.
 #
 #   §1-§5 the library does what it claims — the port it hands back is real,
-#         free, outside the range the kernel hands out unasked, and never one
-#         something is already listening on.
+#         free, and outside the range the kernel hands out unasked. (§4, a
+#         live listener fixture, was deleted with the repo's Python, 2026-10-15.)
 #   §6-§8 THE RATCHET. A picked host port has now been found and fixed in five
 #         files (deploy/ci.sh, tests/tenants/handles.sh, and all three of
 #         tests/litestream/). Each fix was correct and each time the next file
@@ -69,19 +69,8 @@ check "in the unprivileged range" "yes" \
 
 log "2. the port it names is actually free"
 # The whole contract. Bind it the way a caller would.
-BOUND=$(python3 -c '
-import socket, sys
-s = socket.socket()
-try:
-    s.bind(("", int(sys.argv[1])))
-except OSError as e:
-    print("no: %s" % e)
-else:
-    print("yes")
-finally:
-    s.close()
-' "$PORT_A")
-check "it binds" "yes" "$BOUND"
+check "no socket on this box holds it" "free" \
+	"$(port_in_use "$PORT_A" && echo held || echo free)"
 
 log "3. it is outside the range the kernel hands out unasked"
 # The reason this is not `bind(("", 0))`. A gate holds its port for minutes;
@@ -94,37 +83,6 @@ if [[ $((65535 - EPH_HI)) -ge 64 ]]; then
 else
 	echo "  SKIP  this box hands out everything up to 65535; no band above it"
 fi
-
-log "4. it does not hand back a port something is already listening on"
-# A listener is held open for the duration, and free_port is asked repeatedly.
-# The bind inside free_port is what has to notice; nothing else would.
-LISTENER_OUT="$(mktemp "${TMPDIR:-/tmp}/pd-portstest.XXXXXX")"
-trap 'rm -f "$LISTENER_OUT"' EXIT
-python3 -c '
-import socket, sys, time
-s = socket.socket()
-s.bind(("", 0))
-s.listen(1)
-print(s.getsockname()[1], flush=True)
-time.sleep(30)
-' >"$LISTENER_OUT" &
-LISTENER_PID=$!
-trap 'kill "$LISTENER_PID" 2>/dev/null; rm -f "$LISTENER_OUT"' EXIT
-for _ in $(seq 50); do
-	[[ -s "$LISTENER_OUT" ]] && break
-	sleep 0.1
-done
-HELD="$(cat "$LISTENER_OUT")"
-check "the fixture is listening on a port" "yes" \
-	"$([[ $HELD =~ ^[0-9]+$ ]] && echo yes || echo no)"
-COLLISIONS=0
-for _ in $(seq 30); do
-	[[ "$(free_port)" == "$HELD" ]] && COLLISIONS=$((COLLISIONS + 1))
-done
-check "30 calls never returned it" "0" "$COLLISIONS"
-kill "$LISTENER_PID" 2>/dev/null
-wait "$LISTENER_PID" 2>/dev/null
-trap 'rm -f "$LISTENER_OUT"' EXIT
 
 log "5. successive calls do not repeat"
 # Not a guarantee of the contract — a random draw may legitimately repeat — but

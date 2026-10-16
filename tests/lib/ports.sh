@@ -48,38 +48,42 @@
 # tests/tenants/handles.sh uses, `-p 127.0.0.1::8080` then read it back) is not:
 # tests/alarming/run.sh stops and starts its MinIO mid-run and every URL built
 # before that has to still work afterwards.
+# Whether any socket on this box holds <port> as its local port, in any state —
+# a listener, an established connection or one in TIME_WAIT all make a bind
+# without SO_REUSEADDR fail. Read straight from the kernel's socket tables, so
+# this needs nothing but awk (no Python, no iproute2).
+port_in_use() { # port_in_use <port> -> exit 0 if held
+	local hex tables=()
+	printf -v hex '%04X' "$1"
+	for t in /proc/net/tcp /proc/net/tcp6 /proc/net/udp /proc/net/udp6; do
+		[[ -r $t ]] && tables+=("$t")
+	done
+	# No readable table means we cannot tell, and a port we cannot vouch for is
+	# not handed out.
+	[[ ${#tables[@]} -gt 0 ]] || return 0
+	awk -v h="$hex" 'FNR > 1 { n = split($2, a, ":"); if (a[n] == h) { found = 1; exit } }
+		END { exit !found }' "${tables[@]}"
+}
+
 free_port() {
-	python3 - <<'PY'
-import random, socket, sys
-
-# The kernel's own answer to "which ports do I hand out unasked".
-try:
-    with open("/proc/sys/net/ipv4/ip_local_port_range") as f:
-        eph_lo, eph_hi = (int(x) for x in f.read().split()[:2])
-except OSError:
-    eph_lo, eph_hi = 32768, 60999
-
-# Above the ephemeral range by preference (61000-65535 on a default box), below
-# it if some box has been configured to hand out everything up to 65535, and
-# only then the whole unprivileged range — a narrow band beats no port at all.
-bands = [b for b in ((eph_hi + 1, 65535), (10000, eph_lo - 1)) if b[1] - b[0] >= 64]
-bands.append((1024, 65535))
-
-for lo, hi in bands:
-    for _ in range(200):
-        port = random.randint(lo, hi)
-        s = socket.socket()
-        try:
-            # No SO_REUSEADDR: a port this bind cannot have is a port the
-            # caller must not be handed either.
-            s.bind(("", port))
-        except OSError:
-            continue
-        finally:
-            s.close()
-        print(port)
-        sys.exit(0)
-
-sys.exit("free_port: no free port found in %r" % (bands,))
-PY
+	local eph_lo eph_hi lo hi port band bands=()
+	# The kernel's own answer to "which ports do I hand out unasked".
+	read -r eph_lo eph_hi < <(cat /proc/sys/net/ipv4/ip_local_port_range 2>/dev/null || echo "32768 60999")
+	# Above the ephemeral range by preference (61000-65535 on a default box),
+	# below it if some box hands out everything up to 65535, and only then the
+	# whole unprivileged range — a narrow band beats no port at all.
+	(( 65535 - (eph_hi + 1) >= 64 )) && bands+=("$((eph_hi + 1)) 65535")
+	(( (eph_lo - 1) - 10000 >= 64 )) && bands+=("10000 $((eph_lo - 1))")
+	bands+=("1024 65535")
+	for band in "${bands[@]}"; do
+		read -r lo hi <<<"$band"
+		for _ in $(seq 200); do
+			port=$(( ((RANDOM << 15) | RANDOM) % (hi - lo + 1) + lo ))
+			port_in_use "$port" && continue
+			echo "$port"
+			return 0
+		done
+	done
+	echo "free_port: no free port found in ${bands[*]}" >&2
+	return 1
 }

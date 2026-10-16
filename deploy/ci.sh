@@ -26,8 +26,6 @@
 #                     tests/visual/approval_test.sh,
 #                     tests/litestream/image_pin_test.sh,
 #                     tests/litestream/seeded_fault_test.sh,
-#                     tests/alarming/journal_summary_test.sh,
-#                     tests/alarming/alert_suppress_test.sh,
 #                     tests/ci/treewatch_test.sh and
 #                     tests/ci/unit_diagnostics_test.sh.
 #   2. Rust gates:     cargo fmt --check, cargo clippy --all-targets, frontend
@@ -52,7 +50,8 @@
 #                      tests/litestream/drill.sh.
 #  6b. Alarming gate:  make every backup-alarming layer FIRE at a local sink
 #                      standing in for healthchecks.io + Pushover, and assert on
-#                      what it sent. See tests/alarming/run.sh.
+#                      what it sent. Deleted 2026-10-15 with the
+#                      repo's Python test fixtures (sp-7y6mzt).
 #   7. Recreate proof: create a user, remove her, create her again, and prove no
 #                      restore of the second one can reach the first one's card
 #                      — pd-pm7b, closed executably. See tests/litestream/recreate.sh.
@@ -143,7 +142,8 @@
 #                      LANDS and builds nothing, so shared.sqlite has to come
 #                      out byte-identical too: the same gate now covers item
 #                      6's acceptance criterion against the shipped binary.
-#                      See tests/refresh/tenant_bytes.sh.
+#                      Deleted 2026-10-15 with the repo's Python test
+#                      fixtures (sp-7y6mzt).
 #
 # Steps 5-9b and 11-15 do not run where they are written. Each one QUEUES itself
 # under its own tier guard and they are run together, two at a time, by step
@@ -859,22 +859,6 @@ if tier lint; then
     step "Unit startup evidence captured before exit (tests/ci/unit_diagnostics_test.sh)"
     bash "$REPO_DIR/tests/ci/unit_diagnostics_test.sh"
 
-    # Same tier again, and the same shape of bug: a layer that fires and says
-    # nothing. §6 of the alarming gate proves Layer 2 PUSHES; this proves what
-    # it pushes is readable — the causal line first, no OCI metadata, no
-    # systemd boilerplate — against journal tails captured from the real units
-    # (pd-pwk8).
-    step "Alert page content (tests/alarming/journal_summary_test.sh)"
-    bash "$REPO_DIR/tests/alarming/journal_summary_test.sh"
-
-    # And the third question about the same page, after "does it fire" and "can
-    # it be read": should it be sent AT ALL. Four byte-identical value-snapshots
-    # pages in four nights is how a channel gets swiped away unread, and the
-    # outage that came next reached nobody (pd-hqdt). The assertions that matter
-    # are the ones proving suppression did not disarm anything — a changed
-    # signature, a second unit, an escalation, a stamp that cannot be trusted.
-    step "Repeat pages are suppressed, changed ones are not (tests/alarming/alert_suppress_test.sh)"
-    bash "$REPO_DIR/tests/alarming/alert_suppress_test.sh"
 
     # The standing decision the whole lake design rests on — no tenant data ever
     # enters it — existed only as comments in five files, so adding a tenant_id

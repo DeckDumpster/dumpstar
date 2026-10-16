@@ -1,31 +1,31 @@
 <script lang="ts">
 	import { rarityMarks } from '$lib/rarity.svelte';
+	import { rarityShape } from '$lib/rarityShapes';
 
 	let { name }: { name: string | null | undefined } = $props();
 	const mark = $derived(rarityMarks.get(name));
+	const shape = $derived(name ? rarityShape(name) : null);
 
 	$effect(() => {
 		void rarityMarks.load();
 	});
 </script>
 
-{#if name}
-	{#if mark}
-		<span class="rarity-mark" role="img" aria-label={mark.name} title={mark.name} style:color={mark.color}
-			>{mark.character}</span
-		>
-	{:else}
-		<span class="rarity-name">{name}</span>
-	{/if}
+{#if name && shape}
+	<span class="rarity-mark" role="img" aria-label={name} title={name} style:color={mark?.color ?? shape.color}>
+		<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d={shape.path} fill="currentColor" fill-rule="evenodd" /></svg>
+	</span>
 {/if}
 
 <style>
 	.rarity-mark {
-		display: inline-block;
-		font-weight: 700;
-		min-width: 1.1em;
-		text-align: center;
+		display: inline-flex;
+		vertical-align: middle;
+	}
+	.rarity-mark svg {
+		width: 1.1em;
+		height: 1.1em;
 		/* A thin halo keeps the black Special mark legible on a dark theme. */
-		text-shadow: 0 0 1px var(--color-border);
+		filter: drop-shadow(0 0 1px var(--color-border));
 	}
 </style>

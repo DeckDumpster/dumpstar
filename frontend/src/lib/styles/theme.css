@@ -21,6 +21,9 @@
 	--pd-alpha-gold-08: rgba(245, 197, 66, 0.08);
 	--pd-alpha-gold-14: rgba(245, 197, 66, 0.14);
 
+	--cost-mark-fill: var(--pd-gold-500);
+	--cost-mark-edge: var(--pd-gold-600);
+	--cost-mark-text: var(--pd-gold-900);
 	--color-surface-selected: var(--pd-alpha-gold-14);
 	--color-surface-accent-wash: var(--pd-alpha-gold-08);
 	--color-border-accent: var(--pd-gold-500);

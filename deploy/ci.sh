@@ -48,8 +48,8 @@
 #                      tests/litestream/drill.sh.
 #  6b. Alarming gate:  make every backup-alarming layer FIRE at a local sink
 #                      standing in for healthchecks.io + Pushover, and assert on
-#                      what it sent. Deleted 2026-10-15 with the
-#                      repo's Python test fixtures (sp-7y6mzt).
+#                      what it sent. See tests/alarming/run.sh (sink: sink.rs,
+#                      built with rustc; not armed in CI, run by hand).
 #   7. Recreate proof: create a user, remove her, create her again, and prove no
 #                      restore of the second one can reach the first one's card
 #                      — pd-pm7b, closed executably. See tests/litestream/recreate.sh.

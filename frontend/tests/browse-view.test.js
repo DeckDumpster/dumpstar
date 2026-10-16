@@ -147,3 +147,11 @@ test('the browse tile is the kit CardTile, with no local tile CSS', () => {
 	assert.match(src, /<CardTile[\s\S]*?\/>/);
 	assert.doesNotMatch(src, /\.slot\b|\.vchips?\b|\.slotwrap|\.pricebadge|class="slot|class="vchip/);
 });
+
+test('unturned leaders and bases get a landscape box and a coarser band grid', () => {
+	const src = readFileSync(new URL('../src/routes/browse/[set]/+page.svelte', import.meta.url), 'utf8');
+	assert.match(src, /class:flat=\{slot\.landscape && !turnLandscape\}/);
+	assert.match(src, /\.flat :global\(\.art\)\s*\{\s*aspect-ratio: 7 \/ 5;/);
+	assert.match(src, /landscapeCols = \$derived\(turnLandscape \? cols : Math\.max\(1, Math\.ceil\(cols \/ 2\)\)\)/);
+	assert.equal((src.match(/repeat\(\{landscapeCols\}/g) ?? []).length, 2);
+});

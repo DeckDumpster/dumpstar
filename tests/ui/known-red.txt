@@ -4,6 +4,11 @@
 # be deleted — THIS LIST ONLY SHRINKS. Never add a line for a UI change's own test:
 # fix the UI.
 #
+# PR 79 ejected the first ui tier for 25 reds; those still red are listed here as
+# expected failures so the tier lands green and ratchets. sp-6rejya deletes the
+# STALE block when it regenerates the fixtures; collection_aspects_column_fits_icons
+# and rarity_official_mark pass on the current tree and are not listed.
+#
 # UNFIXED UI DEFECTS — implementations written to guard a fix that does not hold;
 # they were never run before the ui tier existed (sp-howojk). Each fixing bead
 # deletes its line.

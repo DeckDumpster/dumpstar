@@ -29,13 +29,24 @@ pub struct Landed {
 }
 
 impl Provenance {
-    /// What `applied_payloads` is keyed on: the content hash, and the day it
+    /// What `applied_payloads` is keyed on: the content hash, the day it
     /// describes when the bytes do not say (an unchanged tcgcsv price file is
-    /// still a new day's prices).
+    /// still a new day's prices), and the source's derivation version when it
+    /// is past the first, so a build that derives more from a payload applies
+    /// it again (sp-boex8e).
     pub fn applied_key(&self) -> String {
-        match &self.as_of {
+        self.applied_key_at(crate::apply::derivation_version(&self.source))
+    }
+
+    pub fn applied_key_at(&self, derivation: u32) -> String {
+        let base = match &self.as_of {
             Some(d) => format!("{}@{d}", self.sha256),
             None => self.sha256.clone(),
+        };
+        if derivation > 1 {
+            format!("{base}#d{derivation}")
+        } else {
+            base
         }
     }
 }

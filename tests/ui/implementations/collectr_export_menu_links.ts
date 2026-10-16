@@ -1,3 +1,4 @@
+// covers: UC-collectr-01
 /**
  * Hand-written implementation for collectr_export_menu_links.
  *

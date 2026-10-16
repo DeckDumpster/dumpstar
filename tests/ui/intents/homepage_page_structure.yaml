@@ -1,4 +1,5 @@
 # Scenario: Homepage displays the app title, description, and navigation
+# Use case: UC-homepage-04
 
 # Related: homepage_nav_links_collection, homepage_nav_links_analysis_and_addcards
 

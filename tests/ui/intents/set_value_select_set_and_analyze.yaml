@@ -1,4 +1,5 @@
 # Scenario: Reach the Set Stats page from the binder browse view
+# Use case: UC-set-05
 #
 # Related:
 #   pages: [set-stats]

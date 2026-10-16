@@ -1,4 +1,5 @@
 # Scenario: Closing the add-cards picker modal leaves the collection unchanged
+# Use case: UC-decks-03
 #
 # Prerequisites:
 #   A deck exists; the deck detail page loads with a "+ Add cards" button

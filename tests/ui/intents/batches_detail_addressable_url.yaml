@@ -1,4 +1,5 @@
 # Scenario: Batch detail is reachable directly at its own URL
+# Use case: UC-batches-04
 
 # Related: batches_detail_view_and_metadata, batches_detail_back_preserves_filter
 

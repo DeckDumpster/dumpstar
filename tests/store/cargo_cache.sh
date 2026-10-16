@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T2
+# covers: Containerfile deploy/ci.sh
 # The image ships the binaries the image's OWN sources build (pd-wjmd).
 #
 # The Containerfile hands cargo a `--mount=type=cache` target directory that

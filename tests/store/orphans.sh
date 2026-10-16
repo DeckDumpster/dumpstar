@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T2
+# covers: deploy/image-lib.sh
 # What a build orphans, collected — measured against real podman (pd-h3wy).
 #
 # A build leaves two kinds of unreachable image behind: the STAGE images of a

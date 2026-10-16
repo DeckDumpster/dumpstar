@@ -1,4 +1,5 @@
 # Scenario: The collection table's Aspects column is sized for icons, not names
+# Use case: UC-collection-04
 #
 # Related:
 #   issues: [sp-jwkqo6]

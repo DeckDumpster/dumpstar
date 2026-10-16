@@ -1,4 +1,5 @@
 # Scenario: Global header stays reachable when the collection table is scrolled
+# Use case: UC-collection-10
 #
 # Related:
 #   issues: []

@@ -1,4 +1,5 @@
 # Scenario: Add an individual copy to a deck from the picker
+# Use case: UC-deck-11
 #
 # Prerequisites:
 #   Deck 2 "Vader Aggro" exists. A card has multiple physical

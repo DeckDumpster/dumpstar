@@ -1,4 +1,5 @@
 # Scenario: A binder-click batch detail lists every card it registered
+# Use case: UC-batches-02
 
 # Related: batches_detail_view_and_metadata, batches_homepage_nav_link
 

@@ -1,4 +1,5 @@
 # Scenario: The value chart breaks the collection down by set and by binder
+# Use case: UC-collection-41
 #
 # Related:
 #   issues: [pd-0a30f178]

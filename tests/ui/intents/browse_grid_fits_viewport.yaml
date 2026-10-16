@@ -1,4 +1,5 @@
 # Scenario: the set browse grid never exceeds the viewport
+# Use case: UC-browse-02
 #
 # Related:
 #   issues: [sp-mxm9dw]

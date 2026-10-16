@@ -1,3 +1,4 @@
+// covers: UC-homepage-07
 /**
  * Hand-written implementation for homepage_tagline_names_swu.
  *

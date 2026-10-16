@@ -1,4 +1,5 @@
 # Scenario: Committing a Collectr import writes cards and sealed separately
+# Use case: UC-collectr-02
 #
 # Related:
 #   issues: [dumpstar-0i9y]

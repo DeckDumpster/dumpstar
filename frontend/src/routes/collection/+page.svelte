@@ -2338,7 +2338,7 @@
 	}
 	td .t-sub {
 		color: var(--text-muted);
-		font-size: 0.85em;
+		font-size: var(--text-sm);
 	}
 	col.c-aspects {
 		width: var(--col-aspects);

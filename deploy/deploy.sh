@@ -103,6 +103,17 @@ fi
 
 echo "==> ${SERVICE_NAME} restarted. Port: podman port systemd-${SERVICE_NAME}"
 
+# Every timer this checkout ships must be enabled (sp-892w24): enable them, then
+# fail the deploy if any still is not.
+echo "==> Enabling the shipped timers..."
+# shellcheck source=deploy/units-lib.sh
+. "$SCRIPT_DIR/units-lib.sh"
+dumpstar_units_enable_timers "$INSTANCE"
+if dumpstar_units_alerting "$INSTANCE" && ! dumpstar_units_timer_drift "$INSTANCE"; then
+    echo "deploy: shipped timers are not all enabled (above)" >&2
+    exit 1
+fi
+
 # --- Data jobs the change affects (sp-g20aoh) --------------------------------
 #
 # Last, after the app: a data job that fails must not leave

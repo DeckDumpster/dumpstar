@@ -227,6 +227,8 @@ pub struct CollectionRow {
     pub aspects: Option<String>,
     /// JSON array, e.g. `["Ground"]`.
     pub arenas: Option<String>,
+    /// JSON array, e.g. `["Underworld","Droid","Bounty Hunter"]`.
+    pub traits: Option<String>,
     /// Latest market price for this exact printing (NULL when the feed has
     /// none and nothing was entered by hand).
     pub market_price: Option<f64>,
@@ -246,7 +248,7 @@ const ROW_COLUMNS_SQL: &str = concat!(
      ",
     crate::market_price_expr!(),
     " AS market_price, \
-     p.image_url, p.variant_description"
+     p.image_url, p.variant_description, cd.traits"
 );
 
 // `p` is `PRINTING_REL`: shared.printings plus the user-DB user_printings
@@ -296,6 +298,7 @@ fn collection_row_from_row(r: &rusqlite::Row) -> rusqlite::Result<CollectionRow>
         market_price: r.get(29)?,
         image_url: r.get(30)?,
         variant_description: r.get(31)?,
+        traits: r.get(32)?,
     })
 }
 

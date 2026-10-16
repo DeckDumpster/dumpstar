@@ -10,7 +10,7 @@
 	import SetLogo from '$lib/components/SetLogo.svelte';
 		import { CONDITIONS } from '$lib/conditions';
 	import { conditionMultiplier } from '$lib/conditions.svelte';
-	import { money, count, printingLabel, printingTag, jsonList } from '$lib/format';
+	import { money, count, printingLabel, printingTag, jsonList, typeLines, traitsLine } from '$lib/format';
 	import { stackOffsets, windowOf } from '$lib/virtual';
 
 	// Foil shimmer treatment for Foil-finish printings.
@@ -109,6 +109,7 @@
 				hp: sr.hp,
 				aspects: sr.aspects,
 				arenas: sr.arenas,
+				traits: sr.traits,
 				market_price: sr.market_price,
 				image_url: sr.image_url
 			}))
@@ -523,6 +524,9 @@
 		hp: number | null;
 		/** JSON array string, e.g. `["Vigilance","Heroism"]`. */
 		aspects: string | null;
+		/** JSON array strings, e.g. `["Ground"]` and `["Underworld","Droid"]`. */
+		arenas: string | null;
+		traits: string | null;
 		variant: string;
 		finish: string;
 		condition: string;
@@ -568,6 +572,8 @@
 					power: r.power,
 					hp: r.hp,
 					aspects: r.aspects,
+					arenas: r.arenas,
+					traits: r.traits,
 					variant: r.variant,
 					finish: r.finish,
 					condition: r.condition,
@@ -609,6 +615,8 @@
 			power: sr.power,
 			hp: sr.hp,
 			aspects: sr.aspects,
+			arenas: sr.arenas,
+			traits: sr.traits,
 			variant: sr.variant,
 			finish: sr.finish,
 			condition: '',
@@ -1493,6 +1501,7 @@
 				{#if showCol('qty')}<col class="c-qty" />{/if}
 				<col class="c-name" />
 				{#if showCol('type')}<col class="c-type" />{/if}
+				{#if showCol('traits')}<col class="c-traits" />{/if}
 				{#if showCol('aspects')}<col class="c-aspects" />{/if}
 				{#if showCol('cost')}<col class="c-cost" />{/if}
 				{#if showCol('stats')}<col class="c-stats" />{/if}
@@ -1512,6 +1521,7 @@
 					{#if showCol('qty')}{@render sortable('qty', 'Qty', 'num qty')}{/if}
 					{@render sortable('name', 'Name', '')}
 					{#if showCol('type')}{@render sortable('type', 'Type', '')}{/if}
+					{#if showCol('traits')}<th>Traits</th>{/if}
 					{#if showCol('aspects')}<th>Aspects</th>{/if}
 					{#if showCol('cost')}{@render sortable('cost', 'Cost', 'num')}{/if}
 					{#if showCol('stats')}<th class="center" title="Power / HP">Pwr/HP</th>{/if}
@@ -1558,7 +1568,8 @@
 									<span class="namebody"><span class="cardname">{a.name}</span></span>
 								</div>
 							</td>
-							{#if showCol('type')}<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}>{a.card_type ?? ''}</td>{/if}
+							{#if showCol('type')}<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}><span class="t-type">{typeLines(a.card_type, a.arenas).type}</span>{#if typeLines(a.card_type, a.arenas).arena}<span class="t-sub">{typeLines(a.card_type, a.arenas).arena}</span>{/if}</td>{/if}
+							{#if showCol('traits')}<td class="traits"><span class="t-sub">{traitsLine(a.traits)}</span></td>{/if}
 							{#if showCol('aspects')}<td class="fac aspects" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', jsonList(a.aspects)[0])}>{#each jsonList(a.aspects) as n, i (i)}<span class="fac-aspect" data-aspect={n} title="Find all {n} cards" onclick={(e) => facetCell(e, 'aspect', n)}><AspectIcon name={n} /></span>{/each}</td>{/if}
 							{#if showCol('cost')}<td class="center"><CostMark cost={a.cost} /></td>{/if}
 							{#if showCol('stats')}<td class="center">{powerHp(a)}</td>{/if}
@@ -1612,7 +1623,8 @@
 								>
 							</div>
 						</td>
-						{#if showCol('type')}<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}>{a.card_type ?? ''}</td>{/if}
+						{#if showCol('type')}<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}><span class="t-type">{typeLines(a.card_type, a.arenas).type}</span>{#if typeLines(a.card_type, a.arenas).arena}<span class="t-sub">{typeLines(a.card_type, a.arenas).arena}</span>{/if}</td>{/if}
+							{#if showCol('traits')}<td class="traits"><span class="t-sub">{traitsLine(a.traits)}</span></td>{/if}
 						{#if showCol('aspects')}<td class="fac aspects" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', jsonList(a.aspects)[0])}>{#each jsonList(a.aspects) as n, i (i)}<span class="fac-aspect" data-aspect={n} title="Find all {n} cards" onclick={(e) => facetCell(e, 'aspect', n)}><AspectIcon name={n} /></span>{/each}</td>{/if}
 						{#if showCol('cost')}<td class="center"><CostMark cost={a.cost} /></td>{/if}
 						{#if showCol('stats')}<td class="center">{powerHp(a)}</td>{/if}
@@ -2252,6 +2264,7 @@
 		   at most two: 2 x 1.25em icon at this table's 0.9rem, plus the
 		   cell's 0.6rem padding each side), resource cost, and power/HP. */
 		--col-type: 5.5rem;
+		--col-traits: 11rem;
 		--aspect-n: 2;
 		--col-aspects: calc(var(--aspect-n) * 1.25em + 1.2rem + 1px);
 		--col-cost: 3.5rem;
@@ -2281,7 +2294,7 @@
 		   except that it now happens at ONE width instead of a width that
 		   changed with whichever rows were rendered. */
 		min-width: calc(
-			var(--col-sel-used) + var(--col-qty) + var(--col-name-min) + var(--col-type) +
+			var(--col-sel-used) + var(--col-qty) + var(--col-name-min) + var(--col-type) + var(--col-traits) +
 				var(--col-aspects) + var(--col-cost) + var(--col-stats) + var(--col-rarity) + var(--col-set) +
 				var(--col-number) + var(--col-nm) + var(--col-adj)
 		);
@@ -2311,6 +2324,18 @@
 	}
 	col.c-type {
 		width: var(--col-type);
+	}
+	col.c-traits {
+		width: var(--col-traits);
+	}
+	td .t-type,
+	td .t-sub {
+		display: block;
+		overflow-wrap: anywhere;
+	}
+	td .t-sub {
+		color: var(--text-muted);
+		font-size: 0.85em;
 	}
 	col.c-aspects {
 		width: var(--col-aspects);
@@ -2572,6 +2597,7 @@
 			--col-sel: 1.75rem;
 			--col-qty: 2rem;
 			--col-type: 4.5rem;
+			--col-traits: 8rem;
 			--col-aspects: calc(var(--aspect-n) * 1.25em + 0.7rem + 1px);
 			--col-cost: 2.75rem;
 			--col-stats: 3.5rem;

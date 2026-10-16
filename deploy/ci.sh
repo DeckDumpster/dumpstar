@@ -89,8 +89,10 @@
 #                      LANDS and builds nothing, so shared.sqlite has to come
 #                      out byte-identical too: the same gate now covers item
 #                      6's acceptance criterion against the shipped binary.
-#                      Deleted 2026-10-15 with the repo's Python test
-#                      fixtures (sp-7y6mzt).
+#                      Restored without Python (sp-kqsq71) as a Rust test of the
+#                      shipped binary against an in-process fake upstream:
+#                      crates/dumpstar-cli/tests/refresh_tenant_bytes.rs, run by
+#                      the rust tier (cargo test), so it needs no step of its own.
 #
 # Steps 5-9b and 11-15 do not run where they are written. Each one QUEUES itself
 # under its own tier guard and they are run together, two at a time, by step

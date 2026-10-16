@@ -1,0 +1,25 @@
+{
+	"_doc": "Single-letter variant badges, shown beside a card name. Letters: S Showcase, H Hyperspace, P Prestige, N Serialized (numbered), W Weekly Play, O promo, C Costco Exclusive, F Foil. Every variant the catalog carries needs a row here (tests/printing-badges.test.js reads the captured catalog and fails on a missing one); an empty list means the variant adds no badge.",
+	"finish": { "Foil": "F" },
+	"letters": {
+		"S": "Showcase",
+		"H": "Hyperspace",
+		"P": "Prestige",
+		"N": "Serialized",
+		"W": "Weekly Play",
+		"O": "Promo",
+		"C": "Costco Exclusive",
+		"F": "Foil"
+	},
+	"variants": {
+		"Standard": [],
+		"Hyperspace": ["H"],
+		"Showcase": ["S"],
+		"Standard Prestige": ["P"],
+		"Foil Prestige": ["P", "F"],
+		"Serialized Prestige": ["P", "N"],
+		"Weekly Play": ["W"],
+		"Promo": ["O"],
+		"Costco Exclusive": ["C"]
+	}
+}

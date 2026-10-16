@@ -10,7 +10,7 @@ const src = readFileSync(new URL('../src/routes/browse/[set]/+page.svelte', impo
 
 test('slot lists are keyed by collector number, never card_id', () => {
 	const keyed = src.match(/\{#each [^}]*\(([^)]*)\)\}/g) ?? [];
-	const slotLists = keyed.filter((k) => /\bslot\b/.test(k) && !/printings/.test(k));
+	const slotLists = keyed.filter((k) => /\bslot\b/.test(k) && !/printings|slotBadgeVariants/.test(k));
 	assert.ok(slotLists.length === 2, `expected the slot lists, found ${slotLists.length}`);
 	for (const k of slotLists) assert.match(k, /\(slot\.number\)\}$/, k);
 });

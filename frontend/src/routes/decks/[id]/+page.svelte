@@ -2,6 +2,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api';
+	import VariantBadges from '$lib/components/VariantBadges.svelte';
 	import { variantLabel } from '$lib/variants.svelte';
 	import CollectionPicker from '$lib/components/CollectionPicker.svelte';
 	import { Button, EmptyState } from '$lib/components/ui';
@@ -121,7 +122,7 @@
 			<tbody>
 				{#each detail.cards as card (card.id)}
 					<tr>
-						<td><a href="/card/{card.set_code}/{card.number}">{card.name}</a></td>
+						<td><a href="/card/{card.set_code}/{card.number}">{card.name}</a><VariantBadges variant={card.variant} finish={card.finish} /></td>
 						<td><a href="/browse/{card.set_code}">{card.set_name}</a></td>
 						<td>{card.number}</td>
 						<td>{variantLabel(card.variant)}</td>

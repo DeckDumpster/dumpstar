@@ -1492,7 +1492,7 @@
 								</div>
 							</td>
 							<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}>{a.card_type ?? ''}</td>
-							<td class="fac aspects" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', sortAspects(jsonList(a.aspects))[0])}>{#each sortAspects(jsonList(a.aspects)) as n (n)}<AspectIcon name={n} />{/each}</td>
+							<td class="fac aspects" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', sortAspects(jsonList(a.aspects))[0])}>{#each sortAspects(jsonList(a.aspects)) as n (n)}<span class="fac-aspect" data-aspect={n} title="Find all {n} cards" onclick={(e) => facetCell(e, 'aspect', n)}><AspectIcon name={n} /></span>{/each}</td>
 							<td class="num">{a.cost ?? ''}</td>
 							<td class="center">{powerHp(a)}</td>
 							<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}><RarityMark name={a.rarity} /></td>
@@ -1546,7 +1546,7 @@
 							</div>
 						</td>
 						<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}>{a.card_type ?? ''}</td>
-						<td class="fac aspects" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', sortAspects(jsonList(a.aspects))[0])}>{#each sortAspects(jsonList(a.aspects)) as n (n)}<AspectIcon name={n} />{/each}</td>
+						<td class="fac aspects" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', sortAspects(jsonList(a.aspects))[0])}>{#each sortAspects(jsonList(a.aspects)) as n (n)}<span class="fac-aspect" data-aspect={n} title="Find all {n} cards" onclick={(e) => facetCell(e, 'aspect', n)}><AspectIcon name={n} /></span>{/each}</td>
 						<td class="num">{a.cost ?? ''}</td>
 						<td class="center">{powerHp(a)}</td>
 						<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}><RarityMark name={a.rarity} /></td>

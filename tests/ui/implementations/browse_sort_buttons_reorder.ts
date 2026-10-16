@@ -1,3 +1,4 @@
+// covers: UC-browse-32
 /**
  * Guards sp-yc7gp1: a set's sort buttons re-order the visible list and never
  * throw. A slot is one collector number, so a card's Standard and Hyperspace

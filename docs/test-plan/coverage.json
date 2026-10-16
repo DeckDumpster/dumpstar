@@ -13,13 +13,13 @@
         {
           "id": "UC-batches-02",
           "tier": "T4",
-          "statement": "When I open the batch 151 binder page-through from the batches list, the detail page shows the batch name as the heading and a metadata line marking it as a binder-click batch with its timestamp and an 8 cards count. ... (batches_assign_unassigned_to_deck)",
+          "statement": "When I open the batch Spark of Rebellion binder page-through from the batches list, the detail page shows the batch name as the heading and a metadata line marking it as a binder-click batch with its timestamp and a 7... (batches_assign_unassigned_to_deck)",
           "covering_suites": []
         },
         {
           "id": "UC-batches-03",
           "tier": "T4",
-          "statement": "In the batches list view, each batch appears as a table row showing its Type, Name, Cards count, and When timestamp. The 151 binder page-through row shows a binder-click type and an 8 card count; the ManaBox export 20... (batches_deck_label_in_list)",
+          "statement": "In the batches list view, each batch appears as a table row showing its Type, Name, Cards count, and When timestamp. The Spark of Rebellion binder page-through row shows a binder-click type and a 7 card count; the CSV... (batches_deck_label_in_list)",
           "covering_suites": []
         },
         {
@@ -43,7 +43,7 @@
         {
           "id": "UC-batches-07",
           "tier": "T4",
-          "statement": "When I choose manual_id from the Type filter on the batches page, the table narrows to show only the manual-entry batch Vintage holo entry. When I choose a type with no batches, the table renders with no body rows. Sw... (batches_filter_empty_result)",
+          "statement": "When I choose manual_id from the Type filter on the batches page, the table narrows to show only the manual-entry batch Showcase entry. When I choose a type with no batches, the table renders with no body rows. Switch... (batches_filter_empty_result)",
           "covering_suites": []
         },
         {
@@ -66,7 +66,7 @@
         {
           "id": "UC-binders-01",
           "tier": "T4",
-          "statement": "From the Trade Binder detail view, I click + Add cards. The collection picker modal opens titled Add cards to Trade Binder, loads my collection, and offers a Search your collection… box. I type char into the search bo... (binders_add_cards_full_flow)",
+          "statement": "From the Trade Binder detail view, I click + Add cards. The collection picker modal opens titled Add cards to Trade Binder, loads my collection, and offers a Search your collection… box. I type luke into the search bo... (binders_add_cards_full_flow)",
           "covering_suites": []
         },
         {
@@ -102,7 +102,7 @@
         {
           "id": "UC-binders-07",
           "tier": "T4",
-          "statement": "When I navigate to /binders, I see the three existing binders (Trade Binder, Master Set: 151, and Vintage Vault) rendered as tiles in the binder grid. Each tile shows the binder name and an {n} cards count. Clicking a... (binders_list_view_populated)",
+          "statement": "When I navigate to /binders, I see the three existing binders (Trade Binder, Master Set: Spark of Rebellion, and Hyperspace Vault) rendered as tiles in the binder grid. Each tile shows the binder name and an {n} cards... (binders_list_view_populated)",
           "covering_suites": []
         },
         {
@@ -114,7 +114,7 @@
         {
           "id": "UC-binders-09",
           "tier": "T4",
-          "statement": "From a binder's detail view with cards present (Master Set: 151), I click the Remove link in the action cell of the first card row. That copy is un-assigned from the binder — it disappears from the card table and the ... (binders_remove_cards)",
+          "statement": "From a binder's detail view with cards present (Master Set: Spark of Rebellion), I click the Remove link in the action cell of the first card row. That copy is un-assigned from the binder — it disappears from the card... (binders_remove_cards)",
           "covering_suites": []
         }
       ]
@@ -125,7 +125,7 @@
         {
           "id": "UC-browse-01",
           "tier": "T3",
-          "statement": "I page through a set's binder with the pager until I'm on a deeper page (page 3), open a card's variant modal, and follow its Full card details link to the card page. When I press the browser Back button I land back o... (browse_back_preserves_page_param)",
+          "statement": "I page through a set's binder with the pager until I'm on a deeper page (page 2), open a card's variant modal, and follow its Full card details link to the card page. When I press the browser Back button I land back o... (browse_back_preserves_page_param)",
           "covering_suites": [
             {
               "path": "tests/ui/implementations/browse_back_preserves_page_param.ts",
@@ -147,69 +147,15 @@
           ]
         },
         {
-          "id": "UC-browse-03",
-          "tier": "T4",
-          "statement": "On a binder browse page the Promos checkbox is unchecked by default, so promo cards are excluded from the binder and no Promos section is shown. I check Promos; the page resets to Page 1 of N and, for a set with promo... (browse_include_promos_toggle)",
-          "covering_suites": []
-        },
-        {
-          "id": "UC-browse-04",
-          "tier": "T4",
-          "statement": "On the 151 binder browse page the Secret checkbox is checked by default, so the trailing Secret Rares section is visible and the Mew ex hyper-rare slot (#201) appears after the numbered cards. I uncheck Secret; the pa... (browse_include_secret_rares_toggle)",
-          "covering_suites": []
-        },
-        {
-          "id": "UC-browse-05",
-          "tier": "T4",
-          "statement": "On a binder browse page the Subset checkbox is checked by default. When a set has subset cards (e.g. Galaxy/Trainer Gallery printings marked as a subset), they render in a trailing Subset section under a Subset divide... (browse_include_subset_toggle)",
-          "covering_suites": []
-        },
-        {
-          "id": "UC-browse-06",
-          "tier": "T4",
-          "statement": "On the 151 binder browse page there is an Incomplete only filter pill. By default it is off and every slot on the page is shown. When I activate Incomplete only, slots whose pip row is completely filled — every varian... (browse_incomplete_only_filter)",
-          "covering_suites": []
-        },
-        {
-          "id": "UC-browse-07",
-          "tier": "T3",
-          "statement": "Starting from Browse sets I expand the Pokémon JP — Original Era series and open its one set, Mystery of the Fossils. The binder page loads at /browse/jp-23723 with the set name in the breadcrumb, a single page of six... (browse_japanese_set_add_first_copy)",
-          "covering_suites": [
-            {
-              "path": "tests/ui/implementations/browse_japanese_set_add_first_copy.ts",
-              "tier": "T3",
-              "over_budget": false
-            }
-          ]
-        },
-        {
-          "id": "UC-browse-08",
-          "tier": "T3",
-          "statement": "On the Browse sets page the Japanese era Pokémon JP — Original Era is listed as its own series and starts collapsed, because I own nothing in it. Expanding it reveals one tile, Mystery of the Fossils. The tile has no ... (browse_japanese_set_tile_not_provisional)",
-          "covering_suites": [
-            {
-              "path": "tests/ui/implementations/browse_japanese_set_tile_not_provisional.ts",
-              "tier": "T3",
-              "over_budget": false
-            }
-          ]
-        },
-        {
-          "id": "UC-browse-09",
-          "tier": "T4",
-          "statement": "On the 151 binder browse page the Layout selector defaults to 9-pocket and the slot grid shows three columns. I change the selector to 4-pocket. The grid re-renders with two columns, the pagination resets to Page 1 of... (browse_layout_toggle_9_to_4)",
-          "covering_suites": []
-        },
-        {
           "id": "UC-browse-10",
           "tier": "T4",
-          "statement": "From the Browse sets page I click the tile for the 151 set. The binder browse page loads at /browse/sv3pt5: I see the set name 151 as the page heading, a Set stats → link, the two completion progress bars (a Base bar ... (browse_loads_set_first_page)",
+          "statement": "From the Browse sets page I click the tile for the Spark of Rebellion set. The binder browse page loads at /browse/SOR: I see the set name Spark of Rebellion as the page heading, a Set stats → link, the two completion... (browse_loads_set_first_page)",
           "covering_suites": []
         },
         {
           "id": "UC-browse-11",
           "tier": "T4",
-          "statement": "On the 151 binder browse page the header shows two completion stats side by side. The first reads Base {owned}/{total} with a progress bar — the count of card numbers I own at least one variant of, over the total numb... (browse_master_set_completion_stats_visible)",
+          "statement": "On the Spark of Rebellion binder browse page the header shows two completion stats side by side. The first reads Base {owned}/{total} with a progress bar — the count of card numbers I own at least one variant of, over... (browse_master_set_completion_stats_visible)",
           "covering_suites": []
         },
         {
@@ -219,15 +165,9 @@
           "covering_suites": []
         },
         {
-          "id": "UC-browse-13",
-          "tier": "T4",
-          "statement": "On the 151 binder browse page with the default 9-pocket layout, a wide desktop viewport shows the slot grid in three columns. When I narrow the viewport below 768px the grid drops to two columns, and below 480px it dr... (browse_mobile_breakpoints)",
-          "covering_suites": []
-        },
-        {
           "id": "UC-browse-14",
           "tier": "T4",
-          "statement": "On the 151 binder browse page I open the variant modal for Charmander #4 and click + Add on the Normal printing. The count optimistically jumps to 1 owned and a toast appears bottom-center reading Added Charmander · N... (browse_optimistic_ui_undo_toast)",
+          "statement": "On the Spark of Rebellion binder browse page I open the variant modal for Millennium Falcon - Piece of Junk #193 and click + Add on the Normal printing. The count optimistically jumps from 7 owned to 8 owned and a toa... (browse_optimistic_ui_undo_toast)",
           "covering_suites": []
         },
         {
@@ -245,104 +185,68 @@
         {
           "id": "UC-browse-16",
           "tier": "T4",
-          "statement": "On the 151 binder browse page the indicator reads Page 1 of N and the ← Prev button is disabled. I click Next →; the indicator advances to Page 2 of N, a new set of card slots loads, and ← Prev becomes enabled. I clic... (browse_pagination_next_prev)",
-          "covering_suites": []
-        },
-        {
-          "id": "UC-browse-17",
-          "tier": "T4",
-          "statement": "On the 151 binder browse page, with the Secret checkbox on, the numbered cards (#1 through #165) come first in set-number order. After the last numbered card a full-width Secret Rares divider appears, followed by the ... (browse_secret_rares_appended_after_numbered)",
+          "statement": "On the Spark of Rebellion binder browse page at one card per row the indicator reads Page 1 of 2 and the ← Prev button is disabled. I click Next →; the indicator advances to Page 2 of 2, a new set of card slots loads,... (browse_pagination_next_prev)",
           "covering_suites": []
         },
         {
           "id": "UC-browse-18",
           "tier": "T4",
-          "statement": "When I open the 151 binder browse page and merely look around — paging, toggling sections — no batch is created. The moment I make my first add (clicking + Add in the variant modal), a single ingestion batch is create... (browse_session_creates_batch)",
+          "statement": "When I open the Spark of Rebellion binder browse page and merely look around — paging, switching views — no batch is created. The moment I make my first add (clicking + Add in the variant modal), a single ingestion ba... (browse_session_creates_batch)",
           "covering_suites": []
         },
         {
           "id": "UC-browse-19",
           "tier": "T4",
-          "statement": "On the 151 set stats page every progress meter announces itself as a progress bar. The Completion card has three — Base set, Numbered set and Master set — and the Rarity split table has one per rarity row, named for i... (browse_set_stats_progress_bars_are_accessible)",
-          "covering_suites": []
-        },
-        {
-          "id": "UC-browse-20",
-          "tier": "T4",
-          "statement": "On the 151 set stats page the Rarity split table lists tiers from commonest to rarest — Common, Uncommon, Rare, Double Rare, Illustration Rare, Special Illustration Rare, Hyper Rare — not alphabetically and not in wha... (browse_set_stats_rarity_split_order)",
+          "statement": "On the Spark of Rebellion set stats page every progress meter announces itself as a progress bar. The Completion card has three — Base set, Numbered set and Master set — and the Rarity split table has one per rarity r... (browse_set_stats_progress_bars_are_accessible)",
           "covering_suites": []
         },
         {
           "id": "UC-browse-21",
           "tier": "T4",
-          "statement": "On the 151 binder browse page I click the body of the Bulbasaur #1 slot. The variant modal opens, titled #1 · Bulbasaur, listing every printing of that card. The modal has a close × button and a Full card details → li... (browse_slot_click_opens_variant_modal)",
-          "covering_suites": []
-        },
-        {
-          "id": "UC-browse-22",
-          "tier": "T4",
-          "statement": "On the Base Set binder browse page the slot for a Rare Holo card such as Charizard #4 carries two inline quick-toggle checkboxes labelled Holo and RH — the two common variants for a holo rare. I click the Holo checkbo... (browse_slot_inline_checkbox_holo_rh)",
-          "covering_suites": []
-        },
-        {
-          "id": "UC-browse-23",
-          "tier": "T4",
-          "statement": "On the 151 binder browse page the slot for a Common card such as Bulbasaur #1 carries two inline quick-toggle checkboxes in its footer, labelled Reg and RH — the two most common variants for that rarity. I click the R... (browse_slot_inline_checkbox_reg_rh)",
+          "statement": "On the Spark of Rebellion binder browse page I click the body of the Luke Skywalker - Faithful Friend #5 slot. The variant modal opens, titled #5 · Luke Skywalker - Faithful Friend, listing every printing of that card... (browse_slot_click_opens_variant_modal)",
           "covering_suites": []
         },
         {
           "id": "UC-browse-24",
           "tier": "T4",
-          "statement": "On the 151 binder browse page each slot's pip row shows my ownership at a glance. For a card whose printings I own at least one copy of, the matching pips render filled; for printings I do not own, the pips render emp... (browse_slot_pips_reflect_ownership)",
+          "statement": "On the Spark of Rebellion binder browse page each slot's pip row shows my ownership at a glance. For a card whose printings I own at least one copy of, the matching pips render filled; for printings I do not own, the ... (browse_slot_pips_reflect_ownership)",
           "covering_suites": []
         },
         {
           "id": "UC-browse-25",
           "tier": "T4",
-          "statement": "On the 151 binder browse page each slot in the grid is a clickable button that shows the card's image at the top, and a footer row with the card number on the left and a row of pips on the right. There is one pip per ... (browse_slot_renders_image_number_pips)",
-          "covering_suites": []
-        },
-        {
-          "id": "UC-browse-26",
-          "tier": "T4",
-          "statement": "On the 151 binder browse page the slots are ordered by set number by default — Bulbasaur #1, then Charmander #4, then Charizard ex #6, and so on in ascending numeric order. A sort-mode control lets me switch to rarity... (browse_sort_mode_change)",
-          "covering_suites": []
-        },
-        {
-          "id": "UC-browse-27",
-          "tier": "T4",
-          "statement": "On a binder browse page, with the Subset checkbox on, cards flagged as a subset (such as a Galaxy or Trainer Gallery sub-collection) render as a separate appended section. After the numbered set — and after any secret... (browse_subset_section_appended)",
+          "statement": "On the Spark of Rebellion binder browse page each slot in the grid is a clickable button that shows the card's image at the top, and a footer row with the card number on the left and a row of pips on the right. There ... (browse_slot_renders_image_number_pips)",
           "covering_suites": []
         },
         {
           "id": "UC-browse-28",
           "tier": "T4",
-          "statement": "The binder browse page is addressable by set: navigating directly to /browse/sv3pt5 loads the 151 binder, while /browse/base1 loads the Base Set binder. The page reacts to the set route parameter — changing the set in... (browse_url_state_persists)",
+          "statement": "The binder browse page is addressable by set: navigating directly to /browse/SOR loads the Spark of Rebellion binder, while /browse/SHD loads the Shadows of the Galaxy binder. The page reacts to the set route paramete... (browse_url_state_persists)",
           "covering_suites": []
         },
         {
           "id": "UC-browse-29",
           "tier": "T4",
-          "statement": "I open the variant modal for Charmander #4 in the 151 set. The Normal printing row shows 0 owned. I click its + Add button. The count immediately updates to 1 owned and turns green, the slot's matching pip fills behin... (browse_variant_modal_add_increments_count)",
-          "covering_suites": []
-        },
-        {
-          "id": "UC-browse-30",
-          "tier": "T4",
-          "statement": "In the variant modal for a card I own, each printing row offers an Edit copies… affordance. When I expand it, per-copy controls appear — one set per physical copy — letting me change a copy's condition, language, note... (browse_variant_modal_edit_copies)",
+          "statement": "I open the variant modal for Millennium Falcon - Piece of Junk #193 in the Spark of Rebellion set. The Normal printing row shows 7 owned. I click its + Add button. The count immediately updates to 8 owned and turns gr... (browse_variant_modal_add_increments_count)",
           "covering_suites": []
         },
         {
           "id": "UC-browse-31",
           "tier": "T4",
-          "statement": "I open the variant modal for Bulbasaur #1 in the 151 set. The modal lists one row per printing of the card: each row shows the variant label (e.g. Normal, Reverse Holo), an {n} owned count that turns green when I own ... (browse_variant_modal_lists_all_variants)",
+          "statement": "I open the variant modal for Luke Skywalker - Faithful Friend #5 in the Spark of Rebellion set. The modal lists one row per printing of the card: each row shows the variant label (e.g. Normal, Foil), an {n} owned coun... (browse_variant_modal_lists_all_variants)",
           "covering_suites": []
         },
         {
           "id": "UC-browse-32",
-          "tier": "T4",
-          "statement": "I open the variant modal for a printing I already own and use the modal's per-variant remove control to take one copy off. The {n} owned count decreases by one, and when it reaches zero it loses its green styling and ... (browse_variant_modal_remove_decrements_count)",
-          "covering_suites": []
+          "tier": "T3",
+          "statement": "On a set's browse page, pressing # twice flips the collector-number order each time, and pressing Price twice flips between most and least expensive each time. The list on screen changes with every press, the page kee... (browse_sort_buttons_reorder)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/browse_sort_buttons_reorder.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
         }
       ]
     },
@@ -577,18 +481,6 @@
           ]
         },
         {
-          "id": "UC-collection-03",
-          "tier": "T3",
-          "statement": "With All cards turned on, the collection shows every catalog printing — the ones I own as normal rows and the ones I don't as dimmed missing rows. Sorting by a column (e.g. the NM price) must order owned and unowned p... (collection_all_cards_sort_interleaves)",
-          "covering_suites": [
-            {
-              "path": "tests/ui/implementations/collection_all_cards_sort_interleaves.ts",
-              "tier": "T3",
-              "over_budget": false
-            }
-          ]
-        },
-        {
           "id": "UC-collection-04",
           "tier": "T3",
           "statement": "In the collection table view, the Aspects column is no wider than two aspect icons plus cell padding, and a card with two aspects shows both icons fully unclipped; the freed width goes to the Name column. (collection_aspects_column_fits_icons)",
@@ -639,7 +531,7 @@
         {
           "id": "UC-collection-09",
           "tier": "T4",
-          "statement": "I can narrow the collection table by Pokémon rarity. The sidebar's Rarity facet lists every rarity present among my copies — Common, Rare Holo, Double Rare, Illustration Rare and so on. When I tick a rarity, the table... (collection_filter_rarity)",
+          "statement": "I can narrow the collection table by rarity. The sidebar's Rarity facet lists every rarity present among my copies — Common, Rare, Special, Legendary. When I tick a rarity, the table filters to rows of that rarity and... (collection_filter_rarity)",
           "covering_suites": []
         },
         {
@@ -681,7 +573,7 @@
         {
           "id": "UC-collection-16",
           "tier": "T4",
-          "statement": "When I open the Collection page and enter multi-select mode, a card I own more than once shows one row per physical copy because Dumpstar keeps strictly one row per card. I can check exactly one of the Charmander rows... (collection_multiselect_delete_individual_copies)",
+          "statement": "When I open the Collection page and enter multi-select mode, a card I own more than once shows one row per physical copy because Dumpstar keeps strictly one row per card. I can check exactly one of the Vanquish rows, ... (collection_multiselect_delete_individual_copies)",
           "covering_suites": []
         },
         {
@@ -693,7 +585,7 @@
         {
           "id": "UC-collection-18",
           "tier": "T4",
-          "statement": "When I enter multi-select mode on the Collection page, the table still shows one row per physical copy, so a card I own twice appears as two separate selectable rows. I can check just one Charmander row and use the bu... (collection_multiselect_individual_copies)",
+          "statement": "When I enter multi-select mode on the Collection page, the table still shows one row per physical copy, so a card I own three times appears as three separate selectable rows. I can check just one Vanquish row and use ... (collection_multiselect_individual_copies)",
           "covering_suites": []
         },
         {
@@ -717,7 +609,7 @@
         {
           "id": "UC-collection-22",
           "tier": "T3",
-          "statement": "As I type in the Collection search bar, a dropdown suggests completions from the query vocabulary. Typing a bare token like t lists matching keywords (e.g. the energy-type keyword) with their descriptions; typing is: ... (collection_search_autocomplete_keywords)",
+          "statement": "As I type in the Collection search bar, a dropdown suggests completions from the query vocabulary. Typing a bare token like t lists matching keywords (e.g. the rarity keyword) with their descriptions; typing is: lists... (collection_search_autocomplete_keywords)",
           "covering_suites": [
             {
               "path": "tests/ui/implementations/collection_search_autocomplete_keywords.ts",
@@ -730,12 +622,6 @@
           "id": "UC-collection-23",
           "tier": "T4",
           "statement": "I can type a card name into the sidebar search input and, after the 200 ms debounce idle, the table filters to rows whose card name contains what I typed. The toolbar {filtered} of {total} cards count updates to the f... (collection_search_debounced)",
-          "covering_suites": []
-        },
-        {
-          "id": "UC-collection-24",
-          "tier": "T4",
-          "statement": "I can tick a value in the sidebar Set facet to narrow the collection table to only the copies from that set. The toolbar count updates to the filtered subset, and unticking the facet restores the full table. (collection_search_deck_filter)",
           "covering_suites": []
         },
         {
@@ -757,18 +643,6 @@
           "covering_suites": [
             {
               "path": "tests/ui/implementations/collection_search_help_page.ts",
-              "tier": "T3",
-              "over_budget": false
-            }
-          ]
-        },
-        {
-          "id": "UC-collection-27",
-          "tier": "T3",
-          "statement": "Searching the collection for is:missing lists every printing I don't own as a dimmed missing tile. Cards with several unowned printings (e.g. a base-set card with both a normal and a holo printing) each contribute mul... (collection_search_is_missing)",
-          "covering_suites": [
-            {
-              "path": "tests/ui/implementations/collection_search_is_missing.ts",
               "tier": "T3",
               "over_budget": false
             }
@@ -914,7 +788,7 @@
         {
           "id": "UC-collectr-01",
           "tier": "T3",
-          "statement": "When I open the overflow menu on the collection page, I see two distinct Collectr export downloads — Export cards (Collectr) and Export sealed (Collectr) — alongside the ManaBox export, so cards and sealed can each be... (collectr_export_menu_links)",
+          "statement": "When I open the overflow menu on the collection page, I see two distinct Collectr export downloads — Export cards (Collectr) and Export sealed (Collectr) — alongside the CSV export, so cards and sealed can each be tak... (collectr_export_menu_links)",
           "covering_suites": [
             {
               "path": "tests/ui/implementations/collectr_export_menu_links.ts",
@@ -967,13 +841,13 @@
         {
           "id": "UC-csv-01",
           "tier": "T4",
-          "statement": "After previewing a ManaBox CSV on the CSV Import page, I click Import to commit. A result banner reports the added count and offers a View batch → link. I click the link and land on the created batch's detail page, wh... (csv_import_assign_to_deck)",
+          "statement": "After previewing a TCGplayer CSV on the CSV Import page, I click Import to commit. A result banner reports the added count and offers a View batch → link. I click the link and land on the created batch's detail page, ... (csv_import_assign_to_deck)",
           "covering_suites": []
         },
         {
           "id": "UC-csv-02",
           "tier": "T4",
-          "statement": "On the CSV Import page, I choose the ManaBox format, paste a valid CSV, click Preview to see the resolution report, and click Import to commit. The result banner confirms the cards were added and links to the new inge... (csv_import_batch_metadata_in_commit)",
+          "statement": "On the CSV Import page, I choose the TCGplayer format, paste a valid CSV, click Preview to see the resolution report, and click Import to commit. The result banner confirms the cards were added and links to the new in... (csv_import_batch_metadata_in_commit)",
           "covering_suites": []
         },
         {
@@ -985,25 +859,25 @@
         {
           "id": "UC-csv-04",
           "tier": "T4",
-          "statement": "After previewing a ManaBox CSV on the CSV Import page, I click Import. On success a result banner appears reporting the added and skipped counts, the preview tables clear, and the banner offers a View batch → link. (csv_import_commit_to_collection)",
+          "statement": "After previewing a TCGplayer CSV on the CSV Import page, I click Import. On success a result banner appears reporting the added and skipped counts, the preview tables clear, and the banner offers a View batch → link. (csv_import_commit_to_collection)",
           "covering_suites": []
         },
         {
           "id": "UC-csv-05",
           "tier": "T4",
-          "statement": "When I preview a ManaBox CSV that mixes valid cards with rows that cannot be resolved, the preview summary shows both a matched count and an unmatched count. An Unmatched rows table lists each failed row with its reas... (csv_import_failed_cards_display)",
+          "statement": "When I preview a TCGplayer CSV that mixes valid cards with rows that cannot be resolved, the preview summary shows both a matched count and an unmatched count. An Unmatched rows table lists each failed row with its re... (csv_import_failed_cards_display)",
           "covering_suites": []
         },
         {
           "id": "UC-csv-06",
           "tier": "T4",
-          "statement": "When I navigate to the CSV Import page, I see the correct initial state: the Import CSV heading, a Format select offering ManaBox and TCGplayer, a CSV file file input, a …or paste CSV text textarea, and Preview and Im... (csv_import_page_structure)",
+          "statement": "When I navigate to the CSV Import page, I see the correct initial state: the Import CSV heading, a Format select offering TCGplayer and Dumpstar, a CSV file file input, a …or paste CSV text textarea, and Preview and I... (csv_import_page_structure)",
           "covering_suites": []
         },
         {
           "id": "UC-csv-07",
           "tier": "T4",
-          "statement": "I paste a ManaBox CSV into the CSV Import textarea and click Preview. A resolution report appears: a summary line with the matched count and a Matched rows table showing Line, Card, Set, #, Variant, and Condition for ... (csv_import_parse_and_resolve_decklist)",
+          "statement": "I paste a TCGplayer CSV into the CSV Import textarea and click Preview. A resolution report appears: a summary line with the matched count and a Matched rows table showing Line, Card, Set, #, Variant, and Condition fo... (csv_import_parse_and_resolve_decklist)",
           "covering_suites": []
         },
         {
@@ -1015,7 +889,7 @@
         {
           "id": "UC-csv-09",
           "tier": "T4",
-          "statement": "When I visit the CSV Import page, the Format select offers both ManaBox and TCGplayer parsers. I switch the select to TCGplayer, paste a TCGplayer CSV, and click Preview; the resolution report classifies the rows as m... (csv_import_with_batch_metadata)",
+          "statement": "When I visit the CSV Import page, the Format select offers both TCGplayer and Dumpstar parsers. I switch the select to TCGplayer, paste a TCGplayer CSV, and click Preview; the resolution report classifies the rows as ... (csv_import_with_batch_metadata)",
           "covering_suites": []
         }
       ]
@@ -1026,7 +900,7 @@
         {
           "id": "UC-deck-01",
           "tier": "T4",
-          "statement": "On a deck's detail page, I can click + Add cards to open the collection picker modal. Searching for a card name shows matching owned copies. Selecting a copy and confirming adds it to the deck's card table, grouped by... (deck_builder_add_and_remove_cards)",
+          "statement": "On a deck's detail page, I can click + Add cards to open the collection picker modal. Searching for a card name shows matching owned copies. Selecting a copy and confirming adds it to the deck's card table. The card c... (deck_builder_add_and_remove_cards)",
           "covering_suites": []
         },
         {
@@ -1048,24 +922,6 @@
           "covering_suites": []
         },
         {
-          "id": "UC-deck-05",
-          "tier": "T4",
-          "statement": "When viewing a built deck (cards mapped to physical collection entries), the swap button (⇄) does not appear on card rows. Only the Remove action is shown. This is correct because built decks reference owned physical ... (deck_builder_swap_unavailable_built)",
-          "covering_suites": []
-        },
-        {
-          "id": "UC-deck-06",
-          "tier": "T4",
-          "statement": "In the swap variant modal, I click on a different variant of the same card. The modal closes and the deck reloads with the new variant. The card row in the card table now references the new variant. If I reopen the sw... (deck_builder_swap_variant_execution)",
-          "covering_suites": []
-        },
-        {
-          "id": "UC-deck-07",
-          "tier": "T4",
-          "statement": "When viewing an idea deck's card table, I hover over a card row to reveal the swap button (⇄). Clicking it opens a modal titled Swap Variant showing all variants of that card. Each variant displays: set name with code... (deck_builder_swap_variant_modal)",
-          "covering_suites": []
-        },
-        {
           "id": "UC-deck-08",
           "tier": "T4",
           "statement": "When I create a new deck from the /decks page by filling in the name and owner in the inline create form and clicking Create, the deck appears in the grid as a tile. Clicking the tile opens the new deck's detail page ... (deck_create_redirects_to_detail)",
@@ -1074,19 +930,19 @@
         {
           "id": "UC-deck-09",
           "tier": "T4",
-          "statement": "When I navigate to deck 2 (Pikachu ex Aggro) at /decks/2 and click + Add cards, the collection picker modal opens with a search field. I type Snorlax in the search field, see Snorlax in the results, check it to select... (deck_detail_add_cards_from_collection)",
+          "statement": "When I navigate to deck 2 (Vader Aggro) at /decks/2 and click + Add cards, the collection picker modal opens with a search field. I type Millennium Falcon - Piece of Junk in the search field, see Millennium Falcon - P... (deck_detail_add_cards_from_collection)",
           "covering_suites": []
         },
         {
           "id": "UC-deck-10",
           "tier": "T4",
-          "statement": "When I navigate to deck 2 (Pikachu ex Aggro) at /decks/2 and open the + Add cards picker, the picker lists collection copies as checkbox rows. Copies already assigned to another deck or to a binder are shown with a wh... (deck_detail_add_cards_hides_assigned)",
+          "statement": "When I navigate to deck 2 (Vader Aggro) at /decks/2 and open the + Add cards picker, the picker lists collection copies as checkbox rows. Copies already assigned to another deck or to a binder are shown with a where t... (deck_detail_add_cards_hides_assigned)",
           "covering_suites": []
         },
         {
           "id": "UC-deck-11",
           "tier": "T4",
-          "statement": "When I navigate to deck 2 (Pikachu ex Aggro) at /decks/2 and click + Add cards, the picker modal opens. Each physical copy is listed as its own individual checkbox row — there is no quantity aggregation, one row per p... (deck_detail_add_individual_copy)",
+          "statement": "When I navigate to deck 2 (Vader Aggro) at /decks/2 and click + Add cards, the picker modal opens. Each physical copy is listed as its own individual checkbox row — there is no quantity aggregation, one row per physic... (deck_detail_add_individual_copy)",
           "covering_suites": []
         },
         {
@@ -1110,19 +966,19 @@
         {
           "id": "UC-deck-15",
           "tier": "T4",
-          "statement": "I can navigate directly to a deck's detail page at /decks/:id. I see the deck name, the sub line showing the owner and format, the Lifecycle select, and a card table listing the deck's cards grouped by supertype (Poké... (deck_detail_direct_navigation)",
+          "statement": "I can navigate directly to a deck's detail page at /decks/:id. I see the deck name, the sub line showing the owner and format, the Lifecycle select, and a card table listing the deck's cards with Name, Set, #, Variant... (deck_detail_direct_navigation)",
           "covering_suites": []
         },
         {
           "id": "UC-deck-16",
           "tier": "T4",
-          "statement": "When I navigate to deck 2 (Pikachu ex Aggro) and use the Lifecycle select in the header to change the deck's state from ready to built, the change is saved and the deck reloads showing the new state. The state badge r... (deck_detail_edit_properties)",
+          "statement": "When I navigate to deck 2 (Vader Aggro) and use the Lifecycle select in the header to change the deck's state from ready to built, the change is saved and the deck reloads showing the new state. The state badge reflec... (deck_detail_edit_properties)",
           "covering_suites": []
         },
         {
           "id": "UC-deck-17",
           "tier": "T4",
-          "statement": "When I view a deck's detail page, the supertype-grouped card table fits entirely within the viewport. No content overflows off the right edge of the screen and no horizontal scrollbar appears. (deck_detail_list_view_no_overflow)",
+          "statement": "When I view a deck's detail page, the card table fits entirely within the viewport. No content overflows off the right edge of the screen and no horizontal scrollbar appears. (deck_detail_list_view_no_overflow)",
           "covering_suites": []
         },
         {
@@ -1134,7 +990,7 @@
         {
           "id": "UC-deck-19",
           "tier": "T4",
-          "statement": "When I navigate to deck 1 (Charizard ex Control) and click the Remove link on each card row, the cards are un-assigned from the deck one by one. The copies stay in the collection. After all cards are removed, the card... (deck_detail_select_and_remove_cards)",
+          "statement": "When I navigate to deck 1 (Luke Vigilance Midrange) and click the Remove link on each card row, the cards are un-assigned from the deck one by one. The copies stay in the collection. After all cards are removed, the c... (deck_detail_select_and_remove_cards)",
           "covering_suites": []
         },
         {
@@ -1181,13 +1037,7 @@
         {
           "id": "UC-decks-06",
           "tier": "T4",
-          "statement": "When I delete the deck Charizard ex Control, its cards remain in my collection. After deletion, I can search for Charizard ex on the Collection page and still find the copies that had been in the deck. (decks_delete_keeps_cards)",
-          "covering_suites": []
-        },
-        {
-          "id": "UC-decks-07",
-          "tier": "T4",
-          "statement": "A copy of Charizard ex that is assigned to deck Charizard ex Control can be moved to binder Trade Binder from the card detail modal. After moving, the copy shows the binder assignment instead of the deck assignment — ... (decks_exclusivity_enforcement)",
+          "statement": "When I delete the deck Luke Vigilance Midrange, its cards remain in my collection. After deletion, I can search for Luke Skywalker - Faithful Friend on the Collection page and still find the copies that had been in th... (decks_delete_keeps_cards)",
           "covering_suites": []
         },
         {
@@ -1200,12 +1050,6 @@
           "id": "UC-decks-09",
           "tier": "T4",
           "statement": "When I visit /decks on an instance with no decks, I see the message No decks yet. instead of a deck grid, with a line explaining what a deck is and to name one above. The inline create form is still available above th... (decks_list_empty_state)",
-          "covering_suites": []
-        },
-        {
-          "id": "UC-decks-10",
-          "tier": "T4",
-          "statement": "I can assign an unassigned copy to a deck from the card detail modal's Copies section. After assigning, the copy shows the deck name instead of Unassigned. (decks_manage_from_card_modal)",
           "covering_suites": []
         }
       ]
@@ -1474,7 +1318,7 @@
         {
           "id": "UC-recent-03",
           "tier": "T4",
-          "statement": "On the Recent page, the ManaBox export 2024-01 CSV import batch appears in the timeline with its 4 cards count. Expanding it lazily loads and lists the four sv8 cards that import added to the collection. (recent_batch_ingest)",
+          "statement": "On the Recent page, the CSV export 2025-06 CSV import batch appears in the timeline with its 4 cards count. Expanding it lazily loads and lists the four cards that import added to the collection. (recent_batch_ingest)",
           "covering_suites": []
         },
         {
@@ -1610,7 +1454,7 @@
         {
           "id": "UC-sealed-13",
           "tier": "T4",
-          "statement": "I can open the add-sealed modal and type 151 into the search input to see the 151 sealed products. Typing a more specific term like Booster Bundle narrows the results to a single product, and clearing the input back b... (sealed_search_and_filter)",
+          "statement": "I can open the add-sealed modal and type Spark into the search input to see the Spark of Rebellion sealed products. Typing a more specific term like Prerelease Kit narrows the results to a single product, and clearing... (sealed_search_and_filter)",
           "covering_suites": []
         }
       ]
@@ -1621,13 +1465,13 @@
         {
           "id": "UC-set-01",
           "tier": "T4",
-          "statement": "On the Set Stats page for Base Set, the Completion card's Master set bar (owned variants / total variants) reads a different total than the Numbered set bar (owned cards / total cards), because commons carry both a no... (set_value_filter_card_type_and_owned)",
+          "statement": "On the Set Stats page for Spark of Rebellion, the Completion card's Master set bar (owned variants / total variants) reads a different total than the Numbered set bar (owned cards / total cards), because Luke Skywalke... (set_value_filter_card_type_and_owned)",
           "covering_suites": []
         },
         {
           "id": "UC-set-02",
           "tier": "T4",
-          "statement": "On the Set Stats page for 151, the Rarity split table's Hyper Rare row shows an Owned count of 1 — the Mew ex secret rare is registered in the collection — out of a Total of 1. The Progress cell for that row reads 100... (set_value_filter_rarity)",
+          "statement": "On the Set Stats page for Spark of Rebellion, the Rarity split table's Rare row shows an Owned count of 1 — the Millennium Falcon - Piece of Junk Rare is registered in the collection — out of a Total of 1. The Progres... (set_value_filter_rarity)",
           "covering_suites": []
         },
         {
@@ -1639,7 +1483,7 @@
         {
           "id": "UC-set-04",
           "tier": "T4",
-          "statement": "The Set Stats page re-fetches its analytics whenever the set route param changes. Loading /browse/sv3pt5/stats shows the 151 dashboard; navigating to /browse/sv8/stats re-runs the analytics and the heading, Completion... (set_value_remove_set_pill)",
+          "statement": "The Set Stats page re-fetches its analytics whenever the set route param changes. Loading /browse/SOR/stats shows the Spark of Rebellion dashboard; navigating to /browse/SHD/stats re-runs the analytics and the heading... (set_value_remove_set_pill)",
           "covering_suites": []
         },
         {
@@ -1658,17 +1502,6 @@
           "id": "UC-set-07",
           "tier": "T4",
           "statement": "On the Set Stats page, the Completion card shows two labelled progress bars — Numbered set (owned cards / total cards) and Master set (owned variants / total variants) — each reading {owned} / {total} · {pct}%. The Va... (set_value_summary_stats)",
-          "covering_suites": []
-        }
-      ]
-    },
-    {
-      "area": "views",
-      "use_cases": [
-        {
-          "id": "UC-views-01",
-          "tier": "T4",
-          "statement": "On the Collection page I can pick the saved view Vintage Holos from the Saved views dropdown in the sidebar. Applying it rehydrates the view's saved filters and the collection table narrows to only the matching copies... (views_save_and_load)",
           "covering_suites": []
         }
       ]

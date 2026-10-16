@@ -15,7 +15,9 @@
 		SectionHeader,
 		Toolbar
 	} from '$lib/components/ui';
-	import { printingLabel } from '$lib/format';
+	import { printingLabel, money } from '$lib/format';
+	import { rarityMarks } from '$lib/rarity.svelte';
+	import { slotPrice, ownedFoil } from '$lib/browseView';
 	import { splitLandscape, bandRuns, clampCols, MAX_COLS, BROWSE_ROWS, pageAfterResize } from '$lib/browseView';
 		import { variantColor, variantSortCmp } from '$lib/variants.svelte';
 	import type { BinderPage } from '$lib/types/BinderPage';
@@ -139,6 +141,10 @@
 	// "SOR → Spark of Rebellion" upgrade happens in the same frame as the data load
 	// since $effect.pre runs before the DOM updates. No unmount cleanup
 	// needed — the breadcrumbs store is path-keyed.
+	$effect(() => {
+		void rarityMarks.load();
+	});
+
 	$effect.pre(() => {
 		const setCode = page.params.set;
 		if (!setCode) return;
@@ -694,11 +700,20 @@
 					class:rotated={slot.landscape && turnLandscape}
 					data-landscape={slot.landscape}
 				>
-					<button class="slot" onclick={() => (selectedSlot = slot)}>
+					<button
+						class="slot"
+						class:foil={ownedFoil(slot)}
+						data-rarity={slot.rarity ?? ''}
+						style:--rc={rarityMarks.get(slot.rarity)?.color}
+						onclick={() => (selectedSlot = slot)}
+					>
 						{#if slot.image_url}
 							<img src={slot.image_url} alt={slot.name} loading="lazy" />
 						{:else}
 							<div class="noart">{slot.name}</div>
+						{/if}
+						{#if slotPrice(slot) != null}
+							<span class="pricebadge">{money(slotPrice(slot))}</span>
 						{/if}
 					</button>
 					<div class="foot">
@@ -1061,6 +1076,55 @@
 		overflow: hidden;
 		min-width: 0;
 		aspect-ratio: 5 / 7;
+	}
+	/* Rarity outline: drawn inside the box, so it takes no space. */
+	.slot[style*='--rc'] {
+		outline: 2px solid var(--rc);
+		outline-offset: -2px;
+	}
+	/* Owned foil: a light streak sweeping across the art. */
+	.slot.foil::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background: linear-gradient(
+			115deg,
+			transparent 35%,
+			color-mix(in srgb, var(--color-text-strong) 35%, transparent) 50%,
+			transparent 65%
+		);
+		background-size: 250% 100%;
+		animation: foil-streak 3.5s linear infinite;
+	}
+	@keyframes foil-streak {
+		from {
+			background-position: 150% 0;
+		}
+		to {
+			background-position: -50% 0;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.slot.foil::after {
+			animation: none;
+			background-position: 50% 0;
+		}
+	}
+	/* Price layered on the art, bottom-right; takes no layout space. */
+	.pricebadge {
+		position: absolute;
+		right: var(--space-1);
+		bottom: var(--space-1);
+		padding: var(--space-0) var(--space-1);
+		border-radius: var(--radius-sm);
+		background: color-mix(in srgb, var(--color-surface-overlay) 80%, transparent);
+		color: var(--color-text-strong);
+		font-size: var(--text-xs);
+		font-weight: var(--weight-bold);
+		line-height: 1.3;
+		font-variant-numeric: tabular-nums;
+		pointer-events: none;
 	}
 	.slotwrap.landscape:not(.rotated) .slot {
 		aspect-ratio: 7 / 5;

@@ -1,4 +1,5 @@
 # Scenario: Adding a copy shows an undo toast that reverses the add
+# Use case: UC-browse-14
 
 # Related: browse_variant_modal_add_increments_count, browse_session_creates_batch
 

@@ -1,4 +1,5 @@
 # Scenario: An order-created batch shows its order origin in the detail view
+# Use case: UC-batches-01
 
 # Related: batches_detail_view_and_metadata, batches_type_filter_bar
 

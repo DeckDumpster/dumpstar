@@ -1,4 +1,5 @@
 # Scenario: Advancing a page in binder browse re-centers the viewport at the top
+# Use case: UC-browse-15
 #
 # Related:
 #   issues: [dumpstar-not]

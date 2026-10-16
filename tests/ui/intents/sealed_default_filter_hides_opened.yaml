@@ -1,4 +1,5 @@
 # Scenario: Default sealed view hides opened and disposed entries
+# Use case: UC-sealed-02
 #
 # Related:
 #   issues: []

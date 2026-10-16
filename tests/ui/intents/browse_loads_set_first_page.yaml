@@ -1,4 +1,5 @@
 # Scenario: Opening a set from the browse picker loads its first binder page
+# Use case: UC-browse-10
 
 # Related: browse_pagination_next_prev, browse_slot_renders_image_number_pips, browse_url_state_persists
 

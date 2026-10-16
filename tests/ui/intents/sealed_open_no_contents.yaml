@@ -1,4 +1,5 @@
 # Scenario: Short search queries return no results in the add-sealed modal
+# Use case: UC-sealed-09
 #
 # Related:
 #   issues: []

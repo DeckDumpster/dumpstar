@@ -287,6 +287,7 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
                 power: a.get("power").and_then(Value::as_i64),
                 hp: a.get("hp").and_then(Value::as_i64),
                 aspects: rel_names(a, "aspects"),
+                from_standard: variant == "Standard" && !foil,
                 traits: rel_names(a, "traits"),
                 arenas: rel_names(a, "arenas"),
                 rules_text: {

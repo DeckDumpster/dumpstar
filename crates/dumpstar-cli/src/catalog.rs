@@ -166,6 +166,12 @@ pub fn run(args: CatalogApplyArgs) -> anyhow::Result<()> {
         }
         Err(e) => eprintln!("set art: {e:#}"),
     }
+    let art_cov = dumpstar_catalog::art::coverage(&art_dir, &dumpstar_catalog::art::sources());
+    println!("{}", art_cov.line());
+    if !art_cov.missing.is_empty() {
+        eprintln!("ALARM set-art: missing {}", art_cov.missing.join(", "));
+        failed.push("set art");
+    }
     let images = match args.image_dir {
         Some(p) => p,
         None => dumpstar_db::dumpstar_home()?.join("sealed-images"),
@@ -210,7 +216,17 @@ pub fn check(args: CatalogCheckArgs) -> anyhow::Result<()> {
     for a in &alarms {
         println!("ALARM {} {}: {}", a.kind, a.key, a.detail);
     }
-    anyhow::ensure!(alarms.is_empty(), "{} catalog alarm(s)", alarms.len());
+    let art_dir = dumpstar_db::dumpstar_home()?.join("art");
+    let art_cov = dumpstar_catalog::art::coverage(&art_dir, &dumpstar_catalog::art::sources());
+    println!("{}", art_cov.line());
+    for m in &art_cov.missing {
+        println!("ALARM set-art {m}: listed in set_art.json, not in the art store");
+    }
+    anyhow::ensure!(
+        alarms.is_empty() && art_cov.missing.is_empty(),
+        "{} catalog alarm(s)",
+        alarms.len() + art_cov.missing.len()
+    );
     println!("catalog check: no alarms");
     Ok(())
 }

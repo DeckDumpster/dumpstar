@@ -1,7 +1,7 @@
 /**
  * Hand-written implementation for rarity_official_mark (sp-kvga20).
  * The character, colour and sort order are catalog data served by
- * /api/rarities; a Legendary card shows "L" in rgb(0, 200, 243).
+ * /api/rarities; a Legendary card shows a vector mark, no text, in rgb(0, 200, 243).
  */
 import type { ReplayHarness } from '../replay';
 
@@ -11,9 +11,11 @@ async function assertMark(h: ReplayHarness) {
   await h.wait_for_visible(MARK, 6000);
   const got = await h.page.locator(MARK).first().evaluate((el) => ({
     text: el.textContent?.trim(),
+    svg: el.querySelectorAll('svg path').length,
     color: getComputedStyle(el).color,
   }));
-  if (got.text !== 'L') throw new Error(`expected "L", got ${got.text}`);
+  if (got.text) throw new Error(`expected no text label, got "${got.text}"`);
+  if (got.svg !== 1) throw new Error(`expected one svg mark, got ${got.svg}`);
   if (got.color !== 'rgb(0, 200, 243)') throw new Error(`expected rgb(0, 200, 243), got ${got.color}`);
 }
 

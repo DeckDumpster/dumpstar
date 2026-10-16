@@ -13,11 +13,6 @@ tier = "T3"
 statement = "After adding a copy from one card's detail page (reached from the Collection page), I can navigate back to the Collection page, open a different card's detail page, and successfully add a copy of that second card with... (collection_add_second_card_no_refresh)"
 
 [[use_case]]
-id = "UC-collection-03"
-tier = "T3"
-statement = "With All cards turned on, the collection shows every catalog printing — the ones I own as normal rows and the ones I don't as dimmed missing rows. Sorting by a column (e.g. the NM price) must order owned and unowned p... (collection_all_cards_sort_interleaves)"
-
-[[use_case]]
 id = "UC-collection-04"
 tier = "T3"
 statement = "In the collection table view, the Aspects column is no wider than two aspect icons plus cell padding, and a card with two aspects shows both icons fully unclipped; the freed width goes to the Name column. (collection_aspects_column_fits_icons)"
@@ -45,7 +40,7 @@ statement = "When I open a card's modal on the collection page and click a facet
 [[use_case]]
 id = "UC-collection-09"
 tier = "T4"
-statement = "I can narrow the collection table by Pokémon rarity. The sidebar's Rarity facet lists every rarity present among my copies — Common, Rare Holo, Double Rare, Illustration Rare and so on. When I tick a rarity, the table... (collection_filter_rarity)"
+statement = "I can narrow the collection table by rarity. The sidebar's Rarity facet lists every rarity present among my copies — Common, Rare, Special, Legendary. When I tick a rarity, the table filters to rows of that rarity and... (collection_filter_rarity)"
 
 [[use_case]]
 id = "UC-collection-10"
@@ -80,7 +75,7 @@ statement = "When I am on the Collection page, the sidebar renders within the vi
 [[use_case]]
 id = "UC-collection-16"
 tier = "T4"
-statement = "When I open the Collection page and enter multi-select mode, a card I own more than once shows one row per physical copy because Dumpstar keeps strictly one row per card. I can check exactly one of the Charmander rows... (collection_multiselect_delete_individual_copies)"
+statement = "When I open the Collection page and enter multi-select mode, a card I own more than once shows one row per physical copy because Dumpstar keeps strictly one row per card. I can check exactly one of the Vanquish rows, ... (collection_multiselect_delete_individual_copies)"
 
 [[use_case]]
 id = "UC-collection-17"
@@ -90,7 +85,7 @@ statement = "I can click Select to enter multi-select mode, check one or more co
 [[use_case]]
 id = "UC-collection-18"
 tier = "T4"
-statement = "When I enter multi-select mode on the Collection page, the table still shows one row per physical copy, so a card I own twice appears as two separate selectable rows. I can check just one Charmander row and use the bu... (collection_multiselect_individual_copies)"
+statement = "When I enter multi-select mode on the Collection page, the table still shows one row per physical copy, so a card I own three times appears as three separate selectable rows. I can check just one Vanquish row and use ... (collection_multiselect_individual_copies)"
 
 [[use_case]]
 id = "UC-collection-19"
@@ -110,17 +105,12 @@ statement = "When I open a card's detail page from the Collection table, the Pri
 [[use_case]]
 id = "UC-collection-22"
 tier = "T3"
-statement = "As I type in the Collection search bar, a dropdown suggests completions from the query vocabulary. Typing a bare token like t lists matching keywords (e.g. the energy-type keyword) with their descriptions; typing is: ... (collection_search_autocomplete_keywords)"
+statement = "As I type in the Collection search bar, a dropdown suggests completions from the query vocabulary. Typing a bare token like t lists matching keywords (e.g. the rarity keyword) with their descriptions; typing is: lists... (collection_search_autocomplete_keywords)"
 
 [[use_case]]
 id = "UC-collection-23"
 tier = "T4"
 statement = "I can type a card name into the sidebar search input and, after the 200 ms debounce idle, the table filters to rows whose card name contains what I typed. The toolbar {filtered} of {total} cards count updates to the f... (collection_search_debounced)"
-
-[[use_case]]
-id = "UC-collection-24"
-tier = "T4"
-statement = "I can tick a value in the sidebar Set facet to narrow the collection table to only the copies from that set. The toolbar count updates to the filtered subset, and unticking the facet restores the full table. (collection_search_deck_filter)"
 
 [[use_case]]
 id = "UC-collection-25"
@@ -131,11 +121,6 @@ statement = "When I type a query the parser can't understand — like xyz:1 with
 id = "UC-collection-26"
 tier = "T3"
 statement = "Next to the Collection search bar is a ? help link. Clicking it takes me to a Search syntax page that documents the query language — operators, examples, and the full keyword and is:-flag tables rendered from the serv... (collection_search_help_page)"
-
-[[use_case]]
-id = "UC-collection-27"
-tier = "T3"
-statement = "Searching the collection for is:missing lists every printing I don't own as a dimmed missing tile. Cards with several unowned printings (e.g. a base-set card with both a normal and a holo printing) each contribute mul... (collection_search_is_missing)"
 
 [[use_case]]
 id = "UC-collection-28"

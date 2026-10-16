@@ -5,12 +5,12 @@ area = "csv"
 [[use_case]]
 id = "UC-csv-01"
 tier = "T4"
-statement = "After previewing a ManaBox CSV on the CSV Import page, I click Import to commit. A result banner reports the added count and offers a View batch → link. I click the link and land on the created batch's detail page, wh... (csv_import_assign_to_deck)"
+statement = "After previewing a TCGplayer CSV on the CSV Import page, I click Import to commit. A result banner reports the added count and offers a View batch → link. I click the link and land on the created batch's detail page, ... (csv_import_assign_to_deck)"
 
 [[use_case]]
 id = "UC-csv-02"
 tier = "T4"
-statement = "On the CSV Import page, I choose the ManaBox format, paste a valid CSV, click Preview to see the resolution report, and click Import to commit. The result banner confirms the cards were added and links to the new inge... (csv_import_batch_metadata_in_commit)"
+statement = "On the CSV Import page, I choose the TCGplayer format, paste a valid CSV, click Preview to see the resolution report, and click Import to commit. The result banner confirms the cards were added and links to the new in... (csv_import_batch_metadata_in_commit)"
 
 [[use_case]]
 id = "UC-csv-03"
@@ -20,22 +20,22 @@ statement = "After previewing a CSV on the CSV Import page, I edit the paste tex
 [[use_case]]
 id = "UC-csv-04"
 tier = "T4"
-statement = "After previewing a ManaBox CSV on the CSV Import page, I click Import. On success a result banner appears reporting the added and skipped counts, the preview tables clear, and the banner offers a View batch → link. (csv_import_commit_to_collection)"
+statement = "After previewing a TCGplayer CSV on the CSV Import page, I click Import. On success a result banner appears reporting the added and skipped counts, the preview tables clear, and the banner offers a View batch → link. (csv_import_commit_to_collection)"
 
 [[use_case]]
 id = "UC-csv-05"
 tier = "T4"
-statement = "When I preview a ManaBox CSV that mixes valid cards with rows that cannot be resolved, the preview summary shows both a matched count and an unmatched count. An Unmatched rows table lists each failed row with its reas... (csv_import_failed_cards_display)"
+statement = "When I preview a TCGplayer CSV that mixes valid cards with rows that cannot be resolved, the preview summary shows both a matched count and an unmatched count. An Unmatched rows table lists each failed row with its re... (csv_import_failed_cards_display)"
 
 [[use_case]]
 id = "UC-csv-06"
 tier = "T4"
-statement = "When I navigate to the CSV Import page, I see the correct initial state: the Import CSV heading, a Format select offering ManaBox and TCGplayer, a CSV file file input, a …or paste CSV text textarea, and Preview and Im... (csv_import_page_structure)"
+statement = "When I navigate to the CSV Import page, I see the correct initial state: the Import CSV heading, a Format select offering TCGplayer and Dumpstar, a CSV file file input, a …or paste CSV text textarea, and Preview and I... (csv_import_page_structure)"
 
 [[use_case]]
 id = "UC-csv-07"
 tier = "T4"
-statement = "I paste a ManaBox CSV into the CSV Import textarea and click Preview. A resolution report appears: a summary line with the matched count and a Matched rows table showing Line, Card, Set, #, Variant, and Condition for ... (csv_import_parse_and_resolve_decklist)"
+statement = "I paste a TCGplayer CSV into the CSV Import textarea and click Preview. A resolution report appears: a summary line with the matched count and a Matched rows table showing Line, Card, Set, #, Variant, and Condition fo... (csv_import_parse_and_resolve_decklist)"
 
 [[use_case]]
 id = "UC-csv-08"
@@ -45,4 +45,4 @@ statement = "When I navigate to the CSV Import page without supplying a file or 
 [[use_case]]
 id = "UC-csv-09"
 tier = "T4"
-statement = "When I visit the CSV Import page, the Format select offers both ManaBox and TCGplayer parsers. I switch the select to TCGplayer, paste a TCGplayer CSV, and click Preview; the resolution report classifies the rows as m... (csv_import_with_batch_metadata)"
+statement = "When I visit the CSV Import page, the Format select offers both TCGplayer and Dumpstar parsers. I switch the select to TCGplayer, paste a TCGplayer CSV, and click Preview; the resolution report classifies the rows as ... (csv_import_with_batch_metadata)"

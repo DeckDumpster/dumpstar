@@ -5,12 +5,12 @@ area = "set"
 [[use_case]]
 id = "UC-set-01"
 tier = "T4"
-statement = "On the Set Stats page for Base Set, the Completion card's Master set bar (owned variants / total variants) reads a different total than the Numbered set bar (owned cards / total cards), because commons carry both a no... (set_value_filter_card_type_and_owned)"
+statement = "On the Set Stats page for Spark of Rebellion, the Completion card's Master set bar (owned variants / total variants) reads a different total than the Numbered set bar (owned cards / total cards), because Luke Skywalke... (set_value_filter_card_type_and_owned)"
 
 [[use_case]]
 id = "UC-set-02"
 tier = "T4"
-statement = "On the Set Stats page for 151, the Rarity split table's Hyper Rare row shows an Owned count of 1 — the Mew ex secret rare is registered in the collection — out of a Total of 1. The Progress cell for that row reads 100... (set_value_filter_rarity)"
+statement = "On the Set Stats page for Spark of Rebellion, the Rarity split table's Rare row shows an Owned count of 1 — the Millennium Falcon - Piece of Junk Rare is registered in the collection — out of a Total of 1. The Progres... (set_value_filter_rarity)"
 
 [[use_case]]
 id = "UC-set-03"
@@ -20,7 +20,7 @@ statement = "When I load the Set Stats page for a set, I see the set name as the
 [[use_case]]
 id = "UC-set-04"
 tier = "T4"
-statement = "The Set Stats page re-fetches its analytics whenever the set route param changes. Loading /browse/sv3pt5/stats shows the 151 dashboard; navigating to /browse/sv8/stats re-runs the analytics and the heading, Completion... (set_value_remove_set_pill)"
+statement = "The Set Stats page re-fetches its analytics whenever the set route param changes. Loading /browse/SOR/stats shows the Spark of Rebellion dashboard; navigating to /browse/SHD/stats re-runs the analytics and the heading... (set_value_remove_set_pill)"
 
 [[use_case]]
 id = "UC-set-05"

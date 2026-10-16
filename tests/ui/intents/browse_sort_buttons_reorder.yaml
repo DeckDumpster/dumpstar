@@ -1,0 +1,10 @@
+# Scenario: the set browse sort buttons re-order the list and never throw
+#
+# Related:
+#   issues: [sp-yc7gp1]
+
+description: >
+  On a set's browse page, pressing # twice flips the collector-number order
+  each time, and pressing Price twice flips between most and least expensive
+  each time. The list on screen changes with every press, the page keeps
+  responding, and no uncaught exception is raised.

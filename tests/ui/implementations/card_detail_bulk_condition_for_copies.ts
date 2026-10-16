@@ -1,6 +1,6 @@
 /**
  * Hand-written test for dumpstar-0qu: multi-select copies on the card page
- * and bulk-set their condition. Charizard (base1/4) has two copies in the
+ * and bulk-set their condition. Luke Skywalker - Faithful Friend (SOR/005) has eight copies in the
  * fixture, so the checkbox column + select-all + bulk bar render. We select
  * all, bulk-set the condition, and assert every copy picked up the new value.
  * (Fail-first: before the feature there is no select-all checkbox, so the

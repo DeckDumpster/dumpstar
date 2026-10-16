@@ -5,11 +5,11 @@ involves:
   - "toolbar '{filtered} of {total} cards' count"
   - "collection table rows"
 fixture_data:
-  search_term: "Charizard"
+  search_term: "Luke Skywalker"
   total_cards: 26
 notes: >
-  Navigate to /collection and wait for the table. Type "Charizard" into
+  Navigate to /collection and wait for the table. Type "Luke Skywalker" into
   the search input. Wait past the 200 ms debounce. The table shows only
-  rows whose card name contains "Charizard" (Base Set Charizard plus the
-  151 Charizard ex printings) and the toolbar count updates. Clear the
+  rows whose card name contains "Luke Skywalker" (the Faithful Friend and
+  Faithful Friend (Hyperspace) printings) and the toolbar count updates. Clear the
   search input and wait for the table to re-render with all 26 copies.

@@ -5,6 +5,6 @@
 
 description: >
   The Set Stats page re-fetches its analytics whenever the set route
-  param changes. Loading /browse/sv3pt5/stats shows the "151" dashboard;
-  navigating to /browse/sv8/stats re-runs the analytics and the heading,
-  Completion card, and Rarity split table all update to Surging Sparks.
+  param changes. Loading /browse/SOR/stats shows the "Spark of Rebellion" dashboard;
+  navigating to /browse/SHD/stats re-runs the analytics and the heading,
+  Completion card, and Rarity split table all update to Shadows of the Galaxy.

@@ -4,8 +4,8 @@
 #   issues: []
 #
 # Prerequisites:
-#   A deck with cards must exist (fixture provides the "Charizard ex
-#   Control" deck).
+#   A deck with cards must exist (fixture provides the "Luke Skywalker
+#   Vigilance" deck).
 
 description: >
   When I view a deck's detail page and click a card's name in the card

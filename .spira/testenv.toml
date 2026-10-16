@@ -21,12 +21,18 @@
 image = "docker.io/library/rust:1.94-slim-bookworm"
 workdir = "/work"
 timeout = 1800
-default = ["lint", "rust", "frontend-check"]
+default = ["lint", "plan", "rust", "frontend-check"]
 
 [tier.lint]
 argv = ["bash", "-c", "apt-get update -qq && apt-get install -y -qq git curl jq sqlite3 python3 make >/dev/null && bash deploy/ci.sh"]
 env = { DUMPSTAR_CI_TIERS = "lint", DUMPSTAR_RUNNER_DEPS_ONLY = "base rust" }
 timeout = 600
+
+# Use-case coverage (tests/ci/plan.sh): its own tier because it builds the pinned test-plan.
+[tier.plan]
+argv = ["bash", "-c", "apt-get update -qq && apt-get install -y -qq git curl jq sqlite3 python3 make >/dev/null && bash deploy/ci.sh"]
+env = { DUMPSTAR_CI_TIERS = "plan", DUMPSTAR_RUNNER_DEPS_ONLY = "base rust" }
+timeout = 1200
 
 [tier.rust]
 argv = ["bash", "-c", "apt-get update -qq && apt-get install -y -qq git curl jq sqlite3 python3 make >/dev/null && cargo install --locked cargo-nextest --version 0.9.148 && bash deploy/ci.sh"]
@@ -56,3 +62,4 @@ timeout = 900
 argv = ["bash", "deploy/ci.sh"]
 env = { DUMPSTAR_CI_TIERS = "container" }
 timeout = 2400
+

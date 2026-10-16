@@ -24,7 +24,7 @@
 	--cost-mark-fill: var(--pd-gold-500);
 	--cost-mark-edge: var(--pd-gold-600);
 	--cost-mark-text: var(--pd-gold-900);
-	--color-rarity-common-mark: var(--pd-amber-700);
+	--rarity-common-mark: var(--pd-amber-700);
 	--color-surface-selected: var(--pd-alpha-gold-14);
 	--color-surface-accent-wash: var(--pd-alpha-gold-08);
 	--color-border-accent: var(--pd-gold-500);

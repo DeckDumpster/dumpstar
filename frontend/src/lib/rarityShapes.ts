@@ -15,7 +15,7 @@ const BADGE = 'M3 1H15.6L13.6 18.6H0.8Z';
 const SHAPES: Record<string, RarityShape> = {
 	common: {
 		name: 'Common',
-		color: 'var(--color-rarity-common-mark)',
+		color: 'var(--rarity-common-mark)',
 		frame: 'M0.9 10.9A9.1 9.1 0 1 1 19.1 10.9 9.1 9.1 0 1 1 0.9 10.9Z M9.4 16.2A7.7 7.7 0 1 1 24.8 16.2 7.7 7.7 0 1 1 9.4 16.2Z',
 		path: 'M15.83 6.34A7.4 7.4 0 1 0 15.83 15.46L12.84 13.12A3.6 3.6 0 1 1 12.84 8.68ZM10.4 10H14.4V11.9H10.4Z'
 	},

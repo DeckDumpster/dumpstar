@@ -79,6 +79,16 @@ if [ "$code" = "200" ]; then
              "so NOTHING off-box would notice this box disappearing" >&2
     fi
     echo "heartbeat: ${INSTANCE} OK — ${URL} served 200"
+    # A shipped timer that is not enabled never runs and never alarms (sp-892w24).
+    # After the ping, so a drift pages through this unit's OnFailure= without
+    # reading as an outage to the off-box monitor.
+    if dumpstar_units_alerting "$INSTANCE" && command -v systemctl >/dev/null 2>&1 \
+        && [ -f "$(dumpstar_systemd_user_dir)/dumpstar-heartbeat@.timer" ] \
+        && ! drift="$(dumpstar_units_timer_drift "$INSTANCE")"; then
+        echo "heartbeat: ${INSTANCE} is serving but shipped timers are not running:" >&2
+        echo "$drift" >&2
+        exit 1
+    fi
     exit 0
 fi
 

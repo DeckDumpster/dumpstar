@@ -24,12 +24,13 @@
 //! DOM rather than all of it (pd-7z4o). See [`search::Slice`].
 
 use axum::extract::{Query, State};
+use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
 use dumpstar_core::query::parse;
-use dumpstar_db::search::{self, SearchPage};
+use dumpstar_db::search;
 
 use crate::{AppError, AppState, blocking};
 
@@ -135,7 +136,7 @@ fn slice_from(p: &SearchParams) -> Result<search::Slice, AppError> {
 async fn collection_search(
     State(state): State<AppState>,
     Query(p): Query<SearchParams>,
-) -> Result<Json<SearchPage>, AppError> {
+) -> Result<impl IntoResponse, AppError> {
     let slice = slice_from(&p)?;
     let sort = sort_key(p.sort.as_deref())?;
     let q = p.q.trim();
@@ -154,8 +155,22 @@ async fn collection_search(
     }
     compiled.override_order(sort, p.dir.as_deref());
 
-    let page = blocking(&state, move |c| search::search_page(c, &compiled, slice)).await?;
-    Ok(Json(page))
+    let (page, t) = blocking(&state, move |c| {
+        search::search_page_timed(c, &compiled, slice)
+    })
+    .await?;
+    // Per-stage timings, so a slow sort can be told apart from a slow client.
+    let timing = format!(
+        "totals;dur={:.2}, rows;dur={:.2}, copies;dur={:.2}",
+        t.totals_ms, t.rows_ms, t.copies_ms
+    );
+    Ok((
+        [(
+            axum::http::header::HeaderName::from_static("server-timing"),
+            timing,
+        )],
+        Json(page),
+    ))
 }
 
 /// One keyword, for autocomplete + the help page.

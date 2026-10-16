@@ -1075,6 +1075,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn search_reports_where_its_time_went_in_server_timing() {
+        let (_d, router, fx) = test_app().await;
+        let tok = fx.valid_token("u@example.com");
+        let resp = router
+            .oneshot(request(
+                "GET",
+                "/api/collection/search?sort=set&limit=all",
+                Some(&tok),
+                None,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let timing = resp.headers()["server-timing"]
+            .to_str()
+            .unwrap()
+            .to_string();
+        for stage in ["totals;dur=", "rows;dur=", "copies;dur="] {
+            assert!(timing.contains(stage), "{stage} missing from {timing}");
+        }
+    }
+
+    #[tokio::test]
     async fn search_serves_the_whole_result_for_limit_all() {
         let (_d, router, fx) = test_app().await;
         let tok = fx.valid_token("u@example.com");

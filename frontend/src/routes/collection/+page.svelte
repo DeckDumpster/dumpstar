@@ -287,7 +287,11 @@
 	}
 
 	/** Fetch the whole result for the current query + toggle + sort. */
+	// Only the newest request may write the page: a sort clicked twice quickly
+	// must not let the slower first answer overwrite the second.
+	let searchSeq = 0;
 	async function runSearch() {
+		const seq = ++searchSeq;
 		loading = true;
 		error = null;
 		searchError = null;
@@ -304,10 +308,12 @@
 			// and it has to stay server-side, because a sort applied to a
 			// window would order what the window happens to hold.
 			const res = await api.collectionSearch(query, sortKey, sortDir, allCards, 'all');
+			if (seq !== searchSeq) return;
 			searchRows = res.rows;
 			searchTotal = res.total;
 			searchTotalValue = res.total_value;
 		} catch (e) {
+			if (seq !== searchSeq) return;
 			if (e instanceof SearchQueryError) {
 				searchError = { message: e.message, position: e.position };
 				searchRows = [];
@@ -317,8 +323,10 @@
 				error = e instanceof Error ? e.message : String(e);
 			}
 		} finally {
-			loading = false;
-			restoreScroll();
+			if (seq === searchSeq) {
+				loading = false;
+				restoreScroll();
+			}
 		}
 	}
 
@@ -1295,7 +1303,7 @@
      can pin edge to edge; everything below it gets its gutter back here.
      Card art needs a margin as much as it needs a gap. -->
 <div class="content">
-{#if loading}
+{#if loading && searchRows.length === 0}
 	<p class="muted">Loading…</p>
 {:else if error}
 	<p class="error">Failed to load collection: {error}</p>

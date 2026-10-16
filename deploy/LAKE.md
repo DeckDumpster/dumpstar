@@ -1,5 +1,7 @@
 # The raw landing zone
 
+> **2026-10-16 (sp-l74uk0): the Python lake is deleted.** `lake/` (the PyIceberg job image), `deploy/prices.sh`, `deploy/value-snapshots.sh`, `deploy/nessie-backup.sh`, `deploy/setup-lake.sh`, their units and `tests/lake/` are gone: dumpstar's production never had a lakehouse installed, so none of it ever ran there. The lake is being rebuilt in Rust on dumpster-kit's lake crates (Ryan, 2026-10-16: "the path should be all rust, with nessie if necessary"). Sections below that describe those files are history until that port lands; the Rust derive (`crates/dumpstar-lakehouse`, `deploy/derive.sh`) and the shipper (`deploy/ship.sh`) are unchanged.
+
 > **Provenance.** This document was written for the Pokémon site this workspace was
 > copied from. The pokemontcg.io tail, the pokemon-tcg-data bulk corpus, the Japan
 > catalog, set symbols and the "PARTIAL" (exit 2) derive described below were removed

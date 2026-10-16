@@ -60,6 +60,8 @@ test('card-view footer wraps its pips onto their own row, at a 24px tap target',
 	assert.match(rule(/\n\t\.meta \{[^}]*\}/), /flex-wrap:\s*wrap/);
 	assert.match(rule(/\.meta \.vchips \{[^}]*\}/), /flex:\s*1 0 100%/);
 	assert.match(rule(/\n\t\.vchip \{[^}]*\}/), /width:\s*24px;\s*height:\s*24px/);
+});
+
 // HMW-shaped set: Leaders #1-18, Bases #19-34, units 35-272, Hyperspace
 // Leaders #273-290, Hyperspace Bases #291-306, units to 782, Showcase
 // Leaders #783-800.
@@ -92,7 +94,7 @@ const pageOf = (cols, p, desc = false) => {
 	return all.slice((p - 1) * size, p * size);
 };
 /** @param {{ kind: string, slots: { number: string }[] }[]} runs */
-const shape = (runs) => runs.map((r) => `${r.kind}:${r.slots[0].number}-${r.slots.at(-1).number}`);
+const shape = (runs) => runs.map((r) => `${r.kind}:${r.slots[0].number}-${r.slots[r.slots.length - 1].number}`);
 
 test('number sort at cols=6: page 1 is one Leaders band, page 2 Bases then portrait #35, #36', () => {
 	assert.deepEqual(shape(bandRuns(pageOf(6, 1))), ['leaders:1-18']);

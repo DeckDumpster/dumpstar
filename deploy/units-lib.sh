@@ -353,6 +353,69 @@ _dumpstar_units_install_host_wide() {
     done
 }
 
+# ── THE SHIPPED TIMERS ARE THE ENABLED TIMERS (sp-892w24) ────────────────────
+#
+# Installing a timer file arms nothing. Prod ran 2 of the 9 timers this
+# checkout ships for months — catalog-sync and tmpreap — because the other seven
+# were "installed, enabled for none: an operator's act", and no operator did it.
+# Backup-check, diskcheck, heartbeat, catalog-check, refresh, derive and ship
+# never ran, and nothing alarmed on their absence.
+#
+# So the deploy of an instance that may page (dumpstar_units_alerting) enables
+# every timer this checkout ships, and the same list is the drift check:
+# dumpstar_units_timer_drift names each shipped timer that is not enabled, and
+# deploy.sh and heartbeat.sh fail on it. A timer left off on purpose is a row of
+# DUMPSTAR_TIMER_EXCEPTIONS with its reason, never an omission. (The lake timers
+# stay safe on a box with no lakehouse: their ConditionPathExists on lake.env
+# keeps an enabled timer inert there.)
+#
+# "<unit> <reason>" rows; none today.
+DUMPSTAR_TIMER_EXCEPTIONS=()
+
+# dumpstar_units_shipped_timers <instance> — the timer unit names this checkout
+# ships for <instance>, one per line: %i templates instantiated, host-wide ones
+# as they are, exceptions left out.
+dumpstar_units_shipped_timers() {
+    local instance="$1" u name ex skip
+    for u in "${DUMPSTAR_HOST_WIDE_UNIT_FILES[@]}"; do
+        case "$u" in *.timer) ;; *) continue ;; esac
+        name="${u/@./@${instance}.}"
+        skip=
+        for ex in "${DUMPSTAR_TIMER_EXCEPTIONS[@]}"; do
+            [ "${ex%% *}" = "$name" ] && skip=1
+        done
+        [ -n "$skip" ] || printf '%s\n' "$name"
+    done
+}
+
+# dumpstar_units_timer_drift <instance> — name every shipped timer systemd does
+# not report enabled; fails when there is one.
+dumpstar_units_timer_drift() {
+    local t state drift=0
+    while read -r t; do
+        state="$(systemctl --user is-enabled "$t" 2>/dev/null || true)"
+        case "$state" in
+            enabled | enabled-runtime) ;;
+            *) echo "timer not enabled: ${t} (${state:-not installed})"; drift=1 ;;
+        esac
+    done < <(dumpstar_units_shipped_timers "$1")
+    return "$drift"
+}
+
+# dumpstar_units_enable_timers <instance> — enable and start every shipped
+# timer, for an instance that may page. Run after daemon-reload.
+dumpstar_units_enable_timers() {
+    local instance="$1" t
+    if ! dumpstar_units_alerting "$instance"; then
+        echo "    Timers not enabled — '${instance}' is not an alerting instance."
+        return 0
+    fi
+    while read -r t; do
+        systemctl --user enable --now "$t" >/dev/null 2>&1 \
+            || echo "    could not enable ${t}" >&2
+    done < <(dumpstar_units_shipped_timers "$instance")
+}
+
 # dumpstar_units_install <instance> [port]
 #
 # (Re)install every unit file this checkout ships for <instance>. Idempotent.

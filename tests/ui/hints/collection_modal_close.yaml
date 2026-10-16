@@ -3,10 +3,10 @@ involves:
   - "collection table Name link opening a card detail page"
   - "global header 'Collection' nav link"
 fixture_data:
-  card_name: "Charizard"
-  card_route: /card/base1/4
+  card_name: "Luke Skywalker - Faithful Friend"
+  card_route: /card/SOR/005
 notes: >
-  Navigate to /collection, wait for the table, and click the "Charizard"
-  Name link to open /card/base1/4. Then click the "Collection" link in
+  Navigate to /collection, wait for the table, and click the "Luke Skywalker - Faithful Friend"
+  Name link to open /card/SOR/005. Then click the "Collection" link in
   the global header to navigate back to /collection and confirm the
   table is shown again.

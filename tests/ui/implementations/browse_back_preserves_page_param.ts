@@ -7,22 +7,20 @@
  * $app/navigation's replaceState (which stashes the *stale* page.url as the
  * history-entry restore key) to goto(replaceState:true).
  *
- * Uses cols=1 so the 9-card sv8 fixture paginates into 3 pages.
+ * Uses cols=1 so the 4-card SOR fixture paginates into 2 pages.
  */
 import type { ReplayHarness } from '../replay';
 
 export async function steps(h: ReplayHarness) {
-  // cols=1 -> 3 cards/page -> sv8's 9 cards span 3 pages.
-  await h.navigate('/browse/sv8?cols=1');
+  // cols=1 -> 3 cards/page -> SOR's 4 cards span 2 pages.
+  await h.navigate('/browse/SOR?cols=1');
   await h.wait_for_visible('.slot');
 
-  // Page forward to page 3 via the pager (client-side URL rewrite).
+  // Page forward to page 2 via the pager (client-side URL rewrite).
   await h.click_by_selector('.pager-bottom button:has-text("Next")');
-  await h.wait_for_text('Page 2 of 3');
-  await h.click_by_selector('.pager-bottom button:has-text("Next")');
-  await h.wait_for_text('Page 3 of 3');
-  if (!h.page.url().includes('page=3')) {
-    throw new Error(`expected page=3 in URL, got ${h.page.url()}`);
+  await h.wait_for_text('Page 2 of 2');
+  if (!h.page.url().includes('page=2')) {
+    throw new Error(`expected page=2 in URL, got ${h.page.url()}`);
   }
 
   // Open the variant modal and follow "Full card details".
@@ -31,11 +29,11 @@ export async function steps(h: ReplayHarness) {
   await h.click_by_selector('a.full');
   await h.page.waitForURL(/\/card\//, { timeout: 5000 });
 
-  // Browser Back must restore page 3, not snap to page 1.
+  // Browser Back must restore page 2, not snap to page 1.
   await h.page.goBack({ waitUntil: 'networkidle' });
-  await h.wait_for_text('Page 3 of 3');
-  await h.assert_text_present('Page 3 of 3');
-  if (!h.page.url().includes('page=3')) {
+  await h.wait_for_text('Page 2 of 2');
+  await h.assert_text_present('Page 2 of 2');
+  if (!h.page.url().includes('page=2')) {
     throw new Error(`Back dropped the page param: ${h.page.url()}`);
   }
   await h.screenshot('final_state');

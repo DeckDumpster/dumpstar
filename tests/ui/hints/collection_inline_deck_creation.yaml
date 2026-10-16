@@ -6,12 +6,12 @@ involves:
   - "bulk 'Assign to deck…' <select> lists existing decks"
   - "after assignment the page re-fetches via refresh() and clears the selection"
 fixture_data:
-  card_name: "Snorlax"
-  search_term: "Snorlax"
-  target_deck: "Pikachu ex Aggro"
+  card_name: "Vanquish"
+  search_term: "Vanquish"
+  target_deck: "Vader Aggro"
 notes: >
-  Navigate to /collection. Search for "Snorlax" (sv3pt5 #151) to narrow
+  Navigate to /collection. Search for "Vanquish" (SOR #P01) to narrow
   the table. Click "Select" to enter multi-select mode. Check the
-  Snorlax row's checkbox. In the bulk-action bar choose "Pikachu ex
-  Aggro" from the "Assign to deck…" <select>. The page re-fetches the
+  Vanquish row's checkbox. In the bulk-action bar choose "Millennium Falcon
+  Cunning" from the "Assign to deck…" <select>. The page re-fetches the
   collection and drops the selection; the copy is now in that deck.

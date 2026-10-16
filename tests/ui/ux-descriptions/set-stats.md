@@ -1,7 +1,7 @@
 # Set Stats Page UX Description
 
 **Source file:** `frontend/src/routes/browse/[set]/stats/+page.svelte`
-**URL pattern:** `/browse/{set}/stats` (e.g. `/browse/sv3pt5/stats`)
+**URL pattern:** `/browse/{set}/stats` (e.g. `/browse/SOR/stats`)
 
 ---
 

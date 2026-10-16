@@ -5,12 +5,12 @@ involves:
   - 'Cards header ready count and empty message'
   - '"Commit order" button disabled when no lines remain'
 fixture_data:
-  resolve_set: "sv3pt5"
-  resolve_number: "4"
-  resolved_card: "Charmander"
+  resolve_set: "SOR"
+  resolve_number: "193"
+  resolved_card: "Millennium Falcon - Piece of Junk"
 notes: >
-  Navigate to /ingest/order. Add a line, enter set sv3pt5 and number 4,
-  click "Look up" so the line resolves to Charmander and is ready. Click
+  Navigate to /ingest/order. Add a line, enter set SOR and number 193,
+  click "Look up" so the line resolves to Millennium Falcon - Piece of Junk and is ready. Click
   the line's "✕" remove button. Verify the line is gone, the Cards
   header reads "Cards (0/0 ready)", the "No cards on this order yet."
   empty state is shown again, and the "Commit order" button is

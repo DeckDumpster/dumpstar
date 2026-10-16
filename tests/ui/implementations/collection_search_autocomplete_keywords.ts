@@ -10,12 +10,12 @@ export async function steps(h: ReplayHarness) {
   await h.wait_for_visible('[data-testid="search-input"]');
   await h.click_by_test_id('search-input');
   // Bare token -> keyword suggestions.
-  await h.fill_by_selector('[data-testid="search-input"]', 't');
+  await h.fill_by_selector('[data-testid="search-input"]', 'rar');
   await h.wait_for_visible('[data-testid="search-autocomplete"]');
-  await h.assert_text_present('Energy type');
+  await h.assert_text_present('Rarity');
   // "is:" -> flag value suggestions.
   await h.fill_by_selector('[data-testid="search-input"]', 'is:');
   await h.wait_for_visible('[data-testid="search-autocomplete"]');
-  await h.assert_text_present('is:holo');
+  await h.assert_text_present('is:graded');
   await h.screenshot('final_state');
 }

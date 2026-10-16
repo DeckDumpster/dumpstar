@@ -3,10 +3,10 @@
 # Related: batches_detail_view_and_metadata, batches_homepage_nav_link
 
 description: >
-  When I open the batch "151 binder page-through" from the batches
+  When I open the batch "Spark of Rebellion binder page-through" from the batches
   list, the detail page shows the batch name as the heading and a
   metadata line marking it as a binder-click batch with its timestamp
-  and an "8 cards" count. The card table lists all eight sv3pt5 copies
+  and a "7 cards" count. The card table lists all seven SOR copies
   registered during that binder page-through, with Name, Set, #,
   Variant, Condition, and Status columns. The Name cells link to the
   card detail pages.

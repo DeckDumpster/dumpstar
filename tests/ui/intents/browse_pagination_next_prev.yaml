@@ -1,10 +1,10 @@
 # Scenario: Paging through a set with the Prev and Next buttons
 
-# Related: browse_loads_set_first_page, browse_layout_toggle_9_to_4, browse_url_state_persists
+# Related: browse_loads_set_first_page, browse_url_state_persists
 
 description: >
-  On the "151" binder browse page the indicator reads "Page 1 of N" and the
+  On the "Spark of Rebellion" binder browse page at one card per row the indicator reads "Page 1 of 2" and the
   "← Prev" button is disabled. I click "Next →"; the indicator advances to
-  "Page 2 of N", a new set of card slots loads, and "← Prev" becomes enabled.
-  I click "← Prev"; the indicator returns to "Page 1 of N" and the "← Prev"
-  button is disabled again. On the last page the "Next →" button is disabled.
+  "Page 2 of 2", a new set of card slots loads, and "← Prev" becomes enabled.
+  I click "← Prev"; the indicator returns to "Page 1 of 2" and the "← Prev"
+  button is disabled again. On the last page (page 2) the "Next →" button is disabled.

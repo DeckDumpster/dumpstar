@@ -1,15 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { parseView, splitLandscape, bandRuns, clampCols, MAX_COLS, BROWSE_ROWS, pageAfterResize } from '$lib/browseView.js';
-
-test('card view is the default; only view=binder selects binder', () => {
-	assert.equal(parseView(null), 'card');
-	assert.equal(parseView(undefined), 'card');
-	assert.equal(parseView('card'), 'card');
-	assert.equal(parseView('bogus'), 'card');
-	assert.equal(parseView('binder'), 'binder');
-});
+import { splitLandscape, bandRuns, clampCols, MAX_COLS, BROWSE_ROWS, pageAfterResize } from '$lib/browseView.js';
 
 test('splitLandscape keeps order within each group', () => {
 	const s = [
@@ -49,17 +41,28 @@ test('pageAfterResize keeps the first visible card on screen', () => {
 	assert.notEqual(pageAfterResize(4, 9, 12), 1);
 });
 
-test('card-view footer wraps its pips onto their own row, at a 24px tap target', () => {
-	const src = readFileSync(new URL('../src/routes/browse/[set]/+page.svelte', import.meta.url), 'utf8');
-	/** @param {RegExp} re */
-	const rule = (re) => {
-		const m = src.match(re);
-		assert.ok(m, `no CSS rule matches ${re}`);
-		return m[0];
-	};
-	assert.match(rule(/\n\t\.meta \{[^}]*\}/), /flex-wrap:\s*wrap/);
-	assert.match(rule(/\.meta \.vchips \{[^}]*\}/), /flex:\s*1 0 100%/);
-	assert.match(rule(/\n\t\.vchip \{[^}]*\}/), /width:\s*24px;\s*height:\s*24px/);
+const pageSrc = () => readFileSync(new URL('../src/routes/browse/[set]/+page.svelte', import.meta.url), 'utf8');
+/** @param {string} src @param {RegExp} re */
+const rule = (src, re) => {
+	const m = src.match(re);
+	assert.ok(m, `no CSS rule matches ${re}`);
+	return m[0];
+};
+
+test('the tile footer is one nowrap line with 24px pips', () => {
+	const src = pageSrc();
+	assert.match(rule(src, /\n\t\.foot \{[^}]*\}/), /flex-wrap:\s*nowrap/);
+	assert.match(rule(src, /\n\t\.vchips \{[^}]*\}/), /flex-wrap:\s*nowrap/);
+	assert.match(rule(src, /\n\t\.vchip \{[^}]*\}/), /width:\s*24px;\s*height:\s*24px/);
+});
+
+test('one render view: no Binder/Card control, no ?view=, a persisted turn checkbox', () => {
+	const src = pageSrc();
+	assert.doesNotMatch(src, /viewtoggle|parseView|['"]view['"]|class="meta"|\.meta\b/);
+	assert.match(src, /label="Turn leaders and bases"/);
+	assert.match(src, /urlBool\('turn', true\)/);
+	assert.match(src, /set\('turn',/);
+	assert.match(src, /slot\.landscape && turnLandscape/);
 });
 
 // HMW-shaped set: Leaders #1-18, Bases #19-34, units 35-272, Hyperspace

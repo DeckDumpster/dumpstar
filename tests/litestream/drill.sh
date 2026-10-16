@@ -574,7 +574,7 @@ write_phase early
 # drill exercises the BACKUP layer and should not need a build to run.
 sqlite3 "$(registry_file)" 'PRAGMA journal_mode=WAL;' >/dev/null
 kit_manifest="$(cd "${REPO_DIR}" && cargo metadata --format-version 1 --locked 2>/dev/null \
-    | python3 -c 'import json,sys; print(next(p["manifest_path"] for p in json.load(sys.stdin)["packages"] if p["name"]=="dumpster-kit-tenancy"))')"
+    | jq -r 'first(.packages[] | select(.name == "dumpster-kit-tenancy") | .manifest_path)')"
 sqlite3 "$(registry_file)" < "$(dirname "${kit_manifest}")/src/schema_registry.sql"
 # RFC3339, with no space in it, because that is what `registry::insert` writes —
 # and because `dumpstar tenant list` prints the registry as a whitespace-separated

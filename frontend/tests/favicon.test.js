@@ -15,7 +15,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -143,4 +143,19 @@ test('every page links the svg, 32px png and apple-touch icons', () => {
 	const png = (n) => readFileSync(join(frontendRoot, 'static', n));
 	assert.equal(png('apple-touch-icon.png').readUInt32BE(16), 180);
 	assert.equal(png('favicon-32.png').readUInt32BE(16), 32);
+});
+
+test('the served shell (app.html) links each icon and the file exists to serve', () => {
+	// This file was green while the tab icon was missing in production: the
+	// layout test above reads +layout.svelte, whose <svelte:head> only runs once
+	// the SPA boots, so the HTML the server sends carried no icon link at all.
+	// app.html is what is actually served. The server must also route each path
+	// (crates/dumpstar-server `icons_are_served_as_files`); otherwise the URL
+	// answers with the shell as text/html.
+	const shell = readFileSync(join(frontendRoot, 'src/app.html'), 'utf8');
+	for (const href of ['/favicon.svg', '/favicon-32.png', '/apple-touch-icon.png']) {
+		assert.ok(shell.includes(`href="${href}"`), `app.html does not link ${href}`);
+		assert.ok(existsSync(join(frontendRoot, 'static', href)), `static${href} is missing`);
+	}
+	assert.match(shell, /rel="apple-touch-icon"[^>]*sizes="180x180"/);
 });

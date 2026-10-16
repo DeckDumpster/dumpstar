@@ -5,7 +5,7 @@ import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
 import AspectIcon from '../src/lib/components/AspectIcon.svelte';
-import { ASPECTS, sortAspects } from '../src/lib/aspects.ts';
+import { ASPECTS } from '../src/lib/aspects.ts';
 import { markup } from './support/render.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -26,8 +26,7 @@ test('a name the manifest lacks falls back to its text', () => {
 	assert.doesNotMatch(markup(AspectIcon, { name: 'Neutral' }), /<img/);
 });
 
-test('aspects sort in the official order', () => {
-	assert.deepEqual(sortAspects(['Heroism', 'Command', 'Vigilance']), ['Vigilance', 'Command', 'Heroism']);
+test('the manifest lists the aspects in the official order', () => {
 	assert.deepEqual(ASPECTS.map((a) => a.sort_value), [1, 5, 10, 15, 20, 25]);
 });
 
@@ -82,4 +81,11 @@ test('no source file outside the manifest loader names an aspect colour', () => 
 	};
 	walk(join(here, '../src'));
 	assert.deepEqual(offenders, []);
+});
+
+test('views show the aspects of a card as printed, never re-sorted', () => {
+	for (const f of ['src/routes/collection/+page.svelte', 'src/lib/components/CardDetailView.svelte']) {
+		assert.doesNotMatch(readFileSync(join(here, '..', f), 'utf8'), /sortAspects/, f);
+	}
+	assert.equal(typeof (/** @type {any} */ (ASPECTS)).sortAspects, 'undefined');
 });

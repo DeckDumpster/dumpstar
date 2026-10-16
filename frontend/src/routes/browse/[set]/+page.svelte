@@ -710,7 +710,7 @@
 
 			{#snippet portraitGrid(list: BinderSlot[], before: BinderSlot | null)}
 				<div class="grid" data-testid="portrait-grid" style:grid-template-columns="repeat({cols}, minmax(0, 1fr))">
-					{#each list as slot, i (slot.card_id)}
+					{#each list as slot, i (slot.number)}
 						{@const prevSection = i > 0 ? list[i - 1].section : before ? before.section : 'base'}
 						{#if slot.section !== prevSection && slot.section !== 'base'}
 							<SectionHeader
@@ -728,7 +728,7 @@
 			{#if sortKey === 'number'}
 				{#each runs as run, r (run.start)}
 					{#if run.kind === 'portrait'}
-						{@render portraitGrid(run.slots, r > 0 ? runs[r - 1].slots[runs[r - 1].slots.length - 1] : null)}
+						{@render portraitGrid(run.slots, runs[r - 1]?.slots.at(-1) ?? null)}
 					{:else}
 						<SectionHeader
 							class="sectionbreak-top"
@@ -742,7 +742,7 @@
 							data-band={run.kind}
 							style:grid-template-columns="repeat({cols}, minmax(0, 1fr))"
 						>
-							{#each run.slots as slot (slot.card_id)}
+							{#each run.slots as slot (slot.number)}
 								{@render cell(slot)}
 							{/each}
 						</div>
@@ -756,7 +756,7 @@
 						data-testid="landscape-grid"
 						style:grid-template-columns="repeat({cols}, minmax(0, 1fr))"
 					>
-						{#each groups.landscape as slot (slot.card_id)}
+						{#each groups.landscape as slot (slot.number)}
 							{@render cell(slot)}
 						{/each}
 					</div>

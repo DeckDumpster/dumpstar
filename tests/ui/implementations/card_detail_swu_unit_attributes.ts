@@ -1,3 +1,4 @@
+// covers: UC-card-24
 /**
  * Guards sp-iszds1: card detail draws SWU attributes, not Pokémon's.
  */

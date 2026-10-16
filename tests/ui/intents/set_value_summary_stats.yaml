@@ -1,4 +1,5 @@
 # Scenario: Verify the Completion and Value stats on the Set Stats page
+# Use case: UC-set-07
 #
 # Related:
 #   pages: [set-stats]

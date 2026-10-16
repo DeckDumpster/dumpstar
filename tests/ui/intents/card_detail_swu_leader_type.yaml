@@ -1,4 +1,5 @@
 # Scenario: The card page of a Star Wars: Unlimited leader shows its type, Leader, with power and HP and no resource cost
+# Use case: UC-card-23
 #
 # Related:
 #   issues: [sp-iszds1]

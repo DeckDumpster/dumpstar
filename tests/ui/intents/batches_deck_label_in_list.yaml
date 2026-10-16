@@ -1,4 +1,5 @@
 # Scenario: The batches list shows each batch's type, name, and card count
+# Use case: UC-batches-03
 
 # Related: batches_type_filter_bar, batches_detail_view_and_metadata
 

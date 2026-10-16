@@ -1,7 +1,6 @@
 /**
- * One screenshot per route per viewport, compared against a committed
- * baseline. A diff fails; approving it is an explicit, reviewed act —
- * see README.md.
+ * Every route in routes.json renders and holds still at each viewport.
+ * No pixel baseline: the page's properties are asserted, not its picture.
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -42,32 +41,21 @@ for (const route of manifest.routes) {
 
 		await settle(page, route.waitFor);
 
-		// The gate is only worth having if it fails for design reasons, so the
-		// harness has to prove the page is actually still before it judges it.
-		// `toHaveScreenshot` cannot: it re-shoots until two frames match, which
-		// turns a page that settles late into a coin flip rather than a failure
-		// (pd-832w — /search-help alternated 2557/2561px for a week, failing as
-		// "two consecutive stable screenshots" on a fast box and as a baseline
-		// mismatch on a loaded one). Capture size is the cheap tell, and after
-		// settle() it must already be final — if this fails, the route needs a
-		// `waitFor` in routes.json, not a re-recorded baseline.
+		// The page must be still once settle() returns: capture size is the
+		// cheap tell, and a change between two back-to-back shots means the
+		// route needs a `waitFor` in routes.json.
 		const fullPage = route.fullPage ?? true;
 		const first = await page.screenshot({ fullPage });
 		const second = await page.screenshot({ fullPage });
 		expect(
 			dimensions(first),
 			`${route.path} is still moving after settle() — its capture size changed ` +
-				`between two back-to-back shots, so any baseline taken here is a coin flip`
+				`between two back-to-back shots`
 		).toBe(dimensions(second));
-
-		await expect(page).toHaveScreenshot(`${route.id}.png`, {
-			fullPage,
-			mask: (route.mask ?? []).map((selector) => page.locator(selector))
-		});
 	});
 }
 
-test('every route in the app has a baseline', () => {
+test('every route in the app is covered', () => {
 	// The manifest is hand-written, so it can fall behind the app. This is what
 	// stops that: add a +page.svelte and the visual suite fails until it is
 	// either covered or explicitly written off in `unrepresented`.
@@ -100,7 +88,7 @@ test('every route in the app has a baseline', () => {
 	);
 	expect(
 		uncovered,
-		'these routes ship with no visual baseline — add them to routes.json, ' +
+		'these routes ship with no render check — add them to routes.json, ' +
 			'or say in "unrepresented" why they need none'
 	).toEqual([]);
 

@@ -30,8 +30,11 @@ step() { printf '\n==> %s\n' "$*"; }
 step "ui: build dumpstar"
 # Dependencies at opt-level 2: bundled SQLite compiled -O0 answered /api/sets in
 # six seconds on the fixture and pages sat at "Loading…" past the replay's timeouts.
-(cd "$root" && cargo build --quiet -p dumpstar-cli --config 'profile.dev.package."*".opt-level=2')
+# The test Access issuer is built in the same foreground invocation: left to
+# test-jwks.sh it compiled in the background past the 300s wait for jwks.json.
+(cd "$root" && cargo build --quiet -p dumpstar-cli --features test-jwks --bins --config 'profile.dev.package."*".opt-level=2')
 bin="${CARGO_TARGET_DIR:-$root/target}/debug/dumpstar"
+export DUMPSTAR_TEST_JWKS_BIN="${CARGO_TARGET_DIR:-$root/target}/debug/dumpstar-test-jwks"
 [ -x "$bin" ] || { echo "ERROR: $bin was not built" >&2; exit 1; }
 
 step "ui: build the frontend"

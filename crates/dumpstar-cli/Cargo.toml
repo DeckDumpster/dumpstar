@@ -9,7 +9,7 @@ authors.workspace = true
 name = "dumpstar"
 path = "src/main.rs"
 
-# The test Cloudflare Access issuer replaces tests/lib/test_jwks.py. Off by
+# The test Cloudflare Access issuer replaces the old Python issuer. Off by
 # default: the shipped image carries `dumpstar` alone.
 [[bin]]
 name = "dumpstar-test-jwks"

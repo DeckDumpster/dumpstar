@@ -18,3 +18,17 @@ test('the collection Set cell, the card page and the /browse tile each show the 
 	assert.match(read('../src/routes/browse/+page.svelte'), /<img class="logo" src=\{set\.logo_url\}/);
 	assert.match(read('../src/lib/components/SetLogo.svelte'), /<img class="setmark" \{src\}/);
 });
+
+test('the set page header fits the logo to a fixed box beside the crop, never by intrinsic size', () => {
+	const src = readFileSync(new URL('../src/routes/browse/[set]/+page.svelte', import.meta.url), 'utf8');
+	assert.match(src, /<div class="logobox">\s*<img class="setlogo"/);
+	const css = (/** @type {string} */ sel) => src.match(new RegExp(`\\n\\t${sel} \\{([^}]*)\\}`))?.[1] ?? '';
+	const box = css('\\.logobox');
+	assert.match(box, /min-width: 0/);
+	assert.match(box, /height: /);
+	const logo = css('\\.setlogo');
+	assert.match(logo, /width: 100%/);
+	assert.match(logo, /height: 100%/);
+	assert.match(logo, /object-fit: contain/);
+	assert.match(css('\\.setcrop'), /max-width: 40%/);
+});

@@ -135,8 +135,7 @@ dumpstar_record_deployed_sha "$REPO_DIR" "$INSTANCE"
 # "not valued yet" until the next 07:30. A failed run pages through the unit's
 # OnFailure=; it must not fail a deploy whose app is already up.
 if systemctl --user cat "dumpstar-value-snapshots@${INSTANCE}.timer" >/dev/null 2>&1; then
-    echo "==> Enabling the daily valuation timer and valuing once now..."
-    systemctl --user enable --now "dumpstar-value-snapshots@${INSTANCE}.timer"
+    echo "==> Valuing once now (the timer was enabled with the shipped timers above)..."
     systemctl --user start --wait "dumpstar-value-snapshots@${INSTANCE}.service" \
         || { echo "WARNING: dumpstar-value-snapshots@${INSTANCE}.service failed" >&2; dump_unit_diagnostics "dumpstar-value-snapshots@${INSTANCE}.service"; }
 fi

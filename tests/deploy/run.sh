@@ -3002,6 +3002,13 @@ echo "$*" >> "$DUMPSTAR_TEST_CURL_LOG"
 printf 200
 EOF
 chmod +x "${WORK}/bin20c/curl"
+# the heartbeat also checks timer drift (sp-892w24): every timer reads enabled
+cat > "${WORK}/bin20c/systemctl" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in *is-enabled*) echo enabled ;; esac
+exit 0
+EOF
+chmod +x "${WORK}/bin20c/systemctl"
 CURL_LOG="${WORK}/curl20.log"
 : > "$CURL_LOG"
 HB_RC=0
@@ -3084,7 +3091,8 @@ t18() { env PATH="${T18}/bin:${PATH}" T18_STATE="${T18}/enabled" bash -c '
 SHIPPED_DIR="$(cd "${REPO_DIR}/deploy" && ls dumpstar-*.timer | sed -e 's/^dumpstar-//' -e 's/\.timer$//' | sort | paste -sd, -)"
 SHIPPED_LIB="$(t18 dumpstar_units_shipped_timers prod | sed -e 's/^dumpstar-//' -e 's/@prod//' -e 's/\.timer$//' | sort | paste -sd, -)"
 check "the install list names every timer deploy/ ships" "$SHIPPED_DIR" "$SHIPPED_LIB"
-check "nine timers are shipped" "9" "$(t18 dumpstar_units_shipped_timers prod | wc -l | tr -d ' ')"
+N18="$(cd "${REPO_DIR}/deploy" && ls dumpstar-*.timer | wc -l | tr -d ' ')"
+check "every timer deploy/ ships is listed" "$N18" "$(t18 dumpstar_units_shipped_timers prod | wc -l | tr -d ' ')"
 
 : > "${T18}/enabled/dumpstar-catalog-sync@prod.timer"
 : > "${T18}/enabled/dumpstar-tmpreap.timer"
@@ -3092,14 +3100,14 @@ set +e
 DRIFT="$(t18 dumpstar_units_timer_drift prod)"; DRIFT_RC=$?
 set -e
 check "drift fails when timers are not enabled" "1" "$DRIFT_RC"
-check "and names each of the seven missing" "7" "$(printf '%s\n' "$DRIFT" | grep -c 'timer not enabled')"
+check "and names each of the others missing" "$((N18 - 2))" "$(printf '%s\n' "$DRIFT" | grep -c 'timer not enabled')"
 check "and not the two that run" "0" "$(printf '%s\n' "$DRIFT" | grep -c 'catalog-sync\|tmpreap' || true)"
 
 t18 dumpstar_units_enable_timers other >/dev/null
 check "a non-alerting instance enables nothing" "2" "$(ls "${T18}/enabled" | wc -l | tr -d ' ')"
 
 t18 dumpstar_units_enable_timers prod >/dev/null
-check "enabling for prod arms all nine" "9" "$(ls "${T18}/enabled" | wc -l | tr -d ' ')"
+check "enabling for prod arms every shipped timer" "$N18" "$(ls "${T18}/enabled" | wc -l | tr -d ' ')"
 check "after which there is no drift" "0" "$(t18 dumpstar_units_timer_drift prod >/dev/null; echo $?)"
 
 check "deploy.sh enables the timers and fails on drift" "2" \

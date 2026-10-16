@@ -36,8 +36,8 @@ other files and are never touched.
 **Not here yet** (each is its own bead of the dumpstar design): authentication
 and tenant resolution under the dumpstar name, the shared `dumpster-kit`
 adoption beyond tokens and primitives, and a Star Wars: Unlimited rework of the
-`tests/ui` intents and `tests/visual` baselines (`dumpstar seed-fixture` builds
-an SWU fixture; those two still name the Pokémon cards they were written for
+`tests/ui` intents (`dumpstar seed-fixture` builds
+an SWU fixture; those still name the Pokémon cards they were written for
 and are outside CI). Sealed products are filled from tcgcsv's numberless
 products at convergence; their daily prices are `sealed_prices`, written by the
 catalog apply job as a series apart from the card `prices`. Their pictures are

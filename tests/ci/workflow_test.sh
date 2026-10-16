@@ -10,7 +10,7 @@
 #     `spill-after-seconds: '60'`, and goes away through teardown@v2 under
 #     `if: always()` — a cancelled or failed run otherwise leaves the VM running.
 #   * the job the merge queue reads is named `gate`.
-#   * ci.yml, deploy.yml, record-baselines.yml and data-jobs.yml are the only workflows; deploy.yml's own shape is held
+#   * ci.yml, deploy.yml and data-jobs.yml are the only workflows; deploy.yml's own shape is held
 #     by tests/ci/deploy_workflow_test.sh.
 #
 # §1 is the SEEN-RED arm: each rule is broken in a scratch copy and the checker
@@ -73,9 +73,9 @@ echo "==> §2 the real workflow"
 out="$(problems "$wf")"
 if [ -z "$out" ]; then echo "    ok   ci.yml holds every rule"; else echo "    FAIL ci.yml: $out"; fail=1; fi
 
-others="$(find .github/workflows -type f ! -name ci.yml ! -name deploy.yml ! -name record-baselines.yml ! -name data-jobs.yml | sort)"
+others="$(find .github/workflows -type f ! -name ci.yml ! -name deploy.yml ! -name data-jobs.yml | sort)"
 if [ -z "$others" ]; then
-    echo "    ok   ci.yml, deploy.yml, record-baselines.yml and data-jobs.yml are the only workflows"
+    echo "    ok   ci.yml, deploy.yml and data-jobs.yml are the only workflows"
 else
     echo "    FAIL other workflows exist: $others"
     fail=1

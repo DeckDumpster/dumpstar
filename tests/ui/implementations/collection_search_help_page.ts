@@ -13,6 +13,6 @@ export async function steps(h: ReplayHarness) {
   await h.wait_for_visible('[data-testid="search-help"]');
   await h.assert_text_present('Search syntax');
   // A keyword rendered from the server registry.
-  await h.assert_text_present('Energy type');
+  await h.assert_text_present('Rarity');
   await h.screenshot('final_state');
 }

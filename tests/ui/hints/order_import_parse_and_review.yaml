@@ -6,7 +6,7 @@ involves:
   - 'each line carries a quantity and a name hint'
   - 'paste textarea clears after Parse'
 fixture_data:
-  order_text: "2x Charmander\n1x Charizard ex"
+  order_text: "2x Millennium Falcon - Piece of Junk\n1x Luke Skywalker - Faithful Friend"
 notes: >
   Navigate to /ingest/order. Paste two-line order text into the paste
   textarea. Click "Parse". Verify two .line rows are appended to the

@@ -7,9 +7,9 @@ involves:
   - "resolved-card section heading"
 fixture_data:
   entries:
-    - { set_code: "sv3pt5", collector_number: "1", card_name: "Bulbasaur" }
-    - { set_code: "sv3pt5", collector_number: "4", card_name: "Charmander" }
-    - { set_code: "sv3pt5", collector_number: "7", card_name: "Squirtle" }
+    - { set_code: "SOR", collector_number: "5", card_name: "Luke Skywalker - Faithful Friend" }
+    - { set_code: "SOR", collector_number: "193", card_name: "Millennium Falcon - Piece of Junk" }
+    - { set_code: "SOR", collector_number: "P01", card_name: "Vanquish" }
 notes: >
   Navigate to /ingest/manual. Wait for the Set code input. For each entry:
   fill the Set code and Number inputs, then press Enter to submit the lookup

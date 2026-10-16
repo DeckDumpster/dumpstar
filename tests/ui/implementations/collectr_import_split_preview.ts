@@ -10,18 +10,19 @@
  */
 import type { ReplayHarness } from '../replay';
 
-// 6 data rows: Lorcana (skipped); Base Set Charizard (matched); Base Set
-// Bulbasaur qty 2 (matched, 2 copies); Base Set Fakemon (unmatched card);
-// Two-Player Starter (matched sealed); Surging Sparks pack qty 6 (matched sealed);
+// 7 data rows: Lorcana (skipped); Spark of Rebellion Luke Skywalker - Faithful
+// Friend #5 foil (matched); Millennium Falcon - Piece of Junk #193 qty 2
+// (matched, 2 copies); Nonexistent Card #999 (unmatched card); Two-Player
+// Starter (matched sealed); Shadows of the Galaxy pack qty 6 (matched sealed);
 // Nonexistent Box (unmatched sealed).
 const CSV = `Portfolio Name,Category,Set,Product Name,Card Number,Rarity,Variance,Grade,Card Condition,Average Cost Paid,Quantity,Market Price (As of 2026-07-19),Price Override,Watchlist,Date Added,Notes
-Main,Lorcana,Disney Lorcana Promo Cards,Elsa - The Fifth Spirit,6,Promo,Holofoil,Ungraded,Near Mint,0,1,7.12,0,false,2026-01-24,
-Main,Star Wars Unlimited,Base Set,Charizard,4/102,Rare Holo,Holofoil,Ungraded,Lightly Played,280,1,300,0,false,2024-01-10,
-Main,Star Wars Unlimited,Base Set,Bulbasaur,46/102,Common,Normal,Ungraded,Near Mint,1.00,2,2,0,false,2024-01-10,
-Main,Star Wars Unlimited,Base Set,Fakemon,999/102,Common,Normal,Ungraded,Near Mint,0,1,0,0,false,2024-01-10,
-Sealed Star Wars Unlimited,Star Wars Unlimited,151,Spark of Rebellion Two-Player Starter,,,Normal,Ungraded,Near Mint,49.99,1,60,0,false,2023-09-22,
-Sealed Star Wars Unlimited,Star Wars Unlimited,Surging Sparks,Shadows of the Galaxy Booster Pack,,,Normal,Ungraded,Near Mint,4.49,6,5,0,false,2024-11-08,
-Sealed Star Wars Unlimited,Star Wars Unlimited,151,Nonexistent Box,,,Normal,Ungraded,Near Mint,10,1,10,0,false,2024-01-01,`;
+Main,Lorcana,Disney Lorcana Promo Cards,Elsa - The Fifth Spirit,6,Promo,Foil,Ungraded,Near Mint,0,1,7.12,0,false,2026-01-24,
+Main,Star Wars Unlimited,Spark of Rebellion,Luke Skywalker - Faithful Friend,5,Special,Foil,Ungraded,Lightly Played,280,1,300,0,false,2024-01-10,
+Main,Star Wars Unlimited,Spark of Rebellion,Millennium Falcon - Piece of Junk,193,Rare,Normal,Ungraded,Near Mint,1.00,2,2,0,false,2024-01-10,
+Main,Star Wars Unlimited,Spark of Rebellion,Nonexistent Card,999,Common,Normal,Ungraded,Near Mint,0,1,0,0,false,2024-01-10,
+Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebellion Two-Player Starter,,,Normal,Ungraded,Near Mint,49.99,1,60,0,false,2023-09-22,
+Sealed Star Wars Unlimited,Star Wars Unlimited,Shadows of the Galaxy,Shadows of the Galaxy Booster Pack,,,Normal,Ungraded,Near Mint,4.49,6,5,0,false,2024-11-08,
+Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Nonexistent Box,,,Normal,Ungraded,Near Mint,10,1,10,0,false,2024-01-01,`;
 
 export async function steps(h: ReplayHarness) {
   await h.navigate('/ingest/csv');
@@ -35,9 +36,9 @@ export async function steps(h: ReplayHarness) {
   await h.wait_for_visible('.pane-head', 8000);
   await h.assert_element_count('.pane-head', 3);
 
-  // A matched card resolved to its catalog set code (`base1`) — this text is
+  // A matched card resolved to its catalog set code (`SOR`) — this text is
   // produced by the backend, so it only appears in the Single cards pane.
-  await h.assert_text_present('base1');
+  await h.assert_text_present('SOR');
   // Each split pane surfaced its own unmatched sub-table.
   await h.assert_text_present('Unmatched cards');
   await h.assert_text_present('Unmatched sealed');

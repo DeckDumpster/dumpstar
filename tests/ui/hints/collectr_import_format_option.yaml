@@ -1,6 +1,6 @@
 start_page: /ingest/csv
 involves:
-  - "Format select (ManaBox / TCGplayer / Dumpstar / Collectr)"
+  - "Format select (TCGplayer / Dumpstar / Collectr)"
   - "explanatory hint paragraph shown only for Collectr"
 fixture_data:
   format: "Collectr (cards + sealed)"

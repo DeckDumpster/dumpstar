@@ -9,10 +9,11 @@
 import type { ReplayHarness } from '../replay';
 
 const CSV = `Portfolio Name,Category,Set,Product Name,Card Number,Rarity,Variance,Grade,Card Condition,Average Cost Paid,Quantity,Market Price (As of 2026-07-19),Price Override,Watchlist,Date Added,Notes
-Main,Star Wars Unlimited,Base Set,Charizard,4/102,Rare Holo,Holofoil,Ungraded,Lightly Played,280,1,300,0,false,2024-01-10,
-Main,Star Wars Unlimited,Base Set,Bulbasaur,46/102,Common,Normal,Ungraded,Near Mint,1.00,2,2,0,false,2024-01-10,
-Sealed Star Wars Unlimited,Star Wars Unlimited,151,Spark of Rebellion Two-Player Starter,,,Normal,Ungraded,Near Mint,49.99,1,60,0,false,2023-09-22,
-Sealed Star Wars Unlimited,Star Wars Unlimited,Surging Sparks,Shadows of the Galaxy Booster Pack,,,Normal,Ungraded,Near Mint,4.49,6,5,0,false,2024-11-08,`;
+Main,Lorcana,Disney Lorcana Promo Cards,Elsa - The Fifth Spirit,6,Promo,Foil,Ungraded,Near Mint,0,1,7.12,0,false,2026-01-24,
+Main,Star Wars Unlimited,Spark of Rebellion,Luke Skywalker - Faithful Friend,5,Special,Foil,Ungraded,Lightly Played,280,1,300,0,false,2024-01-10,
+Main,Star Wars Unlimited,Spark of Rebellion,Millennium Falcon - Piece of Junk,193,Rare,Normal,Ungraded,Near Mint,1.00,2,2,0,false,2024-01-10,
+Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebellion Two-Player Starter,,,Normal,Ungraded,Near Mint,49.99,1,60,0,false,2023-09-22,
+Sealed Star Wars Unlimited,Star Wars Unlimited,Shadows of the Galaxy,Shadows of the Galaxy Booster Pack,,,Normal,Ungraded,Near Mint,4.49,6,5,0,false,2024-11-08,`;
 
 export async function steps(h: ReplayHarness) {
   await h.navigate('/ingest/csv');

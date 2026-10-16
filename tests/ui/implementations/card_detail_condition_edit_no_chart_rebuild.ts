@@ -10,7 +10,8 @@
 import type { ReplayHarness } from '../replay';
 
 const CHART = '[data-testid="price-chart"]';
-const CONDITION = 'td[data-label="Condition"] select';
+// Luke Skywalker (SOR/005) has several copies; edit the first copy row.
+const CONDITION = 'td[data-label="Condition"] select >> nth=0';
 
 export async function steps(h: ReplayHarness) {
   await h.wait_for_visible(CHART, 6000);
@@ -19,8 +20,8 @@ export async function steps(h: ReplayHarness) {
   const before = await h.page.getByTestId('price-chart').first().getAttribute('data-builds');
   if (before === null) throw new Error('price chart did not render a data-builds counter');
 
-  // Change the copy's condition (Near Mint -> Lightly Played).
-  await h.select_by_label(CONDITION, 'Lightly Played');
+  // Change the copy's condition (Near Mint -> Moderately Played).
+  await h.select_by_label(CONDITION, 'Moderately Played');
   // The inline ✓ confirms the edit committed (fires after the reload).
   await h.wait_for_visible('.cellSaved', 5000);
 

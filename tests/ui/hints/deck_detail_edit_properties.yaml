@@ -5,11 +5,11 @@ involves:
   - deck reloads reflecting the new lifecycle state
 fixture_data:
   deck_id: 2
-  deck_name: "Pikachu ex Aggro"
+  deck_name: "Vader Aggro"
   original_state: "ready"
   new_state: "built"
 notes: >
-  Navigate to /decks/2 (Pikachu ex Aggro). Wait for the deck to load.
+  Navigate to /decks/2 (Vader Aggro). Wait for the deck to load.
   Confirm the "Lifecycle" select currently shows "ready". Change the
   select to "built". Wait for the deck to reload. Verify the lifecycle
   select now shows "built". Take a screenshot.

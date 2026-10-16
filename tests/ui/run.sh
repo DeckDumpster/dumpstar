@@ -11,7 +11,7 @@
 #
 #   bash tests/ui/run.sh [playwright args...]     e.g. -g browse_grid_fits_viewport
 #
-# Needs: cargo, node 22.18+, python3 with cryptography and PyJWT, curl, and
+# Needs: cargo, node 22.18+, jq, curl, and
 # chromium's system libraries (`npx playwright install --with-deps` fetches them
 # where apt is available; set UI_SKIP_BROWSER_INSTALL=1 where they are present).
 set -euo pipefail
@@ -54,11 +54,12 @@ export DUMPSTAR_USER=collection
 step "ui: start the test Access JWKS and the server"
 jwks="$work/jwks"
 mkdir -p "$jwks"
-python3 "$root/tests/lib/test_jwks.py" serve "$jwks" >/dev/null &
+bash "$root/tests/lib/test-jwks.sh" serve "$jwks" >/dev/null &
 pids+=("$!")
-for _ in $(seq 1 100); do [ -f "$jwks/jwks.json" ] && break; sleep 0.1; done
-[ -f "$jwks/jwks.json" ] || { echo "ERROR: the test JWKS server wrote no jwks.json (python3 needs cryptography and PyJWT)" >&2; exit 1; }
-meta() { python3 -c "import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])" "$jwks/jwks.json" "$1"; }
+# test-jwks.sh builds the issuer on first use, so allow for a cargo build.
+for _ in $(seq 1 3000); do [ -f "$jwks/jwks.json" ] && break; sleep 0.1; done
+[ -f "$jwks/jwks.json" ] || { echo "ERROR: the test JWKS server wrote no jwks.json (cargo must build dumpstar-test-jwks)" >&2; exit 1; }
+meta() { jq -r ".$1" "$jwks/jwks.json"; }
 port="${UI_TEST_PORT:-18080}"
 
 export DUMPSTAR_HOME="$home"
@@ -82,7 +83,7 @@ if [ -z "$up" ]; then
 fi
 
 step "ui: smoke — the authenticated API answers"
-token="$(python3 "$root/tests/lib/test_jwks.py" issue "$jwks" ui-test@example.com)"
+token="$(bash "$root/tests/lib/test-jwks.sh" issue "$jwks" ui-test@example.com)"
 for ep in sets collection/value-history?dimension=all; do
     curl -sS -m 20 -o /dev/null -w "    /api/$ep -> %{http_code} in %{time_total}s\n" \
         -H "Cf-Access-Jwt-Assertion: $token" "http://127.0.0.1:$port/api/$ep" || true

@@ -121,7 +121,8 @@ test('a page that begins mid-band still opens with that band', () => {
 
 test('the set page renders bands only under the number sort', () => {
 	const src = readFileSync(new URL('../src/routes/browse/[set]/+page.svelte', import.meta.url), 'utf8');
-	assert.match(src, /sortKey === 'number'\s*\?\s*\{ landscape: \[\], portrait: \[\] \}/);
+	assert.match(src, /sortKey === 'number' \? bandRuns\(binder\?\.slots \?\? \[\]\) : \[\]/);
+	assert.doesNotMatch(src, /splitLandscape/);
 	assert.match(src, /data-testid="landscape-band"/);
 });
 
@@ -153,5 +154,5 @@ test('unturned leaders and bases get a landscape box and a coarser band grid', (
 	assert.match(src, /class:flat=\{slot\.landscape && !turnLandscape\}/);
 	assert.match(src, /\.flat :global\(\.art\)\s*\{\s*aspect-ratio: 7 \/ 5;/);
 	assert.match(src, /landscapeCols = \$derived\(turnLandscape \? cols : Math\.max\(1, Math\.ceil\(cols \/ 2\)\)\)/);
-	assert.equal((src.match(/repeat\(\{landscapeCols\}/g) ?? []).length, 2);
+	assert.equal((src.match(/repeat\(\{landscapeCols\}/g) ?? []).length, 1);
 });

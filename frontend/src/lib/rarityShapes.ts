@@ -1,7 +1,7 @@
 // Vector rarity marks, traced from the marks printed on SWU cards (the
 // bottom-right of the card, beside the set code and number). Each mark is a
 // slanted bold letter on a badge with a light outline and a trailing burst:
-// a disc for Common, a pentagon for Uncommon, a five-point star for Rare, a
+// a disc and a round burst for Common (a bold bronze C, not the pale slate of the token), a pentagon for Uncommon, a five-point star for Rare, a
 // seven-point star for Legendary, a trapezoid for Special. `frame` is the
 // outline plus burst, drawn in the text colour; `path` is the letter, drawn in
 // the rarity's colour (the publisher's, served by /api/rarities, when the
@@ -15,9 +15,9 @@ const BADGE = 'M3 1H15.6L13.6 18.6H0.8Z';
 const SHAPES: Record<string, RarityShape> = {
 	common: {
 		name: 'Common',
-		color: 'var(--color-rarity-common)',
-		frame: 'M7.5 1C3.6 1 0.5 4.6 0.5 9.5S3.6 18 7.5 18C11 18 14 15 14 11.5A8.5 8.5 0 1 1 15.5 23.5 8.5 8.5 0 0 1 7.5 18Z M15 6.5A8.5 8.5 0 1 0 15 23.5 8.5 8.5 0 1 0 15 6.5Z',
-		path: 'M13 5 13.4 8.4H10.6Q10 7.2 8.8 7.4 7.2 7.6 7 10.4 6.8 13.4 8.6 13.6 10 13.8 10.8 12.4H13.6Q13 16.4 8.6 16.6 3.4 16.4 3.4 10.4 3.6 4 8.4 3.6 11.4 3.4 13 5Z'
+		color: 'var(--rarity-common-mark)',
+		frame: 'M0.9 10.9A9.1 9.1 0 1 1 19.1 10.9 9.1 9.1 0 1 1 0.9 10.9Z M9.4 16.2A7.7 7.7 0 1 1 24.8 16.2 7.7 7.7 0 1 1 9.4 16.2Z',
+		path: 'M15.83 6.34A7.4 7.4 0 1 0 15.83 15.46L12.84 13.12A3.6 3.6 0 1 1 12.84 8.68ZM10.4 10H14.4V11.9H10.4Z'
 	},
 	uncommon: {
 		name: 'Uncommon',

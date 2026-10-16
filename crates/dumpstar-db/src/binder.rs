@@ -272,47 +272,29 @@ pub fn get_binder_page(
     // Sort. Progress above is computed pre-sort/filter, so the bars always
     // reflect the whole section-included set rather than the current view.
     // `visible` arrives in collector-number order.
-    // Under any sort but collector number, leaders and bases form their own
-    // top section: pulled out first, Leaders then Bases, each ordered by
-    // the chosen sort (collector number breaks ties). Collector-number sorts
-    // list every card strictly by number, leaders and bases included.
-    let mut top: Vec<BinderSlot> = Vec::new();
-    let mut rest: Vec<BinderSlot> = Vec::new();
-    let by_number = matches!(q.sort.as_str(), "number" | "number_desc");
-    for s in visible {
-        if s.landscape && !by_number {
-            top.push(s);
-        } else {
-            rest.push(s);
-        }
-    }
+    // Every sort orders the whole set as one list: leaders, bases and variant
+    // sections are not hoisted. The page draws its bands only under the
+    // collector-number sort and its rarity groups only under rarity.
+    let mut visible = visible;
     let rank = |s: &BinderSlot| s.rarity.as_deref().map_or(-1, |r| tiers.sort_value(r));
-    let apply_sort = |v: &mut Vec<BinderSlot>| match q.sort.as_str() {
-        "number_desc" => v.reverse(),
-        "name" => v.sort_by(|a, b| {
+    match q.sort.as_str() {
+        "number_desc" => visible.reverse(),
+        "name" => visible.sort_by(|a, b| {
             a.name
                 .to_ascii_lowercase()
                 .cmp(&b.name.to_ascii_lowercase())
         }),
-        "name_desc" => v.sort_by(|a, b| {
+        "name_desc" => visible.sort_by(|a, b| {
             b.name
                 .to_ascii_lowercase()
                 .cmp(&a.name.to_ascii_lowercase())
         }),
-        "price" => v.sort_by(|a, b| cmp_price(a, b, true)),
-        "price_asc" => v.sort_by(|a, b| cmp_price(a, b, false)),
-        "rarity" => v.sort_by_key(|s| std::cmp::Reverse(rank(s))),
-        "rarity_asc" => v.sort_by_key(|s| rank(s)),
+        "price" => visible.sort_by(|a, b| cmp_price(a, b, true)),
+        "price_asc" => visible.sort_by(|a, b| cmp_price(a, b, false)),
+        "rarity" => visible.sort_by_key(|s| std::cmp::Reverse(rank(s))),
+        "rarity_asc" => visible.sort_by_key(|s| rank(s)),
         _ => {} // "number" — already collector-number ascending.
-    };
-    // The chosen sort orders inside the top section too (Leaders, then
-    // Bases): a set with dozens of them would otherwise show the same fixed
-    // pages under every sort.
-    apply_sort(&mut top);
-    top.sort_by_key(|s| landscape_rank(s.card_type.as_deref()));
-    let mut visible = rest;
-    apply_sort(&mut visible);
-    visible.splice(0..0, top);
+    }
 
     // Filter: in-set name search, then the ownership tab.
     let search = q.search.trim().to_ascii_lowercase();
@@ -682,7 +664,14 @@ mod tests {
             let nums: Vec<&str> = page.slots.iter().map(|s| s.number.as_str()).collect();
             assert_eq!(nums, want, "sort {sort}");
         }
-        for sort in ["name", "name_desc", "price", "rarity"] {
+        // Every other sort is one flat list: leaders and bases are not hoisted.
+        for (sort, want) in [
+            ("name", ["5", "7", "9", "8", "6", "4", "3", "10", "2", "1"]),
+            (
+                "name_desc",
+                ["1", "2", "10", "3", "4", "6", "8", "9", "7", "5"],
+            ),
+        ] {
             let page = get_binder_page(
                 &conn,
                 "SOR",
@@ -695,35 +684,12 @@ mod tests {
             .unwrap()
             .unwrap();
             let nums: Vec<&str> = page.slots.iter().map(|s| s.number.as_str()).collect();
-            // Leaders then Bases, each ordered by the sort; the unpriced and
-            // equal-rarity ties keep collector-number order.
-            let want: [&str; 4] = match sort {
-                "name" => ["5", "2", "7", "1"],
-                "name_desc" => ["2", "5", "1", "7"],
-                _ => ["2", "5", "1", "7"],
-            };
-            assert_eq!(&nums[..4], want, "sort {sort}");
-            assert!(page.slots[..4].iter().all(|s| s.landscape), "sort {sort}");
-            assert!(page.slots[4..].iter().all(|s| !s.landscape), "sort {sort}");
-            if sort == "name" {
-                let names: Vec<&str> = page.slots[4..].iter().map(|s| s.name.as_str()).collect();
-                assert_eq!(
-                    names,
-                    [
-                        "Unit Alpha",
-                        "Unit Bravo",
-                        "Unit Charlie",
-                        "Unit Delta",
-                        "Unit Echo",
-                        "Unit Foxtrot"
-                    ]
-                );
-            }
+            assert_eq!(nums, want, "sort {sort}");
         }
     }
 
     #[test]
-    fn price_sort_reorders_a_set_headed_by_leaders_and_bases() {
+    fn price_sort_is_one_flat_list_across_leaders_and_bases() {
         // HMW shape: dozens of leaders and bases head the page, so the first
         // pages must differ between the two price directions.
         let dir = tempfile::tempdir().unwrap();
@@ -769,8 +735,38 @@ mod tests {
             .map(|s| s.number)
             .collect()
         };
-        assert_eq!(order("price"), ["2", "3", "1", "5", "4", "6"]);
-        assert_eq!(order("price_asc"), ["1", "3", "2", "4", "5", "6"]);
+        assert_eq!(order("price"), ["6", "2", "3", "5", "1", "4"]);
+        assert_eq!(order("price_asc"), ["4", "1", "5", "3", "2", "6"]);
+    }
+
+    #[test]
+    fn price_sort_ignores_type_and_variant_section() {
+        // A cheap leader, an expensive promo and a mid hyperspace card.
+        let (_d, conn) = binder_conn_priced(&[
+            ("SOR-1-normal", 0.1),
+            ("SOR-P01-promo", 40.0),
+            ("SOR-1-hyper", 5.0),
+        ]);
+        let order = |sort: &str| -> Vec<String> {
+            get_binder_page(
+                &conn,
+                "SOR",
+                &BinderQuery {
+                    sort: sort.into(),
+                    layout: 60,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .unwrap()
+            .slots
+            .into_iter()
+            .map(|s| s.number)
+            .collect()
+        };
+        assert_eq!(&order("price")[..3], ["P01", "264", "1"]);
+        let asc = order("price_asc");
+        assert_eq!(&asc[..3], ["1", "264", "P01"]);
     }
 
     #[test]
@@ -795,7 +791,6 @@ mod tests {
             .unwrap()
             .slots
             .into_iter()
-            .filter(|s| !s.landscape)
             .map(|s| s.number)
             .collect()
         };

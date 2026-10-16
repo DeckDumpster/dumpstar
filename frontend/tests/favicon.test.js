@@ -112,6 +112,7 @@ test('every page links the svg, 32px png and apple-touch icons', () => {
 		assert.ok(layout.includes(`href="${href}"`), `+layout.svelte does not link ${href}`);
 	}
 	assert.match(layout, /rel="apple-touch-icon"[^>]*sizes="180x180"/);
+	/** @param {string} n */
 	const png = (n) => readFileSync(join(frontendRoot, 'static', n));
 	assert.equal(png('apple-touch-icon.png').readUInt32BE(16), 180);
 	assert.equal(png('favicon-32.png').readUInt32BE(16), 32);

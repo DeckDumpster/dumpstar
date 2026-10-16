@@ -28,7 +28,7 @@ key="$(
 hit="$cache_root/$key"
 if [ ! -f "$hit/shared.sqlite" ] || [ ! -f "$hit/collection.sqlite" ]; then
     tmp="$(mktemp -d "$cache_root.tmp.XXXXXX" 2>/dev/null || mktemp -d)"
-    (cd "$root" && cargo run --quiet -p dumpstar-cli -- seed-fixture --out "$tmp")
+    (cd "$root" && cargo run --quiet -p dumpstar-cli --bin dumpstar -- seed-fixture --out "$tmp")
     mkdir -p "$cache_root"
     rm -rf "$hit"
     mv "$tmp" "$hit"

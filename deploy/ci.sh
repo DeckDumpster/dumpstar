@@ -781,6 +781,12 @@ if tier lint; then
     step "Unit startup evidence captured before exit (tests/ci/unit_diagnostics_test.sh)"
     bash "$REPO_DIR/tests/ci/unit_diagnostics_test.sh"
 
+    # Should an alert page be sent AT ALL (pd-hqdt)? The cases that matter prove
+    # suppression disarmed nothing: a changed signature, a second unit, an
+    # escalation, an untrusted stamp. A stub curl stands in for Pushover.
+    step "Repeat pages are suppressed, changed ones are not (tests/alarming/alert_suppress_test.sh)"
+    bash "$REPO_DIR/tests/alarming/alert_suppress_test.sh"
+
     # ci.yml has no concurrency: block, provisions through ephemeral-ci@v2 with
     # the 60s spill, and tears down under if: always().
     step "Shared Rust compile cache wiring (tests/ci/rust_cache_test.sh)"

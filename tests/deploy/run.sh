@@ -550,6 +550,8 @@ EOF
 cat > "${WORK}/deploybin/systemctl" <<'EOF'
 #!/usr/bin/env bash
 for a in "$@"; do [ "$a" = is-active ] && exit 3; done
+# The timers deploy.sh enables must read back enabled, or it fails on drift (sp-892w24).
+for a in "$@"; do [ "$a" = is-enabled ] && { echo enabled; exit 0; }; done
 echo "SYSTEMCTL: $*" >> "$DUMPSTAR_TEST_SYSTEMCTL_LOG"
 exit 0
 EOF
@@ -2903,6 +2905,8 @@ cp "${WORK}/deploybin/podman" "${WORK}/bin20/podman"
 cat > "${WORK}/bin20/systemctl" <<'EOF'
 #!/usr/bin/env bash
 for a in "$@"; do [ "$a" = is-active ] && exit 3; done
+# The timers deploy.sh enables must read back enabled, or it fails on drift (sp-892w24).
+for a in "$@"; do [ "$a" = is-enabled ] && { echo enabled; exit 0; }; done
 echo "SYSTEMCTL: $*" >> "$DUMPSTAR_TEST_SYSTEMCTL_LOG"
 exit 0
 EOF

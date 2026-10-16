@@ -1778,8 +1778,14 @@
 		color: var(--color-text);
 		text-decoration: underline;
 	}
+	/* The table runs edge to edge: it cancels `.content`'s gutter on the
+	   sides and under the pinned bar. A bulk bar above it keeps the top gap. */
 	.tableScroll {
 		overflow-x: auto;
+		margin: calc(-1 * var(--space-5)) calc(-1 * var(--space-6)) 0;
+	}
+	.bulkbar ~ .tableScroll {
+		margin-top: 0;
 	}
 	.viewtoggle {
 		display: flex;

@@ -259,7 +259,7 @@
 		flex: 1;
 	}
 	/* Sticky Jump-to column beside the groups; on narrow viewports the list
-	   becomes a horizontal chip row above them. */
+	   becomes a horizontal wrapping chip row above them (never a sideways scroll). */
 	.layout {
 		display: grid;
 		grid-template-columns: 200px minmax(0, 1fr);
@@ -475,7 +475,7 @@
 
 	@media (max-width: 720px) {
 		/* `minmax(0, 1fr)`, not `1fr`: a bare 1fr track has an automatic
-		   minimum of its content's min-content, and the chip row's nowrap
+		   minimum of its content's min-content, and the chip row's
 		   chips add up to wider than a phone, so the track grew to fit them
 		   and the tile grid below fitted 7 columns into it. */
 		.layout {
@@ -489,11 +489,13 @@
 		}
 		.navcol ul {
 			flex-direction: row;
-			overflow-x: auto;
+			flex-wrap: wrap;
 			gap: var(--space-1);
 		}
 		.navlink {
-			flex: 0 0 auto;
+			flex: 0 1 auto;
+			width: auto;
+			max-width: 100%;
 			padding: var(--space-1) var(--space-2);
 			border: 1px solid var(--color-border);
 			border-radius: var(--radius-pill);

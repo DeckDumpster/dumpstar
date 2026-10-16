@@ -9,5 +9,7 @@ test('browse ports the Jump-to rail, collapsible groups and chip row', () => {
 	assert.match(src, /Jump to/);
 	assert.match(src, /aria-expanded=\{!collapsed\[g\.category\]\}/);
 	assert.match(src, /position: sticky/);
-	assert.match(src, /@media \(max-width: 720px\)[\s\S]*overflow-x: auto/);
+	assert.match(src, /@media \(max-width: 720px\)[\s\S]*flex-wrap: wrap/);
+	const narrow = src.slice(src.indexOf('@media (max-width: 720px)'));
+	assert.doesNotMatch(narrow, /overflow-x: auto/);
 });

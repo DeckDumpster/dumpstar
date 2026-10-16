@@ -18,7 +18,7 @@
 	} from '$lib/components/ui';
 	import { printingLabel, money } from '$lib/format';
 	import { slotPrice, ownedFoil } from '$lib/browseView';
-	import { splitLandscape, bandRuns, clampCols, MAX_COLS, BROWSE_ROWS, pageAfterResize } from '$lib/browseView';
+	import { bandRuns, clampCols, MAX_COLS, BROWSE_ROWS, pageAfterResize } from '$lib/browseView';
 		import { variantColor, variantSortCmp } from '$lib/variants.svelte';
 	import type { BinderPage } from '$lib/types/BinderPage';
 	import type { BinderSlot } from '$lib/types/BinderSlot';
@@ -355,15 +355,11 @@
 		}
 	}
 
-	// Leaders and bases group on top under every sort except collector number,
-	// which lists every card strictly by number: there each run of leaders or
-	// bases is a band of its own at the point it occurs, and nothing moves.
-	const groups = $derived(
-		sortKey === 'number'
-			? { landscape: [], portrait: [] }
-			: splitLandscape(binder?.slots ?? [])
-	);
+	// Collector number is the only sort that bands leaders, bases and the
+	// Hyperspace/Showcase/Promo sections. Rarity groups by rarity; every other
+	// sort is one flat list in the order the server returned.
 	const runs = $derived(sortKey === 'number' ? bandRuns(binder?.slots ?? []) : []);
+	const byRarity = $derived(sortKey === 'rarity');
 
 	const sectionLabel: Record<string, string> = {
 		base: '',
@@ -701,11 +697,14 @@
 				</div>
 			{/snippet}
 
-			{#snippet portraitGrid(list: BinderSlot[], before: BinderSlot | null)}
+			{#snippet portraitGrid(list: BinderSlot[], before: BinderSlot | null, banded: boolean = true)}
 				<div class="grid" data-testid="portrait-grid" style:grid-template-columns="repeat({cols}, minmax(0, 1fr))">
 					{#each list as slot, i (slot.number)}
 						{@const prevSection = i > 0 ? list[i - 1].section : before ? before.section : 'base'}
-						{#if slot.section !== prevSection && slot.section !== 'base'}
+						{#if byRarity && (i === 0 || slot.rarity !== list[i - 1].rarity)}
+							<SectionHeader class="sectionbreak" tone="accent" divider title={slot.rarity ?? 'No rarity'} />
+						{/if}
+						{#if banded && slot.section !== prevSection && slot.section !== 'base'}
 							<SectionHeader
 								class="sectionbreak"
 								tone="accent"
@@ -741,20 +740,8 @@
 						</div>
 					{/if}
 				{/each}
-			{:else}
-				{#if groups.landscape.length > 0}
-					<SectionHeader class="sectionbreak-top" tone="accent" divider title="Leaders & Bases" />
-					<div
-						class="grid landscapegrid"
-						data-testid="landscape-grid"
-						style:grid-template-columns="repeat({landscapeCols}, minmax(0, 1fr))"
-					>
-						{#each groups.landscape as slot (slot.number)}
-							{@render cell(slot)}
-						{/each}
-					</div>
-				{/if}
-				{@render portraitGrid(groups.portrait, null)}
+				{:else}
+					{@render portraitGrid(binder.slots, null, false)}
 			{/if}
 
 			{#if binder.total_pages > 1}

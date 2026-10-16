@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T4
+# covers: tests/lake/shipper.sh deploy/ci.sh
 # Container-tier gate (pd-dxn3): the SHIPPER, against a real object store,
 # under the real tenant credential policy, killed for real.
 #

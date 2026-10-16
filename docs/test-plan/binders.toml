@@ -5,7 +5,7 @@ area = "binders"
 [[use_case]]
 id = "UC-binders-01"
 tier = "T4"
-statement = "From the Trade Binder detail view, I click + Add cards. The collection picker modal opens titled Add cards to Trade Binder, loads my collection, and offers a Search your collection… box. I type char into the search bo... (binders_add_cards_full_flow)"
+statement = "From the Trade Binder detail view, I click + Add cards. The collection picker modal opens titled Add cards to Trade Binder, loads my collection, and offers a Search your collection… box. I type luke into the search bo... (binders_add_cards_full_flow)"
 
 [[use_case]]
 id = "UC-binders-02"
@@ -35,7 +35,7 @@ statement = "From the binders list I click the Trade Binder tile and land on its
 [[use_case]]
 id = "UC-binders-07"
 tier = "T4"
-statement = "When I navigate to /binders, I see the three existing binders (Trade Binder, Master Set: 151, and Vintage Vault) rendered as tiles in the binder grid. Each tile shows the binder name and an {n} cards count. Clicking a... (binders_list_view_populated)"
+statement = "When I navigate to /binders, I see the three existing binders (Trade Binder, Master Set: Spark of Rebellion, and Hyperspace Vault) rendered as tiles in the binder grid. Each tile shows the binder name and an {n} cards... (binders_list_view_populated)"
 
 [[use_case]]
 id = "UC-binders-08"
@@ -45,4 +45,4 @@ statement = "From the card detail page for a card with an unassigned copy, I use
 [[use_case]]
 id = "UC-binders-09"
 tier = "T4"
-statement = "From a binder's detail view with cards present (Master Set: 151), I click the Remove link in the action cell of the first card row. That copy is un-assigned from the binder — it disappears from the card table and the ... (binders_remove_cards)"
+statement = "From a binder's detail view with cards present (Master Set: Spark of Rebellion), I click the Remove link in the action cell of the first card row. That copy is un-assigned from the binder — it disappears from the card... (binders_remove_cards)"

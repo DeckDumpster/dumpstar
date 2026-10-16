@@ -30,12 +30,7 @@ statement = "When I click Create on the deck create form without entering a name
 [[use_case]]
 id = "UC-decks-06"
 tier = "T4"
-statement = "When I delete the deck Charizard ex Control, its cards remain in my collection. After deletion, I can search for Charizard ex on the Collection page and still find the copies that had been in the deck. (decks_delete_keeps_cards)"
-
-[[use_case]]
-id = "UC-decks-07"
-tier = "T4"
-statement = "A copy of Charizard ex that is assigned to deck Charizard ex Control can be moved to binder Trade Binder from the card detail modal. After moving, the copy shows the binder assignment instead of the deck assignment — ... (decks_exclusivity_enforcement)"
+statement = "When I delete the deck Luke Vigilance Midrange, its cards remain in my collection. After deletion, I can search for Luke Skywalker - Faithful Friend on the Collection page and still find the copies that had been in th... (decks_delete_keeps_cards)"
 
 [[use_case]]
 id = "UC-decks-08"
@@ -46,8 +41,3 @@ statement = "When I visit /decks with existing decks, each deck tile in the grid
 id = "UC-decks-09"
 tier = "T4"
 statement = "When I visit /decks on an instance with no decks, I see the message No decks yet. instead of a deck grid, with a line explaining what a deck is and to name one above. The inline create form is still available above th... (decks_list_empty_state)"
-
-[[use_case]]
-id = "UC-decks-10"
-tier = "T4"
-statement = "I can assign an unassigned copy to a deck from the card detail modal's Copies section. After assigning, the copy shows the deck name instead of Unassigned. (decks_manage_from_card_modal)"

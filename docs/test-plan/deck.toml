@@ -5,7 +5,7 @@ area = "deck"
 [[use_case]]
 id = "UC-deck-01"
 tier = "T4"
-statement = "On a deck's detail page, I can click + Add cards to open the collection picker modal. Searching for a card name shows matching owned copies. Selecting a copy and confirming adds it to the deck's card table, grouped by... (deck_builder_add_and_remove_cards)"
+statement = "On a deck's detail page, I can click + Add cards to open the collection picker modal. Searching for a card name shows matching owned copies. Selecting a copy and confirming adds it to the deck's card table. The card c... (deck_builder_add_and_remove_cards)"
 
 [[use_case]]
 id = "UC-deck-02"
@@ -23,21 +23,6 @@ tier = "T4"
 statement = "When I navigate to /decks, I see a Decks heading, the inline create form with a New deck name… text input and an Owner (optional) text input, and a Create submit button. Below the form, the grid lists the existing dec... (deck_builder_page_initial_state)"
 
 [[use_case]]
-id = "UC-deck-05"
-tier = "T4"
-statement = "When viewing a built deck (cards mapped to physical collection entries), the swap button (⇄) does not appear on card rows. Only the Remove action is shown. This is correct because built decks reference owned physical ... (deck_builder_swap_unavailable_built)"
-
-[[use_case]]
-id = "UC-deck-06"
-tier = "T4"
-statement = "In the swap variant modal, I click on a different variant of the same card. The modal closes and the deck reloads with the new variant. The card row in the card table now references the new variant. If I reopen the sw... (deck_builder_swap_variant_execution)"
-
-[[use_case]]
-id = "UC-deck-07"
-tier = "T4"
-statement = "When viewing an idea deck's card table, I hover over a card row to reveal the swap button (⇄). Clicking it opens a modal titled Swap Variant showing all variants of that card. Each variant displays: set name with code... (deck_builder_swap_variant_modal)"
-
-[[use_case]]
 id = "UC-deck-08"
 tier = "T4"
 statement = "When I create a new deck from the /decks page by filling in the name and owner in the inline create form and clicking Create, the deck appears in the grid as a tile. Clicking the tile opens the new deck's detail page ... (deck_create_redirects_to_detail)"
@@ -45,17 +30,17 @@ statement = "When I create a new deck from the /decks page by filling in the nam
 [[use_case]]
 id = "UC-deck-09"
 tier = "T4"
-statement = "When I navigate to deck 2 (Pikachu ex Aggro) at /decks/2 and click + Add cards, the collection picker modal opens with a search field. I type Snorlax in the search field, see Snorlax in the results, check it to select... (deck_detail_add_cards_from_collection)"
+statement = "When I navigate to deck 2 (Vader Aggro) at /decks/2 and click + Add cards, the collection picker modal opens with a search field. I type Millennium Falcon - Piece of Junk in the search field, see Millennium Falcon - P... (deck_detail_add_cards_from_collection)"
 
 [[use_case]]
 id = "UC-deck-10"
 tier = "T4"
-statement = "When I navigate to deck 2 (Pikachu ex Aggro) at /decks/2 and open the + Add cards picker, the picker lists collection copies as checkbox rows. Copies already assigned to another deck or to a binder are shown with a wh... (deck_detail_add_cards_hides_assigned)"
+statement = "When I navigate to deck 2 (Vader Aggro) at /decks/2 and open the + Add cards picker, the picker lists collection copies as checkbox rows. Copies already assigned to another deck or to a binder are shown with a where t... (deck_detail_add_cards_hides_assigned)"
 
 [[use_case]]
 id = "UC-deck-11"
 tier = "T4"
-statement = "When I navigate to deck 2 (Pikachu ex Aggro) at /decks/2 and click + Add cards, the picker modal opens. Each physical copy is listed as its own individual checkbox row — there is no quantity aggregation, one row per p... (deck_detail_add_individual_copy)"
+statement = "When I navigate to deck 2 (Vader Aggro) at /decks/2 and click + Add cards, the picker modal opens. Each physical copy is listed as its own individual checkbox row — there is no quantity aggregation, one row per physic... (deck_detail_add_individual_copy)"
 
 [[use_case]]
 id = "UC-deck-12"
@@ -75,17 +60,17 @@ statement = "When I open a deck's detail page and click the Delete deck button, 
 [[use_case]]
 id = "UC-deck-15"
 tier = "T4"
-statement = "I can navigate directly to a deck's detail page at /decks/:id. I see the deck name, the sub line showing the owner and format, the Lifecycle select, and a card table listing the deck's cards grouped by supertype (Poké... (deck_detail_direct_navigation)"
+statement = "I can navigate directly to a deck's detail page at /decks/:id. I see the deck name, the sub line showing the owner and format, the Lifecycle select, and a card table listing the deck's cards with Name, Set, #, Variant... (deck_detail_direct_navigation)"
 
 [[use_case]]
 id = "UC-deck-16"
 tier = "T4"
-statement = "When I navigate to deck 2 (Pikachu ex Aggro) and use the Lifecycle select in the header to change the deck's state from ready to built, the change is saved and the deck reloads showing the new state. The state badge r... (deck_detail_edit_properties)"
+statement = "When I navigate to deck 2 (Vader Aggro) and use the Lifecycle select in the header to change the deck's state from ready to built, the change is saved and the deck reloads showing the new state. The state badge reflec... (deck_detail_edit_properties)"
 
 [[use_case]]
 id = "UC-deck-17"
 tier = "T4"
-statement = "When I view a deck's detail page, the supertype-grouped card table fits entirely within the viewport. No content overflows off the right edge of the screen and no horizontal scrollbar appears. (deck_detail_list_view_no_overflow)"
+statement = "When I view a deck's detail page, the card table fits entirely within the viewport. No content overflows off the right edge of the screen and no horizontal scrollbar appears. (deck_detail_list_view_no_overflow)"
 
 [[use_case]]
 id = "UC-deck-18"
@@ -95,7 +80,7 @@ statement = "When I view a deck's detail page, the card table displays content i
 [[use_case]]
 id = "UC-deck-19"
 tier = "T4"
-statement = "When I navigate to deck 1 (Charizard ex Control) and click the Remove link on each card row, the cards are un-assigned from the deck one by one. The copies stay in the collection. After all cards are removed, the card... (deck_detail_select_and_remove_cards)"
+statement = "When I navigate to deck 1 (Luke Vigilance Midrange) and click the Remove link on each card row, the cards are un-assigned from the deck one by one. The copies stay in the collection. After all cards are removed, the c... (deck_detail_select_and_remove_cards)"
 
 [[use_case]]
 id = "UC-deck-20"

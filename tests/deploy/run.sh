@@ -3054,5 +3054,57 @@ check "…and still not under the real dir" "0" \
 reset_store
 
 # ---------------------------------------------------------------------------
+log "18. Every shipped timer is enabled, or its omission is written down (sp-892w24)"
+# ---------------------------------------------------------------------------
+#
+# Prod ran 2 of the 9 timers deploy/ ships: the rest were installed and enabled
+# for nobody. The list below is read from the directory, so a timer added to
+# deploy/ and not to the install, or not to the enabled set, fails here.
+
+T18="${WORK}/t18"
+mkdir -p "${T18}/bin" "${T18}/enabled"
+cat > "${T18}/bin/systemctl" <<'FAKE'
+#!/usr/bin/env bash
+# fake: `systemctl --user enable --now <t>` / `is-enabled <t>`
+shift
+case "$1" in
+	enable) shift; [ "$1" = --now ] && shift; : > "${T18_STATE}/$1" ;;
+	is-enabled) [ -e "${T18_STATE}/$2" ] && echo enabled || { echo disabled; exit 1; } ;;
+esac
+FAKE
+chmod +x "${T18}/bin/systemctl"
+
+t18() { env PATH="${T18}/bin:${PATH}" T18_STATE="${T18}/enabled" bash -c '
+	. "$1/deploy/units-lib.sh"; shift; "$@"' _ "$REPO_DIR" "$@"; }
+
+SHIPPED_DIR="$(cd "${REPO_DIR}/deploy" && ls dumpstar-*.timer | sed -e 's/^dumpstar-//' -e 's/\.timer$//' | sort | paste -sd, -)"
+SHIPPED_LIB="$(t18 dumpstar_units_shipped_timers prod | sed -e 's/^dumpstar-//' -e 's/@prod//' -e 's/\.timer$//' | sort | paste -sd, -)"
+check "the install list names every timer deploy/ ships" "$SHIPPED_DIR" "$SHIPPED_LIB"
+check "nine timers are shipped" "9" "$(t18 dumpstar_units_shipped_timers prod | wc -l | tr -d ' ')"
+
+: > "${T18}/enabled/dumpstar-catalog-sync@prod.timer"
+: > "${T18}/enabled/dumpstar-tmpreap.timer"
+set +e
+DRIFT="$(t18 dumpstar_units_timer_drift prod)"; DRIFT_RC=$?
+set -e
+check "drift fails when timers are not enabled" "1" "$DRIFT_RC"
+check "and names each of the seven missing" "7" "$(printf '%s\n' "$DRIFT" | grep -c 'timer not enabled')"
+check "and not the two that run" "0" "$(printf '%s\n' "$DRIFT" | grep -c 'catalog-sync\|tmpreap' || true)"
+
+t18 dumpstar_units_enable_timers other >/dev/null
+check "a non-alerting instance enables nothing" "2" "$(ls "${T18}/enabled" | wc -l | tr -d ' ')"
+
+t18 dumpstar_units_enable_timers prod >/dev/null
+check "enabling for prod arms all nine" "9" "$(ls "${T18}/enabled" | wc -l | tr -d ' ')"
+check "after which there is no drift" "0" "$(t18 dumpstar_units_timer_drift prod >/dev/null; echo $?)"
+
+check "deploy.sh enables the timers and fails on drift" "2" \
+	"$(grep -c 'dumpstar_units_enable_timers\|dumpstar_units_timer_drift' "${REPO_DIR}/deploy/deploy.sh" || true)"
+check "the heartbeat alarms on drift" "1" \
+	"$(grep -c 'dumpstar_units_timer_drift' "${REPO_DIR}/deploy/heartbeat.sh" || true)"
+
+reset_store
+
+# ---------------------------------------------------------------------------
 printf '\n=== %d passed, %d failed ===\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -172,10 +172,10 @@ check "docs + a crate -> everything" "$ALL" \
 check "order does not matter" "$ALL" \
 	"$(select_for "crates/dumpstar-db/src/lib.rs" "README.md")"
 
-# The visual baselines live OUTSIDE frontend/, so touching them is not a
+# The browser specs live OUTSIDE frontend/, so touching them is not a
 # frontend-only change — and must not be treated as one.
-check "a committed baseline -> everything" "$ALL" \
-	"$(select_for "tests/visual/baselines/browse-1440.png")"
+check "a browser spec -> everything" "$ALL" \
+	"$(select_for "tests/visual/routes.spec.ts")"
 
 # The browser tier drives the instance the container tier starts, so a
 # selection can never hold one without the other.

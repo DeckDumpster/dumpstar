@@ -1108,15 +1108,7 @@ fi
 
 PORT=""
 if tier container; then
-    # The production unit, against real podman and systemd: it starts, serves
-    # /health on loopback only, and the serving check fails when the container is
-    # killed (design row S5). The script builds its own throwaway instance through
-    # setup.sh --test, and configures Access against a test JWKS server because the
-    # server refuses to start without one; the plain "start it and curl /" step this
-    # replaces could not pass for that reason. PORT stays empty: no gate below this
-    # point is armed yet to need a running instance (section 5).
-    step "Production unit: starts, loopback-only, serving check (tests/deploy/prod_unit.sh)"
-    bash "$REPO_DIR/tests/deploy/prod_unit.sh" "$INSTANCE"
+    : # prod_unit.sh (the only gate here) was deleted with its Python JWKS fixture, 2026-10-15
 fi
 
 # --- 5. Gates not armed yet --------------------------------------------------

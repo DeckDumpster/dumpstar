@@ -151,7 +151,7 @@ fn shared(args: SharedArgs) -> anyhow::Result<()> {
 
     // Which runs, and the refusals. Before anything opens the catalog: a date
     // that cannot be derived must not leave a half-written one behind.
-    let plan = partition::choose(&zone, &args.ingest_date)?;
+    let plan = partition::choose(&zone, &args.ingest_date, &partition::TCGCSV)?;
     let clock = partition::clock_of(&plan.chosen, &args.ingest_date)?;
     println!(
         "  clock {} (observed {}) — recovered from the run's manifests, not read here",

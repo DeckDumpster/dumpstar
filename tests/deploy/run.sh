@@ -550,6 +550,8 @@ EOF
 cat > "${WORK}/deploybin/systemctl" <<'EOF'
 #!/usr/bin/env bash
 for a in "$@"; do [ "$a" = is-active ] && exit 3; done
+# The timers deploy.sh enables must read back enabled, or it fails on drift (sp-892w24).
+for a in "$@"; do [ "$a" = is-enabled ] && { echo enabled; exit 0; }; done
 echo "SYSTEMCTL: $*" >> "$DUMPSTAR_TEST_SYSTEMCTL_LOG"
 exit 0
 EOF
@@ -2903,6 +2905,8 @@ cp "${WORK}/deploybin/podman" "${WORK}/bin20/podman"
 cat > "${WORK}/bin20/systemctl" <<'EOF'
 #!/usr/bin/env bash
 for a in "$@"; do [ "$a" = is-active ] && exit 3; done
+# The timers deploy.sh enables must read back enabled, or it fails on drift (sp-892w24).
+for a in "$@"; do [ "$a" = is-enabled ] && { echo enabled; exit 0; }; done
 echo "SYSTEMCTL: $*" >> "$DUMPSTAR_TEST_SYSTEMCTL_LOG"
 exit 0
 EOF
@@ -2998,6 +3002,13 @@ echo "$*" >> "$DUMPSTAR_TEST_CURL_LOG"
 printf 200
 EOF
 chmod +x "${WORK}/bin20c/curl"
+# the heartbeat also checks timer drift (sp-892w24): every timer reads enabled
+cat > "${WORK}/bin20c/systemctl" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in *is-enabled*) echo enabled ;; esac
+exit 0
+EOF
+chmod +x "${WORK}/bin20c/systemctl"
 CURL_LOG="${WORK}/curl20.log"
 : > "$CURL_LOG"
 HB_RC=0
@@ -3050,6 +3061,59 @@ check "pointed at a scratch dir, the install lands there" "yes" \
 	"$([ -f "${SCRATCH21}/dumpstar-refresh@.service" ] && echo yes || echo no)"
 check "…and still not under the real dir" "0" \
 	"$(find "$REALHOME/.config/systemd/user" -type f 2>/dev/null | wc -l | tr -d ' ')"
+
+reset_store
+
+# ---------------------------------------------------------------------------
+log "18. Every shipped timer is enabled, or its omission is written down (sp-892w24)"
+# ---------------------------------------------------------------------------
+#
+# Prod ran 2 of the 9 timers deploy/ ships: the rest were installed and enabled
+# for nobody. The list below is read from the directory, so a timer added to
+# deploy/ and not to the install, or not to the enabled set, fails here.
+
+T18="${WORK}/t18"
+mkdir -p "${T18}/bin" "${T18}/enabled"
+cat > "${T18}/bin/systemctl" <<'FAKE'
+#!/usr/bin/env bash
+# fake: `systemctl --user enable --now <t>` / `is-enabled <t>`
+shift
+case "$1" in
+	enable) shift; [ "$1" = --now ] && shift; : > "${T18_STATE}/$1" ;;
+	is-enabled) [ -e "${T18_STATE}/$2" ] && echo enabled || { echo disabled; exit 1; } ;;
+esac
+FAKE
+chmod +x "${T18}/bin/systemctl"
+
+t18() { env PATH="${T18}/bin:${PATH}" T18_STATE="${T18}/enabled" bash -c '
+	. "$1/deploy/units-lib.sh"; shift; "$@"' _ "$REPO_DIR" "$@"; }
+
+SHIPPED_DIR="$(cd "${REPO_DIR}/deploy" && ls dumpstar-*.timer | sed -e 's/^dumpstar-//' -e 's/\.timer$//' | sort | paste -sd, -)"
+SHIPPED_LIB="$(t18 dumpstar_units_shipped_timers prod | sed -e 's/^dumpstar-//' -e 's/@prod//' -e 's/\.timer$//' | sort | paste -sd, -)"
+check "the install list names every timer deploy/ ships" "$SHIPPED_DIR" "$SHIPPED_LIB"
+N18="$(cd "${REPO_DIR}/deploy" && ls dumpstar-*.timer | wc -l | tr -d ' ')"
+check "every timer deploy/ ships is listed" "$N18" "$(t18 dumpstar_units_shipped_timers prod | wc -l | tr -d ' ')"
+
+: > "${T18}/enabled/dumpstar-catalog-sync@prod.timer"
+: > "${T18}/enabled/dumpstar-tmpreap.timer"
+set +e
+DRIFT="$(t18 dumpstar_units_timer_drift prod)"; DRIFT_RC=$?
+set -e
+check "drift fails when timers are not enabled" "1" "$DRIFT_RC"
+check "and names each of the others missing" "$((N18 - 2))" "$(printf '%s\n' "$DRIFT" | grep -c 'timer not enabled')"
+check "and not the two that run" "0" "$(printf '%s\n' "$DRIFT" | grep -c 'catalog-sync\|tmpreap' || true)"
+
+t18 dumpstar_units_enable_timers other >/dev/null
+check "a non-alerting instance enables nothing" "2" "$(ls "${T18}/enabled" | wc -l | tr -d ' ')"
+
+t18 dumpstar_units_enable_timers prod >/dev/null
+check "enabling for prod arms every shipped timer" "$N18" "$(ls "${T18}/enabled" | wc -l | tr -d ' ')"
+check "after which there is no drift" "0" "$(t18 dumpstar_units_timer_drift prod >/dev/null; echo $?)"
+
+check "deploy.sh enables the timers and fails on drift" "2" \
+	"$(grep -c 'dumpstar_units_enable_timers\|dumpstar_units_timer_drift' "${REPO_DIR}/deploy/deploy.sh" || true)"
+check "the heartbeat alarms on drift" "1" \
+	"$(grep -c 'dumpstar_units_timer_drift' "${REPO_DIR}/deploy/heartbeat.sh" || true)"
 
 reset_store
 

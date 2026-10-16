@@ -38,6 +38,9 @@ pub struct SetSources {
     pub crop: Option<Source>,
     /// Why the set has no logo or crop; required when both are absent.
     pub none: Option<String>,
+    /// Why the set has no crop; required when `crop` is absent.
+    #[serde(default)]
+    pub crop_none: Option<String>,
 }
 
 #[derive(Deserialize)]

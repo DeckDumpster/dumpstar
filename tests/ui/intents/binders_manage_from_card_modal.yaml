@@ -1,4 +1,5 @@
 # Scenario: Assign a card to a binder from the card detail copies table
+# Use case: UC-binders-08
 
 # Related: binders_add_cards_full_flow, binders_remove_cards
 

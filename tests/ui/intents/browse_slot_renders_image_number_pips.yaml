@@ -1,4 +1,5 @@
 # Scenario: Each binder slot renders a card image, number, and pip row
+# Use case: UC-browse-25
 
 # Related: browse_slot_pips_reflect_ownership, browse_slot_click_opens_variant_modal
 

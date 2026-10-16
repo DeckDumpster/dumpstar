@@ -1,4 +1,5 @@
 # Scenario: Recent page is reachable from the global header nav
+# Use case: UC-recent-07
 
 # Related: recent_page_overview, recent_assign_target_dropdown
 

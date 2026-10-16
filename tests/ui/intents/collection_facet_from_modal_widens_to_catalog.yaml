@@ -1,4 +1,5 @@
 # Scenario: A facet link clicked inside the card modal widens to All cards live
+# Use case: UC-collection-08
 #
 # Related:
 #   issues: [dumpstar-ozm, dumpstar-xj6]

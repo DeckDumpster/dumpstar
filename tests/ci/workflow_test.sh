@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T0
+# covers: .github/workflows/ci.yml
 # tests/ci/workflow_test.sh — the shape of .github/workflows/ci.yml (design row S1).
 #
 # What it holds, each a thing that went wrong somewhere else once:

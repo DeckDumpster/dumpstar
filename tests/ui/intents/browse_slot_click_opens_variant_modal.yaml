@@ -1,4 +1,5 @@
 # Scenario: Clicking a slot body opens the variant modal for that card
+# Use case: UC-browse-21
 
 # Related: browse_variant_modal_lists_all_variants, browse_slot_renders_image_number_pips
 

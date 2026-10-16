@@ -1,4 +1,5 @@
 # Scenario: View the rarity split breakdown on the Set Stats page
+# Use case: UC-set-06
 #
 # Related:
 #   pages: [set-stats]

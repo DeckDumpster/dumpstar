@@ -1,4 +1,5 @@
 # Scenario: Failed card lookup with an invalid set or number
+# Use case: UC-manual-03
 #
 # Related:
 #   issues: []

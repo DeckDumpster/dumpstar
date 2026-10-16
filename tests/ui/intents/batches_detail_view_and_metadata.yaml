@@ -1,4 +1,5 @@
 # Scenario: View a batch detail with its cards and metadata
+# Use case: UC-batches-06
 
 # Related: batches_detail_addressable_url, batches_homepage_nav_link
 

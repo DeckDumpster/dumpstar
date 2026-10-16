@@ -1,3 +1,4 @@
+// covers: UC-collection-05
 /**
  * Hand-written implementation for collection_back_preserves_search.
  *

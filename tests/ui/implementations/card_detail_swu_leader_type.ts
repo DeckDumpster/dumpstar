@@ -1,3 +1,4 @@
+// covers: UC-card-23
 /**
  * Guards sp-iszds1: a leader shows its type, cost, power and HP.
  */

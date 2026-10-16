@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T0
+# covers: deploy/*.sh tests/*
 # tests/ci/grepq_test.sh — `cmd | grep -q PAT` inverts under `pipefail`.
 #
 # grep -q exits the moment it matches. That closes the read end of the pipe, the

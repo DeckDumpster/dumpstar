@@ -1,4 +1,5 @@
 # Scenario: Bulk-delete one specific copy when a card has several
+# Use case: UC-collection-16
 #
 # Prerequisites:
 #   The fixture owns multiple copies of "Vanquish" (SOR-P01) — three

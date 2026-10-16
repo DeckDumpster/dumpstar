@@ -1,4 +1,5 @@
 # Scenario: Binders list view shows the populated binder grid
+# Use case: UC-binders-07
 
 # Related: binders_edit_binder, binders_create_with_all_fields
 

@@ -51,8 +51,13 @@ test('pageAfterResize keeps the first visible card on screen', () => {
 
 test('card-view footer wraps its pips onto their own row, at a 24px tap target', () => {
 	const src = readFileSync(new URL('../src/routes/browse/[set]/+page.svelte', import.meta.url), 'utf8');
-	const meta = src.match(/\n\t\.meta \{[^}]*\}/)[0];
-	assert.match(meta, /flex-wrap:\s*wrap/);
-	assert.match(src.match(/\.meta \.vchips \{[^}]*\}/)[0], /flex:\s*1 0 100%/);
-	assert.match(src.match(/\n\t\.vchip \{[^}]*\}/)[0], /width:\s*24px;\s*height:\s*24px/);
+	/** @param {RegExp} re */
+	const rule = (re) => {
+		const m = src.match(re);
+		assert.ok(m, `no CSS rule matches ${re}`);
+		return m[0];
+	};
+	assert.match(rule(/\n\t\.meta \{[^}]*\}/), /flex-wrap:\s*wrap/);
+	assert.match(rule(/\.meta \.vchips \{[^}]*\}/), /flex:\s*1 0 100%/);
+	assert.match(rule(/\n\t\.vchip \{[^}]*\}/), /width:\s*24px;\s*height:\s*24px/);
 });

@@ -136,7 +136,7 @@ scan() {
 		! -path '*/node_modules/*' ! -path '*/target/*' ! -path '*/.git/*' \
 		! -path '*/.svelte-kit/*' ! -path '*/build/*' ! -path '*/dist/*' \
 		| sort | while IFS= read -r f; do logical_lines "$f"; done \
-		| grep -E '\|[[:space:]]*grep[[:space:]]+-[a-zA-Z]*q' \
+		| grep -E '(^|[^|])\|&?[[:space:]]*grep[[:space:]]+-[a-zA-Z]*q' \
 		| grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' \
 		| cut -d: -f1,2
 }
@@ -169,6 +169,25 @@ if podman logs "$c" 2>&1 | grep "db=x" \
 	| grep -qE 'txid'; then :; fi
 FIX
 
+# A logical OR is not a pipe: the second | of || must not read as one (PR 76).
+cat > "$TMP/fixture/logical_or.sh" <<'FIX'
+#!/usr/bin/env bash
+set -euo pipefail
+x || grep -q y <<<"$z"
+{ [ -z "$p" ] || grep -q "^${p}" <<<"$(rustup toolchain list)"; }
+FIX
+cat > "$TMP/fixture/tight.sh" <<'FIX'
+#!/usr/bin/env bash
+set -euo pipefail
+x |grep -q y
+FIX
+cat > "$TMP/fixture/newline.sh" <<'FIX'
+#!/usr/bin/env bash
+set -euo pipefail
+x |\
+  grep -q y
+FIX
+
 FOUND="$(scan "$TMP/fixture")"
 check "the scanner flags a real pipeline into grep -q" "yes" \
 	"$(grep -qF 'offender.sh:3' <<<"$FOUND" && echo yes || echo no)"
@@ -178,7 +197,13 @@ check "…and does not flag the herestring cure" "no" \
 	"$(grep -qF 'cured.sh' <<<"$FOUND" && echo yes || echo no)"
 check "…and does not flag a comment explaining the rule" "no" \
 	"$(grep -qF 'explained.sh' <<<"$FOUND" && echo yes || echo no)"
-check "exactly two offending lines in the fixture" "2" "$(grep -c . <<<"$FOUND")"
+check "…and does not flag a logical || grep -q" "no" \
+	"$(grep -qF 'logical_or.sh' <<<"$FOUND" && echo yes || echo no)"
+check "…and flags |grep -q with no space" "yes" \
+	"$(grep -qF 'tight.sh:3' <<<"$FOUND" && echo yes || echo no)"
+check "…and flags | then a line continuation then grep -q" "yes" \
+	"$(grep -qF 'newline.sh:3' <<<"$FOUND" && echo yes || echo no)"
+check "exactly four offending lines in the fixture" "4" "$(grep -c . <<<"$FOUND")"
 
 # ---------------------------------------------------------------------------
 log "§3 the real tree is clean"

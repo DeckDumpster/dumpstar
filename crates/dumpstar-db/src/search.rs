@@ -134,6 +134,8 @@ pub struct SearchRow {
     pub aspects: Option<String>,
     /// JSON array, e.g. `["Ground"]`.
     pub arenas: Option<String>,
+    /// JSON array, e.g. `["Underworld","Droid","Bounty Hunter"]`.
+    pub traits: Option<String>,
     pub market_price: Option<f64>,
     pub image_url: Option<String>,
     pub variant: String,
@@ -1052,7 +1054,7 @@ fn build_full_sql(c: &CompiledSearch, page: Option<(u32, u32)>) -> String {
                 cd.aspects, cd.arenas, \
                 {MARKET_PRICE_EXPR} AS market_price, \
                 p.image_url, p.variant, p.finish, \
-                ({OWNED_COUNT_SUBQ}) AS owned_count \
+                ({OWNED_COUNT_SUBQ}) AS owned_count, cd.traits \
          {FROM_CLAUSE} \
          WHERE {where_clause} \
          ORDER BY {order_clause}{paging}"
@@ -1076,6 +1078,7 @@ fn row_from(r: &rusqlite::Row) -> rusqlite::Result<SearchRow> {
         hp: r.get(11)?,
         aspects: r.get(12)?,
         arenas: r.get(13)?,
+        traits: r.get(19)?,
         market_price: r.get(14)?,
         image_url: r.get(15)?,
         variant: r.get(16)?,
@@ -1413,6 +1416,7 @@ mod tests {
             hp: None,
             aspects: None,
             arenas: None,
+            traits: None,
             market_price: None,
             image_url: None,
             variant: String::new(),

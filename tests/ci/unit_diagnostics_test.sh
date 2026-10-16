@@ -38,6 +38,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CI_SH="${REPO_DIR}/deploy/ci.sh"
 DEPLOY_SH="${REPO_DIR}/deploy/deploy.sh"
+# The container tier starts the unit in tests/deploy/prod_unit.sh, which ci.sh runs;
+# the start and wait-timeout paths live there.
+START_SH="${REPO_DIR}/tests/deploy/prod_unit.sh"
 DIAG_LIB="${REPO_DIR}/deploy/diagnostics-lib.sh"
 
 pass=0
@@ -80,6 +83,21 @@ check "helper body contains systemctl status" "yes" \
 
 check "helper body contains journalctl" "yes" \
     "$(grep -q 'journalctl' <<<"$BODY" && echo yes || echo no)"
+
+# ---------------------------------------------------------------------------
+log "§2 helper is called on systemctl --user start failure in the container-tier start site"
+
+check "systemctl start failure calls dump_unit_diagnostics" "yes" \
+    "$(grep -q 'systemctl.*start.*dump_unit_diagnostics\|dump_unit_diagnostics.*systemctl.*start' "$START_SH" && echo yes || echo no)"
+
+check "start failure path exits after dumping diagnostics" "yes" \
+    "$(grep -qE 'systemctl --user start.*\|\|.*dump_unit_diagnostics' "$START_SH" && echo yes || echo no)"
+
+# ---------------------------------------------------------------------------
+log "§3 helper is called on the start site (prod_unit.sh)"
+
+check "timeout path calls dump_unit_diagnostics" "yes" \
+    "$(AWK_OUT="$(awk '/systemctl --user start/{found=1} found && /dump_unit_diagnostics/{print "yes"; found=0}' "$START_SH")"; grep -q yes <<<"$AWK_OUT" && echo yes || echo no)"
 
 # ---------------------------------------------------------------------------
 log "§4 no bare journalctl outside the helper definition"

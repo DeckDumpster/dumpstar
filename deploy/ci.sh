@@ -1001,6 +1001,13 @@ fi
 
 PORT=""
 if tier container; then
+    # The production unit, against real podman and systemd: it starts, serves
+    # /health on loopback only, and the serving check fails when the container is
+    # killed (design row S5). It builds its own throwaway instance through
+    # setup.sh --test, which serves the Rust test JWKS the server needs to start
+    # (no Python), so it runs here, serially, before the queued gates.
+    step "Production unit: starts, loopback-only, serving check (tests/deploy/prod_unit.sh)"
+    bash "$REPO_DIR/tests/deploy/prod_unit.sh" "$INSTANCE"
     # The shipper against a real MinIO under the real tenant credential policy
     # (sp-g1zv9j): a Rust binary driven by a shell harness, no Python. It builds
     # nothing itself — dumpstar_image_ensure picks up DUMPSTAR_PREBUILT_IMAGE.

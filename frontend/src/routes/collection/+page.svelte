@@ -26,7 +26,7 @@
 	import type { SearchVocabulary } from '$lib/types/SearchVocabulary';
 	import type { Binder } from '$lib/types/Binder';
 	import type { Deck } from '$lib/types/Deck';
-	import { COLUMNS, anyAdjusted, parseHidden, visibleColumns } from '$lib/collectionColumns';
+	import { COLUMNS, PHONE_MAX_WIDTH, anyAdjusted, parseHidden, visibleColumns } from '$lib/collectionColumns';
 
 	// Server-side search results (one row per printing, owned or not). The
 	// page's existing rendering is per-copy, so owned printings are flattened
@@ -367,19 +367,21 @@
 
 	// Table columns the reader has hidden — persisted like the view and the
 	// sort. Adjusted starts hidden and is drawn only when some row is adjusted.
+	// A phone keeps its own choice, under its own key, and starts with Name and
+	// Type only (as deckdumpster's mobile table). Written when the reader
+	// chooses, not on load, so an untouched default can still move.
+	const phoneTable =
+		typeof window !== 'undefined' && window.matchMedia(`(max-width: ${PHONE_MAX_WIDTH}px)`).matches;
+	const hiddenKey = phoneTable ? 'collection.hiddenColumns.phone' : 'collection.hiddenColumns';
 	let hiddenCols = $state<string[]>(
-		parseHidden(typeof window === 'undefined' ? null : localStorage.getItem('collection.hiddenColumns'))
+		parseHidden(typeof window === 'undefined' ? null : localStorage.getItem(hiddenKey), phoneTable)
 	);
-	$effect(() => {
-		if (typeof window !== 'undefined') {
-			localStorage.setItem('collection.hiddenColumns', JSON.stringify(hiddenCols));
-		}
-	});
 	let columnsOpen = $state(false);
 	function toggleColumn(key: string) {
 		hiddenCols = hiddenCols.includes(key)
 			? hiddenCols.filter((k) => k !== key)
 			: [...hiddenCols, key];
+		localStorage.setItem(hiddenKey, JSON.stringify(hiddenCols));
 	}
 
 	// Burger menu (Export CSV, Select) lives in the sticky top bar.
@@ -2561,6 +2563,23 @@
 		table.dd th,
 		table.dd td {
 			padding: 0.3rem 0.35rem;
+		}
+		/* Names wrap, never truncate (deckdumpster's mobile table). Still ONE
+		   row height for the scroller: the row is two lines of name tall, and
+		   a one-line name is centred in it. */
+		table.dd {
+			--row-content: 2.4em;
+		}
+		.namebody {
+			white-space: normal;
+			overflow-wrap: anywhere;
+			text-overflow: clip;
+			line-height: 1.2;
+		}
+		table.dd td.fac {
+			white-space: normal;
+			overflow-wrap: anywhere;
+			line-height: 1.2;
 		}
 	}
 </style>

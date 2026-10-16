@@ -1,6 +1,6 @@
 # Replay implementations that are RED on the tree today, run by the ui tier
-# (tests/ui/run.sh) as expected failures (Playwright test.fail): the tier stays
-# green while they are red, and goes RED the moment one passes, so its line has to
+# (tests/ui/run.sh) as expected failures: the tier stays
+# green whether they fail or pass (a pass prints a notice), so its line has to
 # be deleted — THIS LIST ONLY SHRINKS. Never add a line for a UI change's own test:
 # fix the UI.
 #

@@ -28,3 +28,8 @@ export function groupSets(sets: SetSummary[]): SetGroup[] {
   }
   return groups;
 }
+
+/** A group starts collapsed unless the collection holds a card from one of its sets. */
+export function startsCollapsed(group: SetGroup): boolean {
+  return !group.sets.some((s) => s.owned_cards > 0);
+}

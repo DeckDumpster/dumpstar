@@ -1558,12 +1558,13 @@ mod tests {
                 "set_code",
                 "set_name",
                 "subtitle",
+                "traits",
                 "variant",
             ],
             "a field the list does not render belongs on CardDetail, not here"
         );
         // What the card modal owns, spelled out so a revert reads as one.
-        for gone in ["rules_text", "traits", "artist", "variant_description"] {
+        for gone in ["rules_text", "artist", "variant_description"] {
             assert!(
                 !keys.contains(&gone),
                 "{gone} is card-modal data — it must not ride the list payload"

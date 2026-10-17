@@ -1,0 +1,11 @@
+# Scenario: The collection table's name cell wraps only between words and never clips
+#
+# Related:
+#   issues: [sp-d1680d]
+#   pull_requests: []
+
+description: >
+  On a 390px screen the collection table's Name column is at least as wide as
+  its longest word plus a badge: a single-word name such as "Haymaker" is never
+  split across lines, a name such as "Leia Organa" wraps only between words with
+  its badge, and the name cell grows to fit rather than clipping its content.

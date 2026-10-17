@@ -1515,9 +1515,9 @@
 				{#if showCol('qty')}<col class="c-qty" />{/if}
 				<col class="c-name" />
 				{#if showCol('type')}<col class="c-type" />{/if}
-				{#if showCol('traits')}<col class="c-traits" />{/if}
 				{#if showCol('aspects')}<col class="c-aspects" />{/if}
 				{#if showCol('cost')}<col class="c-cost" />{/if}
+				{#if showCol('traits')}<col class="c-traits" />{/if}
 				{#if showCol('stats')}<col class="c-stats" />{/if}
 				{#if showCol('rarity')}<col class="c-rarity" />{/if}
 				{#if showCol('set')}<col class="c-set" />{/if}
@@ -1535,9 +1535,9 @@
 					{#if showCol('qty')}{@render sortable('qty', 'Qty', 'num qty')}{/if}
 					{@render sortable('name', 'Name', '')}
 					{#if showCol('type')}{@render sortable('type', 'Type', '')}{/if}
-					{#if showCol('traits')}<th>Traits</th>{/if}
 					{#if showCol('aspects')}{@render sortable('aspects', 'Aspects', '')}{/if}
 					{#if showCol('cost')}{@render sortable('cost', 'Cost', 'num')}{/if}
+					{#if showCol('traits')}<th>Traits</th>{/if}
 					{#if showCol('stats')}<th class="center" title="Power / HP">Pwr/HP</th>{/if}
 					{#if showCol('rarity')}{@render sortable('rarity', 'Rarity', 'center')}{/if}
 					{#if showCol('set')}{@render sortable('set', 'Set', 'center')}{/if}
@@ -1583,9 +1583,9 @@
 								</div>
 							</td>
 							{#if showCol('type')}<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}><TypeLines cardType={a.card_type} arenas={a.arenas} onlink={linkClick} /></td>{/if}
-							{#if showCol('traits')}<td class="traits"><TraitLinks traits={a.traits} onlink={linkClick} /></td>{/if}
 							{#if showCol('aspects')}<td class="fac aspects" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', jsonList(a.aspects)[0])}>{#each jsonList(a.aspects) as n, i (i)}<span class="fac-aspect" data-aspect={n} title="Find all {n} cards" onclick={(e) => facetCell(e, 'aspect', n)}><AspectIcon name={n} /></span>{/each}</td>{/if}
 							{#if showCol('cost')}<td class="center"><CostMark cost={a.cost} /></td>{/if}
+							{#if showCol('traits')}<td class="traits"><TraitLinks traits={a.traits} onlink={linkClick} /></td>{/if}
 							{#if showCol('stats')}<td class="center stats"><StatFrame kind="power" value={a.power} /> <StatFrame kind="hp" value={a.hp} /></td>{/if}
 							{#if showCol('rarity')}<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}><RarityMark name={a.rarity} /></td>{/if}
 							{#if showCol('set')}<td class="center fac" title="Find all cards in this set" onclick={(e) => facetCell(e, 'set', a.set_code)}>
@@ -1635,9 +1635,9 @@
 							</div>
 						</td>
 						{#if showCol('type')}<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}><TypeLines cardType={a.card_type} arenas={a.arenas} onlink={linkClick} /></td>{/if}
-							{#if showCol('traits')}<td class="traits"><TraitLinks traits={a.traits} onlink={linkClick} /></td>{/if}
 						{#if showCol('aspects')}<td class="fac aspects" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', jsonList(a.aspects)[0])}>{#each jsonList(a.aspects) as n, i (i)}<span class="fac-aspect" data-aspect={n} title="Find all {n} cards" onclick={(e) => facetCell(e, 'aspect', n)}><AspectIcon name={n} /></span>{/each}</td>{/if}
 						{#if showCol('cost')}<td class="center"><CostMark cost={a.cost} /></td>{/if}
+							{#if showCol('traits')}<td class="traits"><TraitLinks traits={a.traits} onlink={linkClick} /></td>{/if}
 						{#if showCol('stats')}<td class="center stats"><StatFrame kind="power" value={a.power} /> <StatFrame kind="hp" value={a.hp} /></td>{/if}
 						{#if showCol('rarity')}<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}><RarityMark name={a.rarity} /></td>{/if}
 						{#if showCol('set')}<td class="center fac" title="Find all cards in this set" onclick={(e) => facetCell(e, 'set', a.set_code)}>

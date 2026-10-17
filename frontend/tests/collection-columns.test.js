@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { anyAdjusted, parseHidden, visibleColumns } from '../src/lib/collectionColumns.ts';
 
 test('Qty and Adjusted start hidden', () => {
@@ -53,4 +54,15 @@ test('a unit with an arena and three traits reads Type over arena, and one Trait
 		traitsLine('["Underworld","Droid","Bounty Hunter"]'),
 		'Underworld · Droid · Bounty Hunter'
 	);
+});
+
+test('the default header order begins Name, Type, Aspects, Cost, Traits', () => {
+	const cols = visibleColumns(parseHidden(null), false);
+	assert.deepEqual(cols.slice(0, 4), ['type', 'aspects', 'cost', 'traits']);
+	const src = readFileSync(new URL('../src/routes/collection/+page.svelte', import.meta.url), 'utf8');
+	const head = src.slice(src.indexOf('<thead>'), src.indexOf('</thead>'));
+	const order = ['Name', 'Type', 'Aspects', 'Cost', 'Traits'].map((l) =>
+		head.search(new RegExp(`'${l}'|<th>${l}</th>`))
+	);
+	assert.ok(order.every((i, n) => i >= 0 && (n === 0 || i > order[n - 1])), order.join());
 });

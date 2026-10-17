@@ -10,7 +10,7 @@ statement = "On the EBAY-55012 order detail page, the one card row shows Status 
 [[use_case]]
 id = "UC-edit-02"
 tier = "T4"
-statement = "When I open the detail page for the received TCG-100001 order, I see a header with the title {source} · {seller} and a sub-line showing the order number, date, card count, and money-formatted total. Below it is a card... (edit_order_load_and_view)"
+statement = "When I open the detail page for the received TCG-100001 order, I see a header with the title {source} · {seller} and a sub-line showing the order number, date, card count, and money-formatted total. Below it is a car... (edit_order_load_and_view)"
 
 [[use_case]]
 id = "UC-edit-03"
@@ -25,4 +25,4 @@ statement = "On the TCG-100001 order detail page, each card row's Name cell is a
 [[use_case]]
 id = "UC-edit-05"
 tier = "T4"
-statement = "When I open the TCG-100001 order detail — an order whose three cards are all already owned — the header shows no Receive button. Instead a static All received badge is displayed, and every card row's Status column rea... (edit_order_save_metadata)"
+statement = "When I open the TCG-100001 order detail — an order whose three cards are all already owned — the header shows no Receive button. Instead a static All received badge is displayed, and every card row's Status column... (edit_order_save_metadata)"

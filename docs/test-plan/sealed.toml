@@ -18,14 +18,14 @@ tier = "T4"
 statement = "I can click the Remove link on a sealed product row, confirm the browser dialog, and the entry is removed. The row disappears from the sealed table. (sealed_delete_entry)"
 
 [[use_case]]
-id = "UC-sealed-04"
-tier = "T4"
-statement = "When I check the Show opened / disposed checkbox on the sealed collection page, non-active entries appear in the table but are visually dimmed compared to owned entries. This makes it clear which items are still in my... (sealed_disposed_entries_dimmed)"
-
-[[use_case]]
 id = "UC-sealed-05"
 tier = "T4"
 statement = "I can change the Status select on an owned sealed product row to sold and verify the row's status updates to sold. (sealed_dispose_entry)"
+
+[[use_case]]
+id = "UC-sealed-04"
+tier = "T4"
+statement = "When I check the Show opened / disposed checkbox on the sealed collection page, non-active entries appear in the table but are visually dimmed compared to owned entries. This makes it clear which items are still in my... (sealed_disposed_entries_dimmed)"
 
 [[use_case]]
 id = "UC-sealed-06"
@@ -40,7 +40,7 @@ statement = "When I add the same sealed product twice with different purchase pr
 [[use_case]]
 id = "UC-sealed-08"
 tier = "T4"
-statement = "I can open the add-sealed modal, search for a sealed product, see results appear, select a product to advance to the confirm step, then click ← Back to return to the search results. I can also close the modal entirely... (sealed_open_modal_navigation)"
+statement = "I can open the add-sealed modal, search for a sealed product, see results appear, select a product to advance to the confirm step, then click ← Back to return to the search results. I can also close the modal entire... (sealed_open_modal_navigation)"
 
 [[use_case]]
 id = "UC-sealed-09"
@@ -55,7 +55,7 @@ statement = "I can add a sealed product by clicking + Add sealed, searching for 
 [[use_case]]
 id = "UC-sealed-11"
 tier = "T4"
-statement = "After adding one sealed product via the + Add sealed modal on the sealed collection page, I can click + Add sealed again and the modal reopens in search mode with an empty search input — so I can search for and add a ... (sealed_open_second_product_no_refresh)"
+statement = "After adding one sealed product via the + Add sealed modal on the sealed collection page, I can click + Add sealed again and the modal reopens in search mode with an empty search input — so I can search for and add ... (sealed_open_second_product_no_refresh)"
 
 [[use_case]]
 id = "UC-sealed-12"

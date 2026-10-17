@@ -15,17 +15,17 @@ statement = "On a set's browse page the card grid stays within the viewport widt
 [[use_case]]
 id = "UC-browse-10"
 tier = "T4"
-statement = "From the Browse sets page I click the tile for the Spark of Rebellion set. The binder browse page loads at /browse/SOR: I see the set name Spark of Rebellion as the page heading, a Set stats → link, the two completion... (browse_loads_set_first_page)"
+statement = "From the Browse sets page I click the tile for the Spark of Rebellion set. The binder browse page loads at /browse/SOR: I see the set name Spark of Rebellion as the page heading, a Set stats → link, the two completi... (browse_loads_set_first_page)"
 
 [[use_case]]
 id = "UC-browse-11"
 tier = "T4"
-statement = "On the Spark of Rebellion binder browse page the header shows two completion stats side by side. The first reads Base {owned}/{total} with a progress bar — the count of card numbers I own at least one variant of, over... (browse_master_set_completion_stats_visible)"
+statement = "On the Spark of Rebellion binder browse page the header shows two completion stats side by side. The first reads Base {owned}/{total} with a progress bar — the count of card numbers I own at least one variant of, ov... (browse_master_set_completion_stats_visible)"
 
 [[use_case]]
 id = "UC-browse-12"
 tier = "T4"
-statement = "On a narrow phone-width viewport I open the variant modal from a binder slot. Instead of a centered dialog, it presents as a bottom sheet — pinned to the bottom edge of the screen, spanning the full width, with rounde... (browse_mobile_bottom_sheet)"
+statement = "On a narrow phone-width viewport I open the variant modal from a binder slot. Instead of a centered dialog, it presents as a bottom sheet — pinned to the bottom edge of the screen, spanning the full width, with roun... (browse_mobile_bottom_sheet)"
 
 [[use_case]]
 id = "UC-browse-14"
@@ -35,27 +35,27 @@ statement = "On the Spark of Rebellion binder browse page I open the variant mod
 [[use_case]]
 id = "UC-browse-15"
 tier = "T3"
-statement = "When I advance from one page to the next in the binder/set browse view — including via the top pager — the viewport re-centers near the top of the card grid, so I go visually from the bottom row back to the top row ra... (browse_pager_scrolls_to_top)"
+statement = "When I advance from one page to the next in the binder/set browse view — including via the top pager — the viewport re-centers near the top of the card grid, so I go visually from the bottom row back to the top ro... (browse_pager_scrolls_to_top)"
 
 [[use_case]]
 id = "UC-browse-16"
 tier = "T4"
-statement = "On the Spark of Rebellion binder browse page at one card per row the indicator reads Page 1 of 2 and the ← Prev button is disabled. I click Next →; the indicator advances to Page 2 of 2, a new set of card slots loads,... (browse_pagination_next_prev)"
+statement = "On the Spark of Rebellion binder browse page at one card per row the indicator reads Page 1 of 2 and the ← Prev button is disabled. I click Next →; the indicator advances to Page 2 of 2, a new set of card slots lo... (browse_pagination_next_prev)"
 
 [[use_case]]
 id = "UC-browse-18"
 tier = "T4"
-statement = "When I open the Spark of Rebellion binder browse page and merely look around — paging, switching views — no batch is created. The moment I make my first add (clicking + Add in the variant modal), a single ingestion ba... (browse_session_creates_batch)"
+statement = "When I open the Spark of Rebellion binder browse page and merely look around — paging, switching views — no batch is created. The moment I make my first add (clicking + Add in the variant modal), a single ingestio... (browse_session_creates_batch)"
 
 [[use_case]]
 id = "UC-browse-19"
 tier = "T4"
-statement = "On the Spark of Rebellion set stats page every progress meter announces itself as a progress bar. The Completion card has three — Base set, Numbered set and Master set — and the Rarity split table has one per rarity r... (browse_set_stats_progress_bars_are_accessible)"
+statement = "On the Spark of Rebellion set stats page every progress meter announces itself as a progress bar. The Completion card has three — Base set, Numbered set and Master set — and the Rarity split table has one per rari... (browse_set_stats_progress_bars_are_accessible)"
 
 [[use_case]]
 id = "UC-browse-21"
 tier = "T4"
-statement = "On the Spark of Rebellion binder browse page I click the body of the Luke Skywalker - Faithful Friend #5 slot. The variant modal opens, titled #5 · Luke Skywalker - Faithful Friend, listing every printing of that card... (browse_slot_click_opens_variant_modal)"
+statement = "On the Spark of Rebellion binder browse page I click the body of the Luke Skywalker - Faithful Friend #5 slot. The variant modal opens, titled #5 · Luke Skywalker - Faithful Friend, listing every printing of that car... (browse_slot_click_opens_variant_modal)"
 
 [[use_case]]
 id = "UC-browse-24"

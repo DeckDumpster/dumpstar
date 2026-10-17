@@ -1570,7 +1570,7 @@
 							{#if showCol('stats')}<td class="center stats"><StatFrame kind="power" value={a.power} /> <StatFrame kind="hp" value={a.hp} /></td>{/if}
 							{#if showCol('rarity')}<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}><RarityMark name={a.rarity} /></td>{/if}
 							{#if showCol('set')}<td class="center fac" title="Find all cards in this set" onclick={(e) => facetCell(e, 'set', a.set_code)}>
-								<span title={a.set_name}><SetLogo code={a.set_code} name={a.set_name} />{a.set_code.toUpperCase()}</span>
+								<SetLogo code={a.set_code} name={a.set_name} />
 							</td>{/if}
 							{#if showCol('number')}<td class="num">{a.number}</td>{/if}
 							{#if showCol('nm')}<td class="num">
@@ -1621,7 +1621,7 @@
 						{#if showCol('stats')}<td class="center stats"><StatFrame kind="power" value={a.power} /> <StatFrame kind="hp" value={a.hp} /></td>{/if}
 						{#if showCol('rarity')}<td class="center fac" title="Find all {a.rarity ?? ''} cards" onclick={(e) => facetCell(e, 'rarity', a.rarity)}><RarityMark name={a.rarity} /></td>{/if}
 						{#if showCol('set')}<td class="center fac" title="Find all cards in this set" onclick={(e) => facetCell(e, 'set', a.set_code)}>
-							<span title={a.set_name}><SetLogo code={a.set_code} name={a.set_name} />{a.set_code.toUpperCase()}</span>
+							<SetLogo code={a.set_code} name={a.set_name} />
 						</td>{/if}
 						{#if showCol('number')}<td class="num">{a.number}</td>{/if}
 						{#if showCol('nm')}<td class="num">

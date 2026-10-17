@@ -21,14 +21,18 @@
 </script>
 
 <script lang="ts">
-	let { code, name = '' }: { code: string; name?: string } = $props();
+	// `logo` pins the image (a row that already knows it); otherwise it is looked up by code.
+	let { code, name = '', logo = '' }: { code: string; name?: string; logo?: string } = $props();
 
 	loadSetLogos();
-	const src = $derived(logos[code.toLowerCase()]);
+	const src = $derived(logo || logos[code.toLowerCase()]);
+	const label = $derived(name || code);
 </script>
 
 {#if src}
-	<img class="setmark" {src} alt="{name || code} logo" loading="lazy" />
+	<img class="setmark" {src} alt={label} title={label} loading="lazy" />
+{:else}
+	<span title={label}>{code.toUpperCase()}</span>
 {/if}
 
 <style>

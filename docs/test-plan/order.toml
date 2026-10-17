@@ -10,12 +10,12 @@ statement = "After I look up a card line on the Import order page, the line show
 [[use_case]]
 id = "UC-order-02"
 tier = "T4"
-statement = "After I add and resolve a card line on the Import order page, I click that line's ✕ remove button. The line disappears, the Cards header ready count drops back to 0/0, the No cards on this order yet. empty state retur... (order_cancel_after_resolve)"
+statement = "After I add and resolve a card line on the Import order page, I click that line's ✕ remove button. The line disappears, the Cards header ready count drops back to 0/0, the No cards on this order yet. empty state ret... (order_cancel_after_resolve)"
 
 [[use_case]]
 id = "UC-order-03"
 tier = "T4"
-statement = "When I resolve a card line and click Commit order, the app creates the order and navigates to /orders/{id}. The order detail header shows the source and seller, the metadata sub-line, and a Receive 1 card(s) button — ... (order_commit_ordered_guidance)"
+statement = "When I resolve a card line and click Commit order, the app creates the order and navigates to /orders/{id}. The order detail header shows the source and seller, the metadata sub-line, and a Receive 1 card(s) button ... (order_commit_ordered_guidance)"
 
 [[use_case]]
 id = "UC-order-04"

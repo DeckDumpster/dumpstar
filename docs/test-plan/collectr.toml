@@ -5,7 +5,7 @@ area = "collectr"
 [[use_case]]
 id = "UC-collectr-01"
 tier = "T3"
-statement = "When I open the overflow menu on the collection page, I see two distinct Collectr export downloads — Export cards (Collectr) and Export sealed (Collectr) — alongside the CSV export, so cards and sealed can each be tak... (collectr_export_menu_links)"
+statement = "When I open the overflow menu on the collection page, I see two distinct Collectr export downloads — Export cards (Collectr) and Export sealed (Collectr) — alongside the CSV export, so cards and sealed can each be... (collectr_export_menu_links)"
 
 [[use_case]]
 id = "UC-collectr-02"
@@ -20,4 +20,4 @@ statement = "When I open the CSV Import page and choose Collectr from the Format
 [[use_case]]
 id = "UC-collectr-04"
 tier = "T3"
-statement = "When I paste a Collectr export that mixes single cards, sealed products, and a other-game row and click Preview, the result is shown as three separate sections — Single cards, Sealed products, and Skipped — each repor... (collectr_import_split_preview)"
+statement = "When I paste a Collectr export that mixes single cards, sealed products, and a other-game row and click Preview, the result is shown as three separate sections — Single cards, Sealed products, and Skipped — each r... (collectr_import_split_preview)"

@@ -5,7 +5,7 @@ area = "recent"
 [[use_case]]
 id = "UC-recent-01"
 tier = "T4"
-statement = "On the Recent page, I click a batch row to expand it. The caret flips from collapsed (▸) to expanded (▾) and an indented card list opens below the row showing every card that batch added. Clicking the same row again c... (recent_accordion_open_close)"
+statement = "On the Recent page, I click a batch row to expand it. The caret flips from collapsed (▸) to expanded (▾) and an indented card list opens below the row showing every card that batch added. Clicking the same row aga... (recent_accordion_open_close)"
 
 [[use_case]]
 id = "UC-recent-02"
@@ -20,7 +20,7 @@ statement = "On the Recent page, the CSV export 2025-06 CSV import batch appears
 [[use_case]]
 id = "UC-recent-04"
 tier = "T4"
-statement = "On the Recent page, when I expand a batch the indented card list shows each card with a name link and a meta line reading {set_code} · {variant} · {status}. The meta line reflects each copy's actual variant and owners... (recent_card_status_borders)"
+statement = "On the Recent page, when I expand a batch the indented card list shows each card with a name link and a meta line reading {set_code} · {variant} · {status}. The meta line reflects each copy's actual variant and owne... (recent_card_status_borders)"
 
 [[use_case]]
 id = "UC-recent-05"
@@ -50,4 +50,4 @@ statement = "On the Recent page, every batch row in the timeline shows how many 
 [[use_case]]
 id = "UC-recent-10"
 tier = "T4"
-statement = "On the Recent page, expanding one batch row does not collapse another already-expanded batch — each row's expansion is tracked independently. I can have two batches expanded at once, each showing its own card list, an... (recent_view_toggle)"
+statement = "On the Recent page, expanding one batch row does not collapse another already-expanded batch — each row's expansion is tracked independently. I can have two batches expanded at once, each showing its own card list, ... (recent_view_toggle)"

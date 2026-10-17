@@ -2296,20 +2296,20 @@
 		   carry prose — the cell ellipsises; both of them already did that
 		   before, at a width that moved. */
 		--col-sel: 2.25rem;
-		--col-qty: 2.5rem;
+		--col-qty: 3.6rem;
 		/* Card type ("Leader", "Upgrade"), the aspect icons (a card carries
 		   at most two: 2 x 1.25em icon at this table's 0.9rem, plus the
 		   cell's 0.6rem padding each side), resource cost, and power/HP. */
 		--col-type: 5.5rem;
 		--col-traits: 11rem;
 		--aspect-n: 2;
-		--col-aspects: calc(var(--aspect-n) * 1.25em + 1.2rem + 1px);
-		--col-cost: 3.5rem;
+		--col-aspects: max(calc(var(--aspect-n) * 1.25em + 1.2rem + 1px), 5.75rem);
+		--col-cost: 4.25rem;
 		--col-stats: 5.5rem;
 		--col-rarity: 5.5rem;
 		--col-set: 4.25rem;
 		--col-number: 3.75rem;
-		--col-nm: 4.75rem;
+		--col-nm: 5rem;
 		--col-adj: 5.5rem;
 		/* Not a column width — the narrowest the flex column may be squeezed
 		   to before the table stops shrinking and `.tableScroll` scrolls
@@ -2519,6 +2519,10 @@
 		color: var(--color-text-accent);
 		font-size: 0.65rem;
 		margin-left: 0.15rem;
+		/* Inline after the label, never a line of its own: the column is
+		   declared wide enough for label + caret (sp-b3gtjs). */
+		display: inline-block;
+		white-space: nowrap;
 	}
 	.qty {
 		font-weight: var(--weight-semibold);
@@ -2635,16 +2639,16 @@
 			   desktop ones. The thumbnail is 70px here, so the name floor
 			   drops with it. */
 			--col-sel: 1.75rem;
-			--col-qty: 2rem;
+			--col-qty: 3.1rem;
 			--col-type: 4.5rem;
 			--col-traits: calc(var(--space-16) * 2);
-			--col-aspects: calc(var(--aspect-n) * 1.25em + 0.7rem + 1px);
-			--col-cost: 2.75rem;
+			--col-aspects: max(calc(var(--aspect-n) * 1.25em + 0.7rem + 1px), 5.25rem);
+			--col-cost: 3.75rem;
 			--col-stats: 4.5rem;
-			--col-rarity: 4.25rem;
+			--col-rarity: 4.75rem;
 			--col-set: 3.25rem;
 			--col-number: 3rem;
-			--col-nm: 4rem;
+			--col-nm: 4.5rem;
 			--col-adj: 4.75rem;
 			/* The thumbnail (70px) + its gap + the longest single word a
 			   name is likely to carry plus one badge: the name wraps between

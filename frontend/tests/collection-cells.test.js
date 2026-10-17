@@ -8,7 +8,7 @@ import TraitLinks from '../src/lib/components/TraitLinks.svelte';
 test('the type cell renders the type link and the arena as two elements, the second secondary', () => {
 	const html = markup(TypeLines, { cardType: 'Unit', arenas: '["Ground"]' });
 	assert.match(html, /<a class="[^"]*t-type[^"]*"[^>]*href="\/collection\?q=type%3AUnit&amp;all=1"[^>]*>Unit<\/a>/);
-	assert.match(html, /<span class="[^"]*t-sub[^"]*">Ground<\/span>/);
+	assert.match(html, /<span class="[^"]*t-sub[^"]*">(?:<!--[^>]*-->)*<a class="[^"]*t-arena[^"]*" href="\/collection\?q=arena%3AGround&amp;all=1"[^>]*>Ground<\/a>(?:<!--[^>]*-->)*<\/span>/);
 	assert.ok(html.indexOf('Unit') < html.indexOf('Ground'));
 });
 

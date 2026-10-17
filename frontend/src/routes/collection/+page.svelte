@@ -11,7 +11,9 @@
 		import { CONDITIONS } from '$lib/conditions';
 	import { conditionMultiplier } from '$lib/conditions.svelte';
 	import VariantBadges from '$lib/components/VariantBadges.svelte';
-	import { money, count, printingLabel, jsonList, typeLines, traitsLine } from '$lib/format';
+	import { money, count, printingLabel, jsonList } from '$lib/format';
+	import TypeLines from '$lib/components/TypeLines.svelte';
+	import TraitLinks from '$lib/components/TraitLinks.svelte';
 	import { stackOffsets, windowOf } from '$lib/virtual';
 
 	// Foil shimmer treatment for Foil-finish printings.
@@ -954,6 +956,12 @@
 		e.stopPropagation();
 		selectedCard = { set: a.set_code, number: a.number };
 	}
+	// A facet link inside a cell: select mode keeps the row's own click, else the
+	// link navigates and the cell's handler must not navigate a second time.
+	function linkClick(e: MouseEvent) {
+		if (selectMode) e.preventDefault();
+		else e.stopPropagation();
+	}
 	function facetCell(e: MouseEvent, field: string, value: string | null | undefined) {
 		if (selectMode) return;
 		e.stopPropagation();
@@ -1571,11 +1579,11 @@
 									{#if a.image_url}
 										<img class="cardthumb" src={a.image_url} alt="" loading="lazy" />
 									{/if}
-									<span class="namebody"><span class="cardname">{a.name}</span></span>
+									<span class="namebody"><span class="cardname">{a.name}</span>{#if a.subtitle}<span class="cardsub">{a.subtitle}</span>{/if}</span>
 								</div>
 							</td>
-							{#if showCol('type')}<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}><span class="t-type">{typeLines(a.card_type, a.arenas).type}</span>{#if typeLines(a.card_type, a.arenas).arena}<span class="t-sub">{typeLines(a.card_type, a.arenas).arena}</span>{/if}</td>{/if}
-							{#if showCol('traits')}<td class="traits"><span class="t-sub">{traitsLine(a.traits)}</span></td>{/if}
+							{#if showCol('type')}<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}><TypeLines cardType={a.card_type} arenas={a.arenas} onlink={linkClick} /></td>{/if}
+							{#if showCol('traits')}<td class="traits"><TraitLinks traits={a.traits} onlink={linkClick} /></td>{/if}
 							{#if showCol('aspects')}<td class="fac aspects" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', jsonList(a.aspects)[0])}>{#each jsonList(a.aspects) as n, i (i)}<span class="fac-aspect" data-aspect={n} title="Find all {n} cards" onclick={(e) => facetCell(e, 'aspect', n)}><AspectIcon name={n} /></span>{/each}</td>{/if}
 							{#if showCol('cost')}<td class="center"><CostMark cost={a.cost} /></td>{/if}
 							{#if showCol('stats')}<td class="center stats"><StatFrame kind="power" value={a.power} /> <StatFrame kind="hp" value={a.hp} /></td>{/if}
@@ -1622,12 +1630,12 @@
 									><span class="cardname">{a.name}</span><VariantBadges variant={a.variant} finish={a.finish} />{#if statusBadge(a.status)}<span
 											class="tag stag t-{a.status}"
 											title={a.status}>{statusBadge(a.status)}</span
-										>{/if}</span
+										>{/if}{#if a.subtitle}<span class="cardsub">{a.subtitle}</span>{/if}</span
 								>
 							</div>
 						</td>
-						{#if showCol('type')}<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}><span class="t-type">{typeLines(a.card_type, a.arenas).type}</span>{#if typeLines(a.card_type, a.arenas).arena}<span class="t-sub">{typeLines(a.card_type, a.arenas).arena}</span>{/if}</td>{/if}
-							{#if showCol('traits')}<td class="traits"><span class="t-sub">{traitsLine(a.traits)}</span></td>{/if}
+						{#if showCol('type')}<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}><TypeLines cardType={a.card_type} arenas={a.arenas} onlink={linkClick} /></td>{/if}
+							{#if showCol('traits')}<td class="traits"><TraitLinks traits={a.traits} onlink={linkClick} /></td>{/if}
 						{#if showCol('aspects')}<td class="fac aspects" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', jsonList(a.aspects)[0])}>{#each jsonList(a.aspects) as n, i (i)}<span class="fac-aspect" data-aspect={n} title="Find all {n} cards" onclick={(e) => facetCell(e, 'aspect', n)}><AspectIcon name={n} /></span>{/each}</td>{/if}
 						{#if showCol('cost')}<td class="center"><CostMark cost={a.cost} /></td>{/if}
 						{#if showCol('stats')}<td class="center stats"><StatFrame kind="power" value={a.power} /> <StatFrame kind="hp" value={a.hp} /></td>{/if}
@@ -2357,13 +2365,11 @@
 	col.c-traits {
 		width: var(--col-traits);
 	}
-	td .t-type,
-	td .t-sub {
+	.cardsub {
 		display: block;
-		overflow-wrap: anywhere;
-	}
-	td .t-sub {
-		color: var(--text-muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		color: var(--color-text-subtle);
 		font-size: var(--text-sm);
 	}
 	col.c-aspects {

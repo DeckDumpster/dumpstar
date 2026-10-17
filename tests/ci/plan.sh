@@ -117,6 +117,8 @@ suites_json() {
 
 # intent_rows -> "<name>\t<uc-id or ->\t<statement>" for every intent, from the working tree.
 # Bytes, not characters (LC_ALL=C, mawk and gawk alike); iconv -c drops a character the cut split.
+# Dropping it is the point, so its status 1 for "skipped invalid input" is success: glibc 2.41+
+# reports it (2.36 does not), and under pipefail it made lint fail with nothing printed.
 intent_rows() {
     (cd "$ROOT/$INTENTS" && awk -v re="^# Use case: ($UC_RE) *\$" '
         function flush() { if (name != "") { gsub(/[\\"]/, "", s); if (length(s) > 220) s = substr(s, 1, 217) "..."; printf "%s\t%s\t%s\n", name, (id == "" ? "-" : id), s } }
@@ -125,7 +127,7 @@ intent_rows() {
         /^description:/ { on = 1; next }
         on && /^[^ ]/ { on = 0 }
         on { sub(/^ +/, ""); s = s (s ? " " : "") $0 }
-        END { flush() }' *.yaml) | iconv -c -f UTF-8 -t UTF-8
+        END { flush() }' *.yaml) | { iconv -c -f UTF-8 -t UTF-8; [ $? -le 1 ]; }
 }
 
 # missing <msg> — a missing header: fails under DUMPSTAR_PLAN_ENFORCE=1, else is reported and passes.
@@ -179,7 +181,8 @@ cmd_lint() {
     # 1. every intent has a unique id, and the committed catalogue is what the intents generate.
     intent_rows | awk -F'\t' '$2 == "-" { print "intent " $1 " has no # Use case: line (plan.sh assign)"; next }
         seen[$2]++ { print "intent " $1 ": duplicate id " $2; dup = 1 } END { exit dup }' > "$tmp/ids" && :
-    [ $? = 0 ] || bad=1
+    # A failure here must say so: bad=1 with nothing printed is a red gate nobody can read.
+    [ $? = 0 ] || { grep -q 'duplicate id' "$tmp/ids" || echo "plan.sh: reading $INTENTS failed"; bad=1; }
     while IFS= read -r f; do
         case "$f" in *"has no # Use case:"*) missing "$f" || bad=1 ;; *) echo "$f" ;; esac
     done < "$tmp/ids"

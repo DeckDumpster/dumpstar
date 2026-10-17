@@ -121,6 +121,7 @@ ARG CARGO_TARGET_CACHE_SCOPE=unscoped
 ARG SCCACHE_WEBDAV_ENDPOINT=
 ENV DUMPSTAR_SOURCES="Cargo.toml Cargo.lock rust-toolchain.toml crates data"
 RUN --mount=type=bind,from=sccache-bin,source=/,target=/opt/sccache-ctx \
+    --mount=type=bind,source=deploy/sccache-probe.sh,target=/opt/sccache-probe.sh \
     --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target,sharing=locked,id=dumpstar-target-bookworm-${CARGO_TARGET_CACHE_SCOPE} \
     stamp="$(find ${DUMPSTAR_SOURCES} -type f -exec sha256sum {} + \
@@ -135,8 +136,9 @@ RUN --mount=type=bind,from=sccache-bin,source=/,target=/opt/sccache-ctx \
     elif [ ! -s /opt/sccache-ctx/sccache ]; then why="the sccache-bin build context is empty"; \
     else \
         cp /opt/sccache-ctx/sccache /tmp/sccache && chmod 755 /tmp/sccache; \
-        if /tmp/sccache --version >/dev/null 2>&1; then cache=on; \
-        else why="the sccache binary does not execute here: $(/tmp/sccache --version 2>&1 | head -1)"; fi; \
+        if ! /tmp/sccache --version >/dev/null 2>&1; then why="the sccache binary does not execute here: $(/tmp/sccache --version 2>&1 | head -1)"; \
+        elif probe="$(SCCACHE_WEBDAV_ENDPOINT="$SCCACHE_WEBDAV_ENDPOINT" SCCACHE_WEBDAV_KEY_PREFIX=/ SCCACHE_IGNORE_SERVER_IO_ERROR=1 sh /opt/sccache-probe.sh /tmp/sccache)"; then cache=on; \
+        else why="$probe"; fi; \
     fi \
  && if [ "$cache" = on ]; then \
         echo "==> rust cache: sccache -> $SCCACHE_WEBDAV_ENDPOINT"; \

@@ -332,10 +332,11 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
         "rarity",
         "artist",
         "image_url",
+        "back_image_url",
     ];
     let sql = format!(
-        "INSERT INTO printings (printing_id, card_id, set_code, number, variant, variant_code, finish, rarity, artist, image_url)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)
+        "INSERT INTO printings (printing_id, card_id, set_code, number, variant, variant_code, finish, rarity, artist, image_url, back_image_url)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)
          ON CONFLICT(printing_id) DO UPDATE SET {}
          WHERE {}",
         cols.iter().map(|c| format!("{c}=excluded.{c}")).collect::<Vec<_>>().join(", "),
@@ -358,7 +359,8 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
                 pr.finish,
                 pr.rarity,
                 pr.artist,
-                pr.image_url
+                pr.image_url,
+                pr.back_image_url
             ],
         )?;
         if let Some(uid) = &pr.official_card_uid {

@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS printings (
     rarity           TEXT,
     artist           TEXT,
     image_url        TEXT,
+    back_image_url   TEXT,                      -- a leader's deployed (unit) side; NULL for one-sided cards
     UNIQUE (set_code, number, variant, variant_code, finish)
 );
 CREATE INDEX IF NOT EXISTS idx_printings_card ON printings(card_id);

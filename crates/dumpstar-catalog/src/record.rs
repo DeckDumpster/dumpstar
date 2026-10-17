@@ -131,6 +131,9 @@ pub struct PrintingRecord {
     pub rarity: Option<String>,
     pub artist: Option<String>,
     pub image_url: Option<String>,
+    /// The deployed side of a leader (the official `artBack`).
+    #[serde(default)]
+    pub back_image_url: Option<String>,
     /// The official `cardUid`. Foil and non-foil printings share it.
     pub official_card_uid: Option<String>,
     pub tcgcsv_product_id: Option<i64>,

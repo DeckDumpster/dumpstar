@@ -5,7 +5,7 @@ area = "csv"
 [[use_case]]
 id = "UC-csv-01"
 tier = "T4"
-statement = "After previewing a TCGplayer CSV on the CSV Import page, I click Import to commit. A result banner reports the added count and offers a View batch → link. I click the link and land on the created batch's detail page, ... (csv_import_assign_to_deck)"
+statement = "After previewing a TCGplayer CSV on the CSV Import page, I click Import to commit. A result banner reports the added count and offers a View batch → link. I click the link and land on the created batch's detail page... (csv_import_assign_to_deck)"
 
 [[use_case]]
 id = "UC-csv-02"
@@ -30,7 +30,7 @@ statement = "When I preview a TCGplayer CSV that mixes valid cards with rows tha
 [[use_case]]
 id = "UC-csv-06"
 tier = "T4"
-statement = "When I navigate to the CSV Import page, I see the correct initial state: the Import CSV heading, a Format select offering TCGplayer and Dumpstar, a CSV file file input, a …or paste CSV text textarea, and Preview and I... (csv_import_page_structure)"
+statement = "When I navigate to the CSV Import page, I see the correct initial state: the Import CSV heading, a Format select offering TCGplayer and Dumpstar, a CSV file file input, a …or paste CSV text textarea, and Preview and... (csv_import_page_structure)"
 
 [[use_case]]
 id = "UC-csv-07"

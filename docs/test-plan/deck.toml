@@ -20,7 +20,7 @@ statement = "I can see a Decks link in the homepage navigation. Clicking it take
 [[use_case]]
 id = "UC-deck-04"
 tier = "T4"
-statement = "When I navigate to /decks, I see a Decks heading, the inline create form with a New deck name… text input and an Owner (optional) text input, and a Create submit button. Below the form, the grid lists the existing dec... (deck_builder_page_initial_state)"
+statement = "When I navigate to /decks, I see a Decks heading, the inline create form with a New deck name… text input and an Owner (optional) text input, and a Create submit button. Below the form, the grid lists the existing d... (deck_builder_page_initial_state)"
 
 [[use_case]]
 id = "UC-deck-08"
@@ -40,7 +40,7 @@ statement = "When I navigate to deck 2 (Vader Aggro) at /decks/2 and open the + 
 [[use_case]]
 id = "UC-deck-11"
 tier = "T4"
-statement = "When I navigate to deck 2 (Vader Aggro) at /decks/2 and click + Add cards, the picker modal opens. Each physical copy is listed as its own individual checkbox row — there is no quantity aggregation, one row per physic... (deck_detail_add_individual_copy)"
+statement = "When I navigate to deck 2 (Vader Aggro) at /decks/2 and click + Add cards, the picker modal opens. Each physical copy is listed as its own individual checkbox row — there is no quantity aggregation, one row per phys... (deck_detail_add_individual_copy)"
 
 [[use_case]]
 id = "UC-deck-12"

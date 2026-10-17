@@ -10,7 +10,7 @@ statement = "On the card detail page, the Printings table lists each variant of 
 [[use_case]]
 id = "UC-card-02"
 tier = "T4"
-statement = "On the card detail page, adding a copy is a single click on a variant's + Add button — there is no expandable purchase form to toggle. The button adds the copy directly, all controls are disabled while the mutation ru... (card_detail_add_form_toggle)"
+statement = "On the card detail page, adding a copy is a single click on a variant's + Add button — there is no expandable purchase form to toggle. The button adds the copy directly, all controls are disabled while the mutation ... (card_detail_add_form_toggle)"
 
 [[use_case]]
 id = "UC-card-03"
@@ -20,7 +20,7 @@ statement = "On the card detail page, an unassigned copy's Location cell is a `<
 [[use_case]]
 id = "UC-card-04"
 tier = "T3"
-statement = "On a card's detail page, when I own more than one copy the Your copies table lets me multi-select copies (a checkbox per row plus a select-all) and bulk-set their condition (and status / location) in one action — inst... (card_detail_bulk_condition_for_copies)"
+statement = "On a card's detail page, when I own more than one copy the Your copies table lets me multi-select copies (a checkbox per row plus a select-all) and bulk-set their condition (and status / location) in one action — in... (card_detail_bulk_condition_for_copies)"
 
 [[use_case]]
 id = "UC-card-05"
@@ -35,7 +35,7 @@ statement = "On the card detail page for a card with multiple variants, a copy's
 [[use_case]]
 id = "UC-card-07"
 tier = "T3"
-statement = "On the card detail page, editing an owned copy's condition updates the copy but must NOT rebuild/refresh the price chart — the catalog price history is unchanged, so destroying and recreating the chart (which replays ... (card_detail_condition_edit_no_chart_rebuild)"
+statement = "On the card detail page, editing an owned copy's condition updates the copy but must NOT rebuild/refresh the price chart — the catalog price history is unchanged, so destroying and recreating the chart (which replay... (card_detail_condition_edit_no_chart_rebuild)"
 
 [[use_case]]
 id = "UC-card-08"
@@ -55,7 +55,7 @@ statement = "On the card detail page, a copy's Status `<select>` includes a remo
 [[use_case]]
 id = "UC-card-11"
 tier = "T4"
-statement = "I can navigate directly to a card's detail page at /card/:set/:number and see the card image on the left and an info panel on the right showing the card name, the {set} · #{number} · {rarity} subtitle, and the card's ... (card_detail_direct_navigation)"
+statement = "I can navigate directly to a card's detail page at /card/:set/:number and see the card image on the left and an info panel on the right showing the card name, the {set} · #{number} · {rarity} subtitle, and the card'... (card_detail_direct_navigation)"
 
 [[use_case]]
 id = "UC-card-12"
@@ -70,7 +70,7 @@ statement = "On the card detail page, I can set an owned copy's Status `<select>
 [[use_case]]
 id = "UC-card-14"
 tier = "T3"
-statement = "When I click a card's artist name on the card page, the browser navigates to the collection search pre-filtered to that artist across the whole catalog — an `artist:` DSL query, not a bare card-name search. Every card... (card_detail_facet_artist_search)"
+statement = "When I click a card's artist name on the card page, the browser navigates to the collection search pre-filtered to that artist across the whole catalog — an `artist:` DSL query, not a bare card-name search. Every ca... (card_detail_facet_artist_search)"
 
 [[use_case]]
 id = "UC-card-15"

@@ -30,6 +30,8 @@
 # tier: T1
 # covers: tests/ci/plan.sh docs/test-plan/* tests/ui/intents/* tests/ui/implementations/*
 set -uo pipefail
+# Glob and sort order is the catalogue's row order: pin it, or the committed toml drifts per locale.
+export LC_ALL=C
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 CAT="$ROOT/docs/test-plan"
 INTENTS="tests/ui/intents"
@@ -110,6 +112,7 @@ suites_json() {
 }
 
 # intent_rows -> "<name>\t<uc-id or ->\t<statement>" for every intent, from the working tree.
+# Bytes, not characters (LC_ALL=C, mawk and gawk alike); iconv -c drops a character the cut split.
 intent_rows() {
     (cd "$ROOT/$INTENTS" && awk -v re="^# Use case: ($UC_RE) *\$" '
         function flush() { if (name != "") { gsub(/[\\"]/, "", s); if (length(s) > 220) s = substr(s, 1, 217) "..."; printf "%s\t%s\t%s\n", name, (id == "" ? "-" : id), s } }
@@ -118,7 +121,7 @@ intent_rows() {
         /^description:/ { on = 1; next }
         on && /^[^ ]/ { on = 0 }
         on { sub(/^ +/, ""); s = s (s ? " " : "") $0 }
-        END { flush() }' *.yaml)
+        END { flush() }' *.yaml) | iconv -c -f UTF-8 -t UTF-8
 }
 
 area_of() { local n="${1%%_*}"; printf '%s' "$n"; }

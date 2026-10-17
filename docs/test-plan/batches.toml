@@ -20,7 +20,7 @@ statement = "In the batches list view, each batch appears as a table row showing
 [[use_case]]
 id = "UC-batches-04"
 tier = "T4"
-statement = "When I navigate directly to /batches/{id} for a specific batch, I see a standalone, bookmarkable detail page — not an in-app modal. The page shows the batch name as the heading, a metadata line with its type, timestam... (batches_detail_addressable_url)"
+statement = "When I navigate directly to /batches/{id} for a specific batch, I see a standalone, bookmarkable detail page — not an in-app modal. The page shows the batch name as the heading, a metadata line with its type, timest... (batches_detail_addressable_url)"
 
 [[use_case]]
 id = "UC-batches-05"
@@ -40,7 +40,7 @@ statement = "When I choose manual_id from the Type filter on the batches page, t
 [[use_case]]
 id = "UC-batches-08"
 tier = "T4"
-statement = "When I navigate to /batches, I land on the Batches page showing the Batches heading and a muted line describing it as every ingestion run — manual entry, binder clicks, imports, and orders. The table below lists each ... (batches_homepage_nav_link)"
+statement = "When I navigate to /batches, I land on the Batches page showing the Batches heading and a muted line describing it as every ingestion run — manual entry, binder clicks, imports, and orders. The table below lists eac... (batches_homepage_nav_link)"
 
 [[use_case]]
 id = "UC-batches-09"

@@ -20,7 +20,7 @@ statement = "In the collection table view, the Aspects column is no wider than t
 [[use_case]]
 id = "UC-collection-05"
 tier = "T3"
-statement = "I type a query into the collection search box so the URL reflects it as ?q=. I then navigate to a card detail page and press the browser Back button. The collection list reappears with the search still applied — the ?... (collection_back_preserves_search)"
+statement = "I type a query into the collection search box so the URL reflects it as ?q=. I then navigate to a card detail page and press the browser Back button. The collection list reappears with the search still applied — the... (collection_back_preserves_search)"
 
 [[use_case]]
 id = "UC-collection-06"
@@ -30,7 +30,7 @@ statement = "When I am on the Collection page, the global header shows the Dumps
 [[use_case]]
 id = "UC-collection-07"
 tier = "T4"
-statement = "From the Collection table I can click a card's Name link to open its card detail page, which shows the card image, name, the {set_code} · #{number} · {rarity} subtitle, and the card metadata. The global header lets me... (collection_card_modal_detail)"
+statement = "From the Collection table I can click a card's Name link to open its card detail page, which shows the card image, name, the {set_code} · #{number} · {rarity} subtitle, and the card metadata. The global header lets ... (collection_card_modal_detail)"
 
 [[use_case]]
 id = "UC-collection-45"
@@ -40,12 +40,12 @@ statement = "On the collection page in table view, I open Columns and untick Typ
 [[use_case]]
 id = "UC-collection-08"
 tier = "T3"
-statement = "When I open a card's modal on the collection page and click a facet link that carries All cards (e.g. the aspect), the results widen to the whole catalog immediately — unowned matches appear as dimmed tiles — with no ... (collection_facet_from_modal_widens_to_catalog)"
+statement = "When I open a card's modal on the collection page and click a facet link that carries All cards (e.g. the aspect), the results widen to the whole catalog immediately — unowned matches appear as dimmed tiles — with... (collection_facet_from_modal_widens_to_catalog)"
 
 [[use_case]]
 id = "UC-collection-09"
 tier = "T4"
-statement = "I can narrow the collection table by rarity. The sidebar's Rarity facet lists every rarity present among my copies — Common, Rare, Special, Legendary. When I tick a rarity, the table filters to rows of that rarity and... (collection_filter_rarity)"
+statement = "I can narrow the collection table by rarity. The sidebar's Rarity facet lists every rarity present among my copies — Common, Rare, Special, Legendary. When I tick a rarity, the table filters to rows of that rarity a... (collection_filter_rarity)"
 
 [[use_case]]
 id = "UC-collection-10"
@@ -55,7 +55,7 @@ statement = "When I am on the Collection page and I scroll the long card table d
 [[use_case]]
 id = "UC-collection-11"
 tier = "T4"
-statement = "In multi-select mode on the Collection page I can select one or more copies and use the bulk Assign to deck… dropdown to move every selected copy into an existing deck. After the assignment the page re-fetches the col... (collection_inline_deck_creation)"
+statement = "In multi-select mode on the Collection page I can select one or more copies and use the bulk Assign to deck… dropdown to move every selected copy into an existing deck. After the assignment the page re-fetches the c... (collection_inline_deck_creation)"
 
 [[use_case]]
 id = "UC-collection-12"
@@ -70,22 +70,22 @@ statement = "When I open a card's detail page by clicking its Name link in the C
 [[use_case]]
 id = "UC-collection-14"
 tier = "T4"
-statement = "When I enter multi-select mode on the Collection page and check at least one row, the bulk-action bar appears between the toolbar and the table. The bar — with its Delete button and the Assign to binder…, Assign to de... (collection_modal_overlays_sticky_header)"
+statement = "When I enter multi-select mode on the Collection page and check at least one row, the bulk-action bar appears between the toolbar and the table. The bar — with its Delete button and the Assign to binder…, Assign t... (collection_modal_overlays_sticky_header)"
 
 [[use_case]]
 id = "UC-collection-15"
 tier = "T4"
-statement = "When I am on the Collection page, the sidebar renders within the viewport with its stacked sections fully readable — Saved views, the search input, and the Rarity, Set, and Variant facet sections. None of the sidebar ... (collection_more_menu_in_viewport)"
-
-[[use_case]]
-id = "UC-collection-16"
-tier = "T4"
-statement = "When I open the Collection page and enter multi-select mode, a card I own more than once shows one row per physical copy because Dumpstar keeps strictly one row per card. I can check exactly one of the Vanquish rows, ... (collection_multiselect_delete_individual_copies)"
+statement = "When I am on the Collection page, the sidebar renders within the viewport with its stacked sections fully readable — Saved views, the search input, and the Rarity, Set, and Variant facet sections. None of the sideba... (collection_more_menu_in_viewport)"
 
 [[use_case]]
 id = "UC-collection-17"
 tier = "T4"
 statement = "I can click Select to enter multi-select mode, check one or more copy rows, click the bulk Delete button, accept the browser confirm dialog, and the selected copies are removed from the collection. The page re-fetches... (collection_multiselect_delete)"
+
+[[use_case]]
+id = "UC-collection-16"
+tier = "T4"
+statement = "When I open the Collection page and enter multi-select mode, a card I own more than once shows one row per physical copy because Dumpstar keeps strictly one row per card. I can check exactly one of the Vanquish rows, ... (collection_multiselect_delete_individual_copies)"
 
 [[use_case]]
 id = "UC-collection-18"
@@ -95,7 +95,7 @@ statement = "When I enter multi-select mode on the Collection page, the table st
 [[use_case]]
 id = "UC-collection-19"
 tier = "T4"
-statement = "I can click Select to enter multi-select mode, check one or more copy rows, and use the bulk Assign to deck… dropdown to assign every selected copy to a deck. After the assignment the page re-fetches the collection, c... (collection_multiselect_new_deck)"
+statement = "I can click Select to enter multi-select mode, check one or more copy rows, and use the bulk Assign to deck… dropdown to assign every selected copy to a deck. After the assignment the page re-fetches the collection,... (collection_multiselect_new_deck)"
 
 [[use_case]]
 id = "UC-collection-20"
@@ -125,22 +125,22 @@ statement = "I can type a card name into the sidebar search input and, after the
 [[use_case]]
 id = "UC-collection-25"
 tier = "T3"
-statement = "When I type a query the parser can't understand — like xyz:1 with an unknown keyword — the Collection page shows an inline error beneath the search box naming the problem (unknown keyword) and the character position, ... (collection_search_error_handling)"
+statement = "When I type a query the parser can't understand — like xyz:1 with an unknown keyword — the Collection page shows an inline error beneath the search box naming the problem (unknown keyword) and the character positi... (collection_search_error_handling)"
 
 [[use_case]]
 id = "UC-collection-26"
 tier = "T3"
-statement = "Next to the Collection search bar is a ? help link. Clicking it takes me to a Search syntax page that documents the query language — operators, examples, and the full keyword and is:-flag tables rendered from the serv... (collection_search_help_page)"
+statement = "Next to the Collection search bar is a ? help link. Clicking it takes me to a Search syntax page that documents the query language — operators, examples, and the full keyword and is:-flag tables rendered from the se... (collection_search_help_page)"
 
 [[use_case]]
 id = "UC-collection-28"
 tier = "T3"
-statement = "On the Collection page I can type a Scryfall-style query like aspect:Aggression into the search bar. The list narrows to cards of that aspect — Wampa appears, while a Command card like Battlefield Marine does not. The... (collection_search_keyword_filter)"
+statement = "On the Collection page I can type a Scryfall-style query like aspect:Aggression into the search bar. The list narrows to cards of that aspect — Wampa appears, while a Command card like Battlefield Marine does not. T... (collection_search_keyword_filter)"
 
 [[use_case]]
 id = "UC-collection-29"
 tier = "T4"
-statement = "When I load the Collection page with no filters, the table shows every physical copy I own or have owned, and the Status column reflects each copy's lifecycle status — owned, ordered, listed, or sold. Filtering by a s... (collection_search_status_default)"
+statement = "When I load the Collection page with no filters, the table shows every physical copy I own or have owned, and the Status column reflects each copy's lifecycle status — owned, ordered, listed, or sold. Filtering by a... (collection_search_status_default)"
 
 [[use_case]]
 id = "UC-collection-30"
@@ -148,19 +148,19 @@ tier = "T3"
 statement = "With the All cards toggle on, a query like t:water returns both the Water cards I own and the ones I'm missing. The unowned printings render as dimmed missing tiles alongside the owned ones, so I can see the gaps in m... (collection_search_unowned)"
 
 [[use_case]]
-id = "UC-collection-31"
-tier = "T4"
-statement = "When my collection has no copies, the Collection page still renders the sidebar and toolbar, but the content area shows the empty message Your collection is empty. above a line naming a set's binder view as where card... (collection_shared_card_list_empty)"
-
-[[use_case]]
 id = "UC-collection-32"
 tier = "T4"
 statement = "The Collection toolbar shows an Export CSV link when my collection is non-empty. The link points at the /api/export/csv endpoint, so clicking it downloads a CSV of every physical copy I own. (collection_shared_card_list)"
 
 [[use_case]]
+id = "UC-collection-31"
+tier = "T4"
+statement = "When my collection has no copies, the Collection page still renders the sidebar and toolbar, but the content area shows the empty message Your collection is empty. above a line naming a set's binder view as where card... (collection_shared_card_list_empty)"
+
+[[use_case]]
 id = "UC-collection-33"
 tier = "T4"
-statement = "When I first open the Collection page, I briefly see a muted Loading… message while the page's parallel mount fetches run, with no layout shown. Once the fetches resolve, the loading message is replaced by the sidebar... (collection_skeleton_loading_state)"
+statement = "When I first open the Collection page, I briefly see a muted Loading… message while the page's parallel mount fetches run, with no layout shown. Once the fetches resolve, the loading message is replaced by the sideb... (collection_skeleton_loading_state)"
 
 [[use_case]]
 id = "UC-collection-34"
@@ -175,7 +175,7 @@ statement = "When I'm on the Collection page with no filters applied, the toolba
 [[use_case]]
 id = "UC-collection-36"
 tier = "T4"
-statement = "When I am on the Collection page, the sidebar's Saved views section shows a Save current… button. The button is easy to find directly under the saved views `<select>` so I can capture my current search and facet selec... (collection_syntax_help_pill)"
+statement = "When I am on the Collection page, the sidebar's Saved views section shows a Save current… button. The button is easy to find directly under the saved views `<select>` so I can capture my current search and facet sel... (collection_syntax_help_pill)"
 
 [[use_case]]
 id = "UC-collection-37"

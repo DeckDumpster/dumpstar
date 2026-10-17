@@ -25,9 +25,12 @@ cleanup() {
     for p in "${pids[@]:-}"; do [ -n "$p" ] && kill "$p" 2>/dev/null || true; done
     rm -rf "$work"
 }
-trap cleanup EXIT
 
-step() { printf '\n==> %s\n' "$*"; }
+cur="start"
+step() { cur="$*"; printf '\n==> %s\n' "$*"; }
+# The last line of a failed run is the cause: name the step that failed, so a
+# harness that shows only the final line shows this rather than a server log line.
+trap 'rc=$?; cleanup; [ "$rc" -eq 0 ] || echo "FAILED (exit $rc) in step: $cur" >&2' EXIT
 
 step "ui: build dumpstar"
 # Dependencies at opt-level 2: bundled SQLite compiled -O0 answered /api/sets in
@@ -59,11 +62,12 @@ export DUMPSTAR_USER=collection
 step "ui: start the test Access JWKS and the server"
 jwks="$work/jwks"
 mkdir -p "$jwks"
-bash "$root/tests/lib/test-jwks.sh" serve "$jwks" >/dev/null &
+bash "$root/tests/lib/test-jwks.sh" serve "$jwks" >"$work/jwks.log" 2>&1 &
 pids+=("$!")
-# test-jwks.sh builds the issuer on first use, so allow for a cargo build.
-for _ in $(seq 1 3000); do [ -f "$jwks/jwks.json" ] && break; sleep 0.1; done
-[ -f "$jwks/jwks.json" ] || { echo "ERROR: the test JWKS server wrote no jwks.json (cargo must build dumpstar-test-jwks)" >&2; exit 1; }
+# The issuer binary is built above, so the wait is for the process, not a clock:
+# poll while it lives (a loaded box is slow, not wrong) and stop the moment it dies.
+while [ ! -f "$jwks/jwks.json" ] && kill -0 "${pids[0]}" 2>/dev/null; do sleep 0.1; done
+[ -f "$jwks/jwks.json" ] || { echo "ERROR: the test JWKS server exited without writing jwks.json; its log:" >&2; cat "$work/jwks.log" >&2; exit 1; }
 meta() { jq -r ".$1" "$jwks/jwks.json"; }
 port="${UI_TEST_PORT:-18080}"
 

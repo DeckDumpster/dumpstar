@@ -28,8 +28,12 @@ out="$(plan orphans HEAD)" && bad "orphans passed with $uc's only suite deleted"
 git -C "$T" checkout -q -- .
 
 sed -i '1d;2d' "$T/tests/ci/select_test.sh"; sed -i '1i #!/usr/bin/env bash' "$T/tests/ci/select_test.sh"
-out="$(plan lint)" && bad "lint passed with a suite lacking its headers" || \
-    { case "$out" in *select_test.sh*"missing # tier"*) ok "a suite without headers is named" ;; *) bad "headerless suite not named: $out" ;; esac; }
+# Report-only by default (a file landing after the catalogue was cut cannot turn main red): exit 0,
+# but the gap is printed. Enforcing (DUMPSTAR_PLAN_ENFORCE=1) the same gap fails, naming the suite.
+out="$(plan lint)" || bad "report-only lint failed: $out"
+case "$out" in *"report-only: tests/ci/select_test.sh: missing # tier"*) ok "report-only lint exits 0 and names the headerless suite" ;; *) bad "report-only lint did not name the headerless suite: $out" ;; esac
+out="$(DUMPSTAR_PLAN_ENFORCE=1 plan lint)" && bad "enforcing lint passed with a suite lacking its headers" || \
+    { case "$out" in *select_test.sh*"missing # tier"*) ok "enforcing lint names a suite without headers" ;; *) bad "headerless suite not named: $out" ;; esac; }
 git -C "$T" checkout -q -- .
 
 [ "$(plan report >/dev/null; git -C "$T" status --short | wc -l)" = 0 ] && ok "coverage report is current" || bad "coverage report regenerates differently"

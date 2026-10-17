@@ -29,6 +29,7 @@ problems() {
     if has 'github\.workspace|GITHUB_WORKSPACE|actions/checkout'; then
         echo "deploys from the runner workspace"
     fi
+    has 'DUMPSTAR_DEPLOY_IMAGE: pull' || echo "may compile on the prod host (DUMPSTAR_DEPLOY_IMAGE is not pull)"
     has 'deploy/heartbeat\.sh" prod' || echo "does not check the origin after deploying"
     return 0
 }
@@ -62,6 +63,9 @@ grep -v 'heartbeat\.sh' "$wf" >"$scratch/e.yml"
 expect "a deploy that never asks the origin" "origin" "$scratch/e.yml"
 sed 's/dumpstar-prod/ubuntu-latest/' "$wf" >"$scratch/f.yml"
 expect "a deploy on a hosted runner" "dumpstar-prod" "$scratch/f.yml"
+
+sed 's/DUMPSTAR_DEPLOY_IMAGE: pull/DUMPSTAR_DEPLOY_IMAGE: auto/' "$wf" >"$scratch/g.yml"
+expect "a deploy that may build on the prod host" "compile on the prod host" "$scratch/g.yml"
 
 echo "==> §2 the real workflow"
 out="$(problems "$wf")"

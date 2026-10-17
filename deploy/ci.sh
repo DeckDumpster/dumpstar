@@ -800,6 +800,9 @@ if tier lint; then
     step "deploy.yml shape (tests/ci/deploy_workflow_test.sh)"
     bash "$REPO_DIR/tests/ci/deploy_workflow_test.sh"
 
+    step "deploy pulls CI's image (tests/ci/published_image_test.sh)"
+    bash "$REPO_DIR/tests/ci/published_image_test.sh"
+
     step "deploy runs the data jobs a change affects (tests/deploy/data_jobs_test.sh)"
     bash "$REPO_DIR/tests/deploy/data_jobs_test.sh"
 
@@ -988,6 +991,14 @@ if [ "$NEEDS_IMAGE" = yes ]; then
     . "$SCRIPT_DIR/image-lib.sh"
     dumpstar_image_ensure "$BUILD_IMAGE" "$REPO_DIR"
     export DUMPSTAR_PREBUILT_IMAGE="$BUILD_IMAGE"
+    # Publish it for the deploy to pull (sp-jooqc0): prod ships this build rather
+    # than compiling its own. A failed push fails the run; an unpublished image
+    # would silently put the next deploy back on the compile-on-prod path.
+    if [ "${DUMPSTAR_PUBLISH_IMAGE:-}" = 1 ]; then
+        # shellcheck source=deploy/published-image-lib.sh
+        . "$SCRIPT_DIR/published-image-lib.sh"
+        dumpstar_image_publish "$BUILD_IMAGE" "$REPO_DIR"
+    fi
     echo "    ${BUILD_IMAGE} ($(podman image inspect --format '{{.Id}}' "$BUILD_IMAGE" | cut -c1-12))"
 else
     echo ""

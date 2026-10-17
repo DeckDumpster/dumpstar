@@ -16,10 +16,10 @@
 #              tier T3; one without is replayed only by the Claude Vision harness, outside CI: T4.
 #
 #   plan.sh lint                 headers, ids, catalogue drift, gaps; exit 1 naming each. A MISSING header
-#                                (intent id, suite tier/covers, implementation covers) is REPORT-ONLY
-#                                — printed as "report-only:", exit unaffected — so a file that landed
-#                                after the catalogue was cut cannot turn main red; DUMPSTAR_PLAN_ENFORCE=1
-#                                makes it fail (sp-hc1kgy flips the gate to that). A wrong header never softens.
+#                                (intent id, suite tier/covers, implementation covers) FAILS, naming the
+#                                fix command; DUMPSTAR_PLAN_REPORT_ONLY=1 prints it as "report-only:" instead.
+#                                Authoring a test or intent: add its headers, then run
+#                                `plan.sh assign && plan.sh generate && plan.sh report`.
 #   plan.sh orphans [<ref>]      fail on a use case whose last cover was deleted since <ref>
 #                                (default $DUMPSTAR_PLAN_BASE, origin/main, then main)
 #   plan.sh generate             rewrite docs/test-plan/*.toml from the intents
@@ -130,10 +130,11 @@ intent_rows() {
         END { flush() }' *.yaml) | { iconv -c -f UTF-8 -t UTF-8; [ $? -le 1 ]; }
 }
 
-# missing <msg> — a missing header: fails under DUMPSTAR_PLAN_ENFORCE=1, else is reported and passes.
+# missing <msg> <fix> — a missing header fails, naming the fix command. DUMPSTAR_PLAN_REPORT_ONLY=1
+# downgrades it to a printed "report-only:" line (an escape hatch, not the default).
 missing() {
-    if [ "${DUMPSTAR_PLAN_ENFORCE:-}" = 1 ]; then echo "$1"; return 1; fi
-    echo "report-only: $1"; return 0
+    if [ "${DUMPSTAR_PLAN_REPORT_ONLY:-}" = 1 ]; then echo "report-only: $1"; return 0; fi
+    echo "$1 — fix: $2"; return 1
 }
 
 area_of() { local n="${1%%_*}"; printf '%s' "$n"; }
@@ -157,7 +158,7 @@ cmd_generate() {
     local n id st area tier outdir="${1:-$CAT}" a
     mkdir -p "$outdir"; rm -f "$outdir"/*.toml
     while IFS=$'\t' read -r n id st; do
-        [ "$id" != "-" ] || { [ "${DUMPSTAR_PLAN_ENFORCE:-}" = 1 ] || continue
+        [ "$id" != "-" ] || { [ "${DUMPSTAR_PLAN_REPORT_ONLY:-}" != 1 ] || continue
             echo "plan.sh: intent $n has no '# Use case:' line — run plan.sh assign" >&2; return 1; }
         a="$(area_of "$n")"
         tier=T4; [ -f "$ROOT/$IMPLS/$n.ts" ] && tier=T3
@@ -179,12 +180,12 @@ cmd_lint() {
     tmp="$(mktemp -d -p "$WORK")"
 
     # 1. every intent has a unique id, and the committed catalogue is what the intents generate.
-    intent_rows | awk -F'\t' '$2 == "-" { print "intent " $1 " has no # Use case: line (plan.sh assign)"; next }
+    intent_rows | awk -F'\t' '$2 == "-" { print "intent " $1 " has no # Use case: line"; next }
         seen[$2]++ { print "intent " $1 ": duplicate id " $2; dup = 1 } END { exit dup }' > "$tmp/ids" && :
     # A failure here must say so: bad=1 with nothing printed is a red gate nobody can read.
     [ $? = 0 ] || { grep -q 'duplicate id' "$tmp/ids" || echo "plan.sh: reading $INTENTS failed"; bad=1; }
     while IFS= read -r f; do
-        case "$f" in *"has no # Use case:"*) missing "$f" || bad=1 ;; *) echo "$f" ;; esac
+        case "$f" in *"has no # Use case:"*) missing "$f" "bash tests/ci/plan.sh assign && bash tests/ci/plan.sh generate && bash tests/ci/plan.sh report" || bad=1 ;; *) echo "$f" ;; esac
     done < "$tmp/ids"
     if cmd_generate "$tmp/cat" 2> "$tmp/err"; then
         drift="$(diff -rq "$tmp/cat" "$CAT" 2>/dev/null | grep -v 'coverage\.' || true)"
@@ -196,8 +197,8 @@ cmd_lint() {
     while IFS= read -r f; do
         is_suite_sh "$f" || continue
         tier="$(header "$ROOT/$f" tier)"; cov="$(header "$ROOT/$f" covers)"
-        [ -n "$tier" ] || missing "$f: missing # tier:" || bad=1
-        [ -n "$cov" ] || missing "$f: missing # covers:" || bad=1
+        [ -n "$tier" ] || missing "$f: missing # tier:" "add '# tier: T0..T4' to its leading comment block" || bad=1
+        [ -n "$cov" ] || missing "$f: missing # covers:" "add '# covers: <paths or UC-…>' to its leading comment block" || bad=1
         for tok in $(printf '%s\n' $cov | grep -E "^$UC_RE\$"); do
             grep -qF "id = \"$tok\"" "$CAT"/*.toml || { echo "$f: unknown UC id on # covers: $tok"; bad=1; }
         done
@@ -209,7 +210,7 @@ cmd_lint() {
         n="$(basename "$f" .ts)"
         id="$(printf '%s\n' "$rows" | awk -F'\t' -v n="$n" '$1 == n { print $2 }')"
         [ -n "$id" ] || { echo "$IMPLS/$n.ts: no intent $INTENTS/$n.yaml"; bad=1; continue; }
-        grep -qE "^[[:space:]]*// covers:.*\\b$id\\b" "$f" || missing "$IMPLS/$n.ts: missing '// covers: $id'" || bad=1
+        grep -qE "^[[:space:]]*// covers:.*\\b$id\\b" "$f" || missing "$IMPLS/$n.ts: missing '// covers: $id'" "add the line '// covers: $id' at the top of the file" || bad=1
     done
 
     # 4. test-plan: the catalogue validates, and no T0-T3 use case is without a cover.

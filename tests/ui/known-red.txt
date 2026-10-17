@@ -26,8 +26,6 @@ rarity_official_mark
 collection_aspects_column_fits_icons
 # sp-d1680d
 collection_name_cell_wraps_at_words
-# sp-howojk.2
-browse_sort_buttons_reorder
 #
 # STALE — written against the Pokémon fixture (sv8, base1, Blastoise, Energy type,
 # Pokémon JP sets) and failing on SWU fixture data, not on a regression. Rewrite

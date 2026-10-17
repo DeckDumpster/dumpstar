@@ -2583,7 +2583,10 @@
 			--col-number: 3rem;
 			--col-nm: 4rem;
 			--col-adj: 4.75rem;
-			--col-name-min: 9rem;
+			/* The thumbnail (70px) + its gap + the longest single word a
+			   name is likely to carry plus one badge: the name wraps between
+			   words, so the column must never be narrower than that word. */
+			--col-name-min: calc(70px + 0.55rem + 6.75rem);
 		}
 		.cardthumb {
 			width: 70px;
@@ -2601,9 +2604,21 @@
 		}
 		.namebody {
 			white-space: normal;
-			overflow-wrap: anywhere;
+			overflow-wrap: normal;
+			word-break: normal;
+			overflow: visible;
 			text-overflow: clip;
 			line-height: 1.2;
+		}
+		/* Badges wrap as a unit with the last word, and the cell grows to
+		   fit rather than clipping a third line. */
+		.namebody :global(.vbadge),
+		.namebody .tag {
+			white-space: nowrap;
+		}
+		table.dd tbody td.namecol > .namecell {
+			max-height: none;
+			overflow: visible;
 		}
 		table.dd td.fac {
 			white-space: normal;

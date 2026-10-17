@@ -31,6 +31,10 @@ aspects: string | null,
  */
 arenas: string | null, 
 /**
+ * JSON array, e.g. `["Underworld","Droid","Bounty Hunter"]`.
+ */
+traits: string | null, 
+/**
  * Latest market price for this exact printing (NULL when the feed has
  * none and nothing was entered by hand).
  */

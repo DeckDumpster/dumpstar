@@ -1,4 +1,5 @@
 # Scenario: Filtering to a type produces a focused or empty result list
+# Use case: UC-batches-07
 
 # Related: batches_type_filter_bar, batches_detail_back_preserves_filter
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T1
+# covers: deploy/data-jobs.sh deploy/data-jobs-lib.sh
 # tests/deploy/data_jobs_test.sh — deploy.sh runs the data jobs a change affects
 # (sp-g20aoh). Hermetic: a scratch git repo and a stub systemctl.
 #   §1 a commit touching crates/dumpstar-catalog runs catalog-apply then prices, once, and logs both

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T2
+# covers: deploy/dumpstar-litestream.container deploy/RESTORE.md
 # Container-tier gate (pd-v8zf): the MULTI-TENANT DR DRILL — restore ONE tenant
 # in place, through the shipped runbook, and prove the other tenants were not
 # touched.

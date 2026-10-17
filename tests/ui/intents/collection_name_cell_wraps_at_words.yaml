@@ -1,4 +1,5 @@
 # Scenario: The collection table's name cell wraps only between words and never clips
+# Use case: UC-collection-46
 #
 # Related:
 #   issues: [sp-d1680d]

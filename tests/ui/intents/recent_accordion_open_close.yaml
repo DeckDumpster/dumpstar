@@ -1,4 +1,5 @@
 # Scenario: Expand and collapse a batch row to reveal its cards
+# Use case: UC-recent-01
 
 # Related: recent_page_overview, recent_card_status_borders
 

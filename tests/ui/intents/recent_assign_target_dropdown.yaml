@@ -1,4 +1,5 @@
 # Scenario: A card name link in an expanded batch navigates to card detail
+# Use case: UC-recent-02
 
 # Related: recent_card_status_borders, recent_navigation_header
 

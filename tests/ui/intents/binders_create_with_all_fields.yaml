@@ -1,4 +1,5 @@
 # Scenario: Create a new binder by name
+# Use case: UC-binders-03
 
 # Related: binders_create_and_manage, binders_detail_view_empty_card_list
 

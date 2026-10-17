@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T2
+# covers: deploy/*.sh deploy/*.service deploy/*.timer
 # Deploy-script gate (pd-fite, pd-2t6u): the container-store resolution, the
 # low-disk guard and the unit-file install are shell, so they get a shell test.
 #

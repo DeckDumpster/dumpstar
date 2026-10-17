@@ -1,4 +1,5 @@
 # Scenario: Every meter on the set stats page is a progressbar to assistive tech
+# Use case: UC-browse-19
 
 # Related: browse_master_set_completion_stats_visible
 

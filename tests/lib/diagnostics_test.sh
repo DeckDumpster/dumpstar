@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T1
+# covers: tests/lib/diagnostics.sh deploy/diagnostics-lib.sh
 # Unit test for tests/lib/diagnostics.sh (pd-8gjs).
 #
 # The thing under test is a harness's ability to describe its own death, so

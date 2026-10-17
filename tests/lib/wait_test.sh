@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T1
+# covers: tests/lib/wait.sh
 # Unit test for tests/lib/wait.sh (pd-86er).
 #
 # Three parts, and the ratchets are the point.

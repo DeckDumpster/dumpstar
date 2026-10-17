@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T4
+# covers: tests/lake/deletion.sh deploy/ci.sh
 # Container-tier gate (pd-qbrf): the DELETION PATH, against a real object
 # store, under the real tenant credential policy, on a VERSIONED bucket.
 #

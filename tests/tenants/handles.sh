@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T2
+# covers: crates/dumpstar-server/*
 # Container-tier gate: what the SHIPPED image answers to multi-tenant requests,
 # using Cloudflare Access JWT authentication (db-ae5u).
 #

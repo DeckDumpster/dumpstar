@@ -187,9 +187,10 @@ LABEL dumpstar.build="1"
 FROM docker.io/library/debian:bookworm-slim
 
 # ca-certificates for HTTPS during `dumpstar setup` / `dumpstar data refresh`. No
-# OpenSSL needed — reqwest is built with rustls.
+# OpenSSL needed — reqwest is built with rustls. sqlite3 is the operator's
+# CLI for looking at /data in place (deploy/README.md, "Inspecting prod").
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates \
+ && apt-get install -y --no-install-recommends ca-certificates sqlite3 \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /out/dumpstar /usr/local/bin/dumpstar

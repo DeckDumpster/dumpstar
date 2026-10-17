@@ -27,6 +27,19 @@ enum DbCommand {
     Snapshot,
     /// Restore the collection (and shared catalog) from their `.bak` files.
     Restore,
+    /// Run read-only SQL against a tenant, with the shared catalog attached as the server has it.
+    Query(SqlArgs),
+    /// EXPLAIN QUERY PLAN for read-only SQL, then run it and print the wall time.
+    Explain(SqlArgs),
+}
+
+#[derive(clap::Args)]
+struct SqlArgs {
+    /// `current`, a handle, or a database id.
+    #[arg(long, default_value = "current")]
+    tenant: String,
+    /// The SQL to run.
+    sql: String,
 }
 
 /// Execute `dumpstar db`.
@@ -34,6 +47,22 @@ pub fn run(args: DbArgs) -> anyhow::Result<()> {
     match args.command {
         DbCommand::Snapshot => snapshot(),
         DbCommand::Restore => restore(),
+        DbCommand::Query(a) => {
+            let conn = crate::ops::open_readonly(
+                &crate::ops::tenant_path(&a.tenant)?,
+                &shared_db_path()?,
+            )?;
+            let n = crate::ops::query(&conn, &a.sql, &mut std::io::stdout())?;
+            eprintln!("{n} rows");
+            Ok(())
+        }
+        DbCommand::Explain(a) => {
+            let conn = crate::ops::open_readonly(
+                &crate::ops::tenant_path(&a.tenant)?,
+                &shared_db_path()?,
+            )?;
+            crate::ops::explain(&conn, &a.sql, &mut std::io::stdout())
+        }
     }
 }
 

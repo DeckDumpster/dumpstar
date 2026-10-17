@@ -10,6 +10,14 @@ test('SetLogo renders no <img> until the set has a retrieved logo', () => {
 	assert.doesNotMatch(markup(SetLogo, { code: 'SOR', name: 'Spark of Rebellion' }), /<img/);
 });
 
+test('a set with a logo renders only the image, named by alt and title; one without shows its code', () => {
+	const withLogo = markup(SetLogo, { code: 'SOR', name: 'Spark of Rebellion', logo: '/art/sor.png' });
+	assert.match(withLogo, /<img[^>]*alt="Spark of Rebellion"/);
+	assert.match(withLogo, /title="Spark of Rebellion"/);
+	assert.doesNotMatch(withLogo, /SOR|<span/);
+	assert.match(markup(SetLogo, { code: 'sor', name: 'Spark of Rebellion' }), /<span[^>]*>SOR<\/span>/);
+});
+
 test('the collection Set cell, the card page and the /browse tile each show the set logo', () => {
 	const read = (/** @type {string} */ f) => readFileSync(new URL(f, import.meta.url), 'utf8');
 	const collection = read('../src/routes/collection/+page.svelte');

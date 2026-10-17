@@ -301,7 +301,7 @@
 					href={facetHref('set', card.set_code)}
 					title="Find all cards in {card.set_name}"
 				>
-					<SetLogo code={card.set_code} name={card.set_name} /><span>{card.set_code.toUpperCase()}</span>
+					<SetLogo code={card.set_code} name={card.set_name} />
 				</a>
 				· #{card.number}{#if card.rarity}
 					·

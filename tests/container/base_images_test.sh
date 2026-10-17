@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T0
+# covers: Containerfile deploy/*.container
 # Unit test for the Containerfile's base-image pins (pd-pejn).
 #
 # The bug: stage 1 was `FROM docker.io/library/rust:1.94-slim`, which does not

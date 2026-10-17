@@ -1,4 +1,5 @@
 # Scenario: Change a deck's lifecycle state from the detail page
+# Use case: UC-deck-16
 #
 # Prerequisites:
 #   Deck 2 "Vader Aggro" exists in the "ready" state.

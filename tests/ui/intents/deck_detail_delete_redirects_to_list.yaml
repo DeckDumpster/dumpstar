@@ -1,4 +1,5 @@
 # Scenario: Deleting a deck from its detail page redirects to the list
+# Use case: UC-deck-14
 #
 # Related:
 #   issues: []

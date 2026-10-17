@@ -1,0 +1,1516 @@
+{
+  "api_version": "test-plan-matrix/v1",
+  "areas": [
+    {
+      "area": "batches",
+      "use_cases": [
+        {
+          "id": "UC-batches-01",
+          "tier": "T4",
+          "statement": "When I open the order-created batch TCG-100001 from the batches list, the detail page shows the batch name as the heading and a metadata line identifying it as an order-tcgplayer batch with its timestamp and card coun... (batches_already_assigned_view)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-batches-02",
+          "tier": "T4",
+          "statement": "When I open the batch Spark of Rebellion binder page-through from the batches list, the detail page shows the batch name as the heading and a metadata line marking it as a binder-click batch with its timestamp and a 7... (batches_assign_unassigned_to_deck)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-batches-03",
+          "tier": "T4",
+          "statement": "In the batches list view, each batch appears as a table row showing its Type, Name, Cards count, and When timestamp. The Spark of Rebellion binder page-through row shows a binder-click type and a 7 card count; the CSV... (batches_deck_label_in_list)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-batches-04",
+          "tier": "T4",
+          "statement": "When I navigate directly to /batches/{id} for a specific batch, I see a standalone, bookmarkable detail page — not an in-app modal. The page shows the batch name as the heading, a metadata line with its type, timestam... (batches_detail_addressable_url)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-batches-05",
+          "tier": "T4",
+          "statement": "On the batches list I choose binder_click from the Type filter and see the list narrow to just the binder-click batch. I click into that batch's detail page, then use the browser Back navigation to return. The batches... (batches_detail_back_preserves_filter)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-batches-06",
+          "tier": "T4",
+          "statement": "I can click a batch's Type link in the list to open its detail view. The detail page shows the batch name as the heading and a metadata line with the batch type, creation timestamp, and card count. It also lists the i... (batches_detail_view_and_metadata)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-batches-07",
+          "tier": "T4",
+          "statement": "When I choose manual_id from the Type filter on the batches page, the table narrows to show only the manual-entry batch Showcase entry. When I choose a type with no batches, the table renders with no body rows. Switch... (batches_filter_empty_result)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-batches-08",
+          "tier": "T4",
+          "statement": "When I navigate to /batches, I land on the Batches page showing the Batches heading and a muted line describing it as every ingestion run — manual entry, binder clicks, imports, and orders. The table below lists each ... (batches_homepage_nav_link)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-batches-09",
+          "tier": "T4",
+          "statement": "I can navigate to the Batches page and see a labelled Type select with an All option plus one option per distinct batch type present in the data (order_tcgplayer, order_ebay, manual_id, binder_click, csv_manabox). Whe... (batches_type_filter_bar)",
+          "covering_suites": []
+        }
+      ]
+    },
+    {
+      "area": "binders",
+      "use_cases": [
+        {
+          "id": "UC-binders-01",
+          "tier": "T4",
+          "statement": "From the Trade Binder detail view, I click + Add cards. The collection picker modal opens titled Add cards to Trade Binder, loads my collection, and offers a Search your collection… box. I type luke into the search bo... (binders_add_cards_full_flow)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-binders-02",
+          "tier": "T4",
+          "statement": "I can create a new binder from the binders list, see it appear in the binder grid, open it, and add cards to it from my collection. The added cards then appear in the binder's card table. (binders_create_and_manage)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-binders-03",
+          "tier": "T4",
+          "statement": "From the binders list view, I type a name (Rare Binder) into the New binder name… input and click Create. The input clears, the list reloads, and the new Rare Binder tile appears in the binder grid with a 0 cards count. (binders_create_with_all_fields)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-binders-04",
+          "tier": "T4",
+          "statement": "From a binder's detail view, I click Delete binder. After accepting the confirmation dialog, I am navigated back to /binders. The deleted binder no longer appears in the binder grid. (binders_delete_returns_to_list)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-binders-05",
+          "tier": "T4",
+          "statement": "After creating a new binder from the binders list, I open its detail view. Since it has no cards, the page shows the empty-state message No cards in this binder. with an Add cards button. The header still shows the + ... (binders_detail_view_empty_card_list)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-binders-06",
+          "tier": "T4",
+          "statement": "From the binders list I click the Trade Binder tile and land on its detail view. The header shows the binder name Trade Binder as the heading alongside a + Add cards button and a red Delete binder button. The card tab... (binders_edit_binder)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-binders-07",
+          "tier": "T4",
+          "statement": "When I navigate to /binders, I see the three existing binders (Trade Binder, Master Set: Spark of Rebellion, and Hyperspace Vault) rendered as tiles in the binder grid. Each tile shows the binder name and an {n} cards... (binders_list_view_populated)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-binders-08",
+          "tier": "T4",
+          "statement": "From the card detail page for a card with an unassigned copy, I use the Location dropdown in that copy's row in the Copies table and choose a binder (Trade Binder). After the assignment, the copy's Location reflects T... (binders_manage_from_card_modal)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-binders-09",
+          "tier": "T4",
+          "statement": "From a binder's detail view with cards present (Master Set: Spark of Rebellion), I click the Remove link in the action cell of the first card row. That copy is un-assigned from the binder — it disappears from the card... (binders_remove_cards)",
+          "covering_suites": []
+        }
+      ]
+    },
+    {
+      "area": "browse",
+      "use_cases": [
+        {
+          "id": "UC-browse-01",
+          "tier": "T3",
+          "statement": "I page through a set's binder with the pager until I'm on a deeper page (page 2), open a card's variant modal, and follow its Full card details link to the card page. When I press the browser Back button I land back o... (browse_back_preserves_page_param)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/browse_back_preserves_page_param.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-browse-02",
+          "tier": "T3",
+          "statement": "On a set's browse page the card grid stays within the viewport width at every cards-per-row setting (minimum, default and maximum), at desktop and phone widths, including on first load of a set with leaders. Cards in ... (browse_grid_fits_viewport)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/browse_grid_fits_viewport.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-browse-10",
+          "tier": "T4",
+          "statement": "From the Browse sets page I click the tile for the Spark of Rebellion set. The binder browse page loads at /browse/SOR: I see the set name Spark of Rebellion as the page heading, a Set stats → link, the two completion... (browse_loads_set_first_page)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-browse-11",
+          "tier": "T4",
+          "statement": "On the Spark of Rebellion binder browse page the header shows two completion stats side by side. The first reads Base {owned}/{total} with a progress bar — the count of card numbers I own at least one variant of, over... (browse_master_set_completion_stats_visible)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-browse-12",
+          "tier": "T4",
+          "statement": "On a narrow phone-width viewport I open the variant modal from a binder slot. Instead of a centered dialog, it presents as a bottom sheet — pinned to the bottom edge of the screen, spanning the full width, with rounde... (browse_mobile_bottom_sheet)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-browse-14",
+          "tier": "T4",
+          "statement": "On the Spark of Rebellion binder browse page I open the variant modal for Millennium Falcon - Piece of Junk #193 and click + Add on the Normal printing. The count optimistically jumps from 7 owned to 8 owned and a toa... (browse_optimistic_ui_undo_toast)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-browse-15",
+          "tier": "T3",
+          "statement": "When I advance from one page to the next in the binder/set browse view — including via the top pager — the viewport re-centers near the top of the card grid, so I go visually from the bottom row back to the top row ra... (browse_pager_scrolls_to_top)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/browse_pager_scrolls_to_top.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-browse-16",
+          "tier": "T4",
+          "statement": "On the Spark of Rebellion binder browse page at one card per row the indicator reads Page 1 of 2 and the ← Prev button is disabled. I click Next →; the indicator advances to Page 2 of 2, a new set of card slots loads,... (browse_pagination_next_prev)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-browse-18",
+          "tier": "T4",
+          "statement": "When I open the Spark of Rebellion binder browse page and merely look around — paging, switching views — no batch is created. The moment I make my first add (clicking + Add in the variant modal), a single ingestion ba... (browse_session_creates_batch)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-browse-19",
+          "tier": "T4",
+          "statement": "On the Spark of Rebellion set stats page every progress meter announces itself as a progress bar. The Completion card has three — Base set, Numbered set and Master set — and the Rarity split table has one per rarity r... (browse_set_stats_progress_bars_are_accessible)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-browse-21",
+          "tier": "T4",
+          "statement": "On the Spark of Rebellion binder browse page I click the body of the Luke Skywalker - Faithful Friend #5 slot. The variant modal opens, titled #5 · Luke Skywalker - Faithful Friend, listing every printing of that card... (browse_slot_click_opens_variant_modal)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-browse-24",
+          "tier": "T4",
+          "statement": "On the Spark of Rebellion binder browse page each slot's pip row shows my ownership at a glance. For a card whose printings I own at least one copy of, the matching pips render filled; for printings I do not own, the ... (browse_slot_pips_reflect_ownership)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-browse-25",
+          "tier": "T4",
+          "statement": "On the Spark of Rebellion binder browse page each slot in the grid is a clickable button that shows the card's image at the top, and a footer row with the card number on the left and a row of pips on the right. There ... (browse_slot_renders_image_number_pips)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-browse-28",
+          "tier": "T4",
+          "statement": "The binder browse page is addressable by set: navigating directly to /browse/SOR loads the Spark of Rebellion binder, while /browse/SHD loads the Shadows of the Galaxy binder. The page reacts to the set route paramete... (browse_url_state_persists)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-browse-29",
+          "tier": "T4",
+          "statement": "I open the variant modal for Millennium Falcon - Piece of Junk #193 in the Spark of Rebellion set. The Normal printing row shows 7 owned. I click its + Add button. The count immediately updates to 8 owned and turns gr... (browse_variant_modal_add_increments_count)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-browse-31",
+          "tier": "T4",
+          "statement": "I open the variant modal for Luke Skywalker - Faithful Friend #5 in the Spark of Rebellion set. The modal lists one row per printing of the card: each row shows the variant label (e.g. Normal, Foil), an {n} owned coun... (browse_variant_modal_lists_all_variants)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-browse-32",
+          "tier": "T3",
+          "statement": "On a set's browse page, pressing # twice flips the collector-number order each time, and pressing Price twice flips between most and least expensive each time. The list on screen changes with every press, the page kee... (browse_sort_buttons_reorder)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/browse_sort_buttons_reorder.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "card",
+      "use_cases": [
+        {
+          "id": "UC-card-01",
+          "tier": "T4",
+          "statement": "On the card detail page, the Printings table lists each variant of the card with a + Add button. When I click + Add on a variant, a new copy of that variant is added to my collection, and it appears in the Your copies... (card_detail_add_copy)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-card-02",
+          "tier": "T4",
+          "statement": "On the card detail page, adding a copy is a single click on a variant's + Add button — there is no expandable purchase form to toggle. The button adds the copy directly, all controls are disabled while the mutation ru... (card_detail_add_form_toggle)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-card-03",
+          "tier": "T4",
+          "statement": "On the card detail page, an unassigned copy's Location cell is a `<select>` that lists every binder, every deck, and an Unassigned option. When I pick a binder, the copy is assigned to it, and after the page reloads t... (card_detail_binder_assign)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-card-04",
+          "tier": "T3",
+          "statement": "On a card's detail page, when I own more than one copy the Your copies table lets me multi-select copies (a checkbox per row plus a select-all) and bulk-set their condition (and status / location) in one action — inst... (card_detail_bulk_condition_for_copies)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/card_detail_bulk_condition_for_copies.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-card-05",
+          "tier": "T4",
+          "statement": "On the card detail page, picking a different variant from a copy's Variant `<select>` re-points that copy at the new variant of the same card. After the page reloads, the copy shows the updated variant selected. (card_detail_change_variant_execute)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-card-06",
+          "tier": "T4",
+          "statement": "On the card detail page for a card with multiple variants, a copy's Variant `<select>` lists every variant of that card. The copy's current variant is the selected option, and the other variants are selectable alterna... (card_detail_change_variant_picker)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-card-07",
+          "tier": "T3",
+          "statement": "On the card detail page, editing an owned copy's condition updates the copy but must NOT rebuild/refresh the price chart — the catalog price history is unchanged, so destroying and recreating the chart (which replays ... (card_detail_condition_edit_no_chart_rebuild)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/card_detail_condition_edit_no_chart_rebuild.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-card-08",
+          "tier": "T4",
+          "statement": "On the card detail page, a copy in the Your copies section exposes a History toggle. Clicking it expands a timeline showing that copy's status changes and binder/deck movements in chronological order. Clicking the tog... (card_detail_copy_history)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-card-09",
+          "tier": "T4",
+          "statement": "On the card detail page, an unassigned copy's Location `<select>` lists every deck alongside the binders and Unassigned. When I pick a deck, the copy is assigned to it, and after the page reloads the Location cell sho... (card_detail_deck_assign)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-card-10",
+          "tier": "T4",
+          "statement": "On the card detail page, a copy's Status `<select>` includes a removed option. Selecting removed changes the copy's status, and after the page reloads the copy is no longer counted among the owned copies. (card_detail_delete_copy)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-card-11",
+          "tier": "T4",
+          "statement": "I can navigate directly to a card's detail page at /card/:set/:number and see the card image on the left and an info panel on the right showing the card name, the {set} · #{number} · {rarity} subtitle, and the card's ... (card_detail_direct_navigation)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-card-12",
+          "tier": "T4",
+          "statement": "On the card detail page, a copy's Status `<select>` lets me dispose of the copy by picking a disposition such as sold, traded, gifted, or lost. After I select one, the copy's status changes and, once the page reloads,... (card_detail_dispose_copy)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-card-13",
+          "tier": "T4",
+          "statement": "On the card detail page, I can set an owned copy's Status `<select>` to listed. After the page reloads, the Status cell shows listed. Selecting owned again on that same `<select>` returns the copy to the owned status. (card_detail_dispose_listed_unlist)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-card-14",
+          "tier": "T3",
+          "statement": "When I click a card's artist name on the card page, the browser navigates to the collection search pre-filtered to that artist across the whole catalog — an `artist:` DSL query, not a bare card-name search. Every card... (card_detail_facet_artist_search)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/card_detail_facet_artist_search.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-card-15",
+          "tier": "T3",
+          "statement": "Clicking an aspect on the card page runs an aspect: catalog search, so other cards of that aspect appear, owned or not. (card_detail_facet_aspect_search)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/card_detail_facet_aspect_search.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-card-16",
+          "tier": "T3",
+          "statement": "When I click a card's rarity on the card page, the browser navigates to the collection search filtered to that rarity across the whole catalog — a `rarity:` DSL query, not a card-name search for the rarity text. (card_detail_facet_rarity_search)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/card_detail_facet_rarity_search.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-card-17",
+          "tier": "T4",
+          "statement": "From the collection page, I can open a card's variant modal and click its Full card details link to navigate to the standalone card detail page. The card detail page shows the same card with its full information. (card_detail_from_collection_modal)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-card-18",
+          "tier": "T4",
+          "statement": "On the card detail page, when a copy is assigned to a deck its Location `<select>` shows that deck selected. Picking a binder from the same `<select>` moves the copy from the deck to the binder, and after the page rel... (card_detail_move_deck_to_binder)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-card-19",
+          "tier": "T4",
+          "statement": "When I navigate to a card detail URL with an invalid set code or collector number, the page shows an error message instead of card details. The error text reports that the card could not be loaded. (card_detail_not_found)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-card-20",
+          "tier": "T4",
+          "statement": "When I view a card's detail page, the Printings table shows a Market column with the latest market price for each variant that has price data. A variant with no price observation shows a blank or dash in its Market cell. (card_detail_price_chart)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-card-21",
+          "tier": "T4",
+          "statement": "On the card detail page, an ordered copy's Status `<select>` shows ordered. When I change it to owned, the copy transitions to the owned status, and after the page reloads the Status cell shows owned with the owned-co... (card_detail_receive_copy)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-card-22",
+          "tier": "T3",
+          "statement": "The card page of a Star Wars: Unlimited base shows its type, Base, and HP, and no power, cost or arena. (card_detail_swu_base_type)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/card_detail_swu_base_type.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-card-23",
+          "tier": "T3",
+          "statement": "The card page of a Star Wars: Unlimited leader shows its type, Leader, with cost, power and HP. (card_detail_swu_leader_type)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/card_detail_swu_leader_type.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-card-24",
+          "tier": "T3",
+          "statement": "The card page of a Star Wars: Unlimited unit shows its SWU attributes: type, cost, aspects, arena, power and HP. It shows no energy icon, Pokédex row, attack, weakness or retreat. (card_detail_swu_unit_attributes)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/card_detail_swu_unit_attributes.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-card-25",
+          "tier": "T4",
+          "statement": "On the card detail page, I can click the Want control to add the card to my wishlist. The control changes to a Wanted state. Clicking it again removes the card from the wishlist and reverts the control to Want. (card_detail_want_toggle)",
+          "covering_suites": []
+        }
+      ]
+    },
+    {
+      "area": "collection",
+      "use_cases": [
+        {
+          "id": "UC-collection-01",
+          "tier": "T3",
+          "statement": "Starting from the Collection page, I can click a card's Name link to open its card detail page, then add a new copy of that card by clicking the + Add button on a variant row. The new copy appears in the Your copies s... (collection_add_from_modal)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/collection_add_from_modal.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-collection-02",
+          "tier": "T3",
+          "statement": "After adding a copy from one card's detail page (reached from the Collection page), I can navigate back to the Collection page, open a different card's detail page, and successfully add a copy of that second card with... (collection_add_second_card_no_refresh)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/collection_add_second_card_no_refresh.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-collection-04",
+          "tier": "T3",
+          "statement": "In the collection table view, the Aspects column is no wider than two aspect icons plus cell padding, and a card with two aspects shows both icons fully unclipped; the freed width goes to the Name column. (collection_aspects_column_fits_icons)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/collection_aspects_column_fits_icons.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-collection-05",
+          "tier": "T3",
+          "statement": "I type a query into the collection search box so the URL reflects it as ?q=. I then navigate to a card detail page and press the browser Back button. The collection list reappears with the search still applied — the ?... (collection_back_preserves_search)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/collection_back_preserves_search.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-collection-06",
+          "tier": "T4",
+          "statement": "When I am on the Collection page, the global header shows the Dumpstar brand link. Clicking it takes me back to the homepage, giving me a consistent way out of the collection view. (collection_brand_logo_links_home)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-07",
+          "tier": "T4",
+          "statement": "From the Collection table I can click a card's Name link to open its card detail page, which shows the card image, name, the {set_code} · #{number} · {rarity} subtitle, and the card metadata. The global header lets me... (collection_card_modal_detail)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-08",
+          "tier": "T3",
+          "statement": "When I open a card's modal on the collection page and click a facet link that carries All cards (e.g. the aspect), the results widen to the whole catalog immediately — unowned matches appear as dimmed tiles — with no ... (collection_facet_from_modal_widens_to_catalog)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/collection_facet_from_modal_widens_to_catalog.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-collection-09",
+          "tier": "T4",
+          "statement": "I can narrow the collection table by rarity. The sidebar's Rarity facet lists every rarity present among my copies — Common, Rare, Special, Legendary. When I tick a rarity, the table filters to rows of that rarity and... (collection_filter_rarity)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-10",
+          "tier": "T4",
+          "statement": "When I am on the Collection page and I scroll the long card table down, the global header bar stays pinned to the top of the viewport. The navigation links remain visible and reachable without scrolling back up, so lo... (collection_header_sticky_on_scroll)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-11",
+          "tier": "T4",
+          "statement": "In multi-select mode on the Collection page I can select one or more copies and use the bulk Assign to deck… dropdown to move every selected copy into an existing deck. After the assignment the page re-fetches the col... (collection_inline_deck_creation)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-12",
+          "tier": "T4",
+          "statement": "Starting from the Collection page, I can click a card's Name link to open its card detail page. In the Your copies section each copy has a Variant `<select>`. Choosing a different variant re-points that copy at anothe... (collection_modal_change_variant)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-13",
+          "tier": "T4",
+          "statement": "When I open a card's detail page by clicking its Name link in the Collection table, I can use the global header's Collection nav link to navigate back to the Collection page and see the table again. (collection_modal_close)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-14",
+          "tier": "T4",
+          "statement": "When I enter multi-select mode on the Collection page and check at least one row, the bulk-action bar appears between the toolbar and the table. The bar — with its Delete button and the Assign to binder…, Assign to de... (collection_modal_overlays_sticky_header)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-15",
+          "tier": "T4",
+          "statement": "When I am on the Collection page, the sidebar renders within the viewport with its stacked sections fully readable — Saved views, the search input, and the Rarity, Set, and Variant facet sections. None of the sidebar ... (collection_more_menu_in_viewport)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-16",
+          "tier": "T4",
+          "statement": "When I open the Collection page and enter multi-select mode, a card I own more than once shows one row per physical copy because Dumpstar keeps strictly one row per card. I can check exactly one of the Vanquish rows, ... (collection_multiselect_delete_individual_copies)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-17",
+          "tier": "T4",
+          "statement": "I can click Select to enter multi-select mode, check one or more copy rows, click the bulk Delete button, accept the browser confirm dialog, and the selected copies are removed from the collection. The page re-fetches... (collection_multiselect_delete)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-18",
+          "tier": "T4",
+          "statement": "When I enter multi-select mode on the Collection page, the table still shows one row per physical copy, so a card I own three times appears as three separate selectable rows. I can check just one Vanquish row and use ... (collection_multiselect_individual_copies)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-19",
+          "tier": "T4",
+          "statement": "I can click Select to enter multi-select mode, check one or more copy rows, and use the bulk Assign to deck… dropdown to assign every selected copy to a deck. After the assignment the page re-fetches the collection, c... (collection_multiselect_new_deck)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-20",
+          "tier": "T4",
+          "statement": "I can click the Select button to enter multi-select mode: a checkbox column appears in the table and the toolbar button switches to Cancel. The bulk-action bar appears once at least one row is checked. Ticking the tab... (collection_multiselect_toggle)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-21",
+          "tier": "T4",
+          "statement": "When I open a card's detail page from the Collection table, the Printings table shows a Market column with the latest market price for each variant. This lets me see what a copy is worth without leaving the card view. (collection_price_chart)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-22",
+          "tier": "T3",
+          "statement": "As I type in the Collection search bar, a dropdown suggests completions from the query vocabulary. Typing a bare token like t lists matching keywords (e.g. the rarity keyword) with their descriptions; typing is: lists... (collection_search_autocomplete_keywords)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/collection_search_autocomplete_keywords.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-collection-23",
+          "tier": "T4",
+          "statement": "I can type a card name into the sidebar search input and, after the 200 ms debounce idle, the table filters to rows whose card name contains what I typed. The toolbar {filtered} of {total} cards count updates to the f... (collection_search_debounced)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-25",
+          "tier": "T3",
+          "statement": "When I type a query the parser can't understand — like xyz:1 with an unknown keyword — the Collection page shows an inline error beneath the search box naming the problem (unknown keyword) and the character position, ... (collection_search_error_handling)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/collection_search_error_handling.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-collection-26",
+          "tier": "T3",
+          "statement": "Next to the Collection search bar is a ? help link. Clicking it takes me to a Search syntax page that documents the query language — operators, examples, and the full keyword and is:-flag tables rendered from the serv... (collection_search_help_page)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/collection_search_help_page.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-collection-28",
+          "tier": "T3",
+          "statement": "On the Collection page I can type a Scryfall-style query like aspect:Aggression into the search bar. The list narrows to cards of that aspect — Wampa appears, while a Command card like Battlefield Marine does not. The... (collection_search_keyword_filter)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/collection_search_keyword_filter.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-collection-29",
+          "tier": "T4",
+          "statement": "When I load the Collection page with no filters, the table shows every physical copy I own or have owned, and the Status column reflects each copy's lifecycle status — owned, ordered, listed, or sold. Filtering by a s... (collection_search_status_default)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-30",
+          "tier": "T3",
+          "statement": "With the All cards toggle on, a query like t:water returns both the Water cards I own and the ones I'm missing. The unowned printings render as dimmed missing tiles alongside the owned ones, so I can see the gaps in m... (collection_search_unowned)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/collection_search_unowned.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-collection-31",
+          "tier": "T4",
+          "statement": "When my collection has no copies, the Collection page still renders the sidebar and toolbar, but the content area shows the empty message Your collection is empty. above a line naming a set's binder view as where card... (collection_shared_card_list_empty)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-32",
+          "tier": "T4",
+          "statement": "The Collection toolbar shows an Export CSV link when my collection is non-empty. The link points at the /api/export/csv endpoint, so clicking it downloads a CSV of every physical copy I own. (collection_shared_card_list)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-33",
+          "tier": "T4",
+          "statement": "When I first open the Collection page, I briefly see a muted Loading… message while the page's parallel mount fetches run, with no layout shown. Once the fetches resolve, the loading message is replaced by the sidebar... (collection_skeleton_loading_state)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-34",
+          "tier": "T4",
+          "statement": "When I narrow the collection with a search term or a facet checkbox, the toolbar {filtered} of {total} cards count updates so the first number matches only the currently-visible rows while the second stays at the full... (collection_stats_modal_reflects_filter)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-35",
+          "tier": "T4",
+          "statement": "When I'm on the Collection page with no filters applied, the toolbar shows a {filtered} of {total} cards count where both numbers equal the full collection size. This gives me an at-a-glance total of every physical co... (collection_stats_modal_shows_breakdown)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-36",
+          "tier": "T4",
+          "statement": "When I am on the Collection page, the sidebar's Saved views section shows a Save current… button. The button is easy to find directly under the saved views `<select>` so I can capture my current search and facet selec... (collection_syntax_help_pill)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-37",
+          "tier": "T3",
+          "statement": "In the collection table view, clicking a row's Name cell opens that card's detail modal, but clicking any other column runs the matching catalog facet search instead of opening the card. Clicking the Set cell navigate... (collection_table_column_facets)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/collection_table_column_facets.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-collection-38",
+          "tier": "T4",
+          "statement": "When I click a card's Name link in a Collection table row, the browser navigates to that card's detail page at /card/{set}/{number}, showing the card image, name, and metadata. (collection_table_row_opens_modal)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-39",
+          "tier": "T4",
+          "statement": "When I scroll the Collection table down, rows further down the list come into view while the rows that were at the top scroll out of sight. The table shows every physical copy I own, so scrolling lets me reach copies ... (collection_table_scroll_reveals_more_cards)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-40",
+          "tier": "T4",
+          "statement": "When I navigate to the Collection page, the content area shows the collection table with its column headers — Name, Set, #, Variant, Rarity, Condition, Status, Paid — and one row per physical copy I own. (collection_table_virtual_scroll_renders_cards)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-41",
+          "tier": "T3",
+          "statement": "Inside the Collection value over time dialog I can switch from the single Total line to a By set or By binder breakdown, and the chart redraws with one line per set or per binder. This tells me which parts of my colle... (collection_value_history_breakdown_tabs)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/collection_value_history_breakdown_tabs.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-collection-42",
+          "tier": "T3",
+          "statement": "When I click the {N} cards, {$X} total in the Collection page header, a Collection value over time dialog opens showing my collection's value plotted against time, with a market-value line and a cost-basis line. This ... (collection_value_history_chart)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/collection_value_history_chart.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-collection-43",
+          "tier": "T4",
+          "statement": "On the Collection page I can click the Select button to switch into multi-select mode, which adds a checkbox column to the table and changes the toolbar button to Cancel. Clicking Cancel switches back to the normal ta... (collection_view_toggle)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-44",
+          "tier": "T4",
+          "statement": "In multi-select mode on the Collection page I can check one or more copy rows and click the bulk Add to wishlist button. One wish is created per distinct card among the selection, so selecting two copies of the same c... (collection_wishlist_panel)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-collection-45",
+          "tier": "T4",
+          "statement": "On the collection page in table view, I open Columns and untick Type. The Type column is gone from the table header. I reload the page and the table still has no Type column. The Columns list offers no Adjusted entry,... (collection_column_chooser)",
+          "covering_suites": []
+        }
+      ]
+    },
+    {
+      "area": "collectr",
+      "use_cases": [
+        {
+          "id": "UC-collectr-01",
+          "tier": "T3",
+          "statement": "When I open the overflow menu on the collection page, I see two distinct Collectr export downloads — Export cards (Collectr) and Export sealed (Collectr) — alongside the CSV export, so cards and sealed can each be tak... (collectr_export_menu_links)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/collectr_export_menu_links.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-collectr-02",
+          "tier": "T3",
+          "statement": "After previewing a Collectr export, when I click Import the matched single cards and sealed products are both committed, and I see a confirmation banner reporting how many cards and how many sealed products were added... (collectr_import_commit_both_sides)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/collectr_import_commit_both_sides.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-collectr-03",
+          "tier": "T3",
+          "statement": "When I open the CSV Import page and choose Collectr from the Format dropdown, I see a note explaining that a Collectr export mixes single cards and sealed products and that they'll be imported separately, with other-g... (collectr_import_format_option)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/collectr_import_format_option.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-collectr-04",
+          "tier": "T3",
+          "statement": "When I paste a Collectr export that mixes single cards, sealed products, and a other-game row and click Preview, the result is shown as three separate sections — Single cards, Sealed products, and Skipped — each repor... (collectr_import_split_preview)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/collectr_import_split_preview.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "csv",
+      "use_cases": [
+        {
+          "id": "UC-csv-01",
+          "tier": "T4",
+          "statement": "After previewing a TCGplayer CSV on the CSV Import page, I click Import to commit. A result banner reports the added count and offers a View batch → link. I click the link and land on the created batch's detail page, ... (csv_import_assign_to_deck)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-csv-02",
+          "tier": "T4",
+          "statement": "On the CSV Import page, I choose the TCGplayer format, paste a valid CSV, click Preview to see the resolution report, and click Import to commit. The result banner confirms the cards were added and links to the new in... (csv_import_batch_metadata_in_commit)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-csv-03",
+          "tier": "T4",
+          "statement": "After previewing a CSV on the CSV Import page, I edit the paste textarea. The prior preview tables disappear and the Import button returns to its disabled state, so I cannot commit against outdated content. (csv_import_cancel_after_resolve)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-csv-04",
+          "tier": "T4",
+          "statement": "After previewing a TCGplayer CSV on the CSV Import page, I click Import. On success a result banner appears reporting the added and skipped counts, the preview tables clear, and the banner offers a View batch → link. (csv_import_commit_to_collection)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-csv-05",
+          "tier": "T4",
+          "statement": "When I preview a TCGplayer CSV that mixes valid cards with rows that cannot be resolved, the preview summary shows both a matched count and an unmatched count. An Unmatched rows table lists each failed row with its re... (csv_import_failed_cards_display)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-csv-06",
+          "tier": "T4",
+          "statement": "When I navigate to the CSV Import page, I see the correct initial state: the Import CSV heading, a Format select offering TCGplayer and Dumpstar, a CSV file file input, a …or paste CSV text textarea, and Preview and I... (csv_import_page_structure)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-csv-07",
+          "tier": "T4",
+          "statement": "I paste a TCGplayer CSV into the CSV Import textarea and click Preview. A resolution report appears: a summary line with the matched count and a Matched rows table showing Line, Card, Set, #, Variant, and Condition fo... (csv_import_parse_and_resolve_decklist)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-csv-08",
+          "tier": "T4",
+          "statement": "When I navigate to the CSV Import page without supplying a file or pasting any text, the Preview button stays disabled, so no preview request can be made. The Import button is likewise disabled until a preview with ma... (csv_import_parse_empty_input)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-csv-09",
+          "tier": "T4",
+          "statement": "When I visit the CSV Import page, the Format select offers both TCGplayer and Dumpstar parsers. I switch the select to TCGplayer, paste a TCGplayer CSV, and click Preview; the resolution report classifies the rows as ... (csv_import_with_batch_metadata)",
+          "covering_suites": []
+        }
+      ]
+    },
+    {
+      "area": "deck",
+      "use_cases": [
+        {
+          "id": "UC-deck-01",
+          "tier": "T4",
+          "statement": "On a deck's detail page, I can click + Add cards to open the collection picker modal. Searching for a card name shows matching owned copies. Selecting a copy and confirming adds it to the deck's card table. The card c... (deck_builder_add_and_remove_cards)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-deck-02",
+          "tier": "T4",
+          "statement": "After creating a deck from the /decks create form, I can open its tile to reach the deck detail page. The detail page shows the deck name as the header, a + Add cards button, a Delete deck button, and an empty card ta... (deck_builder_create_and_view)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-deck-03",
+          "tier": "T4",
+          "statement": "I can see a Decks link in the homepage navigation. Clicking it takes me to the decks list page, which shows the inline New deck name… create form and the grid of existing decks. (deck_builder_homepage_nav_link)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-deck-04",
+          "tier": "T4",
+          "statement": "When I navigate to /decks, I see a Decks heading, the inline create form with a New deck name… text input and an Owner (optional) text input, and a Create submit button. Below the form, the grid lists the existing dec... (deck_builder_page_initial_state)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-deck-08",
+          "tier": "T4",
+          "statement": "When I create a new deck from the /decks page by filling in the name and owner in the inline create form and clicking Create, the deck appears in the grid as a tile. Clicking the tile opens the new deck's detail page ... (deck_create_redirects_to_detail)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-deck-09",
+          "tier": "T4",
+          "statement": "When I navigate to deck 2 (Vader Aggro) at /decks/2 and click + Add cards, the collection picker modal opens with a search field. I type Millennium Falcon - Piece of Junk in the search field, see Millennium Falcon - P... (deck_detail_add_cards_from_collection)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-deck-10",
+          "tier": "T4",
+          "statement": "When I navigate to deck 2 (Vader Aggro) at /decks/2 and open the + Add cards picker, the picker lists collection copies as checkbox rows. Copies already assigned to another deck or to a binder are shown with a where t... (deck_detail_add_cards_hides_assigned)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-deck-11",
+          "tier": "T4",
+          "statement": "When I navigate to deck 2 (Vader Aggro) at /decks/2 and click + Add cards, the picker modal opens. Each physical copy is listed as its own individual checkbox row — there is no quantity aggregation, one row per physic... (deck_detail_add_individual_copy)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-deck-12",
+          "tier": "T4",
+          "statement": "When I view a deck's detail page and click a card's name in the card table, the browser navigates to that card's detail page at /card/:set/:number, where I see that card's image and details. (deck_detail_card_links_to_card_page)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-deck-13",
+          "tier": "T4",
+          "statement": "When I view a deck's card table on the detail page and click on a card row (not on the name link or the Remove link), a card detail modal opens showing the card image and a details panel. The details panel displays th... (deck_detail_card_row_opens_modal)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-deck-14",
+          "tier": "T4",
+          "statement": "When I open a deck's detail page and click the Delete deck button, a confirmation dialog appears noting the cards stay in the collection. After confirming, the browser navigates back to the deck list at /decks and the... (deck_detail_delete_redirects_to_list)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-deck-15",
+          "tier": "T4",
+          "statement": "I can navigate directly to a deck's detail page at /decks/:id. I see the deck name, the sub line showing the owner and format, the Lifecycle select, and a card table listing the deck's cards with Name, Set, #, Variant... (deck_detail_direct_navigation)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-deck-16",
+          "tier": "T4",
+          "statement": "When I navigate to deck 2 (Vader Aggro) and use the Lifecycle select in the header to change the deck's state from ready to built, the change is saved and the deck reloads showing the new state. The state badge reflec... (deck_detail_edit_properties)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-deck-17",
+          "tier": "T4",
+          "statement": "When I view a deck's detail page, the card table fits entirely within the viewport. No content overflows off the right edge of the screen and no horizontal scrollbar appears. (deck_detail_list_view_no_overflow)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-deck-18",
+          "tier": "T4",
+          "statement": "When I view a deck's detail page, the card table displays content in each row: the card name (linking to the card detail page), the set, the collector number, the variant, and the condition. The table columns are Name... (deck_detail_rich_card_table)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-deck-19",
+          "tier": "T4",
+          "statement": "When I navigate to deck 1 (Luke Vigilance Midrange) and click the Remove link on each card row, the cards are un-assigned from the deck one by one. The copies stay in the collection. After all cards are removed, the c... (deck_detail_select_and_remove_cards)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-deck-20",
+          "tier": "T4",
+          "statement": "When I visit the decks list page at /decks, each deck is rendered as a clickable tile that links to /decks/:id. I can click a deck tile and navigate to that deck's detail page, where I see the deck's full information ... (deck_list_links_to_standalone_detail)",
+          "covering_suites": []
+        }
+      ]
+    },
+    {
+      "area": "decks",
+      "use_cases": [
+        {
+          "id": "UC-decks-01",
+          "tier": "T4",
+          "statement": "I can create a new deck with a name and owner, see it in the deck list, open it to see an empty card list, and add cards to it from my collection. The added cards should appear in the deck's card table. (decks_create_and_add_cards)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-decks-02",
+          "tier": "T4",
+          "statement": "When I enter only a deck name in the create form (the sole required field), leave the owner field blank, and click Create, the deck is created and appears in the deck grid. Opening its tile shows the deck detail page ... (decks_create_minimal)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-decks-03",
+          "tier": "T4",
+          "statement": "When I open the + Add cards picker modal on a deck detail page and dismiss it with the × button without selecting anything, the modal closes and the deck's card table is unchanged. (decks_create_modal_backdrop_close)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-decks-04",
+          "tier": "T4",
+          "statement": "When I open a deck's detail page and click + Add cards, the CollectionPicker modal opens titled Add cards to {deck name}. The modal contains a Search your collection… search box, a list of collection copies rendered a... (decks_create_modal_opens)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-decks-05",
+          "tier": "T4",
+          "statement": "When I click Create on the deck create form without entering a name, nothing happens — the whitespace/empty name is silently ignored and no deck is created. After I enter a name and click Create, the deck is successfu... (decks_create_modal_validation)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-decks-06",
+          "tier": "T4",
+          "statement": "When I delete the deck Luke Vigilance Midrange, its cards remain in my collection. After deletion, I can search for Luke Skywalker - Faithful Friend on the Collection page and still find the copies that had been in th... (decks_delete_keeps_cards)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-decks-08",
+          "tier": "T4",
+          "statement": "When I visit /decks with existing decks, each deck tile in the grid displays the deck name as a heading, a lifecycle state badge (e.g. built, ready, idea), the owner when one is set, and the card count. The fixture ha... (decks_list_card_content)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-decks-09",
+          "tier": "T4",
+          "statement": "When I visit /decks on an instance with no decks, I see the message No decks yet. instead of a deck grid, with a line explaining what a deck is and to name one above. The inline create form is still available above th... (decks_list_empty_state)",
+          "covering_suites": []
+        }
+      ]
+    },
+    {
+      "area": "edit",
+      "use_cases": [
+        {
+          "id": "UC-edit-01",
+          "tier": "T4",
+          "statement": "On the EBAY-55012 order detail page, the one card row shows Status ordered and the header offers a Receive 1 card(s) button. I click Receive; after the non-optimistic reload the card row's Status now reads owned. The ... (edit_order_inline_edit_card)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-edit-02",
+          "tier": "T4",
+          "statement": "When I open the detail page for the received TCG-100001 order, I see a header with the title {source} · {seller} and a sub-line showing the order number, date, card count, and money-formatted total. Below it is a card... (edit_order_load_and_view)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-edit-03",
+          "tier": "T4",
+          "statement": "On the EBAY-55012 order detail page the header shows a Receive 1 card(s) button because exactly one of the order's cards still has status ordered. After I click Receive and the page reloads, the pending count is zero,... (edit_order_remove_card)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-edit-04",
+          "tier": "T4",
+          "statement": "On the TCG-100001 order detail page, each card row's Name cell is a link. When I click the name of a card in the order, I navigate to that card's detail page at /card/{set}/{number}, where the matching card is shown. (edit_order_replace_card)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-edit-05",
+          "tier": "T4",
+          "statement": "When I open the TCG-100001 order detail — an order whose three cards are all already owned — the header shows no Receive button. Instead a static All received badge is displayed, and every card row's Status column rea... (edit_order_save_metadata)",
+          "covering_suites": []
+        }
+      ]
+    },
+    {
+      "area": "homepage",
+      "use_cases": [
+        {
+          "id": "UC-homepage-01",
+          "tier": "T4",
+          "statement": "When I navigate away from the homepage to another section and then click the red Dumpstar brand link in the header, the browser returns to the homepage and the title heading and description are shown again. (homepage_image_display_setting)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-homepage-02",
+          "tier": "T4",
+          "statement": "When I click each of the remaining links in the global header (Browse, Wishlist, Orders, Recent, Import), each navigates to the correct destination page. (homepage_nav_links_analysis_and_addcards)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-homepage-03",
+          "tier": "T4",
+          "statement": "When I click each collection-related link in the global header (Collection, Binders, Decks, Sealed), the browser navigates to the correct destination page. (homepage_nav_links_collection)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-homepage-04",
+          "tier": "T4",
+          "statement": "When I visit the homepage, I can see the Dumpstar title heading, a one-line description telling me to choose a section from the navigation, and the global header with its full set of navigation links. (homepage_page_structure)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-homepage-05",
+          "tier": "T4",
+          "statement": "When I navigate away from the homepage to another section and then click the Home link in the global navigation, the browser returns to the homepage and the title heading and description are shown again. (homepage_price_source_setting)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-homepage-06",
+          "tier": "T4",
+          "statement": "When I visit the homepage, the Recent link in the global navigation is a plain text link with no count or status badge next to it, and clicking it navigates to the Recent page. (homepage_recent_badge_absent_when_idle)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-homepage-07",
+          "tier": "T3",
+          "statement": "When I visit the homepage, the tagline under the Dumpstar title says it is a Star Wars: Unlimited collection tracker, and no other trading card game's name appears on the page. (homepage_tagline_names_swu)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/homepage_tagline_names_swu.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "manual",
+      "use_cases": [
+        {
+          "id": "UC-manual-01",
+          "tier": "T4",
+          "statement": "I can manually enter cards by set code and collector number on the Manual Entry page. After filling the lookup form and clicking Look up, the page matches the card against the catalog. A successfully resolved card sho... (manual_id_add_and_resolve)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-manual-02",
+          "tier": "T4",
+          "statement": "After looking up a card on the Manual Entry page, I change the set code and number and click Look up again. The resolved-card section replaces the previous card with the newly looked-up one, and its variants table ref... (manual_id_cancel_after_resolve)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-manual-03",
+          "tier": "T4",
+          "statement": "When I enter an invalid set code or collector number and click Look up, a red inline error line appears and no resolved-card section is shown. The lookup form stays visible so I can correct the values and try again. (manual_id_failed_resolution)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-manual-04",
+          "tier": "T4",
+          "statement": "After looking up a card on the Manual Entry page, the variants table lists each variant of the card with its own + Add button. I click + Add on the holo variant and a copy of that holo variant is added to my collectio... (manual_id_foil_toggle_in_results)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-manual-05",
+          "tier": "T4",
+          "statement": "I can rapidly look up cards using the keyboard: type a set code in the Set code input, type a collector number in the Number input, and press Enter to submit the lookup without clicking the button. After the card reso... (manual_id_keyboard_rapid_entry)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-manual-06",
+          "tier": "T4",
+          "statement": "When I navigate to the Manual Entry page, I see the correct initial state: the Manual entry heading, a lookup form with a Set code input, a Number input, and a Condition select, plus a Look up button. No resolved-card... (manual_id_page_initial_state)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-manual-07",
+          "tier": "T4",
+          "statement": "When I click Look up with a blank set code or a blank collector number, an inline error line reads Enter a set code and collector number. and no request is sent. No resolved-card section appears. (manual_id_rarity_mismatch)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-manual-08",
+          "tier": "T4",
+          "statement": "After looking up a card and clicking + Add on a variant, a This session log appears listing the added card as Added {name} · {variant} · {condition}. Adding a second card prepends another line, so the newest addition ... (manual_id_remove_entry)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-manual-09",
+          "tier": "T4",
+          "statement": "I look up a known fixture card by set code and number, choose a condition from the Condition select, and click + Add on a variant. The copy is added to my collection at the chosen condition with source manual_id, the ... (manual_id_resolve_and_commit)",
+          "covering_suites": []
+        }
+      ]
+    },
+    {
+      "area": "order",
+      "use_cases": [
+        {
+          "id": "UC-order-01",
+          "tier": "T4",
+          "statement": "After I look up a card line on the Import order page, the line shows a variant dropdown defaulted to the card's first printing. I can open that dropdown and pick a different variant, and the line stays ready with the ... (order_assign_to_deck)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-order-02",
+          "tier": "T4",
+          "statement": "After I add and resolve a card line on the Import order page, I click that line's ✕ remove button. The line disappears, the Cards header ready count drops back to 0/0, the No cards on this order yet. empty state retur... (order_cancel_after_resolve)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-order-03",
+          "tier": "T4",
+          "statement": "When I resolve a card line and click Commit order, the app creates the order and navigates to /orders/{id}. The order detail header shows the source and seller, the metadata sub-line, and a Receive 1 card(s) button — ... (order_commit_ordered_guidance)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-order-04",
+          "tier": "T4",
+          "statement": "I can paste order text into the Import order page, click Parse, and see the recognized lines appended to the Cards section. Each parsed line is pre-filled with its quantity and a name hint from the pasted text, and th... (order_import_parse_and_review)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-order-05",
+          "tier": "T4",
+          "statement": "When I add a card line, enter a set and number that do not exist in the catalog, and click that line's Look up button, the lookup fails: a red per-line error message appears under the line, the line gets no green bord... (order_import_unresolved_cards)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-order-06",
+          "tier": "T4",
+          "statement": "When I click Commit order on the Import order page without resolving any card line, a validation message Resolve at least one line (look up its card) before committing. appears and no order is created. (order_no_input_error)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-order-07",
+          "tier": "T4",
+          "statement": "When I paste random text that is not a recognized order format into the paste textarea and click Parse, the regex matches nothing, no card lines are appended, and the No cards on this order yet. empty message still sh... (order_no_orders_found)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-order-08",
+          "tier": "T4",
+          "statement": "When I navigate to the Import order page, I see the correct initial state: an Import order heading, an order-metadata section with a Source select (tcgplayer, ebay, lgs, other) and Seller, Order date, Total, and Notes... (order_page_initial_state)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-order-09",
+          "tier": "T4",
+          "statement": "I paste valid order text into the Import order page and click Parse, which appends the card lines. For one line I enter the set and number, click Look up to resolve it to a card and its variants, and the line gets a g... (order_parse_and_commit)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-order-10",
+          "tier": "T4",
+          "statement": "On the Import order page I can pick a different value from the Source dropdown. It defaults to tcgplayer; I select ebay and the select reflects ebay, then I select lgs and it reflects lgs. The other metadata inputs ar... (order_status_toggle)",
+          "covering_suites": []
+        }
+      ]
+    },
+    {
+      "area": "orders",
+      "use_cases": [
+        {
+          "id": "UC-orders-01",
+          "tier": "T4",
+          "statement": "When I navigate to /orders I can see every imported order in the table. The TCG-100001 tcgplayer order and the EBAY-55012 ebay order both appear as rows, each Source cell linking to its detail page. Each row shows the... (orders_list_pending_summary_and_badge)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-orders-02",
+          "tier": "T4",
+          "statement": "When I open the EBAY-55012 order detail and click its Receive 1 card(s) button, the one still-pending card is bulk-flipped from ordered to owned. After the non-optimistic reload the Receive button is gone, replaced by... (orders_receive_all_from_list_row)",
+          "covering_suites": []
+        }
+      ]
+    },
+    {
+      "area": "rarity",
+      "use_cases": [
+        {
+          "id": "UC-rarity-01",
+          "tier": "T3",
+          "statement": "A Legendary card shows its rarity as the official mark — the letter L in the official colour (rgb(0, 200, 243)) with the accessible label Legendary — on the card page and in the collection table, and sorting the colle... (rarity_official_mark)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/rarity_official_mark.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "area": "recent",
+      "use_cases": [
+        {
+          "id": "UC-recent-01",
+          "tier": "T4",
+          "statement": "On the Recent page, I click a batch row to expand it. The caret flips from collapsed (▸) to expanded (▾) and an indented card list opens below the row showing every card that batch added. Clicking the same row again c... (recent_accordion_open_close)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-recent-02",
+          "tier": "T4",
+          "statement": "On the Recent page, when I expand a batch and click a card's name link inside the indented card list, I navigate to that card's detail page at /card/{set}/{number}. (recent_assign_target_dropdown)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-recent-03",
+          "tier": "T4",
+          "statement": "On the Recent page, the CSV export 2025-06 CSV import batch appears in the timeline with its 4 cards count. Expanding it lazily loads and lists the four cards that import added to the collection. (recent_batch_ingest)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-recent-04",
+          "tier": "T4",
+          "statement": "On the Recent page, when I expand a batch the indented card list shows each card with a name link and a meta line reading {set_code} · {variant} · {status}. The meta line reflects each copy's actual variant and owners... (recent_card_status_borders)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-recent-05",
+          "tier": "T4",
+          "statement": "On the Recent page, the first time I expand a batch its cards are fetched and shown. If I collapse it and expand it again, the same card list reappears immediately from the cached detail without a second fetch. (recent_column_adjust)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-recent-06",
+          "tier": "T4",
+          "statement": "When the user has no ingestion batches, the Recent page shows the Recent activity heading and instruction line but the timeline is replaced with a No activity yet. message. The fixture has 5 batches, so this verifies ... (recent_empty_state)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-recent-07",
+          "tier": "T4",
+          "statement": "The global header includes a Recent navigation link. Clicking it takes me to /recent, where the Recent activity page renders. The global header stays present on the Recent page. (recent_navigation_header)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-recent-08",
+          "tier": "T4",
+          "statement": "When I navigate to the Recent page, I see an Recent activity heading and a muted instruction line telling me these are my most recent ingestion batches. Below it a timeline lists my recent batches, one row per batch. ... (recent_page_overview)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-recent-09",
+          "tier": "T4",
+          "statement": "On the Recent page, every batch row in the timeline shows how many cards that batch added as an {n} cards count in the row header. The count for each batch matches the number of collection copies that batch ingested i... (recent_status_summary_counts)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-recent-10",
+          "tier": "T4",
+          "statement": "On the Recent page, expanding one batch row does not collapse another already-expanded batch — each row's expansion is tracked independently. I can have two batches expanded at once, each showing its own card list, an... (recent_view_toggle)",
+          "covering_suites": []
+        }
+      ]
+    },
+    {
+      "area": "recents",
+      "use_cases": [
+        {
+          "id": "UC-recents-01",
+          "tier": "T4",
+          "statement": "When an order is received, Dumpstar auto-creates an ingestion batch for it and registers one collection copy per card in the order. On the Recent page that batch appears in the timeline, and expanding it lists exactly... (recents_single_card_ingest)",
+          "covering_suites": []
+        }
+      ]
+    },
+    {
+      "area": "sealed",
+      "use_cases": [
+        {
+          "id": "UC-sealed-01",
+          "tier": "T4",
+          "statement": "I can add a Spark of Rebellion Booster Display to my sealed collection and then see it in the sealed table. (sealed_add_and_table_view)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-sealed-02",
+          "tier": "T4",
+          "statement": "When I load the sealed collection page, only entries with status owned or listed are visible. Entries that have been opened, sold, traded, or gifted are hidden by default. The Show opened / disposed checkbox is unchec... (sealed_default_filter_hides_opened)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-sealed-03",
+          "tier": "T4",
+          "statement": "I can click the Remove link on a sealed product row, confirm the browser dialog, and the entry is removed. The row disappears from the sealed table. (sealed_delete_entry)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-sealed-04",
+          "tier": "T4",
+          "statement": "When I check the Show opened / disposed checkbox on the sealed collection page, non-active entries appear in the table but are visually dimmed compared to owned entries. This makes it clear which items are still in my... (sealed_disposed_entries_dimmed)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-sealed-05",
+          "tier": "T4",
+          "statement": "I can change the Status select on an owned sealed product row to sold and verify the row's status updates to sold. (sealed_dispose_entry)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-sealed-06",
+          "tier": "T4",
+          "statement": "I can change the Status select on a sealed product row from owned to listed and verify the updated status appears on the row after the table reloads. (sealed_edit_entry)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-sealed-07",
+          "tier": "T4",
+          "statement": "When I add the same sealed product twice with different purchase prices, the sealed table shows both entries as separate rows for that product, each with its own quantity and paid price. (sealed_multi_order_aggregation)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-sealed-08",
+          "tier": "T4",
+          "statement": "I can open the add-sealed modal, search for a sealed product, see results appear, select a product to advance to the confirm step, then click ← Back to return to the search results. I can also close the modal entirely... (sealed_open_modal_navigation)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-sealed-09",
+          "tier": "T4",
+          "statement": "When I type a single character into the add-sealed modal's search input, no results are requested or shown. Only once I have typed at least two characters does the modal search for and list matching sealed products. (sealed_open_no_contents)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-sealed-10",
+          "tier": "T4",
+          "statement": "I can add a sealed product by clicking + Add sealed, searching for a product, selecting it to reach the confirm step, entering a purchase price, and clicking Add to collection. After confirming, the modal closes and t... (sealed_open_product)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-sealed-11",
+          "tier": "T4",
+          "statement": "After adding one sealed product via the + Add sealed modal on the sealed collection page, I can click + Add sealed again and the modal reopens in search mode with an empty search input — so I can search for and add a ... (sealed_open_second_product_no_refresh)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-sealed-12",
+          "tier": "T4",
+          "statement": "When I change the Status select on the Shadows of the Galaxy Booster Pack row (quantity 6) to opened, the whole entry's status changes to opened. With Show opened / disposed unchecked the row disappears from the activ... (sealed_partial_dispose_qty)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-sealed-13",
+          "tier": "T4",
+          "statement": "I can open the add-sealed modal and type Spark into the search input to see the Spark of Rebellion sealed products. Typing a more specific term like Prerelease Kit narrows the results to a single product, and clearing... (sealed_search_and_filter)",
+          "covering_suites": []
+        }
+      ]
+    },
+    {
+      "area": "set",
+      "use_cases": [
+        {
+          "id": "UC-set-01",
+          "tier": "T4",
+          "statement": "On the Set Stats page for Spark of Rebellion, the Completion card's Master set bar (owned variants / total variants) reads a different total than the Numbered set bar (owned cards / total cards), because Luke Skywalke... (set_value_filter_card_type_and_owned)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-set-02",
+          "tier": "T4",
+          "statement": "On the Set Stats page for Spark of Rebellion, the Rarity split table's Rare row shows an Owned count of 1 — the Millennium Falcon - Piece of Junk Rare is registered in the collection — out of a Total of 1. The Progres... (set_value_filter_rarity)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-set-03",
+          "tier": "T4",
+          "statement": "When I load the Set Stats page for a set, I see the set name as the page heading with its series below, and a Binder view → link. The page shows a Completion card with two progress bars, a Value card with three figure... (set_value_initial_state)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-set-04",
+          "tier": "T4",
+          "statement": "The Set Stats page re-fetches its analytics whenever the set route param changes. Loading /browse/SOR/stats shows the Spark of Rebellion dashboard; navigating to /browse/SHD/stats re-runs the analytics and the heading... (set_value_remove_set_pill)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-set-05",
+          "tier": "T4",
+          "statement": "From a set's binder browse page I click the Set stats → link and land on that set's Set Stats page. The analytics load and the Completion card, Value card, and Rarity split table all become visible for that set. (set_value_select_set_and_analyze)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-set-06",
+          "tier": "T4",
+          "statement": "On the Set Stats page, the Rarity split card shows a table with one row per rarity in the set. Each row has the rarity name, an Owned count, a Total count, and a Progress cell with a small bar and a percentage. The ra... (set_value_split_by_rarity)",
+          "covering_suites": []
+        },
+        {
+          "id": "UC-set-07",
+          "tier": "T4",
+          "statement": "On the Set Stats page, the Completion card shows two labelled progress bars — Numbered set (owned cards / total cards) and Master set (owned variants / total variants) — each reading {owned} / {total} · {pct}%. The Va... (set_value_summary_stats)",
+          "covering_suites": []
+        }
+      ]
+    }
+  ]
+}

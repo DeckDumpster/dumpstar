@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T4
+# covers: tests/alarming/run.sh deploy/ci.sh
 # Container-tier gate (pd-dfb2118c / pd-1717): every backup-alarming layer is
 # made to FIRE, at a sink that records what it received.
 #

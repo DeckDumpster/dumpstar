@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T1
+# covers: tests/alarming/journal_summary_test.sh deploy/ci.sh
 # Unit test for deploy/journal-summary.sh and alert.sh's 900-byte budget (pd-pwk8).
 #
 # ── WHAT THIS EXISTS TO CATCH ───────────────────────────────────────────────

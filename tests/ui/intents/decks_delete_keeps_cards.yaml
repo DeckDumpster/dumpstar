@@ -1,4 +1,5 @@
 # Scenario: Deleting a deck does not delete its cards from the collection
+# Use case: UC-decks-06
 #
 # Related:
 #   issues: []

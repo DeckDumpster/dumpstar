@@ -1,3 +1,4 @@
+// covers: UC-collection-37
 /**
  * Hand-written implementation for collection_table_column_facets.
  *

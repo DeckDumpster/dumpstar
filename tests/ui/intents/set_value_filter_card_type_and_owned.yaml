@@ -1,4 +1,5 @@
 # Scenario: Master-set completion counts variants, not just cards
+# Use case: UC-set-01
 #
 # Related:
 #   pages: [set-stats]

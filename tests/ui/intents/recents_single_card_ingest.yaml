@@ -1,4 +1,5 @@
 # Scenario: A received order's auto-created batch appears on Recent
+# Use case: UC-recents-01
 
 # Related: recent_batch_ingest, recent_card_status_borders
 #   issues: [173]

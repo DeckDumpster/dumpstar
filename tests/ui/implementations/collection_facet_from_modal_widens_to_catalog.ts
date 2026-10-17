@@ -1,3 +1,4 @@
+// covers: UC-collection-08
 /**
  * Hand-written fail-first regression for the "all=1 ignored on client-side
  * facet nav" bug: clicking a facet link inside the card modal navigated to

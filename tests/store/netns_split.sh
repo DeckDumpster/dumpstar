@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T2
+# covers: deploy/ci.sh deploy/image-lib.sh
 # The rootless-netns split, measured against real podman (pd-3zjt).
 #
 # Two rootless stores on one login share ONE scaffolding directory,

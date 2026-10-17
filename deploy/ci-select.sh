@@ -73,7 +73,7 @@
 # single source of truth for the names; ci.sh is asserted against it by
 # tests/ci/select_test.sh, so a tier renamed here and not there fails in a
 # second rather than silently never running.
-DUMPSTAR_CI_ALL_TIERS="lint rust isolation deploy frontend container"
+DUMPSTAR_CI_ALL_TIERS="lint plan rust isolation deploy frontend container"
 
 # Always, whatever changed. Hermetic, no compilation, seconds: the shell-harness
 # self-tests and `cargo fmt --check`. These are the "lint tiers only" a

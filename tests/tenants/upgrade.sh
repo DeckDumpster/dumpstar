@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T2
+# covers: crates/dumpstar-server/* crates/dumpstar-db/*
 # Container-tier gate (pd-hqee): the UPGRADE PATH — an OLD-LAYOUT data volume
 # meets the current binary, gets migrated onto opaque database ids, and serves
 # the same collection at every step.

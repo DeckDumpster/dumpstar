@@ -11,7 +11,9 @@
 		import { CONDITIONS } from '$lib/conditions';
 	import { conditionMultiplier } from '$lib/conditions.svelte';
 	import VariantBadges from '$lib/components/VariantBadges.svelte';
-	import { money, count, printingLabel, jsonList, typeLines, traitsLine } from '$lib/format';
+	import { money, count, printingLabel, jsonList } from '$lib/format';
+	import TypeLines from '$lib/components/TypeLines.svelte';
+	import TraitLinks from '$lib/components/TraitLinks.svelte';
 	import { stackOffsets, windowOf } from '$lib/virtual';
 
 	// Foil shimmer treatment for Foil-finish printings.
@@ -954,6 +956,12 @@
 		e.stopPropagation();
 		selectedCard = { set: a.set_code, number: a.number };
 	}
+	// A facet link inside a cell: select mode keeps the row's own click, else the
+	// link navigates and the cell's handler must not navigate a second time.
+	function linkClick(e: MouseEvent) {
+		if (selectMode) e.preventDefault();
+		else e.stopPropagation();
+	}
 	function facetCell(e: MouseEvent, field: string, value: string | null | undefined) {
 		if (selectMode) return;
 		e.stopPropagation();
@@ -1123,7 +1131,7 @@
 	sticky
 	surface="panel"
 >
-	<Toolbar gap="md" wrap={false}>
+	<Toolbar gap="md" wrap={false} class="searchrow">
 		<a class="brand" href="/" aria-label="Home" title="Home">
 			<span class="brandmark"><DeathStar size={26} /></span>
 		</a>
@@ -1571,11 +1579,11 @@
 									{#if a.image_url}
 										<img class="cardthumb" src={a.image_url} alt="" loading="lazy" />
 									{/if}
-									<span class="namebody"><span class="cardname">{a.name}</span></span>
+									<span class="namebody"><span class="cardname">{a.name}</span>{#if a.subtitle}<span class="cardsub">{a.subtitle}</span>{/if}</span>
 								</div>
 							</td>
-							{#if showCol('type')}<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}><span class="t-type">{typeLines(a.card_type, a.arenas).type}</span>{#if typeLines(a.card_type, a.arenas).arena}<span class="t-sub">{typeLines(a.card_type, a.arenas).arena}</span>{/if}</td>{/if}
-							{#if showCol('traits')}<td class="traits"><span class="t-sub">{traitsLine(a.traits)}</span></td>{/if}
+							{#if showCol('type')}<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}><TypeLines cardType={a.card_type} arenas={a.arenas} onlink={linkClick} /></td>{/if}
+							{#if showCol('traits')}<td class="traits"><TraitLinks traits={a.traits} onlink={linkClick} /></td>{/if}
 							{#if showCol('aspects')}<td class="fac aspects" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', jsonList(a.aspects)[0])}>{#each jsonList(a.aspects) as n, i (i)}<span class="fac-aspect" data-aspect={n} title="Find all {n} cards" onclick={(e) => facetCell(e, 'aspect', n)}><AspectIcon name={n} /></span>{/each}</td>{/if}
 							{#if showCol('cost')}<td class="center"><CostMark cost={a.cost} /></td>{/if}
 							{#if showCol('stats')}<td class="center stats"><StatFrame kind="power" value={a.power} /> <StatFrame kind="hp" value={a.hp} /></td>{/if}
@@ -1622,12 +1630,12 @@
 									><span class="cardname">{a.name}</span><VariantBadges variant={a.variant} finish={a.finish} />{#if statusBadge(a.status)}<span
 											class="tag stag t-{a.status}"
 											title={a.status}>{statusBadge(a.status)}</span
-										>{/if}</span
+										>{/if}{#if a.subtitle}<span class="cardsub">{a.subtitle}</span>{/if}</span
 								>
 							</div>
 						</td>
-						{#if showCol('type')}<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}><span class="t-type">{typeLines(a.card_type, a.arenas).type}</span>{#if typeLines(a.card_type, a.arenas).arena}<span class="t-sub">{typeLines(a.card_type, a.arenas).arena}</span>{/if}</td>{/if}
-							{#if showCol('traits')}<td class="traits"><span class="t-sub">{traitsLine(a.traits)}</span></td>{/if}
+						{#if showCol('type')}<td class="fac" title="Find all {a.card_type ?? ''} cards" onclick={(e) => facetCell(e, 'type', a.card_type)}><TypeLines cardType={a.card_type} arenas={a.arenas} onlink={linkClick} /></td>{/if}
+							{#if showCol('traits')}<td class="traits"><TraitLinks traits={a.traits} onlink={linkClick} /></td>{/if}
 						{#if showCol('aspects')}<td class="fac aspects" title="Find cards of this aspect" onclick={(e) => facetCell(e, 'aspect', jsonList(a.aspects)[0])}>{#each jsonList(a.aspects) as n, i (i)}<span class="fac-aspect" data-aspect={n} title="Find all {n} cards" onclick={(e) => facetCell(e, 'aspect', n)}><AspectIcon name={n} /></span>{/each}</td>{/if}
 						{#if showCol('cost')}<td class="center"><CostMark cost={a.cost} /></td>{/if}
 						{#if showCol('stats')}<td class="center stats"><StatFrame kind="power" value={a.power} /> <StatFrame kind="hp" value={a.hp} /></td>{/if}
@@ -1706,10 +1714,26 @@
 		text-decoration: none;
 		flex-shrink: 0;
 	}
+	/* deckdumpster's home link: a 40px box on a phone, 44px beyond it, the
+	   mark centred in it. The box (not the mark) sets the search's width. */
+	.brand {
+		justify-content: center;
+		width: var(--toolbar-brand);
+		height: var(--toolbar-brand);
+	}
 	.brandmark {
 		width: 26px;
 		height: 26px;
 		display: block;
+	}
+	/* The bar's own padding and the search row's gap are deckdumpster's too:
+	   10px above and below, 12px at the sides on a phone and 24px beyond it;
+	   the same gutter is what leaves the search the same width. */
+	:global(.toolbar.topbar.sticky) {
+		padding: var(--toolbar-gap) var(--toolbar-bar-pad-x);
+	}
+	:global(.searchrow) {
+		gap: var(--toolbar-search-gap);
 	}
 	.brand:hover .brandmark {
 		filter: brightness(1.2);
@@ -1732,12 +1756,15 @@
 		min-width: 0;
 		/* Extra right padding leaves room for the clear button without
 		   it overlapping typed text. */
-		padding: var(--space-3) var(--space-8) var(--space-3) var(--space-4);
+		padding: var(--toolbar-search-pad-y) var(--toolbar-search-pad-r) var(--toolbar-search-pad-y)
+			var(--toolbar-search-pad-l);
+		box-sizing: border-box;
+		font-size: var(--toolbar-search-font);
 		background: var(--color-control-surface);
 		border: 1px solid var(--color-control-border);
 		border-radius: var(--radius-md);
 		color: var(--color-control-text);
-		font: inherit;
+		font-family: inherit;
 	}
 	/* An invalid control reddens on the danger ramp, not the brand one —
 	   the same answer the Field primitive gives for `error`. Crimson here
@@ -1761,8 +1788,9 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 2.375rem;
-		height: 2.375rem;
+		box-sizing: border-box;
+		width: var(--toolbar-square);
+		height: var(--toolbar-square);
 		flex-shrink: 0;
 		background: var(--color-control-surface);
 		border: 1px solid var(--color-accent);
@@ -1880,8 +1908,9 @@
 		align-items: center;
 		justify-content: center;
 		box-sizing: border-box;
-		height: 2.375rem;
-		padding: 0 var(--space-3);
+		height: var(--toolbar-toggle-height);
+		width: var(--toolbar-toggle-width);
+		padding: 0;
 		background: var(--color-control-surface);
 		border: 1px solid var(--color-control-border);
 		color: var(--color-control-text);
@@ -1909,13 +1938,17 @@
 		background: var(--color-control-surface);
 		border: 1px solid var(--color-control-border);
 		color: var(--color-text-subtle);
-		font-size: 1.3rem;
+		font-size: var(--toolbar-menu-font);
 		line-height: 1;
 		box-sizing: border-box;
-		height: 2.375rem;
-		padding: 0 var(--space-3);
+		height: var(--toolbar-menu-height);
+		padding: 0 var(--toolbar-menu-pad-x);
 		cursor: pointer;
 		border-radius: var(--radius-md);
+	}
+	/* The controls row's gap is deckdumpster's 10px, between Toolbar's 8 and 12. */
+	:global(.controlsrow) {
+		gap: var(--toolbar-gap);
 	}
 	.burger:hover,
 	.colsbtn:hover {
@@ -1926,7 +1959,8 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 2.375rem;
+		width: var(--toolbar-square);
+		height: var(--toolbar-square);
 		padding: 0;
 		flex-shrink: 0;
 	}
@@ -2331,13 +2365,11 @@
 	col.c-traits {
 		width: var(--col-traits);
 	}
-	td .t-type,
-	td .t-sub {
+	.cardsub {
 		display: block;
-		overflow-wrap: anywhere;
-	}
-	td .t-sub {
-		color: var(--text-muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		color: var(--color-text-subtle);
 		font-size: var(--text-sm);
 	}
 	col.c-aspects {

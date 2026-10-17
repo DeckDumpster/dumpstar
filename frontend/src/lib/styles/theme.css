@@ -37,3 +37,36 @@
 	--color-accent-active: var(--pd-gold-600);
 	--color-accent-surface: var(--pd-gold-900);
 }
+
+/*
+ * The /collection header's control geometry: deckdumpster's measured boxes
+ * (sp-0d7hvi), so the same row reads at the same size on every site. The
+ * kit's ramps have no 34px, 38px or 14px step; these are those measurements,
+ * named once here instead of as raw lengths in the route.
+ */
+:root {
+	--toolbar-square: 2.375rem; /* help (?) and columns buttons: 38 x 38 */
+	--toolbar-toggle-height: 2.125rem; /* list / grid segments: 46 x 34 */
+	--toolbar-toggle-width: 2.875rem;
+	--toolbar-menu-height: 2.05rem; /* options (⋮): 32.8px tall, glyph-wide */
+	--toolbar-menu-pad-x: 0.625rem;
+	--toolbar-menu-font: 1.3rem;
+	--toolbar-gap: 0.625rem; /* between the controls row's buttons */
+	--toolbar-search-font: 1rem;
+	--toolbar-search-pad-y: 0.625rem;
+	--toolbar-search-pad-l: 0.875rem;
+	--toolbar-search-pad-r: 0.875rem;
+	--toolbar-brand: 2.5rem;
+	--toolbar-bar-pad-x: var(--space-3);
+	--toolbar-search-gap: var(--space-2);
+}
+@media (min-width: 769px) {
+	:root {
+		--toolbar-search-pad-y: 0.6875rem;
+		--toolbar-search-pad-l: 1rem;
+		--toolbar-search-pad-r: 2.25rem;
+		--toolbar-brand: 2.75rem;
+		--toolbar-bar-pad-x: var(--space-6);
+		--toolbar-search-gap: var(--space-3);
+	}
+}

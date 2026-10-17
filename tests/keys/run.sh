@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T2
+# covers: crates/dumpstar-ship/* crates/dumpstar-erase/* deploy/KEYS.md
 # Container-tier gate (pd-ulds): tenant-zone key custody, in the SHIPPED image,
 # against a real data volume, through the wrapper a timer would run.
 #

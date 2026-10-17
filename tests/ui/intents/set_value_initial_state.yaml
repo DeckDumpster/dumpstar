@@ -1,4 +1,5 @@
 # Scenario: Verify the initial state of the Set Stats page
+# Use case: UC-set-03
 #
 # Related:
 #   pages: [set-stats]

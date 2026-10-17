@@ -1,3 +1,4 @@
+// covers: UC-collection-04
 /**
  * Hand-written implementation for collection_aspects_column_fits_icons.
  *

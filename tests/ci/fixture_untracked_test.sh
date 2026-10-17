@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T0
+# covers: deploy/ci.sh tests/ui/fixtures/*
 # tests/ci/fixture_untracked_test.sh — no sqlite database is tracked under tests/.
 #
 # The UI fixture was a committed binary that every catalog/schema bead

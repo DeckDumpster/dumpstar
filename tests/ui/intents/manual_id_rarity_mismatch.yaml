@@ -1,4 +1,5 @@
 # Scenario: Validation error when a lookup field is blank
+# Use case: UC-manual-07
 #
 # Related:
 #   issues: []

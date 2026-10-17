@@ -1,4 +1,5 @@
 # Scenario: The set in the URL determines which binder is shown
+# Use case: UC-browse-28
 
 # Related: browse_loads_set_first_page, browse_pagination_next_prev
 

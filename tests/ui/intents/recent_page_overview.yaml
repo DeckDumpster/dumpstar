@@ -1,4 +1,5 @@
 # Scenario: View the recent activity timeline
+# Use case: UC-recent-08
 
 # Related: recent_status_summary_counts, recent_accordion_open_close
 

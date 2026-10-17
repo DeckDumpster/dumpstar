@@ -1,3 +1,4 @@
+// covers: UC-card-16
 /**
  * Hand-written implementation for card_detail_facet_rarity_search.
  *

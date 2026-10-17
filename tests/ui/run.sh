@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T3
+# covers: tests/ui/*.sh tests/ui/implementations/
 # The ui tier: every tests/ui replay implementation, deterministically.
 #
 # Builds `dumpstar` and the SvelteKit frontend from THIS tree, seeds the SWU

@@ -1,3 +1,4 @@
+// covers: UC-collection-01
 /**
  * Hand-written implementation for collection_add_from_modal.
  *

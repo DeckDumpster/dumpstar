@@ -1,4 +1,5 @@
 # Scenario: Each batch row shows its card count
+# Use case: UC-recent-09
 
 # Related: recent_page_overview, recent_accordion_open_close
 

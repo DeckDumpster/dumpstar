@@ -1,4 +1,5 @@
 # Scenario: The variant modal lists every printing with label, count, and price
+# Use case: UC-browse-31
 
 # Related: browse_slot_click_opens_variant_modal, browse_variant_modal_add_increments_count
 

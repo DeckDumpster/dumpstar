@@ -1,3 +1,4 @@
+// covers: UC-card-14
 /**
  * Hand-written implementation for card_detail_facet_artist_search.
  *

@@ -1,4 +1,5 @@
 # Scenario: Navigating to a batch detail and back preserves the type filter
+# Use case: UC-batches-05
 
 # Related: batches_type_filter_bar, batches_detail_view_and_metadata
 

@@ -1,4 +1,5 @@
 # Scenario: Recent page shows an empty state when there is no activity
+# Use case: UC-recent-06
 
 # Related: recent_page_overview
 

@@ -1,4 +1,5 @@
 # Scenario: Clicking a card's Name link in the table opens its detail page
+# Use case: UC-collection-38
 #
 # Related:
 #   issues: []

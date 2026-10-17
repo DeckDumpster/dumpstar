@@ -1,4 +1,5 @@
 # Scenario: Empty state message when no decks exist
+# Use case: UC-decks-09
 #
 # Prerequisites:
 #   All three fixture decks are deleted before loading the page

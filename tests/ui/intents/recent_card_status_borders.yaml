@@ -1,4 +1,5 @@
 # Scenario: Expanded card list shows each card's set, variant and status
+# Use case: UC-recent-04
 
 # Related: recent_accordion_open_close, recent_assign_target_dropdown
 

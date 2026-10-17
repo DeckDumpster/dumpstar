@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T0
+# covers: .github/workflows/*.yml deploy/deploy.sh
 # tests/ci/deploy_workflow_test.sh — the shape of .github/workflows/deploy.yml
 # (design row S5).
 #

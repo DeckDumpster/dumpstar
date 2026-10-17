@@ -1,4 +1,5 @@
 # Scenario: The empty-collection state hides the Export and Select controls
+# Use case: UC-collection-31
 #
 # Related:
 #   issues: []

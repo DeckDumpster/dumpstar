@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T1
+# covers: tests/lib/access.sh crates/dumpstar-cli/*
 # Build (once) and exec the Rust test Access issuer, `dumpstar-test-jwks`
 # (crates/dumpstar-cli, feature test-jwks):
 #   test-jwks.sh serve <dir>                  write <dir>/jwks.json, serve the JWKS

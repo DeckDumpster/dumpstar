@@ -40,14 +40,14 @@ Result: **Vigilance, Command, Aggression, Cunning, Villainy, Heroism**.
   Heroism), then the single-aspect ones. So `[Vigilance, Villainy]` and
   `[Vigilance, Heroism]` sort before `[Vigilance]`, not after it.
 - Villainy alone, then Heroism alone, follow Cunning; unaspected cards are last.
-- The numbering treats a card's aspects as a set: SOR prints some lists in the
-  other order (`[Villainy, Vigilance]` stands among the Vigilance + Villainy
-  run). The key therefore ranks the aspects and sorts the ranks, so a list
-  printed in the other order sorts where its card is numbered.
+- The sort compares the list as printed (the order stored and displayed), element
+  by element, ranking each element by `ASPECT_ORDER`; it is not canonicalised
+  into a set. `[Cunning, Vigilance, Villainy]` therefore sorts among the Cunning
+  cards, and `[Villainy, Vigilance]` among the Villainy ones.
 
 ## Sort key
 
-Each aspect's rank in `ASPECT_ORDER` as two digits, ascending, closed by `99`
+The rank in `ASPECT_ORDER` of each aspect in printed order, as two digits, closed by `99`
 (`[Vigilance, Heroism]` is `010699`, `[Vigilance]` is `0199`); no aspects is
 NULL and sorts last in both directions. Then cost, then name, then number.
 

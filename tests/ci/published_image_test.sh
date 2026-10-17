@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T1
+# covers: deploy/published-image-lib.sh
 # tests/ci/published_image_test.sh - deploy/published-image-lib.sh (sp-jooqc0):
 # the deploy pulls CI's image keyed by tree, falls back to a build only in `auto`,
 # and `pull` never builds. Hermetic: podman is a stub.

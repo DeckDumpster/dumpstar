@@ -36,7 +36,7 @@ export async function steps(h: ReplayHarness) {
   };
 
   await h.navigate('/browse/SOR?cols=5&turn=0');
-  await h.wait_for_visible('[data-testid="portrait-grid"] .slot', 6000);
+  await h.wait_for_visible('[data-testid="portrait-grid"] .card-tile .num', 15000);
 
   const asc = await firstNumber();
   const desc = await press('#', asc);

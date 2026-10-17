@@ -21,6 +21,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { compile } from 'svelte/compiler';
+import ts from 'typescript';
 
 const isSvelte = (/** @type {string} */ specifier) => specifier.endsWith('.svelte');
 
@@ -54,6 +55,15 @@ registerHooks({
 	},
 
 	load(url, context, nextLoad) {
+		// Not every Node 22.x build ships type stripping, and once hooks are
+		// registered the default loader refuses `.ts`; transpile it here with
+		// the repo's own `typescript`.
+		if (url.startsWith('file:') && url.endsWith('.ts') && !url.includes('/node_modules/')) {
+			const { outputText } = ts.transpileModule(readFileSync(fileURLToPath(url), 'utf8'), {
+				compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 }
+			});
+			return { format: 'module', source: outputText, shortCircuit: true };
+		}
 		if (!isSvelte(url)) return nextLoad(url, context);
 		const filename = fileURLToPath(url);
 		const { js } = compile(readFileSync(filename, 'utf8'), {

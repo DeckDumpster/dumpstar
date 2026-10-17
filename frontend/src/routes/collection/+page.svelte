@@ -1123,7 +1123,7 @@
 	sticky
 	surface="panel"
 >
-	<Toolbar gap="md" wrap={false}>
+	<Toolbar gap="md" wrap={false} class="searchrow">
 		<a class="brand" href="/" aria-label="Home" title="Home">
 			<span class="brandmark"><DeathStar size={26} /></span>
 		</a>
@@ -1706,10 +1706,26 @@
 		text-decoration: none;
 		flex-shrink: 0;
 	}
+	/* deckdumpster's home link: a 40px box on a phone, 44px beyond it, the
+	   mark centred in it. The box (not the mark) sets the search's width. */
+	.brand {
+		justify-content: center;
+		width: var(--toolbar-brand);
+		height: var(--toolbar-brand);
+	}
 	.brandmark {
 		width: 26px;
 		height: 26px;
 		display: block;
+	}
+	/* The bar's own padding and the search row's gap are deckdumpster's too:
+	   10px above and below, 12px at the sides on a phone and 24px beyond it;
+	   the same gutter is what leaves the search the same width. */
+	:global(.toolbar.topbar.sticky) {
+		padding: var(--toolbar-gap) var(--toolbar-bar-pad-x);
+	}
+	:global(.searchrow) {
+		gap: var(--toolbar-search-gap);
 	}
 	.brand:hover .brandmark {
 		filter: brightness(1.2);
@@ -1732,12 +1748,15 @@
 		min-width: 0;
 		/* Extra right padding leaves room for the clear button without
 		   it overlapping typed text. */
-		padding: var(--space-3) var(--space-8) var(--space-3) var(--space-4);
+		padding: var(--toolbar-search-pad-y) var(--toolbar-search-pad-r) var(--toolbar-search-pad-y)
+			var(--toolbar-search-pad-l);
+		box-sizing: border-box;
+		font-size: var(--toolbar-search-font);
 		background: var(--color-control-surface);
 		border: 1px solid var(--color-control-border);
 		border-radius: var(--radius-md);
 		color: var(--color-control-text);
-		font: inherit;
+		font-family: inherit;
 	}
 	/* An invalid control reddens on the danger ramp, not the brand one —
 	   the same answer the Field primitive gives for `error`. Crimson here
@@ -1761,8 +1780,9 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 2.375rem;
-		height: 2.375rem;
+		box-sizing: border-box;
+		width: var(--toolbar-square);
+		height: var(--toolbar-square);
 		flex-shrink: 0;
 		background: var(--color-control-surface);
 		border: 1px solid var(--color-accent);
@@ -1880,8 +1900,9 @@
 		align-items: center;
 		justify-content: center;
 		box-sizing: border-box;
-		height: 2.375rem;
-		padding: 0 var(--space-3);
+		height: var(--toolbar-toggle-height);
+		width: var(--toolbar-toggle-width);
+		padding: 0;
 		background: var(--color-control-surface);
 		border: 1px solid var(--color-control-border);
 		color: var(--color-control-text);
@@ -1909,13 +1930,17 @@
 		background: var(--color-control-surface);
 		border: 1px solid var(--color-control-border);
 		color: var(--color-text-subtle);
-		font-size: 1.3rem;
+		font-size: var(--toolbar-menu-font);
 		line-height: 1;
 		box-sizing: border-box;
-		height: 2.375rem;
-		padding: 0 var(--space-3);
+		height: var(--toolbar-menu-height);
+		padding: 0 var(--toolbar-menu-pad-x);
 		cursor: pointer;
 		border-radius: var(--radius-md);
+	}
+	/* The controls row's gap is deckdumpster's 10px, between Toolbar's 8 and 12. */
+	:global(.controlsrow) {
+		gap: var(--toolbar-gap);
 	}
 	.burger:hover,
 	.colsbtn:hover {
@@ -1926,7 +1951,8 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 2.375rem;
+		width: var(--toolbar-square);
+		height: var(--toolbar-square);
 		padding: 0;
 		flex-shrink: 0;
 	}

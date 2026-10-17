@@ -103,6 +103,11 @@ tier = "T4"
 statement = "I can click the Select button to enter multi-select mode: a checkbox column appears in the table and the toolbar button switches to Cancel. The bulk-action bar appears once at least one row is checked. Ticking the tab... (collection_multiselect_toggle)"
 
 [[use_case]]
+id = "UC-collection-46"
+tier = "T3"
+statement = "On a 390px screen the collection table's Name column is at least as wide as its longest word plus a badge: a single-word name such as Haymaker is never split across lines, a name such as Leia Organa wraps only between... (collection_name_cell_wraps_at_words)"
+
+[[use_case]]
 id = "UC-collection-21"
 tier = "T4"
 statement = "When I open a card's detail page from the Collection table, the Printings table shows a Market column with the latest market price for each variant. This lets me see what a copy is worth without leaving the card view. (collection_price_chart)"

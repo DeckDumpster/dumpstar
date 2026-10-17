@@ -1,3 +1,4 @@
+// covers: UC-collection-46
 /**
  * Hand-written implementation for collection_name_cell_wraps_at_words.
  *

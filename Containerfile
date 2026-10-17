@@ -206,5 +206,8 @@ ENV DUMPSTAR_STATIC_DIR=/srv/dumpstar/static
 EXPOSE 8080
 
 LABEL dumpstar.build="1"
+# Links the published package (ghcr.io/deckdumpster/dumpstar-image) to this repo,
+# so it inherits the repo's visibility and the prod host can pull it (sp-jooqc0).
+LABEL org.opencontainers.image.source="https://github.com/DeckDumpster/dumpstar"
 
 ENTRYPOINT ["dumpstar", "serve", "--host", "0.0.0.0", "--port", "8080"]

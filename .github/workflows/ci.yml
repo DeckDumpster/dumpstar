@@ -114,6 +114,9 @@ jobs:
     permissions:
       contents: read
       statuses: write
+      # Publishes the image this run builds; the deploy pulls it instead of
+      # compiling on the prod host (sp-jooqc0).
+      packages: write
     # The suite builds a container, drives Playwright over every route at two
     # viewports, and executes two DR drills against a throwaway MinIO. It is not
     # a two-minute job, and it now also compiles Rust from cold.
@@ -238,6 +241,11 @@ jobs:
 
       - name: deploy/ci.sh
         run: bash deploy/ci.sh
+        env:
+          # Pull requests test the tree that will land; only those publish it.
+          DUMPSTAR_PUBLISH_IMAGE: ${{ github.event_name == 'pull_request' && '1' || '' }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ github.token }}
 
       # BELT AND BRACES: report this run as commit statuses, whatever triggered it.
       #

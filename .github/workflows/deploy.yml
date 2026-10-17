@@ -23,6 +23,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 # Deploys must not overlap, and unlike CI the evicted pending run is harmless: a
 # deploy always ships the newest main, so only the latest request matters.
@@ -44,7 +45,14 @@ jobs:
           checkout="$(eval echo "$PROD_CHECKOUT")"
           git -C "$checkout" fetch origin main
           git -C "$checkout" merge --ff-only "$DEPLOY_SHA"
+      # Ships the image CI built for this tree (pulled, not compiled here;
+      # deploy/published-image-lib.sh). `pull` makes a missing image fail the
+      # deploy rather than fall back to a cargo build on the prod host.
       - name: Deploy prod
+        env:
+          DUMPSTAR_DEPLOY_IMAGE: pull
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           checkout="$(eval echo "$PROD_CHECKOUT")"

@@ -64,7 +64,17 @@ else
     # other unscoped build on the box (pd-sjn7).
     # shellcheck source=deploy/image-lib.sh
     . "$SCRIPT_DIR/image-lib.sh"
+    # The image CI built and tested for this tree, pulled; building here is the
+    # fallback (sp-jooqc0, deploy/published-image-lib.sh).
+    # shellcheck source=deploy/published-image-lib.sh
+    . "$SCRIPT_DIR/published-image-lib.sh"
+    PUBLISHED="$(dumpstar_image_fetch "$REPO_DIR")" || {
+        echo "ERROR: deploy stopped before touching ${SERVICE_NAME}; it is still running its previous version." >&2
+        exit 1
+    }
+    if [ -n "$PUBLISHED" ]; then export DUMPSTAR_PREBUILT_IMAGE="$PUBLISHED"; fi
     dumpstar_image_ensure "dumpstar:${INSTANCE}" "$REPO_DIR"
+    unset DUMPSTAR_PREBUILT_IMAGE
     podman tag "dumpstar:${INSTANCE}" dumpstar:latest
 
     # Ship the unit files too, not just the image (pd-2t6u). The units under

@@ -2378,6 +2378,11 @@
 	table.dd td.aspects {
 		white-space: nowrap;
 	}
+	table.dd td.traits {
+		white-space: normal;
+		min-width: 0;
+		line-height: 1.2;
+	}
 	col.c-cost {
 		width: var(--col-cost);
 	}

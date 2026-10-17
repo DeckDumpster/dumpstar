@@ -45,6 +45,7 @@ test("groupSets names an unmapped set rather than hiding it in another category"
 
 test("only groups whose sets hold an owned card start expanded", async () => {
   const { startsCollapsed } = await import("$lib/setGroups");
+  /** @param {string} code @param {string} category @param {number} n */
   const owned = (code, category, n) => ({ ...s(code, category), owned_cards: n });
   const groups = groupSets([
     owned("SOR", "Main", 0),

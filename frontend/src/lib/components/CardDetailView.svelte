@@ -7,12 +7,14 @@
 	import RarityMark from '$lib/components/RarityMark.svelte';
 	import CostMark from '$lib/components/CostMark.svelte';
 	import StatFrame from '$lib/components/StatFrame.svelte';
+	import CardArt from '$lib/components/CardArt.svelte';
 	import SetLogo from '$lib/components/SetLogo.svelte';
 	import { breadcrumbs } from '$lib/breadcrumbs.svelte';
 	import { variantSortCmp } from '$lib/variants.svelte';
 	import { siblingsAt, shownPrinting, otherPrintings, seriesFor } from '$lib/printings';
 	import { CONDITIONS } from '$lib/conditions';
 	import { conditionMultiplier } from '$lib/conditions.svelte';
+	import VariantBadges from '$lib/components/VariantBadges.svelte';
 	import { money as price, printingLabel, jsonList } from '$lib/format';
 	import type { CardDetail } from '$lib/types/CardDetail';
 	import type { Binder } from '$lib/types/Binder';
@@ -184,6 +186,13 @@
 	);
 	const siblings = $derived(siblingsAt(detail?.printings ?? [], setCode, number));
 	const shown = $derived(shownPrinting(detail?.printings ?? [], setCode, number, pickedId));
+	// Which face of a two-sided card the picture shows; a new card or printing
+	// opens on its front.
+	let flipped = $state(false);
+	$effect(() => {
+		void shown?.printing_id;
+		flipped = false;
+	});
 	const others = $derived(otherPrintings(detail?.printings ?? [], setCode, number));
 	const shownCopies = $derived(
 		(detail?.copies ?? []).filter((c) => c.printing_id === shown?.printing_id)
@@ -277,15 +286,14 @@
 	{@const card = detail.card}
 
 	<div class="detail">
-		<div class="art">
-			{#if shown?.image_url ?? card.image_url}
-				<img src={shown?.image_url ?? card.image_url} alt={card.name} />
-			{:else}
-				<div class="noart">No image</div>
-			{/if}
-		</div>
+		<CardArt
+			front={shown?.image_url ?? card.image_url}
+			back={shown?.back_image_url ?? null}
+			name={card.name}
+			bind:flipped
+		/>
 		<div class="info">
-			<h1>{card.name}</h1>
+			<h1>{card.name}{#if shown}<VariantBadges variant={shown.variant} finish={shown.finish} />{/if}</h1>
 			{#if card.subtitle}<p class="subtitle">{card.subtitle}</p>{/if}
 			<p class="sub">
 				<a
@@ -671,21 +679,6 @@
 		   centers its card-image-section). */
 		justify-content: center;
 	}
-	.art img {
-		width: 320px;
-		max-width: 80vw;
-		border-radius: var(--radius-xl);
-	}
-	.noart {
-		width: 320px;
-		height: 446px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: var(--color-surface-panel);
-		border-radius: var(--radius-xl);
-		color: var(--color-text-subtle);
-	}
 	.info {
 		flex: 1;
 		min-width: 260px;
@@ -987,10 +980,6 @@
 		.info {
 			min-width: 0;
 			width: 100%;
-		}
-		.art img {
-			width: 320px;
-			max-width: 100%;
 		}
 		table {
 			max-width: 100%;

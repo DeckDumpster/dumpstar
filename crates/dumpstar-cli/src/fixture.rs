@@ -1772,7 +1772,7 @@ impl IntoSome for &str {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use rusqlite::OptionalExtension;
     use std::collections::BTreeMap;
@@ -1815,7 +1815,7 @@ mod tests {
     const FROZEN_BROWSER_CLOCK: &str = "2026-01-15";
 
     /// Seed a complete fixture into a fresh directory and return both files.
-    fn seed_into(dir: &Path) -> (Vec<u8>, Vec<u8>) {
+    pub(crate) fn seed_into(dir: &Path) -> (Vec<u8>, Vec<u8>) {
         let _g = SEED_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         run(FixtureArgs {
             out: dir.to_path_buf(),

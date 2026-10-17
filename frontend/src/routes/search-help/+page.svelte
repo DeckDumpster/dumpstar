@@ -48,6 +48,7 @@
 		'cost',
 		'power',
 		'hp',
+		'aspects',
 		'price',
 		'qty',
 		'added'

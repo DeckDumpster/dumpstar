@@ -10,7 +10,8 @@
 	import SetLogo from '$lib/components/SetLogo.svelte';
 		import { CONDITIONS } from '$lib/conditions';
 	import { conditionMultiplier } from '$lib/conditions.svelte';
-	import { money, count, printingLabel, printingTag, jsonList } from '$lib/format';
+	import VariantBadges from '$lib/components/VariantBadges.svelte';
+	import { money, count, printingLabel, jsonList } from '$lib/format';
 	import { stackOffsets, windowOf } from '$lib/virtual';
 
 	// Foil shimmer treatment for Foil-finish printings.
@@ -428,6 +429,7 @@
 		'cost',
 		'power',
 		'hp',
+		'aspects',
 		'price',
 		'qty',
 		'added'
@@ -1403,6 +1405,7 @@
 			{/snippet}
 			{@render sortBtn('name', 'Name')}
 			{@render sortBtn('type', 'Type')}
+			{@render sortBtn('aspects', 'Aspects')}
 			{@render sortBtn('cost', 'Cost')}
 			{@render sortBtn('rarity', 'Rarity')}
 			{@render sortBtn('set', 'Set')}
@@ -1515,7 +1518,7 @@
 					{#if showCol('qty')}{@render sortable('qty', 'Qty', 'num qty')}{/if}
 					{@render sortable('name', 'Name', '')}
 					{#if showCol('type')}{@render sortable('type', 'Type', '')}{/if}
-					{#if showCol('aspects')}<th>Aspects</th>{/if}
+					{#if showCol('aspects')}{@render sortable('aspects', 'Aspects', '')}{/if}
 					{#if showCol('cost')}{@render sortable('cost', 'Cost', 'num')}{/if}
 					{#if showCol('stats')}<th class="center" title="Power / HP">Pwr/HP</th>{/if}
 					{#if showCol('rarity')}{@render sortable('rarity', 'Rarity', 'center')}{/if}
@@ -1605,10 +1608,7 @@
 									</span>
 								{/if}
 								<span class="namebody"
-									><span class="cardname">{a.name}</span>{#if printingTag(a.variant, a.finish, a.set_name)}<span
-											class="tag vtag"
-											title={printingLabel(a.variant, a.finish)}>{printingTag(a.variant, a.finish, a.set_name)}</span
-										>{/if}{#if statusBadge(a.status)}<span
+									><span class="cardname">{a.name}</span><VariantBadges variant={a.variant} finish={a.finish} />{#if statusBadge(a.status)}<span
 											class="tag stag t-{a.status}"
 											title={a.status}>{statusBadge(a.status)}</span
 										>{/if}</span

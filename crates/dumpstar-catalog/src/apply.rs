@@ -8,13 +8,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use rusqlite::{Transaction, params};
+use rusqlite::{OptionalExtension, Transaction, params};
 
 use crate::Catalog;
 use crate::crosswalk::{self, OfficialPrinting};
 use crate::error::{CatalogError, Result};
 use crate::landing::Provenance;
-use crate::record::{AlarmRecord, CatalogPayload, FORMAT};
+use crate::record::{AlarmRecord, CardRecord, CatalogPayload, FORMAT};
 use crate::swu::{self, CrawlMarker};
 use crate::tcgcsv;
 
@@ -79,6 +79,28 @@ fn differs(cols: &[&str]) -> String {
         .join(" OR ")
 }
 
+/// The aspects to write for `c`. Only a Standard entry knows the printed
+/// order; another entry listing the same aspects keeps the stored order.
+fn aspects_to_store(tx: &Transaction, c: &CardRecord) -> Result<Vec<String>> {
+    if c.from_standard {
+        return Ok(c.aspects.clone());
+    }
+    let stored: Option<String> = tx
+        .query_row(
+            "SELECT aspects FROM cards WHERE card_id = ?1",
+            [&c.card_id],
+            |r| r.get(0),
+        )
+        .optional()?;
+    let Some(Ok(stored)) = stored.map(|s| serde_json::from_str::<Vec<String>>(&s)) else {
+        return Ok(c.aspects.clone());
+    };
+    let (mut a, mut b) = (stored.clone(), c.aspects.clone());
+    a.sort();
+    b.sort();
+    Ok(if a == b { stored } else { c.aspects.clone() })
+}
+
 /// What this build derives from a source's payload. Raise a source's number
 /// whenever `apply` starts writing something more from it: payloads already
 /// applied under the old number are applied again from landed raw
@@ -86,6 +108,8 @@ fn differs(cols: &[&str]) -> String {
 const DERIVATIONS: &[(&str, u32)] = &[
     // 2: sealed_images rows (sp-ld1o9n).
     (swu::SRC_PRODUCTS, 2),
+    // 2: aspects keep the Standard entry's printed order (sp-mmro2r).
+    (swu::SRC_OFFICIAL, 2),
 ];
 
 pub fn derivation_version(source: &str) -> u32 {
@@ -273,6 +297,7 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
         differs(&cols)
     );
     for c in &p.cards {
+        let aspects = aspects_to_store(tx, c)?;
         let changed = tx.execute(
             &sql,
             params![
@@ -283,7 +308,7 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
                 c.cost,
                 c.power,
                 c.hp,
-                serde_json::to_string(&c.aspects)?,
+                serde_json::to_string(&aspects)?,
                 serde_json::to_string(&c.traits)?,
                 serde_json::to_string(&c.arenas)?,
                 c.rules_text,
@@ -332,10 +357,11 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
         "rarity",
         "artist",
         "image_url",
+        "back_image_url",
     ];
     let sql = format!(
-        "INSERT INTO printings (printing_id, card_id, set_code, number, variant, variant_code, finish, rarity, artist, image_url)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)
+        "INSERT INTO printings (printing_id, card_id, set_code, number, variant, variant_code, finish, rarity, artist, image_url, back_image_url)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)
          ON CONFLICT(printing_id) DO UPDATE SET {}
          WHERE {}",
         cols.iter().map(|c| format!("{c}=excluded.{c}")).collect::<Vec<_>>().join(", "),
@@ -358,7 +384,8 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
                 pr.finish,
                 pr.rarity,
                 pr.artist,
-                pr.image_url
+                pr.image_url,
+                pr.back_image_url
             ],
         )?;
         if let Some(uid) = &pr.official_card_uid {

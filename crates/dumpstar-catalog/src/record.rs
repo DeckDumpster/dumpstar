@@ -92,6 +92,12 @@ pub struct CardRecord {
     pub hp: Option<i64>,
     #[serde(default)]
     pub aspects: Vec<String>,
+    /// The record was read from the card's Standard non-foil entry. The
+    /// official API lists a card's aspects in printed order only there; every
+    /// other entry lists them by aspect id, so such a record never reorders
+    /// aspects already stored (sp-mmro2r).
+    #[serde(default)]
+    pub from_standard: bool,
     #[serde(default)]
     pub traits: Vec<String>,
     #[serde(default)]
@@ -131,6 +137,9 @@ pub struct PrintingRecord {
     pub rarity: Option<String>,
     pub artist: Option<String>,
     pub image_url: Option<String>,
+    /// The deployed side of a leader (the official `artBack`).
+    #[serde(default)]
+    pub back_image_url: Option<String>,
     /// The official `cardUid`. Foil and non-foil printings share it.
     pub official_card_uid: Option<String>,
     pub tcgcsv_product_id: Option<i64>,

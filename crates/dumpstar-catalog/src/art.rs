@@ -182,9 +182,32 @@ pub struct SetArt {
     pub crop_url: Option<String>,
 }
 
-/// URLs under [`URL_PREFIX`] for the assets of `set_code` that exist in the
-/// store. A missing or unreadable store is no art, never an error.
+/// The main set a Weekly Play set shares its art with: its code minus the `P`
+/// suffix (`LAWP` is `LAW`'s), for any set the category mapping files under
+/// Weekly Play Promos. A new weekly-play set inherits with no list to edit.
+pub fn parent_set(set_code: &str) -> Option<&str> {
+    if crate::set_categories::category_for(set_code)? != "Weekly Play Promos" {
+        return None;
+    }
+    set_code.strip_suffix('P')
+}
+
+/// The served art of `set_code`: a Weekly Play set shows its parent's logo and
+/// crop; when the parent has none it falls back to its own.
 pub fn resolve(art_dir: &Path, set_code: &str) -> SetArt {
+    if let Some(parent) = parent_set(set_code) {
+        let art = resolve_own(art_dir, parent);
+        if art != SetArt::default() {
+            return art;
+        }
+    }
+    resolve_own(art_dir, set_code)
+}
+
+/// URLs under [`URL_PREFIX`] for the assets listed under exactly `set_code`
+/// that exist in the store. A missing or unreadable store is no art, never an
+/// error.
+fn resolve_own(art_dir: &Path, set_code: &str) -> SetArt {
     let manifest = read_manifest(art_dir).unwrap_or_default();
     let url = |kind: &str| {
         let r = manifest.get(&format!("{set_code}/{kind}"))?;
@@ -261,6 +284,32 @@ mod tests {
             (1, vec!["AAA/crop".into()])
         );
         assert_eq!(after.line(), "set art: 1/1 sets");
+    }
+
+    #[test]
+    fn weekly_play_sets_resolve_to_their_parents_art() {
+        let dir = tempfile::tempdir().unwrap();
+        let all = sources();
+        fetch(dir.path(), &Fake(Cell::new(0)), day(), &all).unwrap();
+        assert_eq!(parent_set("LAWP"), Some("LAW"));
+        assert_eq!(parent_set("LAW"), None);
+        let law = resolve(dir.path(), "LAW");
+        assert!(law.logo_url.is_some() && law.crop_url.is_some());
+        assert_eq!(resolve(dir.path(), "LAWP"), law);
+        let weekly: Vec<&str> = include_str!("../../../data/remedial/set-categories.csv")
+            .lines()
+            .filter(|l| l.split(',').nth(1) == Some("Weekly Play Promos"))
+            .filter_map(|l| l.split(',').next())
+            .collect();
+        assert!(weekly.len() >= 6);
+        for code in weekly {
+            let parent = parent_set(code).expect(code);
+            assert_eq!(
+                resolve(dir.path(), code),
+                resolve(dir.path(), parent),
+                "{code}"
+            );
+        }
     }
 
     #[test]

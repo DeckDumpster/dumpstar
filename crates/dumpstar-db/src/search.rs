@@ -926,8 +926,39 @@ fn has_flag(value: &str) -> (String, Vec<Value>) {
 /// and `adj` fixed an affordance and an unindexable ordering, not that number
 /// (pd-66hq).
 pub const SORT_KEYS: &[&str] = &[
-    "name", "number", "set", "rarity", "type", "cost", "power", "hp", "price", "qty", "added",
+    "name", "number", "set", "rarity", "type", "cost", "power", "hp", "aspects", "price", "qty",
+    "added",
 ];
+
+/// The canonical aspect order, from `docs/aspect-order.md`: the order in which a
+/// set's collector numbering walks through the aspects of its non-leader,
+/// non-base cards. A fixed list, never queried at sort time; the test
+/// `aspect_order_constant_matches_the_set_numbering` re-derives it from a
+/// fixture and fails if a set breaks the pattern.
+pub const ASPECT_ORDER: [&str; 6] = [
+    "Vigilance",
+    "Command",
+    "Aggression",
+    "Cunning",
+    "Villainy",
+    "Heroism",
+];
+
+/// SQL for a card's sort key: its aspects' ranks in [`ASPECT_ORDER`], ascending
+/// as two-digit groups, closed by `99`, so keys compare element by element and
+/// a longer list sorts before its own prefix (`[Vigilance, Villainy]` before
+/// `[Vigilance]`, as the numbering has it). NULL when the card has no aspects.
+fn aspects_key_sql() -> String {
+    let mut arms = String::new();
+    for (i, a) in ASPECT_ORDER.iter().enumerate() {
+        arms.push_str(&format!("WHEN '{a}' THEN '{:02}' ", i + 1));
+    }
+    format!(
+        "(SELECT CASE WHEN COUNT(*) = 0 THEN NULL ELSE group_concat(r, '') || '99' END \
+         FROM (SELECT CASE j.value {arms}ELSE '98' END AS r \
+               FROM json_each(cd.aspects) j ORDER BY r))"
+    )
+}
 
 /// Whether `sort=<key>` names a column this query can order by.
 ///
@@ -950,6 +981,9 @@ fn order_sql(order_by: Option<&str>) -> String {
         "cost" => "cd.cost".to_string(),
         "power" => "cd.power".to_string(),
         "hp" => "cd.hp".to_string(),
+        // The real ordering is assembled in `build_full_sql`; this arm only
+        // keeps the key off the name fallback.
+        "aspects" => "cd.aspects".to_string(),
         "price" => format!("({MARKET_PRICE_EXPR})"),
         "added" => {
             "(SELECT MAX(c.acquired_at) FROM collection c WHERE c.printing_id = p.printing_id)"
@@ -1000,6 +1034,14 @@ fn build_full_sql(c: &CompiledSearch, page: Option<(u32, u32)>) -> String {
     // always ascending regardless of dir.
     let order_clause = if c.order_by.as_deref() == Some("set") {
         format!("s.release_date {dir}, s.set_code {dir}, {NUMBER_KEY} ASC, p.printing_id ASC")
+    } else if c.order_by.as_deref() == Some("aspects") {
+        // Unaspected cards last in both directions; cost then name break ties
+        // ascending, like the number tiebreak.
+        let key = aspects_key_sql();
+        format!(
+            "({key} IS NULL) ASC, {key} {dir}, cd.cost ASC, cd.name ASC, {NUMBER_KEY} ASC, \
+             p.printing_id ASC"
+        )
     } else {
         let order_col = order_sql(c.order_by.as_deref());
         format!("{order_col} {dir}, {NUMBER_KEY} ASC, p.printing_id ASC")
@@ -1695,6 +1737,142 @@ mod tests {
                 "han-std",
             ]
         );
+    }
+
+    // --- sort=aspects ------------------------------------------------------
+
+    /// Two sets numbered the way the real ones are (docs/aspect-order.md): per
+    /// primary aspect the dual-aspect cards run first, then the single-aspect
+    /// ones; Villainy and Heroism alone near the end, unaspected cards last. The
+    /// second set skips Command and prints one list in reverse. A Leader numbered
+    /// apart (000) is not evidence for the order.
+    fn aspect_fixture() -> Fix {
+        let dir = tempfile::tempdir().unwrap();
+        let shared = dir.path().join("shared.sqlite");
+        {
+            let mut c = open_shared(&shared).unwrap();
+            search_meta::reconcile(&mut c).unwrap();
+            testkit::set_on(&c, "AS1", "Aspect One", "2024-01-01");
+            testkit::set_on(&c, "AS2", "Aspect Two", "2024-06-01");
+            // (set, number, id, type, cost, aspects)
+            let cards: &[(&str, &str, &str, &str, i64, &str)] = &[
+                ("AS1", "000", "ldr", "Leader", 6, r#"["Heroism"]"#),
+                ("AS1", "001", "vv", "Unit", 2, r#"["Vigilance","Villainy"]"#),
+                ("AS1", "002", "vh", "Event", 1, r#"["Vigilance","Heroism"]"#),
+                ("AS1", "003", "v5", "Unit", 5, r#"["Vigilance"]"#),
+                ("AS1", "004", "v2", "Upgrade", 2, r#"["Vigilance"]"#),
+                ("AS1", "005", "ch", "Unit", 3, r#"["Command","Heroism"]"#),
+                ("AS1", "006", "c3", "Unit", 3, r#"["Command"]"#),
+                ("AS1", "007", "a4", "Unit", 4, r#"["Aggression"]"#),
+                ("AS1", "008", "u3", "Unit", 3, r#"["Cunning"]"#),
+                ("AS1", "009", "vl", "Unit", 2, r#"["Villainy"]"#),
+                ("AS1", "010", "h1", "Event", 1, r#"["Heroism"]"#),
+                ("AS1", "011", "none", "Unit", 0, "[]"),
+                ("AS2", "001", "v7", "Unit", 7, r#"["Vigilance"]"#),
+                ("AS2", "002", "ah", "Unit", 6, r#"["Aggression","Heroism"]"#),
+                ("AS2", "003", "a6", "Unit", 6, r#"["Aggression"]"#),
+                ("AS2", "004", "u6", "Unit", 6, r#"["Cunning"]"#),
+                ("AS2", "005", "hv", "Unit", 6, r#"["Heroism","Vigilance"]"#),
+            ];
+            for (set, number, id, ty, cost, aspects) in cards {
+                testkit::card_full(
+                    &c,
+                    id,
+                    id,
+                    None,
+                    ty,
+                    Some(*cost),
+                    None,
+                    None,
+                    aspects,
+                    "[]",
+                    "[]",
+                    None,
+                );
+                testkit::printing(
+                    &c,
+                    &format!("{id}-p"),
+                    id,
+                    set,
+                    number,
+                    "Standard",
+                    "Normal",
+                );
+            }
+        }
+        let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
+        let registry = search_meta::load_registry(&conn).unwrap();
+        let flags = search_meta::load_flags(&conn).unwrap();
+        Fix {
+            _dir: dir,
+            shared,
+            conn,
+            registry,
+            flags,
+        }
+    }
+
+    /// Each set's aspect order as its numbering gives it: walk the set's
+    /// non-leader, non-base cards by collector number and note where each
+    /// aspect first stands alone on a card.
+    fn derived_set_orders(conn: &Connection) -> Vec<Vec<String>> {
+        let mut stmt = conn
+            .prepare(
+                "SELECT p.set_code, cd.aspects \
+                 FROM printings p JOIN cards cd ON cd.card_id = p.card_id \
+                 WHERE cd.card_type NOT IN ('Leader', 'Base') \
+                   AND p.variant = 'Standard' AND p.finish = 'Normal' \
+                 ORDER BY p.set_code, CAST(p.number AS INTEGER)",
+            )
+            .unwrap();
+        let rows: Vec<(String, String)> = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        let mut sets: Vec<(String, Vec<String>)> = Vec::new();
+        for (set, aspects) in rows {
+            if sets.last().map(|s| &s.0) != Some(&set) {
+                sets.push((set, Vec::new()));
+            }
+            let list: Vec<String> = serde_json::from_str(&aspects).unwrap();
+            if let [only] = list.as_slice() {
+                let seen = &mut sets.last_mut().unwrap().1;
+                if !seen.contains(only) {
+                    seen.push(only.clone());
+                }
+            }
+        }
+        sets.into_iter().map(|s| s.1).collect()
+    }
+
+    #[test]
+    fn aspect_order_constant_matches_the_set_numbering() {
+        let f = aspect_fixture();
+        let orders = derived_set_orders(&f.conn);
+        assert_eq!(orders.len(), 2);
+        assert_eq!(orders[0], ASPECT_ORDER, "a full set walks the whole order");
+        // A set missing an aspect keeps the rest in the same relative order.
+        let mut rest = ASPECT_ORDER.iter();
+        for a in &orders[1] {
+            assert!(rest.any(|o| o == a), "{a} is out of order in {orders:?}");
+        }
+    }
+
+    #[test]
+    fn order_by_aspects_sorts_the_list_then_cost_with_unaspected_last() {
+        let f = aspect_fixture();
+        let want_asc = [
+            "vv-p", "vh-p", "hv-p", "v2-p", "v5-p", "v7-p", "ch-p", "c3-p", "ah-p", "a4-p", "a6-p",
+            "u3-p", "u6-p", "vl-p", "h1-p", "ldr-p", "none-p",
+        ];
+        assert_eq!(ordered(&f, "aspects", "asc"), want_asc);
+        // Descending reverses the aspect lists; unaspected stay last.
+        let want_desc = [
+            "h1-p", "ldr-p", "vl-p", "u3-p", "u6-p", "a4-p", "a6-p", "ah-p", "c3-p", "ch-p",
+            "v2-p", "v5-p", "v7-p", "vh-p", "hv-p", "vv-p", "none-p",
+        ];
+        assert_eq!(ordered(&f, "aspects", "desc"), want_desc);
     }
 
     // --- sort=set with NULL set_sort_order (db-hdwl) ----------------------
@@ -2467,8 +2645,14 @@ mod tests {
             // The direction applies to the sort column, never to the tiebreak:
             // flipping the tiebreak with it would reorder tied rows between a
             // page and the whole result.
+            // (`aspects` slots cost and name, also ASC, between the two.)
+            let after = if *key == "aspects" {
+                "DESC, cd.cost ASC, cd.name ASC"
+            } else {
+                "DESC"
+            };
             assert!(
-                sql.contains(&format!("DESC, {NUMBER_KEY} ASC")),
+                sql.contains(&format!("{after}, {NUMBER_KEY} ASC")),
                 "order:{key} desc keeps an ASC tiebreak: {sql}"
             );
         }

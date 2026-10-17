@@ -107,7 +107,15 @@ fn text(attrs: &Value, key: &str) -> Option<String> {
 }
 
 fn image(attrs: &Value) -> Option<String> {
-    let a = rel(attrs, "artFront")?.get("attributes")?;
+    art(attrs, "artFront")
+}
+
+fn back_image(attrs: &Value) -> Option<String> {
+    art(attrs, "artBack")
+}
+
+fn art(attrs: &Value, key: &str) -> Option<String> {
+    let a = rel(attrs, key)?.get("attributes")?;
     a.pointer("/formats/card/url")
         .or_else(|| a.get("url"))?
         .as_str()
@@ -279,6 +287,7 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
                 power: a.get("power").and_then(Value::as_i64),
                 hp: a.get("hp").and_then(Value::as_i64),
                 aspects: rel_names(a, "aspects"),
+                from_standard: variant == "Standard" && !foil,
                 traits: rel_names(a, "traits"),
                 arenas: rel_names(a, "arenas"),
                 rules_text: {
@@ -325,6 +334,7 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
             rarity: rel_name(a, "rarity"),
             artist: text(a, "artist"),
             image_url: image(a),
+            back_image_url: back_image(a),
             official_card_uid: Some(uid),
             tcgcsv_product_id: None,
             tcgcsv_sub_type_name: None,

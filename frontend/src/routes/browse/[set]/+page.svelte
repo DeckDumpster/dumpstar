@@ -16,6 +16,8 @@
 		SectionHeader,
 		Toolbar
 	} from '$lib/components/ui';
+	import VariantBadges from '$lib/components/VariantBadges.svelte';
+	import { printingBadges } from '$lib/printing-badges.js';
 	import { printingLabel, money } from '$lib/format';
 	import { slotPrice, ownedFoil } from '$lib/browseView';
 	import { bandRuns, clampCols, MAX_COLS, BROWSE_ROWS, pageAfterResize } from '$lib/browseView';
@@ -428,6 +430,17 @@
 			}));
 	}
 
+	/** One printing per distinct badge set, so a slot shows each treatment once. */
+	function slotBadgeVariants(slot: BinderSlot) {
+		const seen = new Set<string>();
+		return slot.printings.filter((p) => {
+			const key = printingBadges(p.variant, p.finish).map((b) => b.letter).join('');
+			if (!key || seen.has(key)) return false;
+			seen.add(key);
+			return true;
+		});
+	}
+
 	function ownedAny(slot: BinderSlot): boolean {
 		return slot.printings.some((p) => p.owned_count > 0);
 	}
@@ -470,7 +483,9 @@
 					<img class="setcrop" src={binder.set.art_url} alt="" />
 				{/if}
 				{#if binder.set.logo_url}
-					<img class="setlogo" src={binder.set.logo_url} alt="{binder.set.name} logo" />
+					<div class="logobox">
+						<img class="setlogo" src={binder.set.logo_url} alt="{binder.set.name} logo" />
+					</div>
 				{:else}
 					<span class="setname">{binder.set.name}</span>
 				{/if}
@@ -694,6 +709,9 @@
 						onselect={() => (selectedSlot = slot)}
 						onpip={(pip) => addToSlot(slot, pip.id)}
 					/>
+					<span class="tilebadges">
+						{#each slotBadgeVariants(slot) as p (p.variant + p.finish)}<VariantBadges variant={p.variant} finish={p.finish} />{/each}
+					</span>
 				</div>
 			{/snippet}
 
@@ -777,6 +795,11 @@
 {/if}
 
 <style>
+	.tilebadges {
+		display: block;
+		min-height: 1.2em;
+		text-align: center;
+	}
 	/*
 		Only layout and geometry are left here — where a box sits, how wide it
 		is, what shape it holds. Surfaces, fills, rules, text colour, radius,
@@ -808,10 +831,25 @@
 		height: var(--space-16, 72px);
 		border-radius: var(--radius-sm);
 		object-fit: cover;
+		flex: none;
+		max-width: 40%;
+	}
+	/* The logo fills a fixed-height box beside the crop and is fitted to it,
+	   never sized by its intrinsic width (wide wordmarks used to run off the
+	   right edge). */
+	.logobox {
+		flex: 1 1 0;
+		min-width: 0;
+		height: var(--space-12, 56px);
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 	.setlogo {
-		max-height: var(--space-12, 56px);
+		width: 100%;
+		height: 100%;
 		object-fit: contain;
+		object-position: center;
 	}
 	.setname {
 		font-weight: var(--weight-semibold);

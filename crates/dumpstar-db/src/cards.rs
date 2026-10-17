@@ -54,6 +54,8 @@ pub struct PrintingInfo {
     pub finish: String,
     pub rarity: Option<String>,
     pub image_url: Option<String>,
+    /// The deployed side of a leader printing; `None` for one-sided cards.
+    pub back_image_url: Option<String>,
     #[ts(type = "number")]
     pub owned_count: i64,
     pub market_price: Option<f64>,
@@ -131,7 +133,7 @@ pub fn get_card_detail(
         // stays catalog-only.
         let mut stmt = conn.prepare(concat!(
             "SELECT p.printing_id, p.set_code, p.number, p.variant, p.finish, p.rarity, \
-                    p.image_url, \
+                    p.image_url, p.back_image_url, \
                     (SELECT count(*) FROM collection c \
                        WHERE c.printing_id = p.printing_id) AS owned_count, \
                     ",
@@ -144,7 +146,7 @@ pub fn get_card_detail(
                     NULL AS description \
              FROM printings p WHERE p.card_id = ?1 \
              UNION ALL \
-             SELECT up.printing_id, ?2, ?3, up.variant, 'Normal', NULL, NULL, \
+             SELECT up.printing_id, ?2, ?3, up.variant, 'Normal', NULL, NULL, NULL, \
                     (SELECT count(*) FROM collection c \
                        WHERE c.printing_id = up.printing_id) AS owned_count, \
                     (SELECT mp.price FROM manual_prices mp \
@@ -165,11 +167,12 @@ pub fn get_card_detail(
                 finish: r.get(4)?,
                 rarity: r.get(5)?,
                 image_url: r.get(6)?,
-                owned_count: r.get(7)?,
-                market_price: r.get(8)?,
-                tcgplayer_product_id: r.get(9)?,
-                is_user_added: r.get::<_, i64>(10)? != 0,
-                description: r.get(11)?,
+                back_image_url: r.get(7)?,
+                owned_count: r.get(8)?,
+                market_price: r.get(9)?,
+                tcgplayer_product_id: r.get(10)?,
+                is_user_added: r.get::<_, i64>(11)? != 0,
+                description: r.get(12)?,
             })
         })?;
         rows.collect::<rusqlite::Result<_>>()?

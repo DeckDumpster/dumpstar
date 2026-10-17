@@ -12,6 +12,7 @@ mod fixture;
 mod import;
 mod keys;
 mod landing;
+mod ops;
 mod outbox;
 mod serve;
 mod setup;
@@ -47,6 +48,8 @@ enum Command {
     SeedFixture(fixture::FixtureArgs),
     /// Database maintenance — snapshot/restore for the UI test harness.
     Db(db::DbArgs),
+    /// Run the server's own collection search, read-only, printing rows and (--timing) timings.
+    Search(ops::SearchArgs),
     /// Write the collection out in a portable format.
     Export(export::ExportArgs),
     /// Load a portable export back into the collection.
@@ -77,6 +80,7 @@ fn main() -> anyhow::Result<()> {
         Command::Keys(args) => keys::run(args),
         Command::SeedFixture(args) => fixture::run(args),
         Command::Db(args) => db::run(args),
+        Command::Search(args) => ops::run_search(args),
         Command::Export(args) => export::run(args),
         Command::Import(args) => import::run(args),
         Command::Outbox(args) => outbox::run(args),

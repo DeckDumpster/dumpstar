@@ -1,3 +1,4 @@
+// covers: UC-browse-01
 /**
  * Hand-written implementation for browse_back_preserves_page_param.
  *

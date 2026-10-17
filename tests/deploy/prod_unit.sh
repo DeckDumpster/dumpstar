@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T2
+# covers: deploy/*.container deploy/deploy.sh deploy/setup.sh
 # tests/deploy/prod_unit.sh — the production Quadlet unit, against real podman and
 # real systemd (design row S5). Container tier.
 #

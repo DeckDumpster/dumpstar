@@ -1,3 +1,4 @@
+// covers: UC-collectr-03
 /**
  * Hand-written implementation for collectr_import_format_option.
  *

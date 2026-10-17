@@ -1,4 +1,5 @@
 # Scenario: the set browse sort buttons re-order the list and never throw
+# Use case: UC-browse-32
 #
 # Related:
 #   issues: [sp-yc7gp1]

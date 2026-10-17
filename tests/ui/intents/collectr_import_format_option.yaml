@@ -1,4 +1,5 @@
 # Scenario: Collectr appears as an import format with a cards+sealed hint
+# Use case: UC-collectr-03
 #
 # Related:
 #   issues: [dumpstar-0i9y]

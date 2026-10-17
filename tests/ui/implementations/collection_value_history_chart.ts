@@ -1,3 +1,4 @@
+// covers: UC-collection-42
 /**
  * Hand-written implementation for collection_value_history_chart.
  *

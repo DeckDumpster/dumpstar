@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T1
+# covers: deploy/backup-check.sh deploy/alarm-status.sh
 # judge_freshness — the tenant backup test, in isolation.
 #
 # It had NO unit coverage, and its one stated assumption — "a collection changes

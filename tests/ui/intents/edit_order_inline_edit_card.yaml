@@ -1,4 +1,5 @@
 # Scenario: Receiving an order flips its pending card status in place
+# Use case: UC-edit-01
 #
 # Related:
 #   issues: []

@@ -1,4 +1,5 @@
 # Scenario: Back button after leaving /collection preserves the active search
+# Use case: UC-collection-05
 
 # Related: browse_back_preserves_page_param
 

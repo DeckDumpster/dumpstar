@@ -1,3 +1,4 @@
+// covers: UC-collection-28
 /**
  * Hand-written implementation for collection_search_keyword_filter.
  *

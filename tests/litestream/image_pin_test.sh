@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T0
+# covers: deploy/dumpstar-litestream.container
 # Unit test for the Litestream image pin and the log level it depends on (pd-pfxf).
 #
 # THE BUG. Eight places named `docker.io/litestream/litestream:latest`. On

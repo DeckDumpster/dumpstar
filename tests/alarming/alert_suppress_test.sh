@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T1
+# covers: tests/alarming/alert_suppress_test.sh deploy/alert.sh
 # Unit test for alert.sh's repeat suppression (pd-hqdt).
 #
 # ── WHAT THIS EXISTS TO CATCH ───────────────────────────────────────────────

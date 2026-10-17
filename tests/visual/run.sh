@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T3
+# covers: tests/visual/* frontend/*
 #
 # Run the visual-regression suite against a throwaway container instance.
 #

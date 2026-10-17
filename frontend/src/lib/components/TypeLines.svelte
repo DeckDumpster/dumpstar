@@ -7,7 +7,7 @@
 -->
 <script lang="ts">
 	import { facetHref } from '$lib/facets';
-	import { typeLines } from '$lib/format';
+	import { jsonList, typeLines } from '$lib/format';
 
 	let {
 		cardType,
@@ -19,9 +19,10 @@
 		onlink?: (e: MouseEvent) => void;
 	} = $props();
 	const lines = $derived(typeLines(cardType, arenas));
+	const arenaList = $derived(jsonList(arenas));
 </script>
 
-{#if lines.type}<a class="t-type" href={facetHref('type', lines.type)} title="Find all {lines.type} cards" onclick={onlink}>{lines.type}</a>{/if}{#if lines.arena}<span class="t-sub">{lines.arena}</span>{/if}
+{#if lines.type}<a class="t-type" href={facetHref('type', lines.type)} title="Find all {lines.type} cards" onclick={onlink}>{lines.type}</a>{/if}{#if arenaList.length}<span class="t-sub">{#each arenaList as a, i (i)}{#if i > 0}{' \u00b7 '}{/if}<a class="t-arena" href={facetHref('arena', a)} title="Find all {a} cards" onclick={onlink}>{a}</a>{/each}</span>{/if}
 
 <style>
 	.t-type,
@@ -30,6 +31,11 @@
 		overflow-wrap: anywhere;
 	}
 	.t-type {
+		color: inherit;
+		text-decoration: underline;
+		text-decoration-color: var(--color-accent);
+	}
+	.t-arena {
 		color: inherit;
 		text-decoration: underline;
 		text-decoration-color: var(--color-accent);

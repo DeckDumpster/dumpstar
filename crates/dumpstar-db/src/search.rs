@@ -944,10 +944,11 @@ pub const ASPECT_ORDER: [&str; 6] = [
     "Heroism",
 ];
 
-/// SQL for a card's sort key: its aspects' ranks in [`ASPECT_ORDER`], ascending
-/// as two-digit groups, closed by `99`, so keys compare element by element and
-/// a longer list sorts before its own prefix (`[Vigilance, Villainy]` before
-/// `[Vigilance]`, as the numbering has it). NULL when the card has no aspects.
+/// SQL for a card's sort key: the ranks in [`ASPECT_ORDER`] of its aspects in
+/// the printed order, as two-digit groups closed by `99`, so keys compare
+/// element by element and a longer list sorts before its own prefix
+/// (`[Vigilance, Villainy]` before `[Vigilance]`, as the numbering has it). The
+/// list is compared as printed, not as a set. NULL when the card has no aspects.
 fn aspects_key_sql() -> String {
     let mut arms = String::new();
     for (i, a) in ASPECT_ORDER.iter().enumerate() {
@@ -956,7 +957,7 @@ fn aspects_key_sql() -> String {
     format!(
         "(SELECT CASE WHEN COUNT(*) = 0 THEN NULL ELSE group_concat(r, '') || '99' END \
          FROM (SELECT CASE j.value {arms}ELSE '98' END AS r \
-               FROM json_each(cd.aspects) j ORDER BY r))"
+               FROM json_each(cd.aspects) j ORDER BY j.key))"
     )
 }
 
@@ -1863,16 +1864,87 @@ mod tests {
     fn order_by_aspects_sorts_the_list_then_cost_with_unaspected_last() {
         let f = aspect_fixture();
         let want_asc = [
-            "vv-p", "vh-p", "hv-p", "v2-p", "v5-p", "v7-p", "ch-p", "c3-p", "ah-p", "a4-p", "a6-p",
-            "u3-p", "u6-p", "vl-p", "h1-p", "ldr-p", "none-p",
+            "vv-p", "vh-p", "v2-p", "v5-p", "v7-p", "ch-p", "c3-p", "ah-p", "a4-p", "a6-p", "u3-p",
+            "u6-p", "vl-p", "hv-p", "h1-p", "ldr-p", "none-p",
         ];
         assert_eq!(ordered(&f, "aspects", "asc"), want_asc);
         // Descending reverses the aspect lists; unaspected stay last.
         let want_desc = [
-            "h1-p", "ldr-p", "vl-p", "u3-p", "u6-p", "a4-p", "a6-p", "ah-p", "c3-p", "ch-p",
-            "v2-p", "v5-p", "v7-p", "vh-p", "hv-p", "vv-p", "none-p",
+            "h1-p", "ldr-p", "hv-p", "vl-p", "u3-p", "u6-p", "a4-p", "a6-p", "ah-p", "c3-p",
+            "ch-p", "v2-p", "v5-p", "v7-p", "vh-p", "vv-p", "none-p",
         ];
         assert_eq!(ordered(&f, "aspects", "desc"), want_desc);
+    }
+
+    #[test]
+    fn order_by_aspects_compares_the_printed_list_not_a_set() {
+        let dir = tempfile::tempdir().unwrap();
+        let shared = dir.path().join("shared.sqlite");
+        {
+            let mut c = open_shared(&shared).unwrap();
+            search_meta::reconcile(&mut c).unwrap();
+            testkit::set_on(&c, "PR1", "Printed One", "2024-01-01");
+            // (card id, name, aspects), as printed on the collection screen.
+            let cards: &[(&str, &str, &str)] = &[
+                (
+                    "jango",
+                    "Jango Fett",
+                    r#"["Cunning","Vigilance","Villainy"]"#,
+                ),
+                ("han", "Han Solo", r#"["Aggression","Heroism"]"#),
+                ("haymaker", "Haymaker", r#"["Command"]"#),
+                ("c3po", "C-3PO", r#"["Command"]"#),
+                ("leia", "Leia Organa", r#"["Vigilance","Heroism"]"#),
+                ("ig88", "IG-88", r#"["Vigilance","Aggression","Villainy"]"#),
+            ];
+            for (id, name, aspects) in cards {
+                testkit::card_full(
+                    &c,
+                    id,
+                    name,
+                    None,
+                    "Unit",
+                    Some(3),
+                    None,
+                    None,
+                    aspects,
+                    "[]",
+                    "[]",
+                    None,
+                );
+            }
+            for (printing, card, number, finish) in [
+                ("jango-p", "jango", "1", "Normal"),
+                ("han-p", "han", "2", "Normal"),
+                ("haymaker-p", "haymaker", "3", "Normal"),
+                ("c3po-p", "c3po", "4", "Normal"),
+                ("leia-p", "leia", "5", "Normal"),
+                ("ig88-p", "ig88", "6", "Normal"),
+                ("ig88-pf", "ig88", "6", "Foil"),
+            ] {
+                testkit::printing(&c, printing, card, "PR1", number, "Standard", finish);
+            }
+        }
+        let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
+        let f = Fix {
+            _dir: dir,
+            shared,
+            registry: search_meta::load_registry(&conn).unwrap(),
+            flags: search_meta::load_flags(&conn).unwrap(),
+            conn,
+        };
+        assert_eq!(
+            ordered(&f, "aspects", "asc"),
+            [
+                "ig88-p",
+                "ig88-pf",
+                "leia-p",
+                "c3po-p",
+                "haymaker-p",
+                "han-p",
+                "jango-p"
+            ]
+        );
     }
 
     // --- sort=set with NULL set_sort_order (db-hdwl) ----------------------

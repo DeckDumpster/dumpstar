@@ -53,6 +53,10 @@ const GENERATE_MISSING = process.env["UI_GENERATE_MISSING"] === "1";
 const REGENERATE_NAME = process.env["UI_REGENERATE"] ?? null;
 const REGENERATE_ALL = process.env["UI_REGENERATE_ALL"] === "1";
 const DIAGNOSE = process.env["UI_DIAGNOSE"] === "1";
+// The ui tier (tests/ui/run.sh): replay implementations only, no Vision, no API
+// key. An intent with no implementation must be named in vision-only.txt, which
+// may only shrink; one that is neither implemented nor listed fails the run.
+const REPLAY_ONLY = process.env["UI_REPLAY_ONLY"] === "1";
 const INTENTS_ONLY = process.env["UI_INTENTS_ONLY"] === "1";
 
 interface DiscoveredTest {
@@ -94,6 +98,28 @@ function discoverTests(): DiscoveredTest[] {
   return found;
 }
 
+/** Names listed in vision-only.txt (blank lines and # comments ignored). */
+function loadVisionOnly(): Set<string> {
+  const file = path.join(here, "vision-only.txt");
+  const names = fs
+    .readFileSync(file, "utf8")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l !== "" && !l.startsWith("#"));
+  return new Set(names);
+}
+
+/** Names listed in known-red.txt: implementations expected to fail today. */
+function loadKnownRed(): Set<string> {
+  const file = path.join(here, "known-red.txt");
+  const names = fs
+    .readFileSync(file, "utf8")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l !== "" && !l.startsWith("#"));
+  return new Set(names);
+}
+
 // ── Session state, established in beforeAll ────────────────────────────────
 
 let baseUrl = "";
@@ -131,8 +157,42 @@ test.afterAll(async () => {
 
 // ── One test per discovered intent ─────────────────────────────────────────
 
+const VISION_ONLY = REPLAY_ONLY ? loadVisionOnly() : new Set<string>();
+const KNOWN_RED = REPLAY_ONLY ? loadKnownRed() : new Set<string>();
+
 for (const t of discoverTests()) {
   test(t.name, async ({ page }) => {
+    let knownRed = false;
+    if (REPLAY_ONLY) {
+      if (t.implPath === null) {
+        if (!VISION_ONLY.has(t.name)) {
+          throw new Error(
+            `${t.name} has no replay implementation and is not listed in ` +
+              `tests/ui/vision-only.txt: generate one (UI_GENERATE=${t.name}) or list it`,
+          );
+        }
+        test.skip(true, "needs Vision: no replay implementation yet (vision-only.txt)");
+        return;
+      }
+      if (VISION_ONLY.has(t.name)) {
+        throw new Error(
+          `${t.name} has a replay implementation but is still listed in ` +
+            `tests/ui/vision-only.txt: remove it from the list`,
+        );
+      }
+      if (KNOWN_RED.has(t.name)) {
+        // Expected to fail, but not strictly: a pass is a notice, never a red.
+        // A strict test.fail() failed whole batches whenever a sibling's fix (or
+        // a faster runner) made a listed scenario pass, which is the gate's own
+        // fault, not a defect.
+        knownRed = true;
+      }
+      if (skipReason !== null) {
+        // An unreachable server is a red, never a skip: a tier that skips
+        // everything passes without having run anything.
+        throw new Error(`ui tier cannot run: ${skipReason}`);
+      }
+    }
     test.skip(skipReason !== null, skipReason ?? "");
     const token = await accessToken();
     if (token !== null) {
@@ -184,7 +244,16 @@ for (const t of discoverTests()) {
       };
       try {
         await mod.steps(harness);
+        if (knownRed) {
+          console.warn(
+            `[${t.name}] NOW PASSES but is listed in tests/ui/known-red.txt: delete its line`,
+          );
+        }
       } catch (e) {
+        if (knownRed) {
+          test.skip(true, `known red (tests/ui/known-red.txt): ${String(e)}`);
+          return;
+        }
         if (e instanceof ReplayStepError) {
           if (DIAGNOSE) {
             await runDiagnosis(t, e);

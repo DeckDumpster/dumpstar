@@ -27,4 +27,14 @@ grep -q 'dumpstar_rust_cache_enable' deploy/ci.sh && grep -q 'dumpstar_rust_cach
 grep -q 'RUSTC_WRAPPER' Containerfile && grep -q 'sccache-bin' Containerfile \
     && ok "Containerfile builder consumes the cache" || bad "Containerfile does not use sccache"
 
+# sp-ma66i8: a sccache whose server cannot start costs the cache, not the build.
+stub="$(mktemp -d)"; trap 'rm -rf "$stub"' EXIT
+printf '#!/bin/sh\necho "sccache: error: Timed out waiting for server startup." >&2\nexit 2\n' >"$stub/sccache"
+chmod +x "$stub/sccache"
+out="$(sh deploy/sccache-probe.sh "$stub/sccache")"; rc=$?
+[ "$rc" -ne 0 ] && case "$out" in *"did not start"*) ok "dead sccache server fails the probe, says why" ;; *) bad "probe silent: $out" ;; esac || bad "probe passed a dead server"
+printf '#!/bin/sh\nexec "$@"\n' >"$stub/sccache"
+sh deploy/sccache-probe.sh "$stub/sccache" >/dev/null 2>&1 && ok "working sccache passes the probe" || bad "working sccache failed the probe"
+grep -q 'sccache-probe.sh' Containerfile && ok "Containerfile probes before enabling the wrapper" || bad "Containerfile does not probe"
+
 exit $fail

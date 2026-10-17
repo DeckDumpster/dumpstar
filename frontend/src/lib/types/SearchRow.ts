@@ -24,7 +24,11 @@ aspects: string | null,
 /**
  * JSON array, e.g. `["Ground"]`.
  */
-arenas: string | null, market_price: number | null, image_url: string | null, variant: string, 
+arenas: string | null, 
+/**
+ * JSON array, e.g. `["Underworld","Droid","Bounty Hunter"]`.
+ */
+traits: string | null, market_price: number | null, image_url: string | null, variant: string, 
 /**
  * `Normal` or `Foil`.
  */

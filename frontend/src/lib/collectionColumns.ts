@@ -7,6 +7,7 @@
 export const COLUMNS = [
 	{ key: 'qty', label: 'Qty' },
 	{ key: 'type', label: 'Type' },
+	{ key: 'traits', label: 'Traits' },
 	{ key: 'aspects', label: 'Aspects' },
 	{ key: 'cost', label: 'Cost' },
 	{ key: 'stats', label: 'Pwr/HP' },

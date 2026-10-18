@@ -18,13 +18,21 @@ pub fn routes() -> Router<AppState> {
         .route("/cards/by-set-cn", get(by_set_cn))
 }
 
+/// `?variant=Hyperspace` addresses that variant's printing at a number; without
+/// it the base printing answers.
+#[derive(Deserialize)]
+struct VariantQuery {
+    variant: Option<String>,
+}
+
 async fn lookup(
     state: &AppState,
     set: String,
     number: String,
+    variant: Option<String>,
 ) -> Result<Json<CardDetail>, AppError> {
     let detail = blocking(state, move |c| {
-        cards::get_card_detail(c, &set, &number)?
+        cards::get_card_detail_variant(c, &set, &number, variant.as_deref())?
             .ok_or_else(|| DbError::NotFound(format!("card {set}/{number}")))
     })
     .await?;
@@ -34,8 +42,9 @@ async fn lookup(
 async fn card_detail(
     State(state): State<AppState>,
     Path((set, number)): Path<(String, String)>,
+    Query(q): Query<VariantQuery>,
 ) -> Result<Json<CardDetail>, AppError> {
-    lookup(&state, set, number).await
+    lookup(&state, set, number, q.variant).await
 }
 
 /// Time-series price history for every printing of a card. Drives the
@@ -45,8 +54,12 @@ async fn card_detail(
 async fn card_prices(
     State(state): State<AppState>,
     Path((set, number)): Path<(String, String)>,
+    Query(q): Query<VariantQuery>,
 ) -> Result<Json<Vec<PriceSeries>>, AppError> {
-    let series = blocking(&state, move |c| cards::get_card_prices(c, &set, &number)).await?;
+    let series = blocking(&state, move |c| {
+        cards::get_card_prices_variant(c, &set, &number, q.variant.as_deref())
+    })
+    .await?;
     Ok(Json(series))
 }
 
@@ -60,5 +73,5 @@ async fn by_set_cn(
     State(state): State<AppState>,
     Query(q): Query<BySetCn>,
 ) -> Result<Json<CardDetail>, AppError> {
-    lookup(&state, q.set, q.cn).await
+    lookup(&state, q.set, q.cn, None).await
 }

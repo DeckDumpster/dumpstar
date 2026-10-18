@@ -122,6 +122,29 @@ fn art(attrs: &Value, key: &str) -> Option<String> {
         .map(str::to_string)
 }
 
+/// Variants the official API files under a main expansion although they are not
+/// printed in it: Weekly Play, prerelease and Organized Play prizes. Their
+/// numbers are the promo run's own and collide with the set's (`SOR` #1 is
+/// Director Krennic and also a Weekly Play Battlefield Marine), so they live in
+/// the set's promo code, `<set>P`, as `LOFP`, `SECP` and the rest already do.
+fn is_promo_variant(variant: &str) -> bool {
+    matches!(
+        variant,
+        "Weekly Play" | "Prerelease Promo" | "Prerelease Judge"
+    ) || variant.starts_with("SS ")
+}
+
+/// The set a printing belongs to: its expansion, or for a promo variant of a
+/// main expansion the expansion's promo set.
+pub fn promo_home(set_code: &str, variant: &str) -> String {
+    let main = crate::set_categories::category_for(set_code) == Some("Main Expansions");
+    if main && is_promo_variant(variant) {
+        format!("{set_code}P")
+    } else {
+        set_code.to_string()
+    }
+}
+
 /// `(set, variant, number)` of a serial code, number without leading zeros.
 ///
 /// A serial is the set's code, two variant characters and the number: `SS VV
@@ -226,31 +249,6 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
             ));
             continue;
         };
-        let exp = rel(a, "expansion")
-            .and_then(|e| e.get("attributes"))
-            .unwrap();
-        if !payload.sets.iter().any(|s| s.set_code == set_code) {
-            let category = crate::set_categories::category_for(&set_code);
-            if category.is_none() {
-                payload.alarms.push(AlarmRecord::alarm(
-                    "unmapped_set_category",
-                    set_code.clone(),
-                    "set has no product category in data/remedial/set-categories.csv",
-                ));
-            }
-            payload.sets.push(SetRecord {
-                set_code: set_code.clone(),
-                name: exp
-                    .get("name")
-                    .and_then(Value::as_str)
-                    .unwrap_or(&set_code)
-                    .to_string(),
-                release_date: None,
-                sort_order: exp.get("sortValue").and_then(Value::as_i64).unwrap_or(0),
-                category: category.map(str::to_string),
-            });
-        }
-
         let vt = rel(a, "variantTypes")
             .and_then(Value::as_array)
             .and_then(|v| v.first())
@@ -274,6 +272,40 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
             .strip_suffix(" Foil")
             .unwrap_or(&vt_name)
             .to_string();
+
+        let expansion = set_code.clone();
+        let exp = rel(a, "expansion")
+            .and_then(|e| e.get("attributes"))
+            .unwrap();
+        let set_code = promo_home(&set_code, &variant);
+        if !payload.sets.iter().any(|s| s.set_code == set_code) {
+            let category = crate::set_categories::category_for(&set_code);
+            if category.is_none() {
+                payload.alarms.push(AlarmRecord::alarm(
+                    "unmapped_set_category",
+                    set_code.clone(),
+                    "set has no product category in data/remedial/set-categories.csv",
+                ));
+            }
+            payload.sets.push(SetRecord {
+                set_code: set_code.clone(),
+                name: {
+                    let name = exp
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .unwrap_or(&set_code)
+                        .to_string();
+                    if set_code == expansion {
+                        name
+                    } else {
+                        format!("{name} Promos")
+                    }
+                },
+                release_date: None,
+                sort_order: exp.get("sortValue").and_then(Value::as_i64).unwrap_or(0),
+                category: category.map(str::to_string),
+            });
+        }
 
         if seen_cards.insert(card_id.clone())
             || (variant == "Standard" && !foil && std_cards.insert(card_id.clone()))

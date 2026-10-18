@@ -260,7 +260,15 @@ fn classify(p: &ProductRecord, groups: &BTreeMap<i64, GroupInfo>) -> Class {
     let Some(info) = groups.get(&p.group_id) else {
         return Class::Unmapped(p.group_id);
     };
-    let set = &info.set_code;
+    let (base, suffix) = strip_variant(&p.name);
+    // A Weekly Play group's Hyperspace products are printings of the main set,
+    // not of its promo set (`SORP`).
+    let set = match (info.kind, suffix) {
+        (GroupKind::WeeklyPlay, Some("Hyperspace")) => {
+            info.set_code.strip_suffix('P').unwrap_or(&info.set_code)
+        }
+        _ => &info.set_code,
+    };
     if info.kind == GroupKind::Promo {
         let (base, qual) = split_paren(&p.name);
         return Class::Promo {
@@ -269,7 +277,6 @@ fn classify(p: &ProductRecord, groups: &BTreeMap<i64, GroupInfo>) -> Class {
             qualifier: name_key(qual),
         };
     }
-    let (base, suffix) = strip_variant(&p.name);
     let variant = match (info.kind, suffix) {
         (GroupKind::WeeklyPlay, Some("Hyperspace")) => "Hyperspace".to_string(),
         (GroupKind::WeeklyPlay, _) => "Weekly Play".to_string(),
@@ -289,7 +296,7 @@ fn classify(p: &ProductRecord, groups: &BTreeMap<i64, GroupInfo>) -> Class {
     {
         return Class::Qualified;
     }
-    let key = |n: &str| (set.clone(), variant.clone(), norm_number(n));
+    let key = |n: &str| (set.to_string(), variant.clone(), norm_number(n));
     if parts.len() > 1 {
         if !is_token_number(first) {
             return Class::TokenBack {

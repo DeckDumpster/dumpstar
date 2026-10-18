@@ -111,7 +111,8 @@ const DERIVATIONS: &[(&str, u32)] = &[
     // 2: aspects keep the Standard entry's printed order (sp-mmro2r).
     // 3: Weekly Play and Event Exclusive Hyperspace printings are filed in the
     // set's promo code by the TCGplayer group that sells them (sp-sv0ys9).
-    (swu::SRC_OFFICIAL, 3),
+    // 4: a foil printing never keeps its foil scan (sp-stvf9v).
+    (swu::SRC_OFFICIAL, 4),
 ];
 
 pub fn derivation_version(source: &str) -> u32 {
@@ -172,6 +173,7 @@ pub fn apply_at(
                     [&p.printing_id],
                 )?;
             }
+            prefer_normal_images(&tx)?;
             rejoin(&tx, &mut r)?;
             r
         }
@@ -810,6 +812,49 @@ impl Catalog {
         tx.commit()?;
         Ok(true)
     }
+}
+
+/// A foil printing is shown from its Normal scan: the shimmer is drawn over it,
+/// so a foil scan is never wanted (Ryan, 2026-10-17). The Normal sibling is the
+/// same set, number and variant; a foil-only printing takes the same card's
+/// Normal scan from any printing, Standard first. A foil with no Normal scan
+/// anywhere keeps its own.
+fn prefer_normal_images(tx: &Transaction) -> Result<usize> {
+    let mut n = tx.execute(
+        "UPDATE printings SET image_url = (
+           SELECT n.image_url FROM printings n
+            WHERE n.set_code = printings.set_code AND n.number = printings.number
+              AND n.variant = printings.variant AND n.finish = 'Normal'
+              AND n.image_url IS NOT NULL
+            ORDER BY n.variant_code, n.printing_id LIMIT 1)
+         WHERE finish = 'Foil' AND EXISTS (
+           SELECT 1 FROM printings n
+            WHERE n.set_code = printings.set_code AND n.number = printings.number
+              AND n.variant = printings.variant AND n.finish = 'Normal'
+              AND n.image_url IS NOT NULL
+              AND n.image_url IS NOT printings.image_url)",
+        [],
+    )?;
+    n += tx.execute(
+        "UPDATE printings SET image_url = (
+           SELECT n.image_url FROM printings n
+            WHERE n.card_id = printings.card_id AND n.finish = 'Normal'
+              AND n.image_url IS NOT NULL
+            ORDER BY n.variant = 'Standard' DESC, n.set_code, n.number, n.printing_id LIMIT 1)
+         WHERE finish = 'Foil'
+           AND NOT EXISTS (
+             SELECT 1 FROM printings n
+              WHERE n.set_code = printings.set_code AND n.number = printings.number
+                AND n.variant = printings.variant AND n.finish = 'Normal'
+                AND n.image_url IS NOT NULL)
+           AND EXISTS (
+             SELECT 1 FROM printings n
+              WHERE n.card_id = printings.card_id AND n.finish = 'Normal'
+                AND n.image_url IS NOT NULL
+                AND n.image_url IS NOT printings.image_url)",
+        [],
+    )?;
+    Ok(n)
 }
 
 /// Re-run the official <-> tcgcsv join over everything stored, so that a change

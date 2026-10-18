@@ -130,7 +130,7 @@ fn art(attrs: &Value, key: &str) -> Option<String> {
 fn is_promo_variant(variant: &str) -> bool {
     matches!(
         variant,
-        "Weekly Play" | "Prerelease Promo" | "Prerelease Judge"
+        "Weekly Play" | "Prerelease Promo" | "Prerelease Judge" | "Event Exclusive"
     ) || variant.starts_with("SS ")
 }
 

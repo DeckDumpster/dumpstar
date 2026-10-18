@@ -1326,3 +1326,52 @@ fn an_image_of_another_card_and_a_wrong_group_are_alarmed() {
     assert_eq!(grp.len(), 1, "{grp:?}");
     assert_eq!(grp[0].kind, "wrong_group");
 }
+
+#[test]
+fn the_two_real_misfiled_hyperspace_printings_stay_in_sorp_and_foil_scans_stay_off_across_a_rederive()
+ {
+    let (e, _http) = loaded();
+    let check_state = |e: &Env| {
+        let c = Catalog::open_readonly(&e.db).unwrap();
+        let conn = c.conn();
+        // Luke 1/2 (Event Exclusive, group 23454) and Vader's Lightsaber 04/20
+        // (Weekly Play, group 23451), which the official API labels Hyperspace
+        // under SOR.
+        for (uid, variant) in [
+            ("6202608327", "Event Exclusive"),
+            ("3911333113", "Weekly Play"),
+        ] {
+            let (set, v): (String, String) = conn
+                .query_row(
+                    "SELECT set_code, variant FROM printings WHERE printing_id LIKE ?1",
+                    [format!("%{uid}%")],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .unwrap_or_else(|e| panic!("{uid}: {e}"));
+            assert_eq!((set.as_str(), v.as_str()), ("SORP", variant), "{uid}");
+        }
+        assert_eq!(
+            count(
+                conn,
+                "SELECT COUNT(*) FROM printings f JOIN printings n
+                   ON n.set_code=f.set_code AND n.number=f.number AND n.variant=f.variant AND n.finish='Normal'
+                 WHERE f.finish='Foil' AND n.image_url IS NOT NULL AND f.image_url IS NOT n.image_url"
+            ),
+            0
+        );
+    };
+    check_state(&e);
+    // Re-apply every landed payload, as a deploy that raises the derivation does.
+    {
+        let mut w = Catalog::open_writer(&e.db).unwrap();
+        let n = w
+            .reapply_landed_at(&e.raw, dumpstar_catalog::swu::SRC_OFFICIAL, 99)
+            .unwrap();
+        assert!(n > 0, "nothing was re-derived");
+        let again = w
+            .reapply_landed_at(&e.raw, dumpstar_catalog::swu::SRC_OFFICIAL, 99)
+            .unwrap();
+        assert_eq!(again, 0);
+    }
+    check_state(&e);
+}

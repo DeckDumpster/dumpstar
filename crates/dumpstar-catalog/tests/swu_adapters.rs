@@ -1375,3 +1375,112 @@ fn the_two_real_misfiled_hyperspace_printings_stay_in_sorp_and_foil_scans_stay_o
     }
     check_state(&e);
 }
+
+// ---- weekly play Hyperspace art (sp-u6tc6b) ------------------------------------
+
+/// One weekly play set (`LAWP`) as the official API lists it: the main set's
+/// Standard card, Weekly Play 1 and its foil twin, and the run's new foil
+/// finish at 21, which has its own art and no Normal at its number.
+fn weekly_play_set() -> Vec<u8> {
+    use serde_json::json;
+    let entry = |id: u32, uid: &str, serial: &str, variant: &str, art: &str| {
+        json!({
+            "id": id,
+            "attributes": {
+                "title": "Saw Gerrera", "subtitle": null, "cardId": "9900000001",
+                "cardUid": uid, "serialCode": serial, "hyperspace": false, "showcase": false,
+                "cost": 3, "power": 2, "hp": 4, "artist": "Test Artist",
+                "updatedAt": "2026-10-18T00:00:00.000Z",
+                "expansion": {"data": {"id": 31, "attributes": {"code": "LAW", "name": "A Lawless Time", "sortValue": 10}}},
+                "variantTypes": {"data": [{"id": 1, "attributes": {"name": variant}}]},
+                "rarity": {"data": {"id": 2, "attributes": {"name": "Uncommon"}}},
+                "artFront": {"data": {"attributes": {"url": format!("https://cdn.test/{art}.png")}}}
+            }
+        })
+    };
+    let data = vec![
+        entry(1, "9000000001", "06360001", "Standard", "std_Saw_Gerrera"),
+        entry(
+            2,
+            "9000000002",
+            "0160001",
+            "Weekly Play",
+            "wp_Saw_Gerrera_OP",
+        ),
+        entry(
+            3,
+            "9000000003",
+            "0135001",
+            "Weekly Play Foil",
+            "wp_Saw_Gerrera_OP_Foil",
+        ),
+        entry(
+            4,
+            "9000000004",
+            "0135021",
+            "Weekly Play Foil",
+            "hs_Saw_Gerrera_OP_Foil",
+        ),
+    ];
+    serde_json::to_vec(&json!({
+        "data": data,
+        "meta": {"pagination": {"page": 1, "pageSize": 100, "pageCount": 1, "total": 4}}
+    }))
+    .unwrap()
+}
+
+fn apply_weekly_play_set() -> (tempfile::TempDir, Catalog) {
+    use dumpstar_catalog::apply::apply;
+    use dumpstar_catalog::landing::{Provenance, sha256_hex};
+    let bytes = weekly_play_set();
+    let dir = tempfile::tempdir().unwrap();
+    let mut catalog = Catalog::open_writer(&dir.path().join("shared.sqlite")).unwrap();
+    let prov = Provenance {
+        source: "official".into(),
+        url: "https://official.test/api/cards?page=1".into(),
+        fetched_at: "2026-10-18T00:00:00Z".into(),
+        sha256: sha256_hex(&bytes),
+        bytes: bytes.len() as u64,
+        as_of: None,
+    };
+    apply(&mut catalog, &bytes, &prov).unwrap();
+    (dir, catalog)
+}
+
+#[test]
+fn a_weekly_play_hyperspace_foil_keeps_its_own_art_not_the_standard_cards() {
+    let (_dir, c) = apply_weekly_play_set();
+    let image = |number: &str, finish: &str| -> String {
+        c.conn()
+            .query_row(
+                "SELECT image_url FROM printings WHERE set_code='LAWP' AND number=?1 AND finish=?2",
+                [number, finish],
+                |r| r.get(0),
+            )
+            .unwrap()
+    };
+    // The foil twin at 1 shows its Normal scan, as before.
+    assert_eq!(image("1", "Foil"), image("1", "Normal"));
+    // The foil-only 21 keeps the scan the source gives it.
+    assert_eq!(
+        image("21", "Foil"),
+        "https://cdn.test/hs_Saw_Gerrera_OP_Foil.png"
+    );
+    assert_ne!(image("21", "Foil"), image("1", "Normal"));
+    assert_eq!(check::variant_image_shared(c.conn()).unwrap(), vec![]);
+}
+
+#[test]
+fn the_variant_image_alarm_names_a_weekly_play_printing_sharing_its_siblings_art() {
+    let (_dir, c) = apply_weekly_play_set();
+    c.conn()
+        .execute(
+            "UPDATE printings SET image_url = (SELECT image_url FROM printings WHERE set_code='LAW')
+              WHERE set_code='LAWP' AND number='21'",
+            [],
+        )
+        .unwrap();
+    let got = check::variant_image_shared(c.conn()).unwrap();
+    assert_eq!(got.len(), 1, "{got:?}");
+    assert_eq!(got[0].kind, "variant_image_shared");
+}

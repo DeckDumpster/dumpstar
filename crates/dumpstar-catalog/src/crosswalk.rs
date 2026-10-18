@@ -85,7 +85,50 @@ pub struct Joined {
 
 /// Variants whose absence from tcgcsv is a fault. Event and prize promos are
 /// listed under promo groups whose naming is not predictable; they are counted.
-pub const PRICED_VARIANTS: &[&str] = &["Standard", "Hyperspace", "Showcase", "Weekly Play"];
+pub const PRICED_VARIANTS: &[&str] = &[
+    "Standard",
+    "Hyperspace",
+    "Showcase",
+    "Weekly Play",
+    "Event Exclusive",
+];
+
+/// The main set a promo set code (`SORP`) belongs to.
+pub fn promo_set_of(set_code: &str) -> Option<&str> {
+    set_code.strip_suffix('P').filter(|m| m.len() > 1)
+}
+
+/// Where the official API's Hyperspace printings that TCGplayer sells in a
+/// Weekly Play or Event Exclusive group belong: `(promo set, variant, name key,
+/// number)` per such product. The official API files them under the main set
+/// with variant `Hyperspace`, at numbers (`1/2`, `4/20`) that collide with the
+/// set's own.
+pub fn rehomes(
+    products: &[ProductRecord],
+    groups: &BTreeMap<i64, GroupInfo>,
+) -> Vec<(String, String, String, String)> {
+    let mut out = Vec::new();
+    for p in products {
+        let (Some(number), Some(info)) = (&p.number, groups.get(&p.group_id)) else {
+            continue;
+        };
+        let variant = match info.kind {
+            GroupKind::WeeklyPlay if promo_set_of(&info.set_code).is_some() => "Weekly Play",
+            GroupKind::EventExclusive => "Event Exclusive",
+            _ => continue,
+        };
+        let (base, Some("Hyperspace")) = strip_variant(&p.name) else {
+            continue;
+        };
+        out.push((
+            info.set_code.clone(),
+            variant.to_string(),
+            name_key(base),
+            norm_number(number),
+        ));
+    }
+    out
+}
 
 pub fn is_token_number(n: &str) -> bool {
     let b = n.as_bytes();
@@ -99,7 +142,7 @@ pub fn is_token_back_number(number: &str) -> bool {
     parts.next().is_some() && !is_token_number(first)
 }
 
-fn norm_number(raw: &str) -> String {
+pub fn norm_number(raw: &str) -> String {
     let first = raw
         .split("//")
         .next()
@@ -261,14 +304,7 @@ fn classify(p: &ProductRecord, groups: &BTreeMap<i64, GroupInfo>) -> Class {
         return Class::Unmapped(p.group_id);
     };
     let (base, suffix) = strip_variant(&p.name);
-    // A Weekly Play group's Hyperspace products are printings of the main set,
-    // not of its promo set (`SORP`).
-    let set = match (info.kind, suffix) {
-        (GroupKind::WeeklyPlay, Some("Hyperspace")) => {
-            info.set_code.strip_suffix('P').unwrap_or(&info.set_code)
-        }
-        _ => &info.set_code,
-    };
+    let set = &info.set_code;
     if info.kind == GroupKind::Promo {
         let (base, qual) = split_paren(&p.name);
         return Class::Promo {
@@ -277,11 +313,18 @@ fn classify(p: &ProductRecord, groups: &BTreeMap<i64, GroupInfo>) -> Class {
             qualifier: name_key(qual),
         };
     }
+    // A Weekly Play group of a promo set (`SORP`) lists its Hyperspace
+    // products as Weekly Play printings of that set: they are filed by the
+    // group they are sold in, never under the main set (`rehome`).
     let variant = match (info.kind, suffix) {
+        (GroupKind::WeeklyPlay, Some("Hyperspace")) if promo_set_of(set).is_some() => {
+            "Weekly Play".to_string()
+        }
         (GroupKind::WeeklyPlay, Some("Hyperspace")) => "Hyperspace".to_string(),
         (GroupKind::WeeklyPlay, _) => "Weekly Play".to_string(),
+        (GroupKind::EventExclusive, Some("Hyperspace")) => "Event Exclusive".to_string(),
         (GroupKind::HyperspaceOnly, Some("Hyperspace")) => "Hyperspace".to_string(),
-        (GroupKind::HyperspaceOnly, _) => return Class::Ignored,
+        (GroupKind::HyperspaceOnly | GroupKind::EventExclusive, _) => return Class::Ignored,
         _ => suffix.unwrap_or("Standard").to_string(),
     };
     let parts: Vec<&str> = number.split("//").collect();
@@ -296,7 +339,7 @@ fn classify(p: &ProductRecord, groups: &BTreeMap<i64, GroupInfo>) -> Class {
     {
         return Class::Qualified;
     }
-    let key = |n: &str| (set.to_string(), variant.clone(), norm_number(n));
+    let key = |n: &str| (set.clone(), variant.clone(), norm_number(n));
     if parts.len() > 1 {
         if !is_token_number(first) {
             return Class::TokenBack {
@@ -825,6 +868,39 @@ pub fn join_with(
                 format!(
                     "tcgcsv promo {:?} matches no official printing here",
                     p.name
+                ),
+            ));
+        }
+    }
+
+    // A printing is filed under the set of the TCGplayer group that sells it. A
+    // numbered group of one set whose product a printing of another set links
+    // to is a printing filed where its number collides with the set's own.
+    let group_of: BTreeMap<i64, i64> = products
+        .iter()
+        .map(|p| (p.product_id, p.group_id))
+        .collect();
+    let mut misfiled: BTreeSet<&str> = BTreeSet::new();
+    for l in &out.links {
+        let (Some(pr), Some(info)) = (
+            by_id.get(l.printing_id.as_str()),
+            group_of.get(&l.product_id).and_then(|g| groups.get(g)),
+        ) else {
+            continue;
+        };
+        if matches!(
+            info.kind,
+            GroupKind::Main | GroupKind::WeeklyPlay | GroupKind::EventExclusive
+        ) && PRICED_VARIANTS.contains(&pr.variant.as_str())
+            && info.set_code != pr.set_code
+            && misfiled.insert(&pr.printing_id)
+        {
+            out.alarms.push(AlarmRecord::alarm(
+                "group_set_mismatch",
+                pr.printing_id.clone(),
+                format!(
+                    "{} {} #{} is filed in {} but tcgcsv sells it in a group of {}",
+                    pr.set_code, pr.variant, pr.number, pr.set_code, info.set_code
                 ),
             ));
         }

@@ -11,12 +11,14 @@
 #                (Hyperspace) products are the Hyperspace printings SS02NNN
 #   hyperspace_only  a group shared by many sets: only (Hyperspace) products
 #                are read, by number
+#   event_exclusive  a group of (Hyperspace) promos numbered N/total of its own,
+#                filed under the set's promo code as variant Event Exclusive
 #   promo        prize and event printings, matched on name; the parenthetical
 #                (Top 8, Finalist, ...) names the finish. `set` is * (any), the
 #                last column lists the official variants the group carries.
 23405	SOR	main
 23451	SORP	weekly_play
-23454	SOR	hyperspace_only
+23454	SORP	event_exclusive
 23452	*	promo	Prerelease Promo
 23453	*	promo	Prerelease Judge|SS Judge
 23455	*	promo	SS Participation|SS Top 8|SS Top 4|SS Finalist|SS Champion

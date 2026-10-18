@@ -156,3 +156,45 @@ test('unturned leaders and bases get a landscape box and a coarser band grid', (
 	assert.match(src, /landscapeCols = \$derived\(turnLandscape \? cols : Math\.max\(1, Math\.ceil\(cols \/ 2\)\)\)/);
 	assert.equal((src.match(/repeat\(\{landscapeCols\}/g) ?? []).length, 1);
 });
+
+import { finishRank, finishColor, orderedPips, tilePrice } from '$lib/browseView.js';
+
+/** @param {string|number} id @param {string} finish @param {number} [owned] @param {number|null} [price] @param {string} [variant] */
+const P = (id, finish, owned = 0, price = null, variant = 'Standard') => ({
+	printing_id: id, finish, variant, owned_count: owned, market_price: price
+});
+
+test('pips: Normal first, then Foil, grey then light blue', () => {
+	const pips = orderedPips([P(2, 'Foil'), P(1, 'Normal')]);
+	assert.deepEqual(pips.map((p) => p.printing_id), [1, 2]);
+	assert.deepEqual(pips.map((p) => p.color), ['var(--color-chart-unknown)', 'var(--color-info-text)']);
+});
+
+test('pips: a finish rarer than Foil sorts last and is purple', () => {
+	const pips = orderedPips([P(3, 'Rainbow Foil'), P(2, 'Foil'), P(1, 'Normal')]);
+	assert.deepEqual(pips.map((p) => p.printing_id), [1, 2, 3]);
+	assert.equal(pips[2].color, 'var(--color-rarity-holo)');
+	assert.ok(finishRank('Normal') < finishRank('Foil') && finishRank('Foil') < finishRank('Rainbow Foil'));
+	assert.equal(finishColor('Foil'), 'var(--color-info-text)');
+});
+
+test('the tile renders no F badge row', () => {
+	const src = pageSrc();
+	assert.doesNotMatch(src, /tilebadges|VariantBadges|slotBadgeVariants/);
+});
+
+test('tilePrice: nothing until a pip is selected', () => {
+	const ps = [P(1, 'Normal', 0, 1), P(2, 'Foil', 0, 5)];
+	assert.equal(tilePrice({ printings: ps }, null), null);
+});
+
+test('tilePrice: the selected finish\'s price', () => {
+	const ps = [P(1, 'Normal', 0, 1), P(2, 'Foil', 0, 5)];
+	assert.equal(tilePrice({ printings: ps }, 1), 1);
+	assert.equal(tilePrice({ printings: ps }, 2), 5);
+});
+
+test('tilePrice: several owned finishes show the most valuable owned', () => {
+	const ps = [P(1, 'Normal', 2, 1), P(2, 'Foil', 1, 5), P(3, 'Rainbow Foil', 0, 50)];
+	assert.equal(tilePrice({ printings: ps }, 1), 5);
+});

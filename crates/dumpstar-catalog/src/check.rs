@@ -430,22 +430,22 @@ pub fn image_wrong_card(conn: &Connection) -> Result<Vec<AlarmRecord>> {
     Ok(out)
 }
 
-/// A printing of a Weekly Play set whose scan is the scan of another printing
-/// of its card at a different set or number (`variant_image_shared`): the run's
-/// Hyperspace finish (`LAWP` 21-40 beside 1-20) has art of its own, and a
-/// derivation that fell back to the Standard card's scan shows the wrong card
-/// face. A foil sharing its Normal twin's scan (same set and number) is the
-/// design, not a finding.
+/// A printing, of any set, whose scan is the scan of another printing of its
+/// card at a different set or number (`variant_image_shared`): a Hyperspace,
+/// Showcase or prestige printing (`ASH` 535+, `LAWP` 21-40) has art of its own,
+/// and a derivation that fell back to the Standard card's scan shows the wrong
+/// card face. A foil sharing its Normal twin's scan (same set and number) is
+/// the design, not a finding. The record's key is the printing, its message the
+/// set, so a report groups per set.
 pub fn variant_image_shared(conn: &Connection) -> Result<Vec<AlarmRecord>> {
     let mut stmt = conn.prepare(
         "SELECT DISTINCT p.printing_id, p.set_code, p.number, p.variant, p.finish,
                 o.set_code, o.number, o.variant
            FROM printings p
-           JOIN sets s ON s.set_code = p.set_code AND s.category = 'Weekly Play Promos'
            JOIN printings o ON o.card_id = p.card_id AND o.image_url = p.image_url
                            AND o.printing_id <> p.printing_id
                            AND (o.set_code <> p.set_code OR o.number <> p.number)
-          WHERE p.image_url IS NOT NULL
+          WHERE p.image_url IS NOT NULL AND p.variant <> 'Standard'
           ORDER BY p.printing_id, o.set_code, o.number",
     )?;
     let mut out: Vec<AlarmRecord> = Vec::new();

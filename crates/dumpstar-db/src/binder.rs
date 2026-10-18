@@ -188,7 +188,8 @@ pub fn get_binder_page(
     // Every printing in the set — catalog and the tenant's own — with its
     // card, owned count and market price. Grouped into slots by collector
     // number below; the catalog rows come first so a slot's identity is the
-    // catalog's.
+    // catalog's, and among them the Standard printing, never the alphabetically
+    // first variant.
     let mut slots_by_number: HashMap<String, BinderSlot> = HashMap::new();
     {
         let mut stmt = conn.prepare(concat!(
@@ -203,7 +204,7 @@ pub fn get_binder_page(
             " p \
              JOIN cards cd ON p.card_id = cd.card_id \
              WHERE p.set_code = ?1 \
-             ORDER BY p.variant_description IS NOT NULL, p.variant, p.finish, p.printing_id",
+             ORDER BY p.variant_description IS NOT NULL, p.variant <> 'Standard', p.variant, p.finish, p.printing_id",
         ))?;
         let rows = stmt.query_map([set_code], |r| {
             Ok((
@@ -882,6 +883,28 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(miss.slots.is_empty());
+    }
+
+    // A printing of another card at the same collector number, whose variant
+    // sorts before 'Standard' (an Event Exclusive 1/2 filed as Hyperspace), must
+    // not become the slot: the Standard printing is the slot's identity.
+    #[test]
+    fn a_slot_is_the_standard_printing_not_the_first_variant() {
+        let dir = tempfile::tempdir().unwrap();
+        let shared = dir.path().join("shared.sqlite");
+        {
+            let c = open_shared(&shared).unwrap();
+            testkit::set(&c, "SOR", "Spark of Rebellion");
+            testkit::simple(&c, "SOR", "1", "Director Krennic");
+            testkit::card(&c, "SOR-EEP1", "Luke Skywalker");
+            testkit::printing(&c, "EEP-1", "SOR-EEP1", "SOR", "1", "Hyperspace", "Normal");
+        }
+        let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
+        let p = get_binder_page(&conn, "SOR", &BinderQuery::default())
+            .unwrap()
+            .unwrap();
+        let one = p.slots.iter().find(|s| s.number == "1").unwrap();
+        assert_eq!(one.name, "Director Krennic");
     }
 
     #[test]

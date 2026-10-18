@@ -16,13 +16,10 @@
 		SectionHeader,
 		Toolbar
 	} from '$lib/components/ui';
-	import VariantBadges from '$lib/components/VariantBadges.svelte';
-	import { printingBadges } from '$lib/printing-badges.js';
-	import { printingLabel, money } from '$lib/format';
-	import { slotPrice, ownedFoil } from '$lib/browseView';
+		import { printingLabel, money } from '$lib/format';
+	import { ownedFoil, orderedPips, tilePrice } from '$lib/browseView';
 	import { bandRuns, clampCols, MAX_COLS, BROWSE_ROWS, pageAfterResize } from '$lib/browseView';
-		import { variantColor, variantSortCmp } from '$lib/variants.svelte';
-	import type { BinderPage } from '$lib/types/BinderPage';
+			import type { BinderPage } from '$lib/types/BinderPage';
 	import type { BinderSlot } from '$lib/types/BinderSlot';
 
 	let binder = $state<BinderPage | null>(null);
@@ -418,27 +415,19 @@
 		if (n === 'legendary') return 'ultra' as const;
 		return RARITY_TIERS.find((t) => t === n) ?? ('unranked' as const);
 	}
+	/** The pip each slot last had clicked; the tile shows no price until one is. */
+	let selectedPip = $state<Record<string, string>>({});
 	function tilePips(slot: BinderSlot) {
-		return slot.printings
-			.slice()
-			.sort((a, b) => variantSortCmp(a.variant, b.variant))
-			.map((p) => ({
-				id: p.printing_id,
-				label: printingLabel(p.variant, p.finish),
-				color: variantColor(p.variant),
-				owned: p.owned_count
-			}));
+		return orderedPips(slot.printings).map((p) => ({
+			id: p.printing_id,
+			label: printingLabel(p.variant, p.finish),
+			color: p.color,
+			owned: p.owned_count
+		}));
 	}
-
-	/** One printing per distinct badge set, so a slot shows each treatment once. */
-	function slotBadgeVariants(slot: BinderSlot) {
-		const seen = new Set<string>();
-		return slot.printings.filter((p) => {
-			const key = printingBadges(p.variant, p.finish).map((b) => b.letter).join('');
-			if (!key || seen.has(key)) return false;
-			seen.add(key);
-			return true;
-		});
+	function slotTilePrice(slot: BinderSlot): string | null {
+		const v = tilePrice(slot, selectedPip[slot.number] ?? null);
+		return v != null ? money(v) : null;
 	}
 
 	function ownedAny(slot: BinderSlot): boolean {
@@ -702,16 +691,16 @@
 						number={slot.number}
 						rarity={tileRarity(slot.rarity)}
 						foil={ownedFoil(slot)}
-						price={slotPrice(slot) != null ? money(slotPrice(slot)) : null}
+						price={slotTilePrice(slot)}
 						pips={tilePips(slot)}
 						rotate={slot.landscape && turnLandscape}
 						missing={!ownedAny(slot)}
 						onselect={() => (selectedSlot = slot)}
-						onpip={(pip) => addToSlot(slot, pip.id)}
+						onpip={(pip) => {
+							selectedPip[slot.number] = pip.id;
+							addToSlot(slot, pip.id);
+						}}
 					/>
-					<span class="tilebadges">
-						{#each slotBadgeVariants(slot) as p (p.variant + p.finish)}<VariantBadges variant={p.variant} finish={p.finish} />{/each}
-					</span>
 				</div>
 			{/snippet}
 
@@ -795,11 +784,6 @@
 {/if}
 
 <style>
-	.tilebadges {
-		display: block;
-		min-height: 1.2em;
-		text-align: center;
-	}
 	/*
 		Only layout and geometry are left here — where a box sits, how wide it
 		is, what shape it holds. Surfaces, fills, rules, text colour, radius,

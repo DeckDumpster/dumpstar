@@ -90,7 +90,7 @@ export DUMPSTAR_UNIT_PREFIX="$P"
 
 VOLUME="dumpstar-${INSTANCE}-data"
 CONF_DIR="${HOME}/.config/dumpstar/${INSTANCE}"
-SECRET_NAME="dumpstar-${INSTANCE}-s3-bootstrap"
+SECRET_NAME="dumpstar-${INSTANCE}-backup-s3"
 SYSTEMD_USER_DIR="${HOME}/.config/systemd/user"
 QUADLET_DIR="${HOME}/.config/containers/systemd"
 # The instance's own Quadlet unit. Named for the instance, so it cannot collide

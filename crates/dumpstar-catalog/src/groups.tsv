@@ -15,7 +15,7 @@
 #                (Top 8, Finalist, ...) names the finish. `set` is * (any), the
 #                last column lists the official variants the group carries.
 23405	SOR	main
-23451	SOR	weekly_play
+23451	SORP	weekly_play
 23454	SOR	hyperspace_only
 23452	*	promo	Prerelease Promo
 23453	*	promo	Prerelease Judge|SS Judge

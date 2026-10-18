@@ -259,11 +259,76 @@ pub fn missing_sealed_images(conn: &Connection) -> Result<Vec<AlarmRecord>> {
     Ok(vec![])
 }
 
+/// The numbering invariants of the printings table, as alarms.
+///
+/// Within a set code a collector number names one card per variant
+/// (`number_collision`): a promo run filed under its parent set, as `SOR` once
+/// held a Weekly Play Battlefield Marine at the number of Director Krennic,
+/// breaks it. And a main expansion's Standard printings are numbered exactly
+/// 1..N (`standard_numbering_gap`), tokens (`T01`) aside.
+pub fn numbering(conn: &Connection) -> Result<Vec<AlarmRecord>> {
+    let mut out = Vec::new();
+    let mut stmt = conn.prepare(
+        "SELECT set_code, number, variant, COUNT(DISTINCT card_id) FROM printings
+         GROUP BY set_code, number, variant HAVING COUNT(DISTINCT card_id) > 1
+         ORDER BY set_code, number, variant",
+    )?;
+    for row in stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, i64>(3)?,
+        ))
+    })? {
+        let (set, number, variant, cards) = row?;
+        out.push(AlarmRecord::alarm(
+            "number_collision",
+            format!("{set}/{number}/{variant}"),
+            format!("{cards} different cards share {variant} number {number} in {set}"),
+        ));
+    }
+    let mut stmt = conn.prepare(
+        "SELECT p.set_code, CAST(p.number AS INTEGER) FROM printings p
+           JOIN sets s ON s.set_code = p.set_code
+          WHERE s.category = 'Main Expansions' AND p.variant = 'Standard'
+            AND p.number NOT GLOB '*[^0-9]*' AND p.number <> ''
+          GROUP BY p.set_code, CAST(p.number AS INTEGER)
+          ORDER BY p.set_code, 2",
+    )?;
+    let mut by_set: std::collections::BTreeMap<String, Vec<i64>> = Default::default();
+    for row in stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))? {
+        let (set, n) = row?;
+        by_set.entry(set).or_default().push(n);
+    }
+    for (set, nums) in by_set {
+        let max = *nums.last().unwrap();
+        if nums.first() != Some(&1) || nums.len() as i64 != max {
+            let missing: Vec<String> = (1..=max)
+                .filter(|n| nums.binary_search(n).is_err())
+                .take(10)
+                .map(|n| n.to_string())
+                .collect();
+            out.push(AlarmRecord::alarm(
+                "standard_numbering_gap",
+                set.clone(),
+                format!(
+                    "{set}: {} Standard numbers up to {max}, expected 1..{max}; missing {}",
+                    nums.len(),
+                    missing.join(", ")
+                ),
+            ));
+        }
+    }
+    Ok(out)
+}
+
 pub fn run(conn: &Connection, now: DateTime<Utc>) -> Result<Vec<AlarmRecord>> {
     let mut out = stored(conn)?;
     out.extend(missing_price_days(conn, now)?);
     out.extend(coverage_drops(conn)?);
     out.extend(missing_sealed_images(conn)?);
+    out.extend(numbering(conn)?);
     let latest: Option<String> = conn.query_row(
         "SELECT MAX(observed_on) FROM prices WHERE source = 'tcgcsv'",
         [],

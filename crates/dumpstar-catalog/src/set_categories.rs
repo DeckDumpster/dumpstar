@@ -75,5 +75,6 @@ mod tests {
         assert_eq!(CATEGORY_ORDER[0], "Main Expansions");
         assert_eq!(category_for("SOR"), Some("Main Expansions"));
         assert_eq!(category_for("JTLP"), Some("Weekly Play Promos"));
+        assert_eq!(category_for("SORP"), Some("Weekly Play Promos"));
     }
 }

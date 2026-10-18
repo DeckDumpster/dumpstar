@@ -39,6 +39,7 @@ test('a tile whose picture lacks the number names the card', () => {
 
 test('turned landscape pictures rotate counter-clockwise, title on the left, in every view', async () => {
 	const { readFileSync } = await import('node:fs');
+	/** @param {string} p */
 	const src = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 	for (const p of ['../src/routes/+page.svelte', '../src/routes/collection/+page.svelte']) {
 		assert.match(src(p), /rotate\(-90deg\)/, p);

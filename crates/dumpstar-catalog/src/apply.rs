@@ -109,7 +109,9 @@ const DERIVATIONS: &[(&str, u32)] = &[
     // 2: sealed_images rows (sp-ld1o9n).
     (swu::SRC_PRODUCTS, 2),
     // 2: aspects keep the Standard entry's printed order (sp-mmro2r).
-    (swu::SRC_OFFICIAL, 2),
+    // 3: Weekly Play and Event Exclusive Hyperspace printings are filed in the
+    // set's promo code by the TCGplayer group that sells them (sp-sv0ys9).
+    (swu::SRC_OFFICIAL, 3),
 ];
 
 pub fn derivation_version(source: &str) -> u32 {
@@ -636,6 +638,54 @@ fn stamp_release_dates(tx: &Transaction, r: &mut ApplyReport) -> Result<()> {
     Ok(())
 }
 
+/// File the official API's Hyperspace printings of Weekly Play and Event
+/// Exclusive promos under the set's promo code, as the TCGplayer group that
+/// sells them does. The official API files them under the main set, at numbers
+/// (`1/2`) that collide with the set's own and, to the binder, take a slot over
+/// its Standard printing. A printing is matched on set, number and name, so a
+/// real Hyperspace printing of the main set is never taken.
+fn rehome(
+    tx: &Transaction,
+    products: &[tcgcsv::ProductRecord],
+    groups: &BTreeMap<i64, tcgcsv::GroupInfo>,
+    r: &mut ApplyReport,
+) -> Result<()> {
+    for (promo_set, variant, name, number) in crosswalk::rehomes(products, groups) {
+        let Some(main) = crosswalk::promo_set_of(&promo_set) else {
+            continue;
+        };
+        let ids: Vec<String> = tx
+            .prepare(
+                "SELECT p.printing_id, p.number, c.name, c.subtitle FROM printings p
+                 JOIN cards c ON c.card_id = p.card_id
+                 WHERE p.set_code = ?1 AND p.variant = 'Hyperspace'",
+            )?
+            .query_map([main], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                ))
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?
+            .into_iter()
+            .filter(|(_, n, cn, sub)| {
+                crosswalk::norm_number(n) == number
+                    && crosswalk::name_key(&format!("{cn}{}", sub.as_deref().unwrap_or(""))) == name
+            })
+            .map(|(id, ..)| id)
+            .collect();
+        for id in ids {
+            r.printings += tx.execute(
+                "UPDATE OR IGNORE printings SET set_code = ?2, variant = ?3 WHERE printing_id = ?1",
+                params![id, promo_set, variant],
+            )?;
+        }
+    }
+    Ok(())
+}
+
 const JOIN_KINDS: &[&str] = &[
     "official_without_tcgcsv",
     "official_unlisted",
@@ -646,6 +696,7 @@ const JOIN_KINDS: &[&str] = &[
     "base_listed_per_token",
     "remedial_stale",
     "remedial_conflict",
+    "group_set_mismatch",
 ];
 
 /// The join's own inputs, hashed: its code, the hand-kept group table and the
@@ -792,6 +843,7 @@ fn rejoin(tx: &Transaction, r: &mut ApplyReport) -> Result<()> {
         .collect::<std::result::Result<_, _>>()?;
     let group_names: BTreeMap<i64, String> = rows.iter().map(|(i, n, _)| (*i, n.clone())).collect();
     let groups = tcgcsv::group_infos(&rows, &set_codes);
+    rehome(tx, &products, &groups, r)?;
     let printings: Vec<OfficialPrinting> = tx
         .prepare(
             "SELECT p.printing_id, p.set_code, p.number, p.variant, p.variant_code, p.finish, c.name, c.subtitle

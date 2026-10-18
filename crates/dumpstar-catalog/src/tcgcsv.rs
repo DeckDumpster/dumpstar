@@ -39,6 +39,10 @@ pub enum GroupKind {
     /// A promo group shared by many sets: only its `(Hyperspace)` products are
     /// read, by number; everything else in it is not this set's.
     HyperspaceOnly,
+    /// A group of Hyperspace promos with a numbering of its own (`1/2`, `2/2`),
+    /// filed under the set's promo code as variant `Event Exclusive`, never
+    /// under the set whose Standard numbers it would collide with.
+    EventExclusive,
     /// A prize/event group whose numbers mean nothing to the official catalog:
     /// products are matched on name, with the parenthetical (`Top 8`) naming the
     /// finish. `variants` are the official variants the group lists.
@@ -73,6 +77,7 @@ pub fn group_table() -> Vec<GroupRow> {
             let kind = match f.next()?.trim() {
                 "weekly_play" => GroupKind::WeeklyPlay,
                 "hyperspace_only" => GroupKind::HyperspaceOnly,
+                "event_exclusive" => GroupKind::EventExclusive,
                 "promo" => GroupKind::Promo,
                 "listed" => GroupKind::Listed,
                 _ => GroupKind::Main,
@@ -157,7 +162,10 @@ pub fn group_info(group_id: i64) -> Option<GroupInfo> {
 
 /// Whether a product in a hyperspace-only group is outside this catalog.
 pub fn is_ignored(info: &GroupInfo, name: &str) -> bool {
-    info.kind == GroupKind::HyperspaceOnly && !name.trim_end().ends_with("(Hyperspace)")
+    matches!(
+        info.kind,
+        GroupKind::HyperspaceOnly | GroupKind::EventExclusive
+    ) && !name.trim_end().ends_with("(Hyperspace)")
 }
 
 fn results(bytes: &[u8]) -> Result<Vec<Value>> {

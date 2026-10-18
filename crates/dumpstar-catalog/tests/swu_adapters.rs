@@ -451,8 +451,9 @@ fn official_identity_wins_and_tcgcsv_only_supplies_ids_and_prices() {
     assert_eq!(pid(&normal, "Normal").as_deref(), Some("540198"));
     assert_eq!(pid(&foil, "Foil").as_deref(), Some("540198"));
     assert!(priced(c.conn(), &normal, "2026-10-12") && priced(c.conn(), &foil, "2026-10-12"));
-    // The Hyperspace Luke is listed by tcgcsv in the Event Exclusive Promos group.
-    let hs = uid_of(c.conn(), "SOR", "1", "Hyperspace", "Normal");
+    // The Hyperspace Luke is listed by tcgcsv in the Event Exclusive Promos
+    // group, and filed there: in SORP, not at the number of Director Krennic.
+    let hs = uid_of(c.conn(), "SORP", "1", "Event Exclusive", "Normal");
     assert_eq!(pid(&hs, "Normal").as_deref(), Some("542170"));
     assert!(priced(c.conn(), &hs, "2026-10-12"));
     // Weekly Play promos join through the hand-kept group table.
@@ -465,6 +466,37 @@ fn official_identity_wins_and_tcgcsv_only_supplies_ids_and_prices() {
         ),
         2
     );
+}
+
+#[test]
+fn weekly_play_and_event_exclusive_printings_are_filed_by_their_tcgplayer_group() {
+    let (e, _) = loaded();
+    let c = Catalog::open_readonly(&e.db).unwrap();
+    // The Weekly Play run is whole in SORP; nothing of it sits in SOR.
+    let nums = count(
+        c.conn(),
+        "SELECT COUNT(DISTINCT number) FROM printings WHERE set_code='SORP' AND variant='Weekly Play' AND CAST(number AS INTEGER) BETWEEN 1 AND 20",
+    );
+    assert_eq!(nums, 20);
+    uid_of(c.conn(), "SORP", "4", "Weekly Play", "Normal");
+    assert_eq!(
+        count(
+            c.conn(),
+            "SELECT COUNT(*) FROM printings WHERE set_code='SOR' AND number IN ('1','2') AND variant <> 'Standard'"
+        ),
+        0
+    );
+    // SOR #1 is Director Krennic, as the binder takes it.
+    let name: String = c
+        .conn()
+        .query_row(
+            "SELECT c.name FROM printings p JOIN cards c USING (card_id) WHERE p.set_code='SOR' AND p.number='1' AND p.variant='Standard'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(name, "Director Krennic");
+    assert!(alarms(c.conn(), "group_set_mismatch").is_empty());
 }
 
 #[test]

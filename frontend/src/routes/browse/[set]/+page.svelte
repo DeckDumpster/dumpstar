@@ -685,8 +685,8 @@
 			{/if}
 		{:else}
 			{#snippet cell(slot: BinderSlot)}
+				{@const face = turnLandscape ? tileFace(slot) : null}
 				<div data-landscape={slot.landscape} class:flat={slot.landscape && !turnLandscape}>
-					{@const face = turnLandscape ? tileFace(slot) : null}
 					<CardTile
 						name={slot.name}
 						image={face ? face.image : slot.image_url}

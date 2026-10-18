@@ -1459,12 +1459,12 @@
 				{:else}
 					{#each displayRows.slice(block.from, block.to) as a (a.key)}
 						{#if a.ids.length === 0}
+							{@const face = tileFace(a)}
 							<button
 								class="cardtile missing"
 								title="{a.name} · {a.set_code.toUpperCase()} #{a.number} · click to add"
 								onclick={() => (selectedCard = { set: a.set_code, number: a.number })}
 							>
-								{@const face = tileFace(a)}
 								{#if face.image}
 									<span class="face" class:turned={face.rotate}>
 										<img src={face.image} alt={a.name} loading="lazy" />
@@ -1475,6 +1475,7 @@
 								{#if face.captioned}<span class="tilecap">{tileCaption(a.number, a.name, face)}</span>{/if}
 							</button>
 						{:else}
+							{@const face = tileFace(a)}
 							<button
 								class="cardtile"
 								class:picked={selectMode && groupChecked(a.ids)}
@@ -1482,7 +1483,6 @@
 								title="{a.name} · {printingLabel(a.variant, a.finish)}{a.qty > 1 ? ` ×${a.qty}` : ''}"
 								onclick={() => openGroup(a)}
 							>
-								{@const face = tileFace(a)}
 								{#if face.image}
 									<span class="face" class:turned={face.rotate}>
 										<img src={face.image} alt={a.name} loading="lazy" />

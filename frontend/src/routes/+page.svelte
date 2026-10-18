@@ -210,9 +210,9 @@
 			{#if recent.length > 0}
 				<ul class="thumbs">
 					{#each recent as card (card.id)}
+						{@const face = tileFace(card)}
 						<li>
 							<a href="/card/{card.set_code}/{card.number}">
-								{@const face = tileFace(card)}
 								{#if face.image}
 									<span class="face" class:turned={face.rotate}>
 										<img src={face.image} alt="" loading="lazy" />

@@ -2172,7 +2172,7 @@
 		height: auto;
 		aspect-ratio: auto;
 		max-width: none;
-		transform: translate(-50%, -50%) rotate(90deg);
+		transform: translate(-50%, -50%) rotate(-90deg);
 	}
 	/* The picture lacks the printed collector number; name the card over its
 	   foot without changing the tile's height. */

@@ -430,6 +430,52 @@ pub fn image_wrong_card(conn: &Connection) -> Result<Vec<AlarmRecord>> {
     Ok(out)
 }
 
+/// A printing of a Weekly Play set whose scan is the scan of another printing
+/// of its card at a different set or number (`variant_image_shared`): the run's
+/// Hyperspace finish (`LAWP` 21-40 beside 1-20) has art of its own, and a
+/// derivation that fell back to the Standard card's scan shows the wrong card
+/// face. A foil sharing its Normal twin's scan (same set and number) is the
+/// design, not a finding.
+pub fn variant_image_shared(conn: &Connection) -> Result<Vec<AlarmRecord>> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT p.printing_id, p.set_code, p.number, p.variant, p.finish,
+                o.set_code, o.number, o.variant
+           FROM printings p
+           JOIN sets s ON s.set_code = p.set_code AND s.category = 'Weekly Play Promos'
+           JOIN printings o ON o.card_id = p.card_id AND o.image_url = p.image_url
+                           AND o.printing_id <> p.printing_id
+                           AND (o.set_code <> p.set_code OR o.number <> p.number)
+          WHERE p.image_url IS NOT NULL
+          ORDER BY p.printing_id, o.set_code, o.number",
+    )?;
+    let mut out: Vec<AlarmRecord> = Vec::new();
+    for row in stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, String>(3)?,
+            r.get::<_, String>(4)?,
+            r.get::<_, String>(5)?,
+            r.get::<_, String>(6)?,
+            r.get::<_, String>(7)?,
+        ))
+    })? {
+        let (id, set, number, variant, finish, oset, onumber, ovariant) = row?;
+        if out.last().is_some_and(|a| a.key == id) {
+            continue;
+        }
+        out.push(AlarmRecord::alarm(
+            "variant_image_shared",
+            id,
+            format!(
+                "{set} {variant} {number} {finish} shows the same image as {oset} {ovariant} {onumber}"
+            ),
+        ));
+    }
+    Ok(out)
+}
+
 pub fn run(conn: &Connection, now: DateTime<Utc>) -> Result<Vec<AlarmRecord>> {
     let mut out = stored(conn)?;
     out.extend(missing_price_days(conn, now)?);
@@ -438,6 +484,7 @@ pub fn run(conn: &Connection, now: DateTime<Utc>) -> Result<Vec<AlarmRecord>> {
     out.extend(numbering(conn)?);
     out.extend(wrong_group(conn)?);
     out.extend(image_wrong_card(conn)?);
+    out.extend(variant_image_shared(conn)?);
     let latest: Option<String> = conn.query_row(
         "SELECT MAX(observed_on) FROM prices WHERE source = 'tcgcsv'",
         [],

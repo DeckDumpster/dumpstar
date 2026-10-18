@@ -112,7 +112,8 @@ const DERIVATIONS: &[(&str, u32)] = &[
     // 3: Weekly Play and Event Exclusive Hyperspace printings are filed in the
     // set's promo code by the TCGplayer group that sells them (sp-sv0ys9).
     // 4: a foil printing never keeps its foil scan (sp-stvf9v).
-    (swu::SRC_OFFICIAL, 4),
+    // 5: a foil with no Normal at its number keeps its own scan (sp-u6tc6b).
+    (swu::SRC_OFFICIAL, 5),
 ];
 
 pub fn derivation_version(source: &str) -> u32 {
@@ -816,9 +817,10 @@ impl Catalog {
 
 /// A foil printing is shown from its Normal scan: the shimmer is drawn over it,
 /// so a foil scan is never wanted (Ryan, 2026-10-17). The Normal sibling is the
-/// same set, number and variant; a foil-only printing takes the same card's
-/// Normal scan from any printing, Standard first. A foil with no Normal scan
-/// anywhere keeps its own.
+/// same set, number and variant. A foil with no Normal at its number keeps the
+/// scan its source gives it (the weekly play Hyperspace foils, `LAWP` 21-40,
+/// have art of their own; sp-u6tc6b), and takes the same card's Normal scan from
+/// another printing, Standard first, only when the source gave it none.
 fn prefer_normal_images(tx: &Transaction) -> Result<usize> {
     let mut n = tx.execute(
         "UPDATE printings SET image_url = (
@@ -841,7 +843,7 @@ fn prefer_normal_images(tx: &Transaction) -> Result<usize> {
             WHERE n.card_id = printings.card_id AND n.finish = 'Normal'
               AND n.image_url IS NOT NULL
             ORDER BY n.variant = 'Standard' DESC, n.set_code, n.number, n.printing_id LIMIT 1)
-         WHERE finish = 'Foil'
+         WHERE finish = 'Foil' AND image_url IS NULL
            AND NOT EXISTS (
              SELECT 1 FROM printings n
               WHERE n.set_code = printings.set_code AND n.number = printings.number

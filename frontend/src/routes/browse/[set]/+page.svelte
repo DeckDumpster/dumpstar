@@ -1028,6 +1028,13 @@
 	.grid :global(.sectionbreak) {
 		grid-column: 1 / -1;
 	}
+	/* The tile footer clips its overflow, so a hovered pip (scaled up) was cut
+	   off at the footer's edge. Pad the footer to hold the grown pip and pull
+	   the margin back so the layout stays as tight as before. */
+	.grid :global(.footer) {
+		padding: var(--space-1);
+		margin: calc(-1 * var(--space-1));
+	}
 	.landscapegrid {
 		margin-bottom: var(--space-4);
 	}

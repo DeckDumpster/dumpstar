@@ -27,7 +27,10 @@ cleanup() {
 }
 
 cur="start"
-step() { cur="$*"; printf '\n==> %s\n' "$*"; }
+t0=$SECONDS
+# Each step line carries the seconds since the run began, so a tier cancelled at a
+# wall-clock cap (sp-tbbakg: 900s) shows which step ate the budget.
+step() { cur="$*"; printf '\n==> [+%ss] %s\n' "$((SECONDS - t0))" "$*"; }
 # The last line of a failed run is the cause: name the step that failed, so a
 # harness that shows only the final line shows this rather than a server log line.
 trap 'rc=$?; cleanup; [ "$rc" -eq 0 ] || echo "FAILED (exit $rc) in step: $cur" >&2' EXIT

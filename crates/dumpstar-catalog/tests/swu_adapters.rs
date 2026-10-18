@@ -1484,3 +1484,93 @@ fn the_variant_image_alarm_names_a_weekly_play_printing_sharing_its_siblings_art
     assert_eq!(got.len(), 1, "{got:?}");
     assert_eq!(got[0].kind, "variant_image_shared");
 }
+
+// ---- main set variant art (sp-zu0jve) -------------------------------------------
+
+/// One card of a main set (`ASH`) as the official API lists it: Standard at 1,
+/// Hyperspace at 268, the Hyperspace foil finish at 535 (no Normal at its
+/// number), and the Foil Prestige at 844 as the positive control.
+fn main_set_variants() -> Vec<u8> {
+    use serde_json::json;
+    let entry = |id: u32, uid: &str, serial: &str, variant: &str, art: &str| {
+        json!({
+            "id": id,
+            "attributes": {
+                "title": "The Armorer", "subtitle": "Steel Shapes Us", "cardId": "9900000002",
+                "cardUid": uid, "serialCode": serial, "hyperspace": false, "showcase": false,
+                "cost": 3, "power": 2, "hp": 4, "artist": "Test Artist",
+                "updatedAt": "2026-10-18T00:00:00.000Z",
+                "expansion": {"data": {"id": 32, "attributes": {"code": "ASH", "name": "Ashes of the Empire", "sortValue": 99}}},
+                "variantTypes": {"data": [{"id": 1, "attributes": {"name": variant}}]},
+                "rarity": {"data": {"id": 2, "attributes": {"name": "Rare"}}},
+                "artFront": {"data": {"attributes": {"url": format!("https://cdn.test/{art}.png")}}}
+            }
+        })
+    };
+    let data = vec![
+        entry(1, "9100000001", "08010001", "Standard", "std"),
+        entry(2, "9100000002", "08020268", "Hyperspace", "hs"),
+        entry(3, "9100000003", "08320535", "Hyperspace Foil", "hs_foil"),
+        entry(4, "9100000004", "08330844", "Foil Prestige", "prestige"),
+    ];
+    serde_json::to_vec(&json!({
+        "data": data,
+        "meta": {"pagination": {"page": 1, "pageSize": 100, "pageCount": 1, "total": 4}}
+    }))
+    .unwrap()
+}
+
+fn apply_bytes(bytes: Vec<u8>) -> (tempfile::TempDir, Catalog) {
+    use dumpstar_catalog::apply::apply;
+    use dumpstar_catalog::landing::{Provenance, sha256_hex};
+    let dir = tempfile::tempdir().unwrap();
+    let mut catalog = Catalog::open_writer(&dir.path().join("shared.sqlite")).unwrap();
+    let prov = Provenance {
+        source: "official".into(),
+        url: "https://official.test/api/cards?page=1".into(),
+        fetched_at: "2026-10-18T00:00:00Z".into(),
+        sha256: sha256_hex(&bytes),
+        bytes: bytes.len() as u64,
+        as_of: None,
+    };
+    apply(&mut catalog, &bytes, &prov).unwrap();
+    (dir, catalog)
+}
+
+#[test]
+fn a_main_set_hyperspace_foil_above_the_standard_range_keeps_its_own_art() {
+    let (_dir, c) = apply_bytes(main_set_variants());
+    let image = |number: &str| -> String {
+        c.conn()
+            .query_row(
+                "SELECT image_url FROM printings WHERE set_code='ASH' AND number=?1",
+                [number],
+                |r| r.get(0),
+            )
+            .unwrap()
+    };
+    assert_eq!(image("535"), "https://cdn.test/hs_foil.png");
+    assert_eq!(image("268"), "https://cdn.test/hs.png");
+    assert_eq!(image("844"), "https://cdn.test/prestige.png");
+    assert_ne!(image("535"), image("1"));
+    assert_eq!(check::variant_image_shared(c.conn()).unwrap(), vec![]);
+}
+
+#[test]
+fn the_variant_image_alarm_covers_main_sets_and_names_the_set() {
+    let (_dir, c) = apply_bytes(main_set_variants());
+    c.conn()
+        .execute(
+            "UPDATE printings SET image_url = (SELECT image_url FROM printings WHERE number='1')
+              WHERE number='535'",
+            [],
+        )
+        .unwrap();
+    let got = check::variant_image_shared(c.conn()).unwrap();
+    assert_eq!(got.len(), 1, "{got:?}");
+    assert_eq!(got[0].kind, "variant_image_shared");
+    assert!(
+        got[0].detail.starts_with("ASH Hyperspace 535 Foil"),
+        "{got:?}"
+    );
+}

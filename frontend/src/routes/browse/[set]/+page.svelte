@@ -1042,6 +1042,10 @@
 	.flat :global(.art) {
 		aspect-ratio: 7 / 5;
 	}
+	/* Turned bases and leaders read with the title on the left, as the card is held. */
+	[data-landscape] :global(.card-tile.rotate .art img) {
+		transform: translate(-50%, -50%) rotate(-90deg);
+	}
 	.binderpage :global(.sectionbreak-top) {
 		margin-bottom: var(--space-2);
 	}

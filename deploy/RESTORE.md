@@ -45,7 +45,7 @@ The irreplaceable set is **two things**, and one sidecar replicates both.
 - The **shared catalog** (`shared.sqlite`: cards/sets/prices) is **not** backed up
   — it's reproducible from upstream (`deploy/seed.sh <inst>`).
 - Credentials: an assume-role profile (`~/.config/dumpstar/<inst>/aws/config`) + the
-  bootstrap key in podman secret `dumpstar-<inst>-s3-bootstrap`. Auto-refreshing
+  bootstrap key in podman secret `dumpstar-<inst>-backup-s3`. Auto-refreshing
   temporary creds; never static keys.
 
 ## Quick reference
@@ -247,7 +247,7 @@ set -a; . ~/.config/dumpstar/prod/litestream.env; set +a
 DB=01K2C7HQ8NZ0XW3V9R5M6D0ABC
 podman run --rm --user 0:0 -v "$D:/out" \
   -v ~/.config/dumpstar/prod/aws/config:/aws/config:ro \
-  --secret dumpstar-prod-s3-bootstrap,type=mount,target=/aws/credentials \
+  --secret dumpstar-prod-backup-s3,type=mount,target=/aws/credentials \
   -e AWS_CONFIG_FILE=/aws/config -e AWS_SHARED_CREDENTIALS_FILE=/aws/credentials -e AWS_PROFILE=dumpstar \
   "$DUMPSTAR_LITESTREAM_IMAGE" \
   restore -integrity-check full -timestamp 2026-06-01T12:00:00Z \
@@ -337,7 +337,7 @@ bash deploy/setup.sh prod 8090            # build image + install units (keep th
 #                                           LITESTREAM_S3_REGISTRY_PATH=prod/registry.sqlite)
 #     setup.sh writes all of these; it is only listed here so you can check them.
 #   ~/.config/dumpstar/prod/aws/config       ([profile dumpstar] role_arn=... source_profile=bootstrap region=...)
-#   podman secret create dumpstar-prod-s3-bootstrap -   (paste the [bootstrap] key; from your password manager)
+#   podman secret create dumpstar-prod-backup-s3 -   (paste the [bootstrap] key; from your password manager)
 
 # The tenant-zone master key comes out of the SAME password manager, and it is
 # a file rather than a podman secret because the offline jobs read it directly:
@@ -451,7 +451,7 @@ tenant that was never replicated, which is an incident of its own.
 ```bash
 podman run --rm \
   -v ~/.config/dumpstar/prod/aws/config:/aws/config:ro \
-  --secret dumpstar-prod-s3-bootstrap,type=mount,target=/aws/credentials \
+  --secret dumpstar-prod-backup-s3,type=mount,target=/aws/credentials \
   -e AWS_CONFIG_FILE=/aws/config -e AWS_SHARED_CREDENTIALS_FILE=/aws/credentials \
   -e AWS_PROFILE=dumpstar -e AWS_REGION="${LITESTREAM_S3_REGION}" \
   docker.io/amazon/aws-cli:latest \

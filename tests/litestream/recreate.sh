@@ -204,7 +204,7 @@ if [ -n "${RECREATE_REAL_S3:-}" ]; then
 	PODMAN_NET=()
 	CRED_ARGS=(
 		-v "${SRC_CONF}/aws/config:/aws/config:ro"
-		--secret "dumpstar-${SRC}-s3-bootstrap,type=mount,target=/aws/credentials"
+		--secret "dumpstar-${SRC}-backup-s3,type=mount,target=/aws/credentials"
 		-e AWS_CONFIG_FILE=/aws/config -e AWS_SHARED_CREDENTIALS_FILE=/aws/credentials
 		-e AWS_PROFILE=dumpstar
 	)

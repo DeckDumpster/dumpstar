@@ -186,7 +186,7 @@ ltx_list() {
     local url="$1" what="$2" out
     out="$(podman run --rm --user 0:0 \
         -v "${CONF_DIR}/aws/config:/aws/config:ro" \
-        --secret "dumpstar-${INSTANCE}-s3-bootstrap,type=mount,target=/aws/credentials" \
+        --secret "dumpstar-${INSTANCE}-backup-s3,type=mount,target=/aws/credentials" \
         -e AWS_CONFIG_FILE=/aws/config \
         -e AWS_SHARED_CREDENTIALS_FILE=/aws/credentials \
         -e AWS_PROFILE="${AWS_PROFILE:-dumpstar}" \

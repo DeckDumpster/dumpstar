@@ -187,7 +187,7 @@ EOF
     echo "           source_profile = bootstrap"
     echo "           region = us-west-2"
     echo "      3. Store the bootstrap key in a podman secret (NOT a file):"
-    echo "           printf '[bootstrap]\\naws_access_key_id=K\\naws_secret_access_key=S\\n' | podman secret create dumpstar-${INSTANCE}-s3-bootstrap -"
+    echo "           printf '[bootstrap]\\naws_access_key_id=K\\naws_secret_access_key=S\\n' | podman secret create dumpstar-${INSTANCE}-backup-s3 -"
     echo "    Sidecar auto-starts once aws/config exists + the secret is present."
 fi
 

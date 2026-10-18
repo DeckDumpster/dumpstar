@@ -138,7 +138,7 @@ esac
 VOLUME="dumpstar-${INSTANCE}-data"
 SIDECAR="dumpstar-litestream-${INSTANCE}"
 CONF_DIR="${HOME}/.config/dumpstar/${INSTANCE}"
-SECRET_NAME="dumpstar-${INSTANCE}-s3-bootstrap"
+SECRET_NAME="dumpstar-${INSTANCE}-backup-s3"
 QUADLET_DIR="${HOME}/.config/containers/systemd"
 
 MINIO_CTR="dumpstar-${INSTANCE}-minio"
@@ -521,7 +521,7 @@ if [ -n "${DRILL_REAL_S3:-}" ]; then
 	# copied into the drill instance's own config so nothing here writes to the
 	# source instance's files.
 	cp "${HOME}/.config/dumpstar/${SRC}/aws/config" "${CONF_DIR}/aws/config"
-	podman secret inspect --showsecret -f '{{.SecretData}}' "dumpstar-${SRC}-s3-bootstrap" \
+	podman secret inspect --showsecret -f '{{.SecretData}}' "dumpstar-${SRC}-backup-s3" \
 		| podman secret create "$SECRET_NAME" - >/dev/null
 else
 	# MinIO cannot assume a role, so the profile carries the static test key

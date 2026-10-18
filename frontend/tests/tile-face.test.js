@@ -36,3 +36,13 @@ test('a tile whose picture lacks the number names the card', () => {
 	assert.equal(tileCaption('020', 'Echo Base', base), '#020 Echo Base');
 	assert.equal(tileCaption('100', 'Vanquish', unit), '#100');
 });
+
+test('turned landscape pictures rotate counter-clockwise, title on the left, in every view', async () => {
+	const { readFileSync } = await import('node:fs');
+	const src = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
+	for (const p of ['../src/routes/+page.svelte', '../src/routes/collection/+page.svelte']) {
+		assert.match(src(p), /rotate\(-90deg\)/, p);
+		assert.doesNotMatch(src(p), /rotate\(90deg\)/, p);
+	}
+	assert.match(src('../src/routes/browse/[set]/+page.svelte'), /\.card-tile\.rotate \.art img[^}]*rotate\(-90deg\)/);
+});

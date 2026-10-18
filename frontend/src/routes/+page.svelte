@@ -384,7 +384,7 @@
 		height: auto;
 		aspect-ratio: auto;
 		max-width: none;
-		transform: translate(-50%, -50%) rotate(90deg);
+		transform: translate(-50%, -50%) rotate(-90deg);
 	}
 	.thumbs a:hover img,
 	.thumbs a:hover .noart {

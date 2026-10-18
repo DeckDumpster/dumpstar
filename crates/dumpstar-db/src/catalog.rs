@@ -43,7 +43,7 @@ pub fn sealed_product_exists(conn: &Connection, product_id: i64) -> Result<bool>
 /// escape hatch, decision dumpstar-x7k).
 ///
 /// Columns: `printing_id, card_id, set_code, number, variant, finish, rarity,
-/// artist, image_url, variant_description`. A tenant-invented printing has no
+/// artist, image_url, variant_description, back_image_url`. A tenant-invented printing has no
 /// set or number of its own; it borrows the card's lead printing (the
 /// Standard one when there is one), so it files beside the card it varies.
 /// `variant_description` is non-NULL only for those. Alias it `p`. The macro
@@ -53,7 +53,7 @@ macro_rules! printing_rel {
     () => {
         "( \
      SELECT printing_id, card_id, set_code, number, variant, finish, rarity, artist, \
-            image_url, NULL AS variant_description \
+            image_url, NULL AS variant_description, back_image_url \
        FROM printings \
      UNION ALL \
      SELECT up.printing_id, up.card_id, \
@@ -61,7 +61,7 @@ macro_rules! printing_rel {
               ORDER BY x.variant <> 'Standard', x.printing_id LIMIT 1), \
             (SELECT x.number FROM printings x WHERE x.card_id = up.card_id \
               ORDER BY x.variant <> 'Standard', x.printing_id LIMIT 1), \
-            up.variant, 'Normal', NULL, NULL, NULL, up.description \
+            up.variant, 'Normal', NULL, NULL, NULL, up.description, NULL \
        FROM user_printings up \
      )"
     };

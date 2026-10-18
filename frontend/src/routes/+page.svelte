@@ -39,6 +39,7 @@
 	import { money, count } from '$lib/format';
 	import { Badge, Button, EmptyState, Panel, ProgressBar, SectionHeader } from '$lib/components/ui';
 	import type { CollectionRow } from '$lib/types/CollectionRow';
+	import { tileCaption, tileFace } from '$lib/tileFace';
 	import type { SetSummary } from '$lib/types/SetSummary';
 	import type { ValuePoint } from '$lib/types/ValuePoint';
 
@@ -209,15 +210,18 @@
 			{#if recent.length > 0}
 				<ul class="thumbs">
 					{#each recent as card (card.id)}
+						{@const face = tileFace(card)}
 						<li>
 							<a href="/card/{card.set_code}/{card.number}">
-								{#if card.image_url}
-									<img src={card.image_url} alt="" loading="lazy" />
+								{#if face.image}
+									<span class="face" class:turned={face.rotate}>
+										<img src={face.image} alt="" loading="lazy" />
+									</span>
 								{:else}
 									<span class="noart" aria-hidden="true"></span>
 								{/if}
 								<span class="thumb-name">{card.name}</span>
-								<span class="thumb-meta">{card.set_name} · {card.number}</span>
+								<span class="thumb-meta">{card.set_name} · {tileCaption(card.number, card.name, face)}</span>
 							</a>
 						</li>
 					{/each}
@@ -357,6 +361,30 @@
 		background: var(--color-surface-sunken);
 		object-fit: cover;
 		transition: transform var(--dur-base) var(--ease-standard);
+	}
+	/* A landscape picture (base, leader front) turned upright inside the
+	   portrait box: its pre-turn width is the box's height. */
+	.face {
+		display: block;
+		position: relative;
+		width: 100%;
+		aspect-ratio: 245 / 342;
+		overflow: hidden;
+		border-radius: var(--radius-md);
+	}
+	.face img {
+		position: absolute;
+		inset: 0;
+	}
+	.face.turned img {
+		inset: auto;
+		top: 50%;
+		left: 50%;
+		width: 140%;
+		height: auto;
+		aspect-ratio: auto;
+		max-width: none;
+		transform: translate(-50%, -50%) rotate(90deg);
 	}
 	.thumbs a:hover img,
 	.thumbs a:hover .noart {

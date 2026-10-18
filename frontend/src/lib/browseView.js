@@ -81,3 +81,46 @@ export function slotPrice(slot) {
 export function ownedFoil(slot) {
 	return slot.printings.some((p) => p.finish === 'Foil' && p.owned_count > 0);
 }
+
+/** Finishes in increasing order of rarity; any finish not listed is rarer than all of them. */
+const FINISH_ORDER = ['Normal', 'Foil'];
+
+/** Sort rank of a finish: Normal first, then by rarity. @param {string} finish */
+export function finishRank(finish) {
+	const i = FINISH_ORDER.indexOf(finish);
+	return i < 0 ? FINISH_ORDER.length : i;
+}
+
+/** Pip colour for a finish: Normal grey, Foil light blue, anything rarer purple.
+ *  @param {string} finish */
+export function finishColor(finish) {
+	if (finish === 'Normal') return 'var(--color-chart-unknown)';
+	if (finish === 'Foil') return 'var(--color-info-text)';
+	return 'var(--color-rarity-holo)';
+}
+
+/** A slot's printings as tile pips: Normal at the left, rarer finishes to its
+ *  right; ties (same finish, different variant) keep the given order.
+ *  @template {{ finish: string }} T
+ *  @param {T[]} printings
+ *  @returns {(T & { color: string })[]} */
+export function orderedPips(printings) {
+	return printings
+		.map((p, i) => ({ p, i }))
+		.sort((a, b) => finishRank(a.p.finish) - finishRank(b.p.finish) || a.i - b.i)
+		.map(({ p }) => ({ ...p, color: finishColor(p.finish) }));
+}
+
+/** The price on a tile: null until a pip is selected; then the selected
+ *  printing's price, or the dearest owned one when several are owned.
+ *  @param {{ printings: { printing_id: string | number, owned_count: number, market_price: number | null }[] }} slot
+ *  @param {string | number | null} selectedId */
+export function tilePrice(slot, selectedId) {
+	if (selectedId == null) return null;
+	const owned = slot.printings.filter((p) => p.owned_count > 0);
+	if (owned.length > 1) {
+		const v = owned.map((p) => p.market_price).filter((n) => n != null);
+		if (v.length) return Math.max(.../** @type {number[]} */ (v));
+	}
+	return slot.printings.find((p) => p.printing_id === selectedId)?.market_price ?? null;
+}

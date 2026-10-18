@@ -1249,3 +1249,80 @@ fn the_numbering_alarm_names_a_collision_and_a_gap() {
         .collect();
     assert_eq!(kinds, ["number_collision", "standard_numbering_gap"]);
 }
+
+#[test]
+fn a_foil_printing_never_keeps_its_foil_scan_where_a_normal_one_exists() {
+    let (e, _) = loaded();
+    let c = Catalog::open_readonly(&e.db).unwrap();
+    let conn = c.conn();
+    // SOR #1-5 are the real set, Standard.
+    for (n, name) in [
+        ("1", "Director Krennic"),
+        ("2", "Iden Versio"),
+        ("3", "Chewbacca"),
+        ("4", "Chirrut"),
+        ("5", "Luke Skywalker"),
+    ] {
+        let got = card_at(conn, "SOR", n, "Standard");
+        assert!(got.iter().any(|g| g.contains(name)), "SOR {n}: {got:?}");
+    }
+    // A foil shares its Normal sibling's scan (same set, number, variant).
+    assert_eq!(
+        count(
+            conn,
+            "SELECT COUNT(*) FROM printings f JOIN printings n
+               ON n.set_code=f.set_code AND n.number=f.number AND n.variant=f.variant AND n.finish='Normal'
+             WHERE f.finish='Foil' AND n.image_url IS NOT NULL AND f.image_url IS NOT n.image_url"
+        ),
+        0
+    );
+    // A foil-only printing whose card has a Normal scan elsewhere takes it.
+    assert_eq!(
+        count(
+            conn,
+            "SELECT COUNT(*) FROM printings f WHERE f.finish='Foil' AND f.image_url LIKE '%Foil%'
+               AND EXISTS (SELECT 1 FROM printings n WHERE n.card_id=f.card_id AND n.finish='Normal'
+                           AND n.image_url IS NOT NULL AND n.image_url NOT LIKE '%Foil%')"
+        ),
+        0
+    );
+    // The recorded load names no image of another card and no wrong group.
+    assert_eq!(check::image_wrong_card(conn).unwrap(), vec![]);
+    assert_eq!(check::wrong_group(conn).unwrap(), vec![]);
+}
+
+#[test]
+fn an_image_of_another_card_and_a_wrong_group_are_alarmed() {
+    let (e, _) = loaded();
+    {
+        let w = Catalog::open_writer(&e.db).unwrap();
+        let normal = uid_of(w.conn(), "SOR", "48", "Standard", "Foil");
+        w.conn()
+            .execute(
+                "UPDATE printings SET image_url='https://x/card_0131048en_base_Consular_Security_Force_Foil.png' WHERE printing_id=?1",
+                [&normal],
+            )
+            .unwrap();
+        // A Standard SOR printing priced from the Weekly Play group.
+        let std1 = uid_of(w.conn(), "SOR", "2", "Standard", "Normal");
+        w.conn()
+            .execute(
+                "INSERT INTO tcgcsv_products (product_id, group_id, name, number) VALUES (999999, 23451, 'Iden Versio', '2/20')",
+                [],
+            )
+            .unwrap();
+        w.conn()
+            .execute(
+                "INSERT INTO printing_source_id (source, source_id, sub_type_name, printing_id) VALUES ('tcgcsv','999999','Normal',?1)",
+                [&std1],
+            )
+            .unwrap();
+    }
+    let c = Catalog::open_readonly(&e.db).unwrap();
+    let img = check::image_wrong_card(c.conn()).unwrap();
+    assert_eq!(img.len(), 1, "{img:?}");
+    assert_eq!(img[0].kind, "image_wrong_card");
+    let grp = check::wrong_group(c.conn()).unwrap();
+    assert_eq!(grp.len(), 1, "{grp:?}");
+    assert_eq!(grp[0].kind, "wrong_group");
+}

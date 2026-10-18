@@ -86,6 +86,18 @@ pub fn get_card_detail(
     set_code: &str,
     number: &str,
 ) -> Result<Option<CardDetail>> {
+    get_card_detail_variant(conn, set_code, number, None)
+}
+
+/// [`get_card_detail`] addressing one printing: a collector number is shared by
+/// a set's Standard, Hyperspace and Showcase printings, so without `variant`
+/// the base (Standard, non-foil) printing answers and with it that variant does.
+pub fn get_card_detail_variant(
+    conn: &Connection,
+    set_code: &str,
+    number: &str,
+    variant: Option<&str>,
+) -> Result<Option<CardDetail>> {
     let card: Option<Card> = conn
         .prepare(
             "SELECT c.card_id, p.set_code, s.name, p.number, c.name, c.subtitle, c.card_type, \
@@ -95,10 +107,10 @@ pub fn get_card_detail(
                JOIN cards c ON c.card_id = p.card_id \
           LEFT JOIN card_text_styled t ON t.card_id = c.card_id \
                JOIN sets s ON s.set_code = p.set_code \
-              WHERE p.set_code = ?1 AND p.number = ?2 \
-              ORDER BY p.finish <> 'Normal', p.printing_id LIMIT 1",
+              WHERE p.set_code = ?1 AND p.number = ?2 AND (?3 IS NULL OR p.variant = ?3) \
+              ORDER BY p.variant <> 'Standard', p.finish <> 'Normal', p.printing_id LIMIT 1",
         )?
-        .query_row(params![set_code, number], |r| {
+        .query_row(params![set_code, number, variant], |r| {
             Ok(Card {
                 card_id: r.get(0)?,
                 set_code: r.get(1)?,
@@ -233,9 +245,23 @@ pub fn get_card_prices(
     set_code: &str,
     number: &str,
 ) -> Result<Vec<PriceSeries>> {
+    get_card_prices_variant(conn, set_code, number, None)
+}
+
+/// [`get_card_prices`] for the card at the printing [`get_card_detail_variant`] picks.
+pub fn get_card_prices_variant(
+    conn: &Connection,
+    set_code: &str,
+    number: &str,
+    variant: Option<&str>,
+) -> Result<Vec<PriceSeries>> {
     let card_id: Option<String> = conn
-        .prepare("SELECT card_id FROM printings WHERE set_code = ?1 AND number = ?2 LIMIT 1")?
-        .query_row(params![set_code, number], |r| r.get(0))
+        .prepare(
+            "SELECT card_id FROM printings WHERE set_code = ?1 AND number = ?2 \
+               AND (?3 IS NULL OR variant = ?3) \
+             ORDER BY variant <> 'Standard', finish <> 'Normal', printing_id LIMIT 1",
+        )?
+        .query_row(params![set_code, number, variant], |r| r.get(0))
         .optional()?;
     let Some(card_id) = card_id else {
         return Ok(Vec::new());
@@ -390,6 +416,36 @@ mod tests {
     // by this payload) is what does draw them, one card at a time. If this
     // ever thinned out to match the list, the rules text and the artist
     // facet link would silently go blank.
+    #[test]
+    fn a_shared_number_resolves_to_the_base_printing_unless_a_variant_is_named() {
+        let (_d, conn) = {
+            let dir = tempfile::tempdir().unwrap();
+            let shared = dir.path().join("shared.sqlite");
+            {
+                let c = open_shared(&shared).unwrap();
+                testkit::set(&c, "SOR", "Spark of Rebellion");
+                testkit::card(&c, "SOR-1", "Director Krennic");
+                testkit::card(&c, "SOR-5", "Luke Skywalker");
+                // A Hyperspace Luke at number 1, sorting before the base card.
+                testkit::printing(&c, "A-hyper", "SOR-5", "SOR", "1", "Hyperspace", "Normal");
+                testkit::printing(&c, "Z-std", "SOR-1", "SOR", "1", "Standard", "Normal");
+            }
+            let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
+            (dir, conn)
+        };
+        let base = get_card_detail(&conn, "SOR", "1").unwrap().unwrap();
+        assert_eq!(base.card.name, "Director Krennic");
+        let hs = get_card_detail_variant(&conn, "SOR", "1", Some("Hyperspace"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(hs.card.name, "Luke Skywalker");
+        assert!(
+            get_card_detail_variant(&conn, "SOR", "1", Some("Showcase"))
+                .unwrap()
+                .is_none()
+        );
+    }
+
     #[test]
     fn card_detail_carries_the_full_rules_the_modal_renders() {
         let (_d, conn) = user_conn();

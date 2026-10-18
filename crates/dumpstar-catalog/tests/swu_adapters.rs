@@ -456,7 +456,7 @@ fn official_identity_wins_and_tcgcsv_only_supplies_ids_and_prices() {
     assert_eq!(pid(&hs, "Normal").as_deref(), Some("542170"));
     assert!(priced(c.conn(), &hs, "2026-10-12"));
     // Weekly Play promos join through the hand-kept group table.
-    let wp = uid_of(c.conn(), "SOR", "20", "Weekly Play", "Normal");
+    let wp = uid_of(c.conn(), "SORP", "20", "Weekly Play", "Normal");
     assert!(priced(c.conn(), &wp, "2026-10-12"));
     assert_eq!(
         count(
@@ -953,7 +953,7 @@ fn the_recorded_load_carries_each_sets_release_date_and_names_a_set_without_one(
             c.conn(),
             "SELECT COUNT(*) FROM sets WHERE release_date = '2024-03-08'"
         ),
-        1
+        2
     );
 
     // A set no source dates is reported by name, not left silently NULL.
@@ -1123,4 +1123,97 @@ fn apply_stores_the_official_mark_and_sort_value_of_every_rarity() {
         0,
         "every rarity a printing carries has a mark"
     );
+}
+
+// ---- numbering (sp-u4wa0d) --------------------------------------------------
+
+fn card_at(conn: &Connection, set: &str, number: &str, variant: &str) -> Vec<String> {
+    let mut s = conn
+        .prepare(
+            "SELECT DISTINCT c.name || COALESCE(', ' || c.subtitle, '') FROM printings p
+               JOIN cards c ON c.card_id = p.card_id
+              WHERE p.set_code=?1 AND p.number=?2 AND p.variant=?3 ORDER BY 1",
+        )
+        .unwrap();
+    s.query_map([set, number, variant], |r| r.get(0))
+        .unwrap()
+        .map(|r| r.unwrap())
+        .collect()
+}
+
+#[test]
+fn sor_base_numbers_are_the_real_set_and_promos_live_in_sorp() {
+    let (e, _) = loaded();
+    let c = Catalog::open_readonly(&e.db).unwrap();
+    let conn = c.conn();
+    // The official SOR list: #1 Director Krennic, #2 Iden Versio, #3 Chewbacca.
+    assert_eq!(
+        card_at(conn, "SOR", "1", "Standard"),
+        ["Director Krennic, Aspiring to Authority"]
+    );
+    assert_eq!(
+        card_at(conn, "SOR", "2", "Standard"),
+        ["Iden Versio, Inferno Squad Commander"]
+    );
+    assert_eq!(
+        card_at(conn, "SOR", "3", "Standard"),
+        ["Chewbacca, Walking Carpet"]
+    );
+    // No event or prize printing is filed in SOR.
+    assert_eq!(
+        count(
+            conn,
+            "SELECT COUNT(*) FROM printings WHERE set_code='SOR' AND (variant IN ('Weekly Play','Prerelease Promo','Prerelease Judge') OR variant LIKE 'SS %')"
+        ),
+        0
+    );
+    assert_eq!(
+        card_at(conn, "SORP", "1", "Weekly Play"),
+        ["Battlefield Marine"]
+    );
+    assert_eq!(
+        card_at(conn, "SORP", "1", "Prerelease Promo"),
+        ["Darth Vader, Dark Lord of the Sith"]
+    );
+    assert_eq!(
+        count(
+            conn,
+            "SELECT COUNT(*) FROM printings WHERE set_code IN ('SOR','SORP')"
+        ),
+        991
+    );
+    assert_eq!(
+        count(
+            conn,
+            "SELECT COUNT(*) FROM sets WHERE set_code='SORP' AND category='Weekly Play Promos'"
+        ),
+        1
+    );
+    // A re-sync reproduces it, and the invariants hold.
+    assert_eq!(check::numbering(conn).unwrap(), vec![]);
+}
+
+#[test]
+fn the_numbering_alarm_names_a_collision_and_a_gap() {
+    let (e, _) = loaded();
+    {
+        let w = Catalog::open_writer(&e.db).unwrap();
+        // A Weekly Play card filed at a base number, as SOR once was.
+        w.conn()
+            .execute_batch(
+                "PRAGMA foreign_keys=OFF;
+                 INSERT INTO cards (card_id, name) VALUES ('x','Intruder');
+                 INSERT INTO printings (printing_id, card_id, set_code, number, variant, variant_code, finish)
+                   VALUES ('xp','x','SOR','1','Standard','99','Normal');
+                 DELETE FROM printings WHERE set_code='SOR' AND number='3' AND variant='Standard';",
+            )
+            .unwrap();
+    }
+    let c = Catalog::open_readonly(&e.db).unwrap();
+    let kinds: Vec<String> = check::numbering(c.conn())
+        .unwrap()
+        .into_iter()
+        .map(|a| a.kind)
+        .collect();
+    assert_eq!(kinds, ["number_collision", "standard_numbering_gap"]);
 }

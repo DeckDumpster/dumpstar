@@ -1194,6 +1194,54 @@ fn sor_base_numbers_are_the_real_set_and_promos_live_in_sorp() {
 }
 
 #[test]
+fn a_catalog_applied_at_derivation_2_with_the_old_sor_shape_is_moved_not_duplicated_on_reapply() {
+    let (e, _) = loaded();
+    let mut c = Catalog::open_writer(&e.db).unwrap();
+    let before = count(c.conn(), "SELECT COUNT(*) FROM printings");
+    // The shape prod had: promos filed under SOR, payloads keyed at version 2.
+    c.conn()
+        .execute(
+            "UPDATE printings SET set_code='SOR' WHERE set_code='SORP'",
+            [],
+        )
+        .unwrap();
+    c.conn()
+        .execute(
+            "UPDATE applied_payloads SET payload_hash = REPLACE(payload_hash, '#d3', '#d2')",
+            [],
+        )
+        .unwrap();
+    assert!(
+        count(
+            c.conn(),
+            "SELECT COUNT(*) FROM printings WHERE set_code='SOR' AND variant='Weekly Play'"
+        ) > 0
+    );
+
+    assert!(c.reapply_landed(&e.raw).unwrap() > 0);
+    let conn = c.conn();
+    assert_eq!(
+        card_at(conn, "SOR", "1", "Standard"),
+        ["Director Krennic, Aspiring to Authority"]
+    );
+    assert_eq!(
+        count(
+            conn,
+            "SELECT COUNT(*) FROM printings WHERE set_code='SOR' AND variant IN ('Weekly Play','Prerelease Promo','Prerelease Judge')"
+        ),
+        0
+    );
+    assert_eq!(count(conn, "SELECT COUNT(*) FROM printings"), before);
+    assert_eq!(
+        count(
+            conn,
+            "SELECT COUNT(*) FROM (SELECT 1 FROM printings WHERE set_code='SOR' GROUP BY number, variant, finish HAVING COUNT(*)>1)"
+        ),
+        0
+    );
+}
+
+#[test]
 fn the_numbering_alarm_names_a_collision_and_a_gap() {
     let (e, _) = loaded();
     {

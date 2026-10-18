@@ -109,7 +109,9 @@ const DERIVATIONS: &[(&str, u32)] = &[
     // 2: sealed_images rows (sp-ld1o9n).
     (swu::SRC_PRODUCTS, 2),
     // 2: aspects keep the Standard entry's printed order (sp-mmro2r).
-    (swu::SRC_OFFICIAL, 2),
+    // 3: promo printings land in their own set codes, SOR numbering is the
+    // official list (sp-u4wa0d); printings keep their cardUid id and move set.
+    (swu::SRC_OFFICIAL, 3),
 ];
 
 pub fn derivation_version(source: &str) -> u32 {

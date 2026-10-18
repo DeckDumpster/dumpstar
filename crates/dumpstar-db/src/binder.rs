@@ -45,6 +45,8 @@ pub struct BinderSlot {
     pub subtitle: Option<String>,
     pub rarity: Option<String>,
     pub image_url: Option<String>,
+    /// The deployed side of a leader printing; `None` for one-sided cards.
+    pub back_image_url: Option<String>,
     /// `base` (Standard) | `hyperspace` | `showcase` | `promo` (anything
     /// else: Promo, Weekly Play, …).
     pub section: String,
@@ -196,7 +198,7 @@ pub fn get_binder_page(
             "SELECT p.number, p.card_id, cd.name, cd.subtitle, p.rarity, p.image_url, \
                     p.variant, p.printing_id, p.finish, \
                     (SELECT count(*) FROM collection c WHERE c.printing_id = p.printing_id), \
-                    cd.card_type, ",
+                    cd.card_type, p.back_image_url, ",
             crate::market_price_expr!(),
             " \
              FROM ",
@@ -217,6 +219,7 @@ pub fn get_binder_page(
                     image_url: r.get(5)?,
                     section: section_of(&r.get::<_, String>(6)?).to_string(),
                     card_type: r.get(10)?,
+                    back_image_url: r.get(11)?,
                     landscape: false,
                     printings: Vec::new(),
                 },
@@ -225,7 +228,7 @@ pub fn get_binder_page(
                     printing_id: r.get(7)?,
                     finish: r.get(8)?,
                     owned_count: r.get(9)?,
-                    market_price: r.get(11)?,
+                    market_price: r.get(12)?,
                 },
             ))
         })?;

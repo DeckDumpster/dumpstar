@@ -30,6 +30,7 @@
 	import type { Binder } from '$lib/types/Binder';
 	import type { Deck } from '$lib/types/Deck';
 	import StatFrame from '$lib/components/StatFrame.svelte';
+	import { tileCaption, tileFace } from '$lib/tileFace';
 	import { COLUMNS, PHONE_MAX_WIDTH, anyAdjusted, parseHidden, visibleColumns } from '$lib/collectionColumns';
 
 	// Server-side search results (one row per printing, owned or not). The
@@ -115,7 +116,8 @@
 				arenas: sr.arenas,
 				traits: sr.traits,
 				market_price: sr.market_price,
-				image_url: sr.image_url
+				image_url: sr.image_url,
+				back_image_url: sr.back_image_url
 			}))
 		)
 	);
@@ -545,6 +547,7 @@
 		condition: string;
 		status: string;
 		image_url: string | null;
+		back_image_url: string | null;
 	};
 
 	function aggregate(input: ListRow[]): AggRow[] {
@@ -591,7 +594,8 @@
 					finish: r.finish,
 					condition: r.condition,
 					status: r.status,
-					image_url: r.image_url
+					image_url: r.image_url,
+					back_image_url: r.back_image_url
 				});
 			}
 		}
@@ -628,7 +632,8 @@
 			finish: sr.finish,
 			condition: '',
 			status: 'unowned',
-			image_url: sr.image_url
+			image_url: sr.image_url,
+			back_image_url: sr.back_image_url
 		};
 	}
 
@@ -1454,18 +1459,23 @@
 				{:else}
 					{#each displayRows.slice(block.from, block.to) as a (a.key)}
 						{#if a.ids.length === 0}
+							{@const face = tileFace(a)}
 							<button
 								class="cardtile missing"
 								title="{a.name} · {a.set_code.toUpperCase()} #{a.number} · click to add"
 								onclick={() => (selectedCard = { set: a.set_code, number: a.number })}
 							>
-								{#if a.image_url}
-									<img src={a.image_url} alt={a.name} loading="lazy" />
+								{#if face.image}
+									<span class="face" class:turned={face.rotate}>
+										<img src={face.image} alt={a.name} loading="lazy" />
+									</span>
 								{:else}
 									<div class="tilenoart">{a.name}</div>
 								{/if}
+								{#if face.captioned}<span class="tilecap">{tileCaption(a.number, a.name, face)}</span>{/if}
 							</button>
 						{:else}
+							{@const face = tileFace(a)}
 							<button
 								class="cardtile"
 								class:picked={selectMode && groupChecked(a.ids)}
@@ -1473,11 +1483,14 @@
 								title="{a.name} · {printingLabel(a.variant, a.finish)}{a.qty > 1 ? ` ×${a.qty}` : ''}"
 								onclick={() => openGroup(a)}
 							>
-								{#if a.image_url}
-									<img src={a.image_url} alt={a.name} loading="lazy" />
+								{#if face.image}
+									<span class="face" class:turned={face.rotate}>
+										<img src={face.image} alt={a.name} loading="lazy" />
+									</span>
 								{:else}
 									<div class="tilenoart">{a.name}</div>
 								{/if}
+								{#if face.captioned}<span class="tilecap">{tileCaption(a.number, a.name, face)}</span>{/if}
 								{#if a.qty > 1}<span class="qtybadge">×{a.qty}</span>{/if}
 								{#if selectMode && groupChecked(a.ids)}<span class="tick">✓</span>{/if}
 							</button>
@@ -2136,6 +2149,48 @@
 		object-fit: contain;
 		background: var(--color-surface-well);
 		border-radius: var(--radius-md);
+	}
+	/* A landscape picture (base, leader front) turned upright inside the
+	   portrait box: its pre-turn width is the box's height. */
+	.cardtile .face {
+		display: block;
+		position: relative;
+		aspect-ratio: 5 / 7;
+		overflow: hidden;
+		border-radius: var(--radius-md);
+	}
+	.cardtile .face img {
+		position: absolute;
+		inset: 0;
+		height: 100%;
+	}
+	.cardtile .face.turned img {
+		inset: auto;
+		top: 50%;
+		left: 50%;
+		width: 140%;
+		height: auto;
+		aspect-ratio: auto;
+		max-width: none;
+		transform: translate(-50%, -50%) rotate(90deg);
+	}
+	/* The picture lacks the printed collector number; name the card over its
+	   foot without changing the tile's height. */
+	.tilecap {
+		position: absolute;
+		left: var(--space-1);
+		right: var(--space-1);
+		bottom: var(--space-1);
+		padding: var(--space-px) var(--space-1);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		border-radius: var(--radius-xs);
+		background: var(--color-scrim);
+		color: var(--color-text-strong);
+		font-size: var(--text-xs);
+		text-align: left;
+		pointer-events: none;
 	}
 	.cardtile.picked {
 		border-color: var(--color-border-accent);

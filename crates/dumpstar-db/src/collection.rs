@@ -236,6 +236,8 @@ pub struct CollectionRow {
     /// Free-text description carried by user_printings rows (the
     /// "Missing Variant" escape hatch). NULL for catalog printings.
     pub variant_description: Option<String>,
+    /// The deployed side of a leader printing; `None` for one-sided cards.
+    pub back_image_url: Option<String>,
 }
 
 /// SELECT-list columns shared by every collection-row query.
@@ -248,7 +250,7 @@ const ROW_COLUMNS_SQL: &str = concat!(
      ",
     crate::market_price_expr!(),
     " AS market_price, \
-     p.image_url, p.variant_description, cd.traits"
+     p.image_url, p.variant_description, cd.traits, p.back_image_url"
 );
 
 // `p` is `PRINTING_REL`: shared.printings plus the user-DB user_printings
@@ -299,6 +301,7 @@ fn collection_row_from_row(r: &rusqlite::Row) -> rusqlite::Result<CollectionRow>
         image_url: r.get(30)?,
         variant_description: r.get(31)?,
         traits: r.get(32)?,
+        back_image_url: r.get(33)?,
     })
 }
 

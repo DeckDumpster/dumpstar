@@ -7,6 +7,10 @@ import type { SlotPrinting } from "./SlotPrinting";
  */
 export type BinderSlot = { card_id: string, number: string, name: string, subtitle: string | null, rarity: string | null, image_url: string | null, 
 /**
+ * The deployed side of a leader printing; `None` for one-sided cards.
+ */
+back_image_url: string | null, 
+/**
  * `base` (Standard) | `hyperspace` | `showcase` | `promo` (anything
  * else: Promo, Weekly Play, …).
  */

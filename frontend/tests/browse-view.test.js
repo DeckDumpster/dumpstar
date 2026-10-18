@@ -55,7 +55,8 @@ test('one render view: no Binder/Card control, no ?view=, a persisted turn check
 	assert.match(src, /label="Turn leaders and bases"/);
 	assert.match(src, /urlBool\('turn', true\)/);
 	assert.match(src, /set\('turn',/);
-	assert.match(src, /slot\.landscape && turnLandscape/);
+	assert.match(src, /turnLandscape \? tileFace\(slot\)/);
+	assert.match(src, /rotate=\{face\?\.rotate \?\? false\}/);
 });
 
 // HMW-shaped set: Leaders #1-18, Bases #19-34, units 35-272, Hyperspace

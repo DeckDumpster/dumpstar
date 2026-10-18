@@ -323,12 +323,121 @@ pub fn numbering(conn: &Connection) -> Result<Vec<AlarmRecord>> {
     Ok(out)
 }
 
+/// A printing linked to a TCGplayer product of a group that is not its set's
+/// (`wrong_group`): the set's code was taken by a printing the group files
+/// elsewhere. A promo group (`*`) carries any set; a Weekly Play group `XYZP`
+/// also carries the Hyperspace printings of `XYZ`.
+pub fn wrong_group(conn: &Connection) -> Result<Vec<AlarmRecord>> {
+    let rows: Vec<(i64, String, Option<String>)> = conn
+        .prepare("SELECT group_id, name, abbreviation FROM tcgcsv_groups")?
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+        .collect::<std::result::Result<_, _>>()?;
+    let set_codes: std::collections::BTreeSet<String> = conn
+        .prepare("SELECT set_code FROM sets")?
+        .query_map([], |r| r.get(0))?
+        .collect::<std::result::Result<_, _>>()?;
+    let groups = crate::tcgcsv::group_infos(&rows, &set_codes);
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT p.printing_id, p.set_code, p.number, p.variant, t.group_id
+           FROM printing_source_id s
+           JOIN printings p ON p.printing_id = s.printing_id
+           JOIN tcgcsv_products t ON t.product_id = CAST(s.source_id AS INTEGER)
+          WHERE s.source = 'tcgcsv' ORDER BY p.printing_id",
+    )?;
+    let mut out = Vec::new();
+    for row in stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, String>(3)?,
+            r.get::<_, i64>(4)?,
+        ))
+    })? {
+        let (id, set, number, variant, group) = row?;
+        let Some(info) = groups.get(&group) else {
+            continue;
+        };
+        let home = info.set_code.as_str();
+        if home == "*"
+            || home == set
+            || (variant == "Hyperspace" && home.strip_suffix('P') == Some(set.as_str()))
+        {
+            continue;
+        }
+        out.push(AlarmRecord::alarm(
+            "wrong_group",
+            id,
+            format!(
+                "{set} {variant} {number} is priced from TCGplayer group {group}, which belongs to {home}"
+            ),
+        ));
+    }
+    Ok(out)
+}
+
+/// The file name of a scan, without extension: `card_0131048en_base_Consular_Security_Force_Foil`.
+fn image_stem(url: &str) -> Option<&str> {
+    let file = url.rsplit('/').next()?.split(['?', '#']).next()?;
+    Some(file.rsplit_once('.').map_or(file, |(s, _)| s))
+}
+
+/// A printing's image names another card (`image_wrong_card`): SOR #48 Foil's
+/// upstream scan is `..._Consular_Security_Force_Foil`. The upstream names carry
+/// typos of their own (`Jeddha`, `Liutenant`), so a name that merely differs
+/// does not alarm; one that names a different card of the catalog does.
+pub fn image_wrong_card(conn: &Connection) -> Result<Vec<AlarmRecord>> {
+    use crate::crosswalk::name_key;
+    let others: Vec<(String, String)> = conn
+        .prepare("SELECT DISTINCT name FROM cards")?
+        .query_map([], |r| r.get::<_, String>(0))?
+        .filter_map(|n| n.ok())
+        .map(|n| (name_key(&n), n))
+        .filter(|(k, _)| k.len() >= 8)
+        .collect();
+    let mut stmt = conn.prepare(
+        "SELECT p.printing_id, c.name, p.image_url, p.set_code, p.number, p.finish
+           FROM printings p JOIN cards c ON c.card_id = p.card_id
+          WHERE p.image_url IS NOT NULL ORDER BY p.printing_id",
+    )?;
+    let mut out = Vec::new();
+    for row in stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, String>(3)?,
+            r.get::<_, String>(4)?,
+            r.get::<_, String>(5)?,
+        ))
+    })? {
+        let (id, name, url, set, number, finish) = row?;
+        let Some(stem) = image_stem(&url) else {
+            continue;
+        };
+        let key = name_key(stem);
+        if key.contains(&name_key(&name)) {
+            continue;
+        }
+        if let Some((_, other)) = others.iter().find(|(k, _)| key.contains(k.as_str())) {
+            out.push(AlarmRecord::alarm(
+                "image_wrong_card",
+                id,
+                format!("{set} {number} {finish} is {name}, but its image {stem} is {other}"),
+            ));
+        }
+    }
+    Ok(out)
+}
+
 pub fn run(conn: &Connection, now: DateTime<Utc>) -> Result<Vec<AlarmRecord>> {
     let mut out = stored(conn)?;
     out.extend(missing_price_days(conn, now)?);
     out.extend(coverage_drops(conn)?);
     out.extend(missing_sealed_images(conn)?);
     out.extend(numbering(conn)?);
+    out.extend(wrong_group(conn)?);
+    out.extend(image_wrong_card(conn)?);
     let latest: Option<String> = conn.query_row(
         "SELECT MAX(observed_on) FROM prices WHERE source = 'tcgcsv'",
         [],

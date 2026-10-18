@@ -138,6 +138,8 @@ pub struct SearchRow {
     pub traits: Option<String>,
     pub market_price: Option<f64>,
     pub image_url: Option<String>,
+    /// The deployed side of a leader printing; `None` for one-sided cards.
+    pub back_image_url: Option<String>,
     pub variant: String,
     /// `Normal` or `Foil`.
     pub finish: String,
@@ -1055,7 +1057,7 @@ fn build_full_sql(c: &CompiledSearch, page: Option<(u32, u32)>) -> String {
                 cd.aspects, cd.arenas, \
                 {MARKET_PRICE_EXPR} AS market_price, \
                 p.image_url, p.variant, p.finish, \
-                ({OWNED_COUNT_SUBQ}) AS owned_count, cd.traits \
+                ({OWNED_COUNT_SUBQ}) AS owned_count, cd.traits, p.back_image_url \
          {FROM_CLAUSE} \
          WHERE {where_clause} \
          ORDER BY {order_clause}{paging}"
@@ -1082,6 +1084,7 @@ fn row_from(r: &rusqlite::Row) -> rusqlite::Result<SearchRow> {
         traits: r.get(19)?,
         market_price: r.get(14)?,
         image_url: r.get(15)?,
+        back_image_url: r.get(20)?,
         variant: r.get(16)?,
         finish: r.get(17)?,
         owned: owned_count > 0,
@@ -1420,6 +1423,7 @@ mod tests {
             traits: None,
             market_price: None,
             image_url: None,
+            back_image_url: None,
             variant: String::new(),
             finish: String::new(),
             owned: false,
@@ -1541,6 +1545,7 @@ mod tests {
             vec![
                 "arenas",
                 "aspects",
+                "back_image_url",
                 "card_id",
                 "card_type",
                 "copies",

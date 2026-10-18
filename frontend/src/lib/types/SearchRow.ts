@@ -28,7 +28,11 @@ arenas: string | null,
 /**
  * JSON array, e.g. `["Underworld","Droid","Bounty Hunter"]`.
  */
-traits: string | null, market_price: number | null, image_url: string | null, variant: string, 
+traits: string | null, market_price: number | null, image_url: string | null, 
+/**
+ * The deployed side of a leader printing; `None` for one-sided cards.
+ */
+back_image_url: string | null, variant: string, 
 /**
  * `Normal` or `Foil`.
  */

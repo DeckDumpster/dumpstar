@@ -43,4 +43,8 @@ market_price: number | null, image_url: string | null,
  * Free-text description carried by user_printings rows (the
  * "Missing Variant" escape hatch). NULL for catalog printings.
  */
-variant_description: string | null, };
+variant_description: string | null, 
+/**
+ * The deployed side of a leader printing; `None` for one-sided cards.
+ */
+back_image_url: string | null, };

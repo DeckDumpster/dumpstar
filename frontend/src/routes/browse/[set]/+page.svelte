@@ -20,6 +20,7 @@
 	import { ownedFoil, orderedPips, tilePrice } from '$lib/browseView';
 	import { bandRuns, clampCols, MAX_COLS, BROWSE_ROWS, pageAfterResize } from '$lib/browseView';
 			import type { BinderPage } from '$lib/types/BinderPage';
+	import { tileFace } from '$lib/tileFace';
 	import type { BinderSlot } from '$lib/types/BinderSlot';
 
 	let binder = $state<BinderPage | null>(null);
@@ -685,15 +686,16 @@
 		{:else}
 			{#snippet cell(slot: BinderSlot)}
 				<div data-landscape={slot.landscape} class:flat={slot.landscape && !turnLandscape}>
+					{@const face = turnLandscape ? tileFace(slot) : null}
 					<CardTile
 						name={slot.name}
-						image={slot.image_url}
-						number={slot.number}
+						image={face ? face.image : slot.image_url}
+						number={face?.captioned ? `${slot.number} ${slot.name}` : slot.number}
 						rarity={tileRarity(slot.rarity)}
 						foil={ownedFoil(slot)}
 						price={slotTilePrice(slot)}
 						pips={tilePips(slot)}
-						rotate={slot.landscape && turnLandscape}
+						rotate={face?.rotate ?? false}
 						missing={!ownedAny(slot)}
 						onselect={() => (selectedSlot = slot)}
 						onpip={(pip) => {

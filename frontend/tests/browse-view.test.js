@@ -199,3 +199,8 @@ test('tilePrice: several owned finishes show the most valuable owned', () => {
 	const ps = [P(1, 'Normal', 2, 1), P(2, 'Foil', 1, 5), P(3, 'Rainbow Foil', 0, 50)];
 	assert.equal(tilePrice({ printings: ps }, 1), 5);
 });
+
+test('hovered pips have room: the clipping tile footer is padded in the grid', () => {
+	const src = pageSrc();
+	assert.match(src, /\.grid :global\(\.footer\)\s*\{[^}]*padding:\s*var\(--space-1\);[^}]*margin:\s*calc\(-1 \* var\(--space-1\)\)/);
+});

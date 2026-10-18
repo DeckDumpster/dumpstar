@@ -422,7 +422,7 @@ two:
   D=$(mktemp -d); chmod 777 "$D"
   podman run --rm --user 0 -v "$D:/out" \
       -v ~/.config/dumpstar/prod/aws/config:/aws/config:ro \
-      --secret dumpstar-prod-s3-bootstrap,type=mount,target=/aws/credentials \
+      --secret dumpstar-prod-backup-s3,type=mount,target=/aws/credentials \
       -e AWS_CONFIG_FILE=/aws/config -e AWS_SHARED_CREDENTIALS_FILE=/aws/credentials \
       -e AWS_PROFILE=dumpstar "$DUMPSTAR_LITESTREAM_IMAGE" \
       restore -integrity-check full -timestamp 2026-07-01T00:00:00Z -o /out/old.sqlite \

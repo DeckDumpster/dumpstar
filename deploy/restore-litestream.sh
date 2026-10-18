@@ -35,7 +35,7 @@
 #
 # CREDENTIALS
 #   Assume-role profile in ~/.config/dumpstar/<instance>/aws/config + the bootstrap
-#   key from podman secret dumpstar-<instance>-s3-bootstrap (same as the sidecar) —
+#   key from podman secret dumpstar-<instance>-backup-s3 (same as the sidecar) —
 #   auto-refreshing temporary credentials via role assumption, never static keys.
 #
 # THE REGISTRY (--registry, pd-nd6w)
@@ -158,7 +158,7 @@ dumpstar_store_activate
 command -v sqlite3 >/dev/null 2>&1 || { echo "ERROR: sqlite3 not found on host. Install: sudo apt install sqlite3"; exit 1; }
 [ -f "${CONF_DIR}/litestream.env" ] || { echo "ERROR: ${CONF_DIR}/litestream.env not found — is the sidecar configured?"; exit 1; }
 [ -f "${CONF_DIR}/aws/config" ] || { echo "ERROR: ${CONF_DIR}/aws/config not found — is the sidecar configured?"; exit 1; }
-podman secret inspect "dumpstar-${INSTANCE}-s3-bootstrap" >/dev/null 2>&1 || { echo "ERROR: podman secret 'dumpstar-${INSTANCE}-s3-bootstrap' not found."; exit 1; }
+podman secret inspect "dumpstar-${INSTANCE}-backup-s3" >/dev/null 2>&1 || { echo "ERROR: podman secret 'dumpstar-${INSTANCE}-backup-s3' not found."; exit 1; }
 podman volume exists "$VOLUME" 2>/dev/null || { echo "ERROR: data volume '${VOLUME}' not found."; exit 1; }
 
 # Read before anything is stopped: the attribution gate below needs the volume's
@@ -280,7 +280,7 @@ RESTORE_FLAGS+=(-o "/data/${RELPATH}.restore-tmp" "$REPLICA_URL")
 podman run --rm --user 0:0 \
     -v "${VOLUME}:/data" \
     -v "${CONF_DIR}/aws/config:/aws/config:ro" \
-    --secret "dumpstar-${INSTANCE}-s3-bootstrap,type=mount,target=/aws/credentials" \
+    --secret "dumpstar-${INSTANCE}-backup-s3,type=mount,target=/aws/credentials" \
     -e AWS_CONFIG_FILE=/aws/config \
     -e AWS_SHARED_CREDENTIALS_FILE=/aws/credentials \
     -e AWS_PROFILE="${AWS_PROFILE:-dumpstar}" \

@@ -47,8 +47,8 @@ Volume=%h/.config/dumpstar/{{INSTANCE}}/aws/config:/aws/config:ro
 # The bootstrap key (the ONLY secret) is a podman secret mounted as a file —
 # kept out of plaintext dotfiles. Create it once per instance:
 #   printf '[bootstrap]\naws_access_key_id=...\naws_secret_access_key=...\n' \
-#     | podman secret create dumpstar-{{INSTANCE}}-s3-bootstrap -
-Secret=dumpstar-{{INSTANCE}}-s3-bootstrap,type=mount,target=/aws/credentials
+#     | podman secret create dumpstar-{{INSTANCE}}-backup-s3 -
+Secret=dumpstar-{{INSTANCE}}-backup-s3,type=mount,target=/aws/credentials
 Environment=AWS_CONFIG_FILE=/aws/config
 Environment=AWS_SHARED_CREDENTIALS_FILE=/aws/credentials
 

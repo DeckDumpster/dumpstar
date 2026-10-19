@@ -13,6 +13,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Router, middleware, routing::get};
@@ -27,8 +28,28 @@ use dumpstar_db::search_meta::SearchFlag;
 
 mod routes;
 
+pub use dumpster_kit_oidc::OidcConfig;
+use dumpster_kit_oidc::{Oidc, SessionUser};
+use dumpster_kit_tenancy::tenant::TenantId;
 use dumpster_kit_tenancy::{AccessState, HttpError, Tenants};
 pub use dumpster_kit_tenancy::{access, tenant};
+
+tokio::task_local! {
+    /// The tenant an OIDC-signed-in request resolved to. Only [`session_tenant`] scopes it, and
+    /// the only source of a [`TenantId`] is [`Tenants::resolve_session`].
+    static SESSION_TENANT: TenantId;
+}
+
+/// The tenant this request is served as: the OIDC session's, else the Access identity's.
+fn current_tenant() -> Result<TenantId, HttpError> {
+    SESSION_TENANT
+        .try_with(TenantId::clone)
+        .or_else(|_| tenant::current())
+}
+
+/// Paths served without a session: the liveness probe and the backup-freshness marker that
+/// `alarm-status.sh` reads from localhost. Neither carries tenant data.
+const OIDC_BYPASS_PATHS: [&str; 2] = ["/health", "/api/backup-status"];
 
 /// Shared application state: the collection databases this process may serve
 /// plus the immutable search registry/flags loaded once at startup.
@@ -45,8 +66,11 @@ pub struct AppState {
     /// The data dir — read by `/api/backup-status` for the `.backup-last-ok`
     /// freshness marker the host-side Layer 1 checker writes (ivq.5).
     data_dir: Arc<PathBuf>,
-    /// Cloudflare Access JWT validation state (JWKS cache + config).
-    pub(crate) access: Arc<AccessState>,
+    /// Pocket ID sign-in. When present it is the only way in; Access is not consulted.
+    pub(crate) oidc: Option<Arc<Oidc>>,
+    /// Cloudflare Access JWT validation state (JWKS cache + config), used only when `oidc` is
+    /// absent — the transitional mode, and what the container harnesses run.
+    pub(crate) access: Option<Arc<AccessState>>,
 }
 
 impl AppState {
@@ -118,7 +142,7 @@ where
     F: FnOnce(&mut Connection) -> Result<T, DbError> + Send + 'static,
     T: Send + 'static,
 {
-    let id = tenant::current()?;
+    let id = current_tenant()?;
     let tenants = state.tenants.clone();
     let result = tokio::task::spawn_blocking(move || {
         let conn = tenants.connection(&id)?;
@@ -213,6 +237,42 @@ async fn api_responses_are_private(
     resp
 }
 
+/// Require an OIDC session on every path but the bypass list and `/auth/*`. A browser
+/// navigating is sent to Pocket ID; a signed-in user outside the required group gets a 403.
+/// An `/api` call without a session is a 401, never a redirect: the SPA's `fetch` cannot follow
+/// a cross-origin sign-in page.
+async fn sign_in_gate(
+    State(oidc): State<Option<Arc<Oidc>>>,
+    req: axum::extract::Request,
+    next: middleware::Next,
+) -> Response {
+    let Some(oidc) = oidc else {
+        return next.run(req).await;
+    };
+    let is_api = req.uri().path() == "/api" || req.uri().path().starts_with("/api/");
+    let resp = Oidc::layer(State(oidc), req, next).await;
+    if is_api && resp.status().is_redirection() {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    resp
+}
+
+/// Resolve the signed-in user's tenant from their session's email, then serve the request as it.
+/// Runs inside [`sign_in_gate`], which put the [`SessionUser`] in the request.
+async fn session_tenant(
+    State(tenants): State<Arc<Tenants>>,
+    req: axum::extract::Request,
+    next: middleware::Next,
+) -> Result<Response, HttpError> {
+    let user = req
+        .extensions()
+        .get::<SessionUser>()
+        .cloned()
+        .ok_or_else(|| HttpError(StatusCode::UNAUTHORIZED, "not signed in".into()))?;
+    let id = tenants.resolve_session(&user)?;
+    Ok(SESSION_TENANT.scope(id, next.run(req)).await)
+}
+
 /// Build the Axum router. `/health` and `/api/*` are handled by Rust; the
 /// SvelteKit bundle under `/_app` and `/robots.txt` are served as files;
 /// every other path returns the SPA's `index.html` so SvelteKit handles
@@ -239,16 +299,23 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
     // Public `/api` routes (see `routes::public_api_router`) are mounted
     // separately, without the auth layers, so they remain reachable from
     // plain localhost — e.g. `alarm-status.sh` reading `/api/backup-status`.
-    let authenticated_api = routes::authenticated_api_router()
-        .route_layer(middleware::from_fn_with_state(
-            state.tenants.clone(),
-            tenant::layer,
-        ))
-        .route_layer(middleware::from_fn_with_state(
-            state.access.clone(),
-            access::layer,
-        ));
+    let authenticated_api = match (&state.oidc, &state.access) {
+        (Some(_), _) => routes::authenticated_api_router().route_layer(
+            middleware::from_fn_with_state(state.tenants.clone(), session_tenant),
+        ),
+        (None, Some(access)) => routes::authenticated_api_router()
+            .route_layer(middleware::from_fn_with_state(
+                state.tenants.clone(),
+                tenant::layer,
+            ))
+            .route_layer(middleware::from_fn_with_state(
+                access.clone(),
+                access::layer,
+            )),
+        (None, None) => unreachable!("serve() refuses to start with neither sign-in configured"),
+    };
     let public_api = routes::public_api_router();
+    let state_for_gate = state.oidc.clone();
     Router::new()
         .route("/health", get(|| async { "ok" }))
         .nest("/api", authenticated_api)
@@ -288,8 +355,10 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
             "/apple-touch-icon.png",
             ServeFile::new(static_dir.join("apple-touch-icon.png")),
         )
-        .with_state(state)
+        .with_state(state.clone())
+        .merge(state.oidc.as_ref().map(|o| o.router()).unwrap_or_default())
         .fallback(get(spa))
+        .layer(middleware::from_fn_with_state(state_for_gate, sign_in_gate))
         .layer(middleware::from_fn(api_responses_are_private))
         // Outermost, so it sees the final response of every route above.
         .layer(compression())
@@ -306,10 +375,12 @@ pub struct ServeConfig {
     pub data_dir: PathBuf,
     pub host: IpAddr,
     pub port: u16,
-    /// Cloudflare Access configuration. Mandatory: there is no mode without
-    /// it. A JWKS fetch failure is a startup failure. See
-    /// `access::AccessConfig::from_env`.
-    pub access: access::AccessConfig,
+    /// Pocket ID sign-in (`DUMPSTAR_OIDC_*`). Takes precedence over `access`; a discovery or
+    /// JWKS failure is a startup failure. See [`OidcConfig::from_env`].
+    pub oidc: Option<OidcConfig>,
+    /// Cloudflare Access configuration, consulted only when `oidc` is absent. One of the two is
+    /// mandatory: there is no mode with neither.
+    pub access: Option<access::AccessConfig>,
 }
 
 /// Start the HTTP server. The shared catalog is opened up front — so a missing
@@ -343,9 +414,22 @@ pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
             Arc::new(dumpstar_db::search_meta::load_flags(&shared)?),
         )
     };
-    // Cloudflare Access JWT validation: primes the JWKS cache; a failed fetch
-    // is a startup failure.
-    let access = AccessState::new(cfg.access).await?;
+    // Primes the provider's discovery and JWKS; a failed fetch is a startup failure.
+    let oidc = match cfg.oidc {
+        Some(mut c) => {
+            c.bypass_paths
+                .extend(OIDC_BYPASS_PATHS.iter().map(|p| p.to_string()));
+            Some(Oidc::discover(c).await?)
+        }
+        None => None,
+    };
+    let access = match (&oidc, cfg.access) {
+        (None, Some(a)) => Some(AccessState::new(a).await?),
+        (None, None) => anyhow::bail!(
+            "refusing to start: no sign-in is configured (set DUMPSTAR_OIDC_* — see deploy/TENANTS.md)"
+        ),
+        (Some(_), _) => None,
+    };
     let tenants = Tenants::new(
         dumpstar_db::app::app().clone(),
         cfg.tenants_dir,
@@ -358,6 +442,7 @@ pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
         registry,
         flags,
         data_dir: Arc::new(cfg.data_dir.clone()),
+        oidc,
         access,
     };
     let addr = SocketAddr::new(cfg.host, cfg.port);
@@ -421,7 +506,8 @@ mod tests {
             registry,
             flags,
             data_dir: Arc::new(data_dir.clone()),
-            access,
+            oidc: None,
+            access: Some(access),
         };
         app(state, dir.join("static"), data_dir)
     }
@@ -1311,6 +1397,237 @@ mod tests {
     mod isolation {
         use super::*;
 
+        // ---- Pocket ID sign-in (sp-yxan2n) ---------------------------------
+
+        use dumpster_kit_oidc::testing::{FakeProvider, GROUP, TokenSpec};
+
+        /// The app over a fake Pocket ID, with `handles` provisioned, and a browser's cookie
+        /// jar. No JWKS fixture and no Access: this is the production mode.
+        struct Site {
+            router: Router,
+            provider: FakeProvider,
+            tenants_dir: PathBuf,
+            jar: Vec<(String, String)>,
+            _dir: tempfile::TempDir,
+        }
+
+        impl Site {
+            async fn new(handles: &[&str]) -> Self {
+                let dir = tempfile::tempdir().unwrap();
+                let shared = seed(dir.path());
+                let tenants_dir = dir.path().join("tenants");
+                std::fs::create_dir_all(&tenants_dir).unwrap();
+                let registry_db = dir.path().join("registry.sqlite");
+                let registry = dumpstar_db::open_registry(&registry_db).unwrap();
+                for handle in handles {
+                    let user = dumpstar_db::registry::insert(&registry, handle).unwrap();
+                    dumpstar_db::open_user(
+                        &dumpstar_db::tenant_db_file(&tenants_dir, &user.database_id).unwrap(),
+                    )
+                    .unwrap();
+                    dumpstar_db::registry::identity_add(
+                        &registry,
+                        &user.database_id,
+                        &format!("{handle}@example.com"),
+                        None,
+                        None,
+                    )
+                    .unwrap();
+                }
+                let provider = FakeProvider::start().await;
+                let mut cfg = provider.config();
+                cfg.bypass_paths
+                    .extend(OIDC_BYPASS_PATHS.iter().map(|p| p.to_string()));
+                let oidc = Oidc::discover(cfg).await.unwrap();
+                let c = dumpstar_db::open_shared(&shared).unwrap();
+                let state = AppState {
+                    tenants: Arc::new(test_tenants(
+                        tenants_dir.clone(),
+                        shared.clone(),
+                        &registry_db,
+                    )),
+                    registry: Arc::new(dumpstar_db::search_meta::load_registry(&c).unwrap()),
+                    flags: Arc::new(dumpstar_db::search_meta::load_flags(&c).unwrap()),
+                    data_dir: Arc::new(dir.path().to_path_buf()),
+                    oidc: Some(oidc),
+                    access: None,
+                };
+                Site {
+                    router: app(state, dir.path().join("static"), dir.path().to_path_buf()),
+                    provider,
+                    tenants_dir,
+                    jar: vec![],
+                    _dir: dir,
+                }
+            }
+
+            async fn send(&mut self, method: &str, uri: &str, body: Option<&str>) -> Response {
+                let mut b = Request::builder().method(method).uri(uri);
+                if !self.jar.is_empty() {
+                    let cookies: Vec<String> =
+                        self.jar.iter().map(|(k, v)| format!("{k}={v}")).collect();
+                    b = b.header(header::COOKIE, cookies.join("; "));
+                }
+                let req = match body {
+                    Some(json) => b
+                        .header("content-type", "application/json")
+                        .body(Body::from(json.to_string()))
+                        .unwrap(),
+                    None => b.body(Body::empty()).unwrap(),
+                };
+                let resp = self.router.clone().oneshot(req).await.unwrap();
+                for sc in resp.headers().get_all(header::SET_COOKIE) {
+                    let (nv, _) = sc.to_str().unwrap().split_once(';').unwrap();
+                    let (n, v) = nv.split_once('=').unwrap();
+                    self.jar.retain(|(k, _)| k != n);
+                    if !v.is_empty() {
+                        self.jar.push((n.into(), v.into()));
+                    }
+                }
+                resp
+            }
+
+            async fn get(&mut self, uri: &str) -> Response {
+                self.send("GET", uri, None).await
+            }
+
+            /// The whole browser round trip: the login redirect, the provider approving as
+            /// `spec`, the callback. Returns the callback's response.
+            async fn sign_in(&mut self, spec: TokenSpec) -> Response {
+                let r = self.get("/auth/login?return_to=/collection").await;
+                assert_eq!(r.status(), StatusCode::SEE_OTHER);
+                let loc = r.headers()[header::LOCATION].to_str().unwrap().to_string();
+                let state = url::Url::parse(&loc)
+                    .unwrap()
+                    .query_pairs()
+                    .find(|(k, _)| k == "state")
+                    .unwrap()
+                    .1
+                    .into_owned();
+                let code = self.provider.authorize(&loc, spec);
+                self.get(&format!("/auth/callback?code={code}&state={state}"))
+                    .await
+            }
+        }
+
+        fn member(email: &str) -> TokenSpec {
+            TokenSpec {
+                email: email.into(),
+                ..Default::default()
+            }
+        }
+
+        /// Acceptance: sign in through the provider and reach the main page and the API as the
+        /// tenant the email is bound to.
+        #[tokio::test]
+        async fn a_member_signs_in_through_the_provider_and_reaches_the_main_page() {
+            let mut site = Site::new(&["alice"]).await;
+
+            let r = site.get("/").await;
+            assert_eq!(
+                r.status(),
+                StatusCode::SEE_OTHER,
+                "no session: sent to sign in"
+            );
+            assert!(
+                r.headers()[header::LOCATION]
+                    .to_str()
+                    .unwrap()
+                    .starts_with("/auth/login")
+            );
+
+            let cb = site.sign_in(member("alice@example.com")).await;
+            assert_eq!(cb.status(), StatusCode::SEE_OTHER);
+            assert_eq!(cb.headers()[header::LOCATION], "/collection");
+
+            let page = site.get("/").await;
+            assert_eq!(page.status(), StatusCode::OK);
+            assert!(body_string(page).await.contains("Dumpstar"));
+
+            let created = site.send("POST", "/api/collection", Some(ADD_CARD)).await;
+            assert_eq!(created.status(), StatusCode::CREATED);
+            let list = site.get("/api/collection").await;
+            assert_eq!(list.status(), StatusCode::OK);
+            assert!(body_string(list).await.contains("SOR-1-normal"));
+        }
+
+        /// Acceptance: a user outside the required group is a 403 and gets no session.
+        #[tokio::test]
+        async fn a_user_outside_dumpstar_users_gets_403_and_no_session() {
+            let mut site = Site::new(&["alice"]).await;
+            let outsider = TokenSpec {
+                email: "alice@example.com".into(),
+                groups: vec!["someone-elses-users".into()],
+                ..Default::default()
+            };
+            assert_ne!(outsider.groups, vec![GROUP.to_string()]);
+            let cb = site.sign_in(outsider).await;
+            assert_eq!(cb.status(), StatusCode::FORBIDDEN);
+
+            let api = site.get("/api/collection").await;
+            assert_eq!(api.status(), StatusCode::UNAUTHORIZED);
+            let page = site.get("/").await;
+            assert_ne!(page.status(), StatusCode::OK);
+        }
+
+        /// A group member whose email no tenant is bound to is a 403 naming the fix, and
+        /// nothing is provisioned.
+        #[tokio::test]
+        async fn a_member_bound_to_no_tenant_is_a_403_and_creates_nothing() {
+            let mut site = Site::new(&["alice"]).await;
+            let before = std::fs::read_dir(&site.tenants_dir).unwrap().count();
+            site.sign_in(member("mallory@example.com")).await;
+            let resp = site.get("/api/collection").await;
+            assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+            assert!(
+                body_string(resp)
+                    .await
+                    .contains("dumpstar tenant identity add")
+            );
+            assert_eq!(
+                std::fs::read_dir(&site.tenants_dir).unwrap().count(),
+                before
+            );
+        }
+
+        /// An `/api` call without a session is a 401 — never the redirect a page gets.
+        #[tokio::test]
+        async fn api_without_a_session_is_401_not_a_redirect() {
+            let mut site = Site::new(&["alice"]).await;
+            for uri in ["/api/collection", "/api/sets", "/api/binders", "/api/decks"] {
+                let r = site.get(uri).await;
+                assert_eq!(r.status(), StatusCode::UNAUTHORIZED, "{uri}");
+            }
+            let r = site.send("POST", "/api/collection", Some(ADD_CARD)).await;
+            assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+        }
+
+        /// The paths automation reaches without a credential stay open: the liveness probe and
+        /// the backup-freshness marker `alarm-status.sh` reads from localhost.
+        #[tokio::test]
+        async fn the_automation_paths_need_no_session() {
+            let mut site = Site::new(&["alice"]).await;
+            for uri in ["/health", "/api/backup-status"] {
+                let r = site.get(uri).await;
+                assert_eq!(r.status(), StatusCode::OK, "{uri}");
+            }
+        }
+
+        /// "Sign out" ends the app session: the cookie goes, and the API is a 401 again.
+        #[tokio::test]
+        async fn sign_out_ends_the_session() {
+            let mut site = Site::new(&["alice"]).await;
+            site.sign_in(member("alice@example.com")).await;
+            assert_eq!(site.get("/api/collection").await.status(), StatusCode::OK);
+
+            let out = site.get("/auth/logout").await;
+            assert!(out.status().is_redirection());
+            assert_eq!(
+                site.get("/api/collection").await.status(),
+                StatusCode::UNAUTHORIZED
+            );
+        }
+
         /// The kit's negative-JWT corpus, minted by the kit's own JWKS fixture, is refused by
         /// dumpstar's router with the status the corpus states; the valid token under the same
         /// fixture is the positive control.
@@ -1569,7 +1886,8 @@ mod tests {
                 registry: Arc::new(Default::default()),
                 flags: Arc::new(Vec::new()),
                 data_dir: Arc::new(dir.path().to_path_buf()),
-                access: fx.access.clone(),
+                oidc: None,
+                access: Some(fx.access.clone()),
             };
 
             let unscoped = blocking(&state, |c| {

@@ -9,6 +9,7 @@ authors.workspace = true
 dumpstar-core.workspace = true
 dumpstar-db.workspace = true
 dumpster-kit-tenancy.workspace = true
+dumpster-kit-oidc.workspace = true
 rusqlite.workspace = true
 axum.workspace = true
 tokio.workspace = true
@@ -18,11 +19,11 @@ anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 ts-rs.workspace = true
-# Cloudflare Access JWT validation.
 
 [dev-dependencies]
 dumpster-kit-tenancy = { workspace = true, features = ["testing"] }
 dumpster-kit-conformance.workspace = true
+dumpster-kit-oidc = { workspace = true, features = ["testing"] }
 dumpstar-catalog.workspace = true
 chrono.workspace = true
 tempfile.workspace = true
@@ -35,3 +36,4 @@ brotli.workspace = true
 rsa = { version = "0.9", features = ["pem"] }
 # Base64url encoding for JWK construction.
 base64 = "0.22"
+url = "2"

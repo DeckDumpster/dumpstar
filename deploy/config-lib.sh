@@ -41,6 +41,37 @@ EOF
     fi
 }
 
+# Write the Pocket ID sign-in config for <instance> into <conf_dir> if it does not already
+# exist, commented out and mode 600. The Quadlet unit loads it with a mandatory
+# 'EnvironmentFile=', so the file always exists. Left commented, the server runs behind
+# Cloudflare Access alone; once ANY DUMPSTAR_OIDC_* line is set it signs users in itself
+# (dumpstar serve) and all of them are required. The client id and secret are placed here
+# by the operator on the host — never in git or chat.
+#
+# Usage: dumpstar_scaffold_oidc_env <instance> <conf_dir>
+dumpstar_scaffold_oidc_env() {
+    local instance="$1" conf_dir="$2"
+    if [ ! -f "${conf_dir}/oidc.env" ]; then
+        mkdir -p "$conf_dir"
+        cat > "${conf_dir}/oidc.env" <<EOF
+# Pocket ID sign-in for instance '${instance}'. Uncomment and fill ALL of these to have
+# dumpstar sign users in itself; leave them commented to run behind Cloudflare Access.
+# Put comments on their own lines: systemd EnvironmentFile keeps a trailing # comment as part
+# of the value.
+#DUMPSTAR_OIDC_ISSUER=https://id.gantt.pub
+#DUMPSTAR_OIDC_CLIENT_ID=CHANGE_ME
+#DUMPSTAR_OIDC_CLIENT_SECRET=CHANGE_ME
+#DUMPSTAR_OIDC_REDIRECT_URL=https://star.dumpster.cards/auth/callback
+# The Pocket ID group a user must be in.
+#DUMPSTAR_OIDC_REQUIRED_GROUP=dumpstar-users
+# At least 32 bytes, hex or base64: openssl rand -hex 32
+#DUMPSTAR_OIDC_COOKIE_KEY=CHANGE_ME
+EOF
+        chmod 600 "${conf_dir}/oidc.env"
+        echo "    Wrote ${conf_dir}/oidc.env — commented out; fill it to sign in with Pocket ID."
+    fi
+}
+
 # Scaffold every config file the instance's units read: the host-wide alerts.env,
 # store.env and lake.env, and the per-instance litestream.env, alerts.env and
 # access.env. Idempotent and never clobbering; setup.sh and deploy.sh both call it
@@ -262,6 +293,7 @@ fi
 # Per-instance Cloudflare Access + multi-tenant config (db-g6ku: extracted into
 # config-lib.sh so deploy.sh can scaffold it for existing instances too).
 dumpstar_scaffold_access_env "$INSTANCE" "$LS_CONF_DIR"
+dumpstar_scaffold_oidc_env "$INSTANCE" "$LS_CONF_DIR"
 }
 
 # --- Required keys, checked before a deploy restarts anything (sp-kaj3xv) ----

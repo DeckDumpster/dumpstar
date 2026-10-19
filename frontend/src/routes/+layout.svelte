@@ -76,7 +76,10 @@
 				{/if}
 			{/each}
 		</nav>
+		<a class="signout" href="/auth/logout">Sign out</a>
 	</header>
+{:else}
+	<a class="signout floating" href="/auth/logout">Sign out</a>
 {/if}
 
 <main class:flush>
@@ -124,6 +127,21 @@
 	}
 	.crumbs .sep {
 		color: var(--color-text-decorative);
+	}
+	.signout {
+		margin-left: auto;
+		color: var(--color-text-muted);
+		text-decoration: none;
+		font-size: 0.85rem;
+	}
+	.signout:hover {
+		color: var(--color-text-accent);
+	}
+	.signout.floating {
+		position: fixed;
+		top: 0.5rem;
+		right: 0.75rem;
+		z-index: 10;
 	}
 	main {
 		padding: 1.5rem;

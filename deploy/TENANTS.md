@@ -689,6 +689,37 @@ same script replicates a handle-named database beside it and shows the old
 addressing handing the deleted user's card straight back, so the absence in the
 first half means something. It runs in `deploy/ci.sh`.
 
+## Authentication — Pocket ID sign-in (sp-yxan2n)
+
+`dumpstar serve` signs users in itself against Pocket ID (`https://id.gantt.pub`) with
+`dumpster-kit-oidc`: authorization code + PKCE, scopes `openid email profile groups`. It reads
+`DUMPSTAR_OIDC_*` from `~/.config/dumpstar/<instance>/oidc.env` (scaffolded commented out, mode
+600; the operator places the client id, secret and cookie key there, never in git):
+
+```
+DUMPSTAR_OIDC_ISSUER           https://id.gantt.pub
+DUMPSTAR_OIDC_CLIENT_ID / _CLIENT_SECRET   the Pocket ID OIDC client
+DUMPSTAR_OIDC_REDIRECT_URL     https://star.dumpster.cards/auth/callback
+DUMPSTAR_OIDC_REQUIRED_GROUP   dumpstar-users
+DUMPSTAR_OIDC_COOKIE_KEY       >= 32 bytes, hex or base64 (openssl rand -hex 32)
+```
+
+Setting **any** `DUMPSTAR_OIDC_*` variable selects this mode and then all of them are required.
+In it every path needs a session except `/health`, `/api/backup-status` and `/auth/*`; a page
+without one is sent to Pocket ID, an `/api` call is a 401, and a signed-in user outside
+`dumpstar-users` is a 403. The tenant is the one the session's email is bound to
+(`dumpstar tenant identity add`), exactly as the Access email was; an unbound email is a 403.
+The header's "Sign out" link is `/auth/logout`: it ends the app session and Pocket ID's.
+
+With no `DUMPSTAR_OIDC_*` set the server runs behind Cloudflare Access as before (the
+`access.env` section below); with OIDC configured, the Cloudflare JWT is not consulted.
+
+**Automation paths.** Nothing reaches dumpstar with a Cloudflare service token. The only
+machine-read endpoint is `/api/backup-status` (backup freshness timestamps, no tenant data), which
+`alarm-status.sh` reads from localhost and which was already public in the app, so it needs
+neither a narrow Access app nor a bearer token; it and `/health` are the OIDC bypass list
+(`OIDC_BYPASS_PATHS` in `dumpstar-server`).
+
 ## Authentication — Cloudflare Access JWT validation
 
 Cloudflare Access JWT validation is in place

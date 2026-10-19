@@ -132,15 +132,15 @@
 		margin-left: auto;
 		color: var(--color-text-muted);
 		text-decoration: none;
-		font-size: 0.85rem;
+		font-size: var(--text-md);
 	}
 	.signout:hover {
 		color: var(--color-text-accent);
 	}
 	.signout.floating {
 		position: fixed;
-		top: 0.5rem;
-		right: 0.75rem;
+		top: var(--space-2);
+		right: var(--space-3);
 		z-index: 10;
 	}
 	main {

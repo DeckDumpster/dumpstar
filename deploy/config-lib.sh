@@ -72,22 +72,41 @@ EOF
     fi
 }
 
-# Write the OTLP metrics config for <instance> into <conf_dir> if it does not already exist,
-# commented out and mode 600. The Quadlet unit loads it with a mandatory 'EnvironmentFile='
-# (Quadlet rejects a leading '-'), so the file always exists. Left commented, metrics are off.
+# The product metrics stack's OTLP endpoint (dumpster-kit deploy/metrics: VictoriaMetrics on the
+# host's loopback, port 8428). The unit maps the host's loopback to 10.0.2.2 inside the container
+# (Network=pasta:--map-host-loopback,10.0.2.2), which is how the container reaches it.
+DUMPSTAR_PRODUCT_OTLP_ENDPOINT="http://10.0.2.2:8428/opentelemetry/v1/metrics"
+
+# Write the OTLP metrics config for <instance> into <conf_dir>, mode 600. The Quadlet unit loads
+# it with a mandatory 'EnvironmentFile=' (Quadlet rejects a leading '-'), so the file always
+# exists. The prod instance gets the product stack's endpoint set, with no hand edit; a prod
+# file still holding the old CHANGE_ME placeholder is rewritten. Any other instance (test
+# instances) stays commented out, so it never feeds prod's dashboard.
 #
 # Usage: dumpstar_scaffold_metrics_env <instance> <conf_dir>
 dumpstar_scaffold_metrics_env() {
-    local instance="$1" conf_dir="$2"
-    if [ ! -f "${conf_dir}/metrics.env" ]; then
+    local instance="$1" conf_dir="$2" f="$2/metrics.env"
+    if [ "$instance" = prod ]; then
+        if [ -f "$f" ] && grep -q '^DUMPSTER_OTLP_METRICS_ENDPOINT=' "$f"; then
+            return 0
+        fi
         mkdir -p "$conf_dir"
-        cat > "${conf_dir}/metrics.env" <<EOF
-# OTLP metrics push for instance '${instance}'. Uncomment and set the product stack's endpoint to
-# turn metrics on; leave it commented and nothing is sent. Put comments on their own lines.
-#DUMPSTER_OTLP_METRICS_ENDPOINT=https://CHANGE_ME/opentelemetry/v1/metrics
+        cat > "$f" <<EOF
+# OTLP metrics push for instance '${instance}': the product stack's VictoriaMetrics.
+# Put comments on their own lines.
+DUMPSTER_OTLP_METRICS_ENDPOINT=${DUMPSTAR_PRODUCT_OTLP_ENDPOINT}
 EOF
-        chmod 600 "${conf_dir}/metrics.env"
-        echo "    Wrote ${conf_dir}/metrics.env — commented out; set the endpoint to send metrics."
+        chmod 600 "$f"
+        echo "    Wrote ${f} — metrics go to ${DUMPSTAR_PRODUCT_OTLP_ENDPOINT}."
+    elif [ ! -f "$f" ]; then
+        mkdir -p "$conf_dir"
+        cat > "$f" <<EOF
+# OTLP metrics push for instance '${instance}': off. Only prod sends to the product stack;
+# set DUMPSTER_OTLP_METRICS_ENDPOINT here to push from this instance.
+#DUMPSTER_OTLP_METRICS_ENDPOINT=${DUMPSTAR_PRODUCT_OTLP_ENDPOINT}
+EOF
+        chmod 600 "$f"
+        echo "    Wrote ${f} — commented out; this instance sends no metrics."
     fi
 }
 

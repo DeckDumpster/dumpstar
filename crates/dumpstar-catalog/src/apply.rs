@@ -115,7 +115,8 @@ const DERIVATIONS: &[(&str, u32)] = &[
     // 5: a foil with no Normal at its number keeps its own scan (sp-u6tc6b).
     // 6: cards.keywords, is_unique and epic_action, columns added in place to a
     // catalog whose payloads were already applied (sp-nb4vqy).
-    (swu::SRC_OFFICIAL, 6),
+    // 7: a base's epic_action is read from its text (sp-qnkbmh).
+    (swu::SRC_OFFICIAL, 7),
 ];
 
 pub fn derivation_version(source: &str) -> u32 {

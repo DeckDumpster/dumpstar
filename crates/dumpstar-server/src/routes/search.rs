@@ -18,6 +18,10 @@
 //! `sort` the query cannot order by is refused the same way, naming the keys it
 //! can — see [`sort_key`].
 //!
+//! `cursor` pages by keyset: an empty `cursor=` asks for the first page of a
+//! walk, and each response's `next_cursor` is passed back as `cursor` for the
+//! next. See [`search::Slice::Cursor`].
+//!
 //! `limit=all` asks for the whole result set instead of a page. It is not the
 //! unbounded default coming back: it is a caller stating that it can hold the
 //! result, which the collection page can now that it renders a window of the
@@ -61,6 +65,10 @@ struct SearchParams {
     /// Rows to skip. Absent means 0. An offset past the end is an empty page
     /// with an honest `total`, not an error.
     offset: Option<String>,
+    /// Opaque `next_cursor` of the previous page; empty for the first page. Pages by keyset seek, and the
+    /// totals ride in it rather than being recounted. `offset` stays accepted
+    /// for callers that have not moved over, but not alongside this.
+    cursor: Option<String>,
 }
 
 /// A paging complaint: HTTP 400 with `error` and no `position`.
@@ -105,6 +113,22 @@ const LIMIT_ALL: &str = "all";
 /// Which slice of the result the caller asked for.
 fn slice_from(p: &SearchParams) -> Result<search::Slice, AppError> {
     let offset = offset_bound(p.offset.as_deref())?;
+    if let Some(cursor) = &p.cursor {
+        if p.offset.is_some() {
+            return Err(paging_error(
+                "cursor and offset are two ways to page; send one".to_string(),
+            ));
+        }
+        if p.limit.as_deref() == Some(LIMIT_ALL) {
+            return Err(paging_error(
+                "cursor has no meaning with limit=all".to_string(),
+            ));
+        }
+        return Ok(search::Slice::Cursor {
+            limit: limit_bound(p.limit.as_deref())?,
+            cursor: Some(cursor.clone()).filter(|c| !c.is_empty()),
+        });
+    }
     if p.limit.as_deref() == Some(LIMIT_ALL) {
         if offset != 0 {
             return Err(paging_error(
@@ -113,11 +137,17 @@ fn slice_from(p: &SearchParams) -> Result<search::Slice, AppError> {
         }
         return Ok(search::Slice::All);
     }
-    let Some(raw) = p.limit.as_deref() else {
-        return Ok(search::Slice::Page {
-            limit: search::DEFAULT_LIMIT,
-            offset,
-        });
+    Ok(search::Slice::Page {
+        limit: limit_bound(p.limit.as_deref())?,
+        offset,
+    })
+}
+
+/// Parse a page `limit`: absent is the bounded default, anything outside
+/// `0..=MAX_LIMIT` is refused.
+fn limit_bound(raw: Option<&str>) -> Result<u32, AppError> {
+    let Some(raw) = raw else {
+        return Ok(search::DEFAULT_LIMIT);
     };
     let max = search::MAX_LIMIT;
     let refuse = || {
@@ -129,7 +159,7 @@ fn slice_from(p: &SearchParams) -> Result<search::Slice, AppError> {
     if limit > max {
         return Err(refuse());
     }
-    Ok(search::Slice::Page { limit, offset })
+    Ok(limit)
 }
 
 /// Run a search. An empty `q` is the default view (all owned printings).
@@ -160,9 +190,14 @@ async fn collection_search(
     })
     .await?;
     // Per-stage timings, so a slow sort can be told apart from a slow client.
+    // A cursor page after the first carries its totals and does not count.
+    let totals = t
+        .totals_ms
+        .map(|d| format!("totals;dur={d:.2}, "))
+        .unwrap_or_default();
     let timing = format!(
-        "totals;dur={:.2}, rows;dur={:.2}, copies;dur={:.2}",
-        t.totals_ms, t.rows_ms, t.copies_ms
+        "{totals}rows;dur={:.2}, copies;dur={:.2}",
+        t.rows_ms, t.copies_ms
     );
     Ok((
         [(

@@ -3169,7 +3169,7 @@ mod tests {
                         "create_deck",
                         json!({
                             "name": format!("Pack {n}"), "format": "SWU Jumpstart Cube",
-                            "group": format!("swu-jumpstart-cube-{n}"),
+                            "group": "swu-jumpstart-cube",
                         }),
                     )
                     .await

@@ -113,7 +113,9 @@ const DERIVATIONS: &[(&str, u32)] = &[
     // set's promo code by the TCGplayer group that sells them (sp-sv0ys9).
     // 4: a foil printing never keeps its foil scan (sp-stvf9v).
     // 5: a foil with no Normal at its number keeps its own scan (sp-u6tc6b).
-    (swu::SRC_OFFICIAL, 5),
+    // 6: cards.keywords, is_unique and epic_action, columns added in place to a
+    // catalog whose payloads were already applied (sp-nb4vqy).
+    (swu::SRC_OFFICIAL, 6),
 ];
 
 pub fn derivation_version(source: &str) -> u32 {

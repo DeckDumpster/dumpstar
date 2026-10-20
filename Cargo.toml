@@ -32,16 +32,19 @@ dumpstar-server = { path = "crates/dumpstar-server" }
 dumpstar-ship = { path = "crates/dumpstar-ship" }
 
 # The shared kit, pinned to a revision (the kit has no tags yet); moves only through a bump bead.
-dumpster-kit-tcgcsv = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "f33691a9811ab9cf7faa0d809d62df578d60ceba" }
-dumpster-kit-tenancy = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "f33691a9811ab9cf7faa0d809d62df578d60ceba" }
-dumpster-kit-lake = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "f33691a9811ab9cf7faa0d809d62df578d60ceba" }
-dumpster-kit-keys = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "f33691a9811ab9cf7faa0d809d62df578d60ceba" }
-dumpster-kit-ship = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "f33691a9811ab9cf7faa0d809d62df578d60ceba" }
-dumpster-kit-erase = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "f33691a9811ab9cf7faa0d809d62df578d60ceba" }
-dumpster-kit-derive = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "f33691a9811ab9cf7faa0d809d62df578d60ceba" }
-dumpster-kit-lakehouse = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "f33691a9811ab9cf7faa0d809d62df578d60ceba" }
-dumpster-kit-conformance = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "f33691a9811ab9cf7faa0d809d62df578d60ceba" }
-dumpster-kit-oidc = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "f33691a9811ab9cf7faa0d809d62df578d60ceba" }
+dumpster-kit-tcgcsv = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "896d73a86f4101e65d09eea2c70ba807d02152c9" }
+dumpster-kit-tenancy = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "896d73a86f4101e65d09eea2c70ba807d02152c9" }
+dumpster-kit-lake = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "896d73a86f4101e65d09eea2c70ba807d02152c9" }
+dumpster-kit-keys = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "896d73a86f4101e65d09eea2c70ba807d02152c9" }
+dumpster-kit-ship = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "896d73a86f4101e65d09eea2c70ba807d02152c9" }
+dumpster-kit-erase = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "896d73a86f4101e65d09eea2c70ba807d02152c9" }
+dumpster-kit-derive = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "896d73a86f4101e65d09eea2c70ba807d02152c9" }
+dumpster-kit-lakehouse = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "896d73a86f4101e65d09eea2c70ba807d02152c9" }
+dumpster-kit-conformance = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "896d73a86f4101e65d09eea2c70ba807d02152c9" }
+dumpster-kit-oidc = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "896d73a86f4101e65d09eea2c70ba807d02152c9" }
+dumpster-kit-mcp = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "896d73a86f4101e65d09eea2c70ba807d02152c9" }
+dumpster-kit-mcp-auth = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "896d73a86f4101e65d09eea2c70ba807d02152c9" }
+dumpster-kit-telemetry = { git = "https://github.com/DeckDumpster/dumpster-kit", rev = "896d73a86f4101e65d09eea2c70ba807d02152c9" }
 
 # External — crates opt in via `dep.workspace = true` as tasks need them
 anyhow = "1"

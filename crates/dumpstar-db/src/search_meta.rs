@@ -19,6 +19,12 @@ use rusqlite::{Connection, params};
 use crate::error::Result;
 
 pub(crate) const KEYWORDS_SEED: &str = include_str!("../../../data/search_keywords.json");
+
+/// The search vocabulary file, verbatim: what the agent tool description and `query_help` are
+/// generated from, so they cannot drift from the UI's own help.
+pub fn keywords_json() -> &'static str {
+    KEYWORDS_SEED
+}
 // `rarities.json` ranks the Star Wars: Unlimited tiers (Common through
 // Legendary, Special, and Promo) so `r>=` / `r<` compare by rank.
 pub(crate) const RARITIES_SEED: &str = include_str!("../../../data/rarities.json");

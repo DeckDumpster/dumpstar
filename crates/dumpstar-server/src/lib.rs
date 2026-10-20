@@ -26,10 +26,13 @@ use dumpstar_core::query::KeywordRegistry;
 use dumpstar_db::DbError;
 use dumpstar_db::search_meta::SearchFlag;
 
+mod mcp;
 mod routes;
 
+use dumpster_kit_mcp_auth::{McpAuth, McpAuthConfig};
 pub use dumpster_kit_oidc::OidcConfig;
 use dumpster_kit_oidc::{Oidc, SessionUser};
+use dumpster_kit_telemetry::Telemetry;
 use dumpster_kit_tenancy::tenant::TenantId;
 use dumpster_kit_tenancy::{AccessState, HttpError, Tenants};
 pub use dumpster_kit_tenancy::{access, tenant};
@@ -71,6 +74,18 @@ pub struct AppState {
     /// Cloudflare Access JWT validation state (JWKS cache + config), used only when `oidc` is
     /// absent — the transitional mode, and what the container harnesses run.
     pub(crate) access: Option<Arc<AccessState>>,
+    /// The agent-tool endpoint (`/mcp`), when configured. Needs `oidc`: Pocket ID is its
+    /// authorization server.
+    pub(crate) mcp: Option<McpMount>,
+}
+
+/// What `/mcp` is served from: the token validator and the tool set.
+#[derive(Clone)]
+pub(crate) struct McpMount {
+    auth: Arc<McpAuth>,
+    tools: Arc<mcp::DumpstarTools>,
+    resolver: Arc<mcp::Resolver>,
+    telemetry: Telemetry,
 }
 
 impl AppState {
@@ -316,6 +331,22 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
     };
     let public_api = routes::public_api_router();
     let state_for_gate = state.oidc.clone();
+    let mcp_routes = state.mcp.as_ref().map(|m| {
+        let endpoint = dumpster_kit_mcp::router_with_telemetry(
+            "dumpstar",
+            m.tools.clone(),
+            m.resolver.clone(),
+            dumpster_kit_mcp::Limits::default(),
+            &m.telemetry,
+        )
+        .layer(middleware::from_fn_with_state(
+            m.auth.clone(),
+            McpAuth::layer,
+        ));
+        Router::new()
+            .nest("/mcp", endpoint)
+            .merge(m.auth.metadata_router())
+    });
     Router::new()
         .route("/health", get(|| async { "ok" }))
         .nest("/api", authenticated_api)
@@ -357,6 +388,7 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
         )
         .with_state(state.clone())
         .merge(state.oidc.as_ref().map(|o| o.router()).unwrap_or_default())
+        .merge(mcp_routes.unwrap_or_default())
         .fallback(get(spa))
         .layer(middleware::from_fn_with_state(state_for_gate, sign_in_gate))
         .layer(middleware::from_fn(api_responses_are_private))
@@ -381,7 +413,14 @@ pub struct ServeConfig {
     /// Cloudflare Access configuration, consulted only when `oidc` is absent. One of the two is
     /// mandatory: there is no mode with neither.
     pub access: Option<access::AccessConfig>,
+    /// The agent-tool endpoint's own URL (`DUMPSTAR_MCP_RESOURCE`, e.g. `https://star.dumpster.cards/mcp`),
+    /// the `aud` its access tokens must carry. `None` serves no `/mcp`. Requires `oidc`.
+    pub mcp_resource: Option<String>,
 }
+
+/// Paths the browser sign-in gate lets through when `/mcp` is served: the endpoint itself
+/// (which validates its own bearer token) and the protected-resource metadata clients read first.
+const MCP_BYPASS_PATHS: [&str; 2] = ["/mcp", "/.well-known/oauth-protected-resource"];
 
 /// Start the HTTP server. The shared catalog is opened up front — so a missing
 /// catalog (`dumpstar setup` not run) fails at startup rather than on the
@@ -415,10 +454,29 @@ pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
         )
     };
     // Primes the provider's discovery and JWKS; a failed fetch is a startup failure.
+    if cfg.mcp_resource.is_some() && cfg.oidc.is_none() {
+        anyhow::bail!(
+            "refusing to start: DUMPSTAR_MCP_RESOURCE needs Pocket ID sign-in (DUMPSTAR_OIDC_*), which is the /mcp authorization server"
+        );
+    }
+    let mcp_cfg = match (&cfg.mcp_resource, &cfg.oidc) {
+        (Some(resource), Some(o)) => Some(McpAuthConfig {
+            issuer: o.issuer.clone(),
+            resource: resource.clone(),
+            required_group: o.required_group.clone(),
+            clock_skew: o.clock_skew,
+            jwks_refetch_min: o.jwks_refetch_min,
+        }),
+        _ => None,
+    };
     let oidc = match cfg.oidc {
         Some(mut c) => {
             c.bypass_paths
                 .extend(OIDC_BYPASS_PATHS.iter().map(|p| p.to_string()));
+            if mcp_cfg.is_some() {
+                c.bypass_paths
+                    .extend(MCP_BYPASS_PATHS.iter().map(|p| p.to_string()));
+            }
             Some(Oidc::discover(c).await?)
         }
         None => None,
@@ -437,13 +495,34 @@ pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
         &cfg.registry_db,
         dumpstar_db::user_spec(),
     )?;
+    let tenants = Arc::new(tenants);
+    let mcp = match mcp_cfg {
+        Some(c) => {
+            let telemetry = Telemetry::init(dumpster_kit_telemetry::Config::from_env(
+                "dumpstar",
+                "dumpstar",
+                env!("CARGO_PKG_VERSION"),
+            ));
+            let auth = McpAuth::discover(c, tenants.clone(), &telemetry).await?;
+            let (tools, resolver) = mcp::tools(tenants.clone(), registry.clone(), flags.clone())
+                .map_err(anyhow::Error::msg)?;
+            Some(McpMount {
+                auth,
+                tools,
+                resolver,
+                telemetry,
+            })
+        }
+        None => None,
+    };
     let state = AppState {
-        tenants: Arc::new(tenants),
+        tenants,
         registry,
         flags,
         data_dir: Arc::new(cfg.data_dir.clone()),
         oidc,
         access,
+        mcp,
     };
     let addr = SocketAddr::new(cfg.host, cfg.port);
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -508,6 +587,7 @@ mod tests {
             data_dir: Arc::new(data_dir.clone()),
             oidc: None,
             access: Some(access),
+            mcp: None,
         };
         app(state, dir.join("static"), data_dir)
     }
@@ -1436,7 +1516,10 @@ mod tests {
 
         // ---- Pocket ID sign-in (sp-yxan2n) ---------------------------------
 
-        use dumpster_kit_oidc::testing::{FakeProvider, GROUP, TokenSpec};
+        use dumpster_kit_oidc::testing::{FakeProvider, GROUP, TokenSpec, unix_now};
+        use serde_json::{Value, json};
+
+        const MCP_RESOURCE: &str = "https://star.test/mcp";
 
         /// The app over a fake Pocket ID, with `handles` provisioned, and a browser's cookie
         /// jar. No JWKS fixture and no Access: this is the production mode.
@@ -1450,8 +1533,19 @@ mod tests {
 
         impl Site {
             async fn new(handles: &[&str]) -> Self {
+                Self::with_catalog(handles, "").await
+            }
+
+            /// As [`Site::new`], with `extra_sql` run against the seeded catalog first.
+            async fn with_catalog(handles: &[&str], extra_sql: &str) -> Self {
                 let dir = tempfile::tempdir().unwrap();
                 let shared = seed(dir.path());
+                if !extra_sql.is_empty() {
+                    dumpstar_db::open_shared(&shared)
+                        .unwrap()
+                        .execute_batch(extra_sql)
+                        .unwrap();
+                }
                 let tenants_dir = dir.path().join("tenants");
                 std::fs::create_dir_all(&tenants_dir).unwrap();
                 let registry_db = dir.path().join("registry.sqlite");
@@ -1475,19 +1569,47 @@ mod tests {
                 let mut cfg = provider.config();
                 cfg.bypass_paths
                     .extend(OIDC_BYPASS_PATHS.iter().map(|p| p.to_string()));
+                cfg.bypass_paths
+                    .extend(MCP_BYPASS_PATHS.iter().map(|p| p.to_string()));
+                let (issuer, group) = (cfg.issuer.clone(), cfg.required_group.clone());
                 let oidc = Oidc::discover(cfg).await.unwrap();
                 let c = dumpstar_db::open_shared(&shared).unwrap();
+                let tenants = Arc::new(test_tenants(
+                    tenants_dir.clone(),
+                    shared.clone(),
+                    &registry_db,
+                ));
+                let registry = Arc::new(dumpstar_db::search_meta::load_registry(&c).unwrap());
+                let flags = Arc::new(dumpstar_db::search_meta::load_flags(&c).unwrap());
+                let telemetry = Telemetry::disabled();
+                let auth = McpAuth::discover(
+                    McpAuthConfig {
+                        issuer,
+                        resource: MCP_RESOURCE.into(),
+                        required_group: group,
+                        clock_skew: std::time::Duration::from_secs(5),
+                        jwks_refetch_min: std::time::Duration::ZERO,
+                    },
+                    tenants.clone(),
+                    &telemetry,
+                )
+                .await
+                .unwrap();
+                let (tools, resolver) =
+                    mcp::tools(tenants.clone(), registry.clone(), flags.clone()).unwrap();
                 let state = AppState {
-                    tenants: Arc::new(test_tenants(
-                        tenants_dir.clone(),
-                        shared.clone(),
-                        &registry_db,
-                    )),
-                    registry: Arc::new(dumpstar_db::search_meta::load_registry(&c).unwrap()),
-                    flags: Arc::new(dumpstar_db::search_meta::load_flags(&c).unwrap()),
+                    tenants,
+                    registry,
+                    flags,
                     data_dir: Arc::new(dir.path().to_path_buf()),
                     oidc: Some(oidc),
                     access: None,
+                    mcp: Some(McpMount {
+                        auth,
+                        tools,
+                        resolver,
+                        telemetry,
+                    }),
                 };
                 Site {
                     router: app(state, dir.path().join("static"), dir.path().to_path_buf()),
@@ -1982,6 +2104,7 @@ mod tests {
                 data_dir: Arc::new(dir.path().to_path_buf()),
                 oidc: None,
                 access: Some(fx.access.clone()),
+                mcp: None,
             };
 
             let unscoped = blocking(&state, |c| {
@@ -2601,6 +2724,242 @@ mod tests {
             // Outside /api nothing changes: the SPA shell is not tenant data.
             let shell = tokenless(&router, "GET", "/").await;
             assert!(shell.headers().get(header::CACHE_CONTROL).is_none());
+        }
+
+        // ---- Agent tools at /mcp (sp-cuhb3r) -------------------------------
+
+        impl Site {
+            fn token_for(&self, email: &str) -> String {
+                self.provider.mint_jwt(
+                    json!({
+                        "iss": self.provider.issuer, "aud": MCP_RESOURCE,
+                        "sub": format!("sub-{email}"), "email": email, "groups": [GROUP],
+                        "client_id": "claude-code", "exp": unix_now() + 3600,
+                    }),
+                    None,
+                )
+            }
+
+            async fn rpc(&self, token: &str, method: &str, params: Value) -> Value {
+                let req = Request::builder()
+                    .method("POST")
+                    .uri("/mcp")
+                    .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
+                            .to_string(),
+                    ))
+                    .unwrap();
+                let resp = self.router.clone().oneshot(req).await.unwrap();
+                assert_eq!(resp.status(), StatusCode::OK);
+                serde_json::from_str(&body_string(resp).await).unwrap()
+            }
+
+            /// A tool's structured result, or its error text.
+            async fn tool(&self, token: &str, name: &str, args: Value) -> Result<Value, String> {
+                let r = self
+                    .rpc(
+                        token,
+                        "tools/call",
+                        json!({"name": name, "arguments": args}),
+                    )
+                    .await;
+                let r = &r["result"];
+                if r["isError"] == true {
+                    Err(r["content"][0]["text"].as_str().unwrap().to_string())
+                } else {
+                    Ok(r["structuredContent"].clone())
+                }
+            }
+        }
+
+        const SECOND_CARD: &str = "INSERT INTO cards (card_id, name, card_type, cost, aspects) \
+               VALUES ('SOR-2', 'Han Solo', 'Unit', 4, '[\"Cunning\",\"Heroism\"]'); \
+             INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
+               VALUES ('SOR-2-normal', 'SOR-2', 'SOR', '2', 'Standard', 'Normal');";
+
+        /// `/mcp` without a bearer is a 401 pointing at the metadata, and the metadata is
+        /// served without a session; a browser session cookie does not open it.
+        #[tokio::test]
+        async fn mcp_without_a_bearer_is_401_and_a_cookie_is_not_one() {
+            let mut site = Site::new(&["alice"]).await;
+            let r = site.get("/mcp").await;
+            assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+            assert!(
+                r.headers()[header::WWW_AUTHENTICATE]
+                    .to_str()
+                    .unwrap()
+                    .contains("resource_metadata=")
+            );
+            let meta = site.get("/.well-known/oauth-protected-resource/mcp").await;
+            assert_eq!(meta.status(), StatusCode::OK);
+            let v: Value = serde_json::from_str(&body_string(meta).await).unwrap();
+            assert_eq!(v["resource"], MCP_RESOURCE);
+
+            site.sign_in(member("alice@example.com")).await;
+            assert_eq!(site.get("/mcp").await.status(), StatusCode::UNAUTHORIZED);
+        }
+
+        /// A bearer token opens nothing under `/api`.
+        #[tokio::test]
+        async fn a_bearer_token_does_not_open_the_api() {
+            let site = Site::new(&["alice"]).await;
+            let token = site.token_for("alice@example.com");
+            let req = Request::builder()
+                .uri("/api/collection")
+                .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                .body(Body::empty())
+                .unwrap();
+            let resp = site.router.clone().oneshot(req).await.unwrap();
+            assert_ne!(resp.status(), StatusCode::OK);
+        }
+
+        /// The whole v1 contract as one tenant, and a second tenant sees none of it.
+        #[tokio::test]
+        async fn an_agent_builds_a_deck_from_owned_copies_and_no_copy_lands_twice() {
+            let mut site = Site::with_catalog(&["alice", "bob"], SECOND_CARD).await;
+            site.sign_in(member("alice@example.com")).await;
+            for _ in 0..2 {
+                let r = site.send("POST", "/api/collection", Some(ADD_CARD)).await;
+                assert_eq!(r.status(), StatusCode::CREATED);
+            }
+            let alice = site.token_for("alice@example.com");
+            let bob = site.token_for("bob@example.com");
+
+            let listed = site.rpc(&alice, "tools/list", json!({})).await;
+            let names: Vec<&str> = listed["result"]["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|t| t["name"].as_str().unwrap())
+                .collect();
+            for want in dumpster_kit_mcp::v1_tools() {
+                assert!(names.contains(&want.as_str()), "missing {want}");
+            }
+
+            let found = site
+                .tool(
+                    &alice,
+                    "search_cards",
+                    json!({"q": "luke", "owned_only": true}),
+                )
+                .await
+                .unwrap();
+            assert_eq!(found["results"][0]["id"], "SOR-1");
+            assert_eq!(found["results"][0]["owned_count"], 2);
+            assert_eq!(found["results"][0]["available_count"], 2);
+            assert_eq!(found["results"][0]["game"]["aspects"], json!(["Vigilance"]));
+
+            let a = site
+                .tool(
+                    &alice,
+                    "create_deck",
+                    json!({"name": "Pack 1", "format": "Jumpstart", "group": "Cube"}),
+                )
+                .await
+                .unwrap()["deck"]["id"]
+                .as_i64()
+                .unwrap();
+            let b = site
+                .tool(
+                    &alice,
+                    "create_deck",
+                    json!({"name": "Pack 2", "format": "Jumpstart", "group": "Cube"}),
+                )
+                .await
+                .unwrap()["deck"]["id"]
+                .as_i64()
+                .unwrap();
+            let one = json!({"lines": [{"card_id": "SOR-1", "qty": 2}]});
+            let set = site
+                .tool(
+                    &alice,
+                    "set_deck_lines",
+                    json!({"id": a, "lines": one["lines"]}),
+                )
+                .await
+                .unwrap();
+            assert_eq!(set["reserved"], 2);
+
+            let again = site
+                .tool(
+                    &alice,
+                    "set_deck_lines",
+                    json!({"id": b, "lines": one["lines"]}),
+                )
+                .await;
+            assert!(again.unwrap_err().contains("not enough free copies"));
+            let summary = site
+                .tool(&alice, "collection_summary", json!({}))
+                .await
+                .unwrap();
+            assert_eq!(summary["reserved_copies"], 2);
+            assert_eq!(summary["available_copies"], 0);
+
+            let freed = site
+                .tool(&alice, "release_deck", json!({"id": a}))
+                .await
+                .unwrap();
+            assert_eq!(freed["released"], 2);
+            site.tool(
+                &alice,
+                "set_deck_lines",
+                json!({"id": b, "lines": one["lines"]}),
+            )
+            .await
+            .unwrap();
+            let unsanctioned = site
+                .tool(&alice, "validate_deck", json!({"id": b}))
+                .await
+                .unwrap();
+            assert_eq!(unsanctioned["sanctioned"], false);
+
+            let theirs = site.tool(&bob, "list_decks", json!({})).await.unwrap();
+            assert_eq!(theirs["decks"], json!([]));
+            assert!(site.tool(&bob, "get_deck", json!({"id": b})).await.is_err());
+            let none = site
+                .tool(&bob, "search_cards", json!({"q": "", "owned_only": true}))
+                .await
+                .unwrap();
+            assert_eq!(none["results"], json!([]));
+            site.tool(&alice, "delete_deck", json!({"id": b}))
+                .await
+                .unwrap();
+        }
+
+        /// An unknown term gets the nearest valid ones, not an empty result.
+        #[tokio::test]
+        async fn a_misspelled_term_names_the_nearest_valid_ones() {
+            let site = Site::new(&["alice"]).await;
+            let t = site.token_for("alice@example.com");
+            let e = site
+                .tool(&t, "search_cards", json!({"q": "aspec:vigilance"}))
+                .await
+                .unwrap_err();
+            assert!(e.contains("did you mean") && e.contains("'aspect:'"), "{e}");
+        }
+
+        /// Acceptance: the kit's conformance suite passes against a running dumpstar.
+        #[tokio::test]
+        async fn the_kit_conformance_suite_passes_against_a_running_site() {
+            let site = Site::with_catalog(&["alice"], SECOND_CARD).await;
+            let token = site.token_for("alice@example.com");
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            let router = site.router.clone();
+            tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+            let keywords = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../data/search_keywords.json");
+            let report =
+                dumpster_kit_mcp::conformance::run(&dumpster_kit_mcp::conformance::Config {
+                    url: format!("http://{addr}/mcp"),
+                    authorization: Some(format!("Bearer {token}")),
+                    keywords_path: keywords,
+                    paging_query: "t:unit".into(),
+                })
+                .await;
+            assert!(report.passed(), "{report}");
         }
     }
 }

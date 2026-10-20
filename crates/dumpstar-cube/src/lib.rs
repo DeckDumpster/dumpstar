@@ -82,7 +82,7 @@ struct Card {
     kind: String,
     cost: Option<u32>,
     hp: Option<i64>,
-    /// `Some` when the card object says whether it has an epic action.
+    /// `Some` when the card object carries a non-null `epic_action`; a null is "not said".
     epic_action: Option<bool>,
     aspects: BTreeSet<String>,
     arenas: BTreeSet<String>,
@@ -105,6 +105,7 @@ impl Card {
             hp: game["hp"].as_i64(),
             epic_action: game
                 .get("epic_action")
+                .filter(|e| !e.is_null())
                 .map(|e| e.as_str().is_some_and(|t| !t.is_empty())),
             aspects: strings(&game["aspects"]),
             arenas: strings(&game["arenas"]),
@@ -648,8 +649,21 @@ mod tests {
         edit(&mut p, "B25", |c| c["name"] = json!("Plain Outpost"));
         assert!(rules(&p).contains(&"base-name"));
         let mut p = pack(1, "Heroism", "Command");
-        edit(&mut p, "B25", |c| c["game"]["epic_action"] = json!(null));
+        edit(&mut p, "B25", |c| {
+            c["name"] = json!("Plain Outpost");
+            c["game"]["epic_action"] = json!(null);
+        });
         assert!(rules(&p).contains(&"base-name"));
+    }
+
+    #[test]
+    fn a_null_epic_action_on_a_known_epic_base_falls_back_to_the_name() {
+        let mut p = pack(1, "Heroism", "Command");
+        edit(&mut p, "B25", |c| {
+            c["name"] = json!("Security Complex");
+            c["game"]["epic_action"] = json!(null);
+        });
+        assert!(rules(&p).is_empty());
     }
 
     #[test]

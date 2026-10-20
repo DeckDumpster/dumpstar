@@ -649,7 +649,10 @@ mod tests {
         edit(&mut p, "B25", |c| c["name"] = json!("Plain Outpost"));
         assert!(rules(&p).contains(&"base-name"));
         let mut p = pack(1, "Heroism", "Command");
-        edit(&mut p, "B25", |c| c["game"]["epic_action"] = json!(null));
+        edit(&mut p, "B25", |c| {
+            c["name"] = json!("Plain Outpost");
+            c["game"]["epic_action"] = json!(null);
+        });
         assert!(rules(&p).contains(&"base-name"));
     }
 

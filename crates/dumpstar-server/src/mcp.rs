@@ -174,6 +174,92 @@ struct Structured {
     rules_text: Option<String>,
 }
 
+/// Owned and available copy counts, keyed by label, as the breakdowns return them.
+#[derive(Default)]
+struct Tally(std::collections::BTreeMap<String, (u64, u64)>);
+
+impl Tally {
+    fn add(&mut self, key: &str, available: bool) {
+        let e = self.0.entry(key.to_string()).or_default();
+        e.0 += 1;
+        e.1 += u64::from(available);
+    }
+
+    fn json(&self) -> Value {
+        Value::Object(
+            self.0
+                .iter()
+                .map(|(k, (o, a))| (k.clone(), json!({"owned": o, "available": a})))
+                .collect(),
+        )
+    }
+}
+
+/// Owned and available copies by type, aspect and set; bases by HP and epic or vanilla;
+/// leaders by aspect and alignment. A card with two aspects counts under each.
+fn breakdown(conn: &Connection) -> Result<Value, ToolError> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT cd.card_type, cd.aspects, cd.hp, cd.epic_action, p.set_code, c.deck_id IS NULL \
+               FROM collection c \
+               JOIN shared.printings p ON p.printing_id = c.printing_id \
+               JOIN shared.cards cd ON cd.card_id = p.card_id \
+              WHERE c.status = 'owned'",
+        )
+        .map_err(|e| db_err(e.into()))?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, Option<String>>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, Option<i64>>(2)?,
+                r.get::<_, Option<String>>(3)?,
+                r.get::<_, String>(4)?,
+                r.get::<_, bool>(5)?,
+            ))
+        })
+        .map_err(|e| db_err(e.into()))?;
+    let (mut by_type, mut by_aspect, mut by_set) =
+        (Tally::default(), Tally::default(), Tally::default());
+    let (mut base_hp, mut base_kind) = (Tally::default(), Tally::default());
+    let (mut leader_aspect, mut leader_align) = (Tally::default(), Tally::default());
+    for row in rows {
+        let (kind, aspects, hp, epic, set, available) = row.map_err(|e| db_err(e.into()))?;
+        let kind = kind.unwrap_or_else(|| "Unknown".into());
+        let aspects: Vec<String> = serde_json::from_str(&aspects).unwrap_or_default();
+        by_type.add(&kind, available);
+        by_set.add(&set, available);
+        for a in &aspects {
+            by_aspect.add(a, available);
+        }
+        match kind.as_str() {
+            "Base" => {
+                base_hp.add(&hp.map_or("unknown".into(), |h| h.to_string()), available);
+                let epic = epic.is_some_and(|e| !e.is_empty());
+                base_kind.add(if epic { "epic" } else { "vanilla" }, available);
+            }
+            "Leader" => {
+                for a in &aspects {
+                    leader_aspect.add(a, available);
+                }
+                let align = ["Heroism", "Villainy"]
+                    .into_iter()
+                    .find(|n| aspects.iter().any(|a| a == n))
+                    .unwrap_or("Neutral");
+                leader_align.add(align, available);
+            }
+            _ => {}
+        }
+    }
+    Ok(json!({
+        "by_type": by_type.json(),
+        "by_aspect": by_aspect.json(),
+        "by_set": by_set.json(),
+        "bases": {"by_hp": base_hp.json(), "by_kind": base_kind.json()},
+        "leaders": {"by_aspect": leader_aspect.json(), "by_alignment": leader_align.json()},
+    }))
+}
+
 fn structured_for(
     conn: &Connection,
     ids: &[String],
@@ -545,6 +631,7 @@ impl DumpstarTools {
                 "distinct_cards": counts.len(),
                 "decks": decks.len(),
                 "deck_groups": groups,
+                "breakdown": breakdown(c)?,
             }))
         })
     }
@@ -742,7 +829,7 @@ impl ToolProvider for DumpstarTools {
             ),
             def(
                 "collection_summary",
-                "Counts of owned, reserved (in a deck) and available copies, distinct cards, decks and deck groups.".into(),
+                "Counts of owned, reserved (in a deck) and available copies, distinct cards, decks and deck groups, with a `breakdown` of owned and available copies by type, aspect and set; bases by HP and epic or vanilla; leaders by aspect and alignment.".into(),
                 schema(json!({}), &[]),
             ),
             def(

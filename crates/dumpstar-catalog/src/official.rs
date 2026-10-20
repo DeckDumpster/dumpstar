@@ -176,6 +176,42 @@ fn keyword_value(rules: &str, name: &str) -> Option<i64> {
         })
 }
 
+/// The card's rules text: `text`, `deployBox` and `epicAction` as lines, each
+/// line once. A leader's deploy box restates its text (Director Krennic's
+/// `text` is also the last paragraph of his `deployBox`), so a plain join
+/// doubled it. An upgrade's printed stat line is not in `text` at all, only in
+/// `upgradePower`/`upgradeHp`, so it is written out (Resilient has no `text`).
+fn rules_text_of(attrs: &Value) -> Option<String> {
+    let mut lines: Vec<String> = Vec::new();
+    for key in ["text", "deployBox", "epicAction"] {
+        let Some(t) = text(attrs, key) else { continue };
+        for line in t.lines().map(str::trim).filter(|l| !l.is_empty()) {
+            if !lines.iter().any(|l| l == line) {
+                lines.push(line.to_string());
+            }
+        }
+    }
+    if rel_name(attrs, "type").as_deref() == Some("Upgrade") {
+        let stat = |k: &str| attrs.get(k).and_then(Value::as_i64);
+        let (p, h) = (stat("upgradePower"), stat("upgradeHp"));
+        if p.is_some() || h.is_some() {
+            let line = format!(
+                "Attached unit gets {:+}/{:+}.",
+                p.unwrap_or(0),
+                h.unwrap_or(0)
+            );
+            if !lines.iter().any(|l| l.contains(&line)) {
+                lines.push(line);
+            }
+        }
+    }
+    if lines.is_empty() {
+        None
+    } else {
+        Some(lines.join("\n"))
+    }
+}
+
 fn text(attrs: &Value, key: &str) -> Option<String> {
     attrs
         .get(key)?
@@ -411,17 +447,7 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
                 from_standard: variant == "Standard" && !foil,
                 traits: rel_names(a, "traits"),
                 arenas: rel_names(a, "arenas"),
-                rules_text: {
-                    let parts: Vec<String> = ["text", "deployBox", "epicAction"]
-                        .iter()
-                        .filter_map(|k| text(a, k))
-                        .collect();
-                    if parts.is_empty() {
-                        None
-                    } else {
-                        Some(parts.join("\n"))
-                    }
-                },
+                rules_text: rules_text_of(a),
                 keywords: keywords_of(a, &card_id, &mut payload.alarms),
                 unique: a.get("unique").and_then(Value::as_bool).unwrap_or(false),
                 epic_action: text(a, "epicAction").or_else(|| epic_action_in(a)),

@@ -19,7 +19,7 @@ copies and that no copy is in two decks. `swu-cube-check` (below) is what tells 
 
 ### 2. The 18-card pack
 
-1. **1 Leader.** It sets the alignment (Heroism/Villainy) and the color aspect.
+1. **1 Leader.** It sets the alignment (Heroism/Villainy, the aspect names; `game.alignment` and the summary use them too) and the color aspect.
 2. **1 Epic Action Base (25 HP)**, strictly the Leader's color aspect: any 25-HP base of that aspect with an epic action.
 3. **1 Vanilla Base (30 HP)**, strictly the Leader's color aspect: any 30-HP base of that aspect without an epic action.
 4. **15 draw cards**, none off the Leader's alignment or color aspect (no off-aspect penalties).
@@ -104,12 +104,16 @@ and choose from the results yourself; do not search once per card.
 2. **Allocate leaders and base pairs.** Pick 20 Leaders: 10 Heroism, 10 Villainy, 5 of each color
    (for example Command 3+2, Vigilance 2+3, Aggression 3+2, Cunning 2+3). Apply the universality
    rule. Each pack takes an epic and a vanilla base of its Leader's color; if the collection lacks them, say so and build what is possible.
-3. **Fill each pack to the skeleton.** One `search_cards` per pack, for the Leader's pool:
-   `a:<color> a:<alignment> avail>=1` (when `query_help` lists `avail`; otherwise pass
-   `owned_only: true` and keep results whose `available_count` is at least 1), `limit: 100`.
-   One more for the color's bases: `t:base a:<color>`. Then pick from the results the 15 cards
-   that meet section 4, the 25-HP and 30-HP bases, and the Leader. A card already chosen for an
-   earlier pack has less available; re-search per pack so `available_count` is current. Prefer
+3. **Fill each pack to the skeleton.** Two `search_cards` per pack cover the Leader's whole pool,
+   because section 2 allows same-color cards with no alignment and one `a:<color> a:<alignment>`
+   query misses them. Both pass `avail>=1` in the query (when `query_help` lists `avail`; otherwise
+   pass `owned_only: true` and keep results whose `available_count` is at least 1), `limit: 100`:
+   - aligned: `a:<color> a:<alignment> avail>=1`
+   - unaligned: `a:<color> -a:heroism -a:villainy -t:base avail>=1`
+
+   One more for the color's bases: `t:base a:<color>`. Then pick from the combined results the 15
+   cards that meet section 4, the 25-HP and 30-HP bases, and the Leader. A card already chosen for
+   an earlier pack has less available; re-search per pack so `available_count` is current. Prefer
    cards of the Leader's own alignment and color; same-color cards with no alignment and cards with
    no aspects are also allowed.
 4. **Check the planned pack, then save it.** Before any write, assemble the pack document (below)
@@ -127,13 +131,14 @@ and choose from the results yourself; do not search once per card.
 `cargo build -p dumpstar-cube --release` (binary `target/release/swu-cube-check`).
 
 A **pack document** is `get_deck`'s result as-is: it carries the card object of every line under
-`cards`, keyed by card id (the `<SET>-<number>` form), in the shape `get_card` returns. To check a
-pack before saving it, build the same document by hand from your `search_cards`/`get_card` results:
+`cards`, keyed by card id (the `<SET>-<number>` form). Each card has the shape of a `search_cards` row, or
+of the `card` member of `get_card`'s result (`get_card` returns `{card, copies, printings}`; use
+only `.card`). To check a pack before saving it, build the same document by hand from those:
 
 ```json
 {"deck": {"name": "Pack 1", "group": "swu-jumpstart-cube"},
- "lines": [{"card_id": "SOR-005", "qty": 1, "zone": "main", "reserved": 1}],
- "cards": {"SOR-005": {"name": "...", "type": "Leader", "cost": 5,
+ "lines": [{"card_id": "SOR-5", "qty": 1, "zone": "main", "reserved": 1}],
+ "cards": {"SOR-5": {"name": "...", "type": "Leader", "cost": 5,
                         "game": {"aspects": ["Vigilance", "Heroism"], "arenas": ["Ground"], "hp": 6}}}}
 ```
 

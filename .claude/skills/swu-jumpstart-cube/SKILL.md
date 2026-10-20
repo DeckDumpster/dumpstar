@@ -20,7 +20,7 @@ copies and that no copy is in two decks. `swu-cube-check` (below) is what tells 
 ### 2. The 18-card pack
 
 1. **1 Leader.** It must be Heroism or Villainy: a **Neutral** leader (no alignment, such as
-   Fennec Shand) does not lead a pack, and `swu-cube-check` rejects one. It sets the alignment (Heroism/Villainy, the aspect names; `game.alignment` and the summary use them too) and the color aspect.
+   Fennec Shand) does not lead a pack, and `swu-cube-check` rejects one. A leader with an alignment but **no color aspect** (Anakin Skywalker, Tempted by the Dark Side, LOF-18: the official record lists Heroism only) cannot lead a pack either, since a pack is defined by its leader's color; the checker rejects it with that message, so pick another leader. It sets the alignment (Heroism/Villainy, the aspect names; `game.alignment` and the summary use them too) and the color aspect.
 2. **1 Epic Action Base (25 HP)**, strictly the Leader's color aspect: any 25-HP base of that aspect with an epic action.
 3. **1 Vanilla Base (30 HP)**, strictly the Leader's color aspect: any 30-HP base of that aspect without an epic action.
 4. **15 draw cards**, none off the Leader's alignment or color aspect (no off-aspect penalties).

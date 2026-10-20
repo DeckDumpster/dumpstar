@@ -19,7 +19,7 @@ copies and that no copy is in two decks. `swu-cube-check` (below) is what tells 
 
 ### 2. The 18-card pack
 
-1. **1 Leader.** It sets the alignment (Heroism/Villainy) and the color aspect.
+1. **1 Leader.** It sets the alignment (Heroism/Villainy, the aspect names; `game.alignment` and the summary use them too) and the color aspect.
 2. **1 Epic Action Base (25 HP)**, strictly the Leader's color aspect: any 25-HP base of that aspect with an epic action.
 3. **1 Vanilla Base (30 HP)**, strictly the Leader's color aspect: any 30-HP base of that aspect without an epic action.
 4. **15 draw cards**, none off the Leader's alignment or color aspect (no off-aspect penalties).
@@ -132,8 +132,8 @@ pack before saving it, build the same document by hand from your `search_cards`/
 
 ```json
 {"deck": {"name": "Pack 1", "group": "swu-jumpstart-cube"},
- "lines": [{"card_id": "SOR-005", "qty": 1, "zone": "main", "reserved": 1}],
- "cards": {"SOR-005": {"name": "...", "type": "Leader", "cost": 5,
+ "lines": [{"card_id": "SOR-5", "qty": 1, "zone": "main", "reserved": 1}],
+ "cards": {"SOR-5": {"name": "...", "type": "Leader", "cost": 5,
                         "game": {"aspects": ["Vigilance", "Heroism"], "arenas": ["Ground"], "hp": 6}}}}
 ```
 

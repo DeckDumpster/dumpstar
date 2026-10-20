@@ -3410,6 +3410,70 @@ mod tests {
             );
         }
 
+        /// sp-fn5iwc: one canonical form across the tools: ids as the catalog numbers them
+        /// (`SOR-5`), the summary's set the card's own set (not a weekly-play `LAWP`), and the
+        /// aspect names (Heroism, Villainy) for alignment.
+        #[tokio::test]
+        async fn mcp_ids_sets_and_alignment_use_one_vocabulary() {
+            let mut site = Site::with_catalog(
+                &["alice"],
+                "INSERT INTO sets (set_code, name, release_date, sort_order) \
+                   VALUES ('LAW', 'A Later Set', '2025-11-14', 9), \
+                          ('LAWP', 'Later Weekly Play', '2025-11-20', 10); \
+                 INSERT INTO cards (card_id, name, card_type, aspects) \
+                   VALUES ('c-hero', 'Hero', 'Leader', '[\"Vigilance\",\"Heroism\"]'), \
+                          ('c-vill', 'Villain', 'Leader', '[\"Aggression\",\"Villainy\"]'), \
+                          ('c-none', 'Neutral', 'Unit', '[\"Vigilance\"]'); \
+                 INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
+                   VALUES ('h-law', 'c-hero', 'LAW', '131', 'Standard', 'Normal'), \
+                          ('h-lawp', 'c-hero', 'LAWP', '21', 'Hyperspace', 'Foil'), \
+                          ('v-sor', 'c-vill', 'SOR', '5', 'Standard', 'Normal'), \
+                          ('n-sor', 'c-none', 'SOR', '12', 'Standard', 'Normal');",
+            )
+            .await;
+            site.sign_in(member("alice@example.com")).await;
+            let body = json!({"printing_id": "h-lawp", "source": "manual_id"}).to_string();
+            let r = site.send("POST", "/api/collection", Some(&body)).await;
+            assert_eq!(r.status(), StatusCode::CREATED);
+            let t = site.token_for("alice@example.com");
+
+            let b = site
+                .tool(&t, "collection_summary", json!({}))
+                .await
+                .unwrap()["breakdown"]
+                .clone();
+            assert_eq!(
+                b["by_set"],
+                json!({"LAW": {"owned": 1, "available": 1}}),
+                "the summary names the card's own set"
+            );
+
+            let hero = site
+                .tool(&t, "get_card", json!({"id": "LAW-131"}))
+                .await
+                .unwrap();
+            assert_eq!(hero["card"]["id"], "LAW-131");
+            assert_eq!(hero["card"]["set"], "LAW");
+            assert_eq!(hero["card"]["game"]["alignment"], "Heroism");
+            let vill = site
+                .tool(&t, "get_card", json!({"id": "SOR-005"}))
+                .await
+                .unwrap();
+            assert_eq!(vill["card"]["id"], "SOR-5", "ids carry no zero padding");
+            assert_eq!(vill["card"]["game"]["alignment"], "Villainy");
+            let none = site
+                .tool(&t, "get_card", json!({"id": "SOR-12"}))
+                .await
+                .unwrap();
+            assert_eq!(none["card"]["game"]["alignment"], "Neutral");
+
+            let tools = site.rpc(&t, "tools/list", json!({})).await;
+            assert!(
+                !tools.to_string().contains("SOR-005"),
+                "schema examples use the returned id form"
+            );
+        }
+
         /// sp-jsizxw: search_cards is one row per card with its original printing's id, and
         /// `v:standard` leaves the Prestige and Serialized variants out.
         #[tokio::test]

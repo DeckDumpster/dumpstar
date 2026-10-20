@@ -58,6 +58,9 @@ pub fn run(args: ServeArgs) -> anyhow::Result<()> {
         port: args.port,
         oidc,
         access,
+        mcp_resource: std::env::var("DUMPSTAR_MCP_RESOURCE")
+            .ok()
+            .filter(|v| !v.trim().is_empty()),
     };
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(dumpstar_server::serve(cfg))

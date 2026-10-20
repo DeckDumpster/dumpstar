@@ -2801,6 +2801,44 @@ mod tests {
             assert_eq!(site.get("/mcp").await.status(), StatusCode::UNAUTHORIZED);
         }
 
+        /// The card object carries the catalog's keywords, uniqueness and epic action.
+        #[tokio::test]
+        async fn the_mcp_card_object_carries_keywords_unique_and_epic_action() {
+            let site = Site::with_catalog(
+                &["alice"],
+                &format!("{SECOND_CARD} UPDATE cards SET keywords='[{{\"name\":\"Raid\",\"value\":2}}]', is_unique=1, \
+                   epic_action='Deal 3 damage to a unit.' WHERE card_id='SOR-2'; \
+                 INSERT INTO cards (card_id, name, card_type) VALUES ('SOR-9', 'Plain', 'Event'); \
+                 INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
+                   VALUES ('SOR-9-normal', 'SOR-9', 'SOR', '9', 'Standard', 'Normal');"),
+            )
+            .await;
+            let token = site.token_for("alice@example.com");
+            let full = site
+                .tool(&token, "get_card", json!({"set": "SOR", "number": "9"}))
+                .await
+                .unwrap();
+            let g = &full["card"]["game"];
+            assert_eq!(g["keywords"], json!([]));
+            assert_eq!(g["unique"], json!(false));
+            assert!(g["epic_action"].is_null());
+
+            let han = site
+                .tool(&token, "get_card", json!({"id": "SOR-2"}))
+                .await
+                .unwrap();
+            let g = &han["card"]["game"];
+            assert_eq!(g["keywords"], json!([{"name": "Raid", "value": 2}]));
+            assert_eq!(g["unique"], json!(true));
+            assert_eq!(g["epic_action"], json!("Deal 3 damage to a unit."));
+
+            let found = site
+                .tool(&token, "search_cards", json!({"q": "han"}))
+                .await
+                .unwrap();
+            assert_eq!(found["results"][0]["game"]["unique"], json!(true));
+        }
+
         /// A bearer token opens nothing under `/api`.
         #[tokio::test]
         async fn a_bearer_token_does_not_open_the_api() {

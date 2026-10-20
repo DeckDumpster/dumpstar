@@ -1340,6 +1340,7 @@ dependencies = [
  "dumpstar-db",
  "dumpster-kit-conformance",
  "dumpster-kit-oidc",
+ "dumpster-kit-telemetry",
  "dumpster-kit-tenancy",
  "flate2",
  "rsa",
@@ -1497,6 +1498,17 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "dumpster-kit-telemetry"
+version = "0.1.0"
+source = "git+https://github.com/DeckDumpster/dumpster-kit?rev=23564d8b461692c6f33ea1c094c41d0b870ce63f#23564d8b461692c6f33ea1c094c41d0b870ce63f"
+dependencies = [
+ "axum",
+ "reqwest",
+ "tokio",
+ "tower",
 ]
 
 [[package]]

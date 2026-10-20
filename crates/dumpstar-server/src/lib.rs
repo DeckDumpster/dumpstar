@@ -26,6 +26,7 @@ use dumpstar_core::query::KeywordRegistry;
 use dumpstar_db::DbError;
 use dumpstar_db::search_meta::SearchFlag;
 
+mod metrics;
 mod routes;
 
 pub use dumpster_kit_oidc::OidcConfig;
@@ -71,6 +72,8 @@ pub struct AppState {
     /// Cloudflare Access JWT validation state (JWKS cache + config), used only when `oidc` is
     /// absent — the transitional mode, and what the container harnesses run.
     pub(crate) access: Option<Arc<AccessState>>,
+    /// OTLP metrics; a no-op unless `DUMPSTER_OTLP_METRICS_ENDPOINT` is set.
+    pub(crate) metrics: metrics::Metrics,
 }
 
 impl AppState {
@@ -360,6 +363,9 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
         .fallback(get(spa))
         .layer(middleware::from_fn_with_state(state_for_gate, sign_in_gate))
         .layer(middleware::from_fn(api_responses_are_private))
+        .layer(dumpster_kit_telemetry::RouteMetricsLayer::new(
+            state.metrics.telemetry(),
+        ))
         // Outermost, so it sees the final response of every route above.
         .layer(compression())
 }
@@ -444,6 +450,7 @@ pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
         data_dir: Arc::new(cfg.data_dir.clone()),
         oidc,
         access,
+        metrics: metrics::Metrics::from_env(),
     };
     let addr = SocketAddr::new(cfg.host, cfg.port);
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -508,6 +515,7 @@ mod tests {
             data_dir: Arc::new(data_dir.clone()),
             oidc: None,
             access: Some(access),
+            metrics: metrics::Metrics::disabled(),
         };
         app(state, dir.join("static"), data_dir)
     }
@@ -1451,6 +1459,7 @@ mod tests {
                     data_dir: Arc::new(dir.path().to_path_buf()),
                     oidc: Some(oidc),
                     access: None,
+                    metrics: metrics::Metrics::disabled(),
                 };
                 Site {
                     router: app(state, dir.path().join("static"), dir.path().to_path_buf()),
@@ -1888,6 +1897,7 @@ mod tests {
                 data_dir: Arc::new(dir.path().to_path_buf()),
                 oidc: None,
                 access: Some(fx.access.clone()),
+                metrics: metrics::Metrics::disabled(),
             };
 
             let unscoped = blocking(&state, |c| {

@@ -26,8 +26,11 @@ use crate::error::Result;
 use crate::search_meta::SearchFlag;
 
 // Scalar subqueries reused across the SELECT list and predicates.
-const AVAILABLE_COUNT_SUBQ: &str =
-    "SELECT COUNT(*) FROM collection c WHERE c.printing_id = p.printing_id AND c.deck_id IS NULL";
+// Per CARD, across its printings — the same thing the `available_count` field
+// reports (sp-hnps8p).
+const AVAILABLE_COUNT_SUBQ: &str = "SELECT COUNT(*) FROM collection c \
+     JOIN printings cp ON cp.printing_id = c.printing_id \
+     WHERE cp.card_id = p.card_id AND c.deck_id IS NULL";
 const OWNED_COUNT_SUBQ: &str =
     "SELECT COUNT(*) FROM collection c WHERE c.printing_id = p.printing_id";
 // What this printing's OWNED copies are worth: its market price times the sum
@@ -1659,6 +1662,21 @@ mod tests {
         assert_eq!(f.ids("avail>=1 s:sor"), vec!["luke-foil"]);
         assert_eq!(f.ids("free=1 name:luke"), vec!["luke-foil"]);
         assert!(f.ids("qty>=2").contains(&"luke-foil".to_string()));
+    }
+
+    #[test]
+    fn avail_counts_copies_of_the_card_across_printings() {
+        let f = fixture();
+        // One free copy, on falcon-std; falcon-hyper is owned by nobody.
+        // is:missing searches the unowned printing B in catalog-wide mode.
+        assert_eq!(
+            f.ids("avail>=1 name:falcon is:missing"),
+            vec!["falcon-hyper"]
+        );
+        assert_eq!(
+            f.ids("avail>=2 name:falcon is:missing"),
+            Vec::<String>::new()
+        );
     }
 
     #[test]

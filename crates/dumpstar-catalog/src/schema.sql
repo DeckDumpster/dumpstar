@@ -26,7 +26,10 @@ CREATE TABLE IF NOT EXISTS cards (
     aspects          TEXT NOT NULL DEFAULT '[]', -- JSON array
     traits           TEXT NOT NULL DEFAULT '[]', -- JSON array
     arenas           TEXT NOT NULL DEFAULT '[]', -- JSON array
-    rules_text       TEXT
+    rules_text       TEXT,
+    keywords         TEXT NOT NULL DEFAULT '[]', -- JSON array of {"name": "Raid", "value": 2|null}
+    is_unique        INTEGER NOT NULL DEFAULT 0, -- 1 for a unique card (the bullet before its name)
+    epic_action      TEXT                       -- a leader's or base's epic action text, when it has one
 );
 CREATE INDEX IF NOT EXISTS idx_cards_name ON cards(name);
 

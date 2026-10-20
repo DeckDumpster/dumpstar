@@ -1,5 +1,5 @@
 [
-  {"canonical":"name","aliases":["n"],"operators":[":","="],"kind":"name","target":"cards.name","help":"Card name (bare words search this too)"},
+  {"canonical":"name","aliases":["n"],"operators":[":","=","!="],"kind":"name","target":"cards.name","help":"Card name (bare words search this too)"},
   {"canonical":"card_type","aliases":["t","type"],"operators":[":","=","!="],"kind":"enum","target":"cards.card_type","value_enum":"card_type","help":"Card type: Leader, Unit, Event, Upgrade, Base, Token"},
   {"canonical":"aspect","aliases":["a","aspect"],"operators":[":","=","!="],"kind":"json_array","target":"cards.aspects","value_enum":"aspect","help":"Aspect: Vigilance, Command, Aggression, Cunning, Heroism, Villainy"},
   {"canonical":"arena","aliases":["arena"],"operators":[":","=","!="],"kind":"json_array","target":"cards.arenas","value_enum":"arena","help":"Arena: Ground or Space"},
@@ -26,13 +26,15 @@
   {"canonical":"paid","aliases":["paid"],"operators":[":","=","!=","<",">","<=",">="],"kind":"numeric","target":"collection.purchase_price","semantics":"exists","help":"Purchase price you paid"},
   {"canonical":"sale_price","aliases":["sold"],"operators":[":","=","!=","<",">","<=",">="],"kind":"numeric","target":"collection.sale_price","semantics":"exists","help":"Sale price"},
   {"canonical":"added","aliases":["added"],"operators":[":","=","!=","<",">","<=",">="],"kind":"date","target":"collection.acquired_at","semantics":"exists","help":"Date added to the collection"},
-  {"canonical":"deck","aliases":["deck"],"operators":[":","=","!="],"kind":"deck","target":"decks.name","semantics":"exists","help":"In a deck (name, or * for any)"},
+  {"canonical":"deck","aliases":["deck"],"operators":[":","=","!="],"kind":"deck","target":"decks.name","semantics":"exists","help":"In a deck (name, or * for any; -deck:* = in no deck)"},
+  {"canonical":"deck_group","aliases":["group"],"operators":[":","=","!="],"kind":"deck","target":"decks.deck_group","semantics":"exists","help":"In a deck of this group (e.g. a cube or jumpstart set)"},
   {"canonical":"binder","aliases":["binder"],"operators":[":","=","!="],"kind":"binder","target":"binders.name","semantics":"exists","help":"In a binder (name, or * for any)"},
   {"canonical":"language","aliases":["lang","language"],"operators":[":","=","!="],"kind":"enum","target":"collection.language","semantics":"exists","help":"Card language"},
   {"canonical":"source","aliases":["source"],"operators":[":","=","!="],"kind":"enum","target":"collection.source","semantics":"exists","help":"Acquisition source"},
   {"canonical":"tag","aliases":["tag"],"operators":[":"],"kind":"json_array","target":"collection.tags","semantics":"exists","help":"Collection tag"},
   {"canonical":"note","aliases":["note","notes"],"operators":[":"],"kind":"text","target":"collection.notes","semantics":"exists","help":"Notes text"},
   {"canonical":"qty","aliases":["qty","count"],"operators":[":","=","!=","<",">","<=",">="],"kind":"numeric","target":"owned_count","help":"Copies owned of a printing"},
+  {"canonical":"avail","aliases":["free"],"operators":[":","=","!=","<",">","<=",">="],"kind":"numeric","target":"available_count","help":"Owned copies of a printing not reserved by any deck"},
   {"canonical":"order","aliases":["order"],"operators":[":"],"kind":"modifier","value_enum":"order_field","help":"Sort by: name, number, set, rarity, type, cost, power, hp, price, added, qty"},
   {"canonical":"direction","aliases":["direction","dir"],"operators":[":"],"kind":"modifier","value_enum":"direction","help":"Sort direction: asc or desc"}
 ]

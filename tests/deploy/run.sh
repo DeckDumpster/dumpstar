@@ -2957,6 +2957,15 @@ echo "SYSTEMCTL: $*" >> "$DUMPSTAR_TEST_SYSTEMCTL_LOG"
 exit 0
 EOF
 chmod +x "${WORK}/bin20/systemctl"
+# The /mcp probe deploy.sh runs on prod (sp-tfkp9o) reaches the public URL; answer it as a healthy site would.
+cat > "${WORK}/bin20/curl" <<'EOF'
+#!/usr/bin/env bash
+for a in "$@"; do
+	[ "$a" = -D ] && { printf 'HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Bearer\r\n\r\n'; exit 0; }
+done
+printf '{"resource":"https://star.dumpster.cards/mcp"}\n200'
+EOF
+chmod +x "${WORK}/bin20/curl"
 printf 'DUMPSTAR_ACCESS_TEAM_DOMAIN=https://t.example\nDUMPSTAR_ACCESS_AUD=aud\nDUMPSTAR_ACCESS_JWKS_URL=https://t.example/certs\n' > "${CONF20}/access.env"
 printf '[Unit]\nDescription=running\n\n[Container]\nImage=localhost/dumpstar:prod\nPublishPort=127.0.0.1:8091:8080\n' > "${Q20}/dumpstar-prod.container"
 cp "${Q20}/dumpstar-prod.container" "${WORK}/unit20.before"

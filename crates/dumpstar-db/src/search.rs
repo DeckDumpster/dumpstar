@@ -366,6 +366,9 @@ pub struct SearchTimings {
     pub totals_ms: Option<f64>,
     pub rows_ms: f64,
     pub copies_ms: f64,
+    /// Pages served before this one on a cursor walk (0 for the first page and for every
+    /// non-cursor slice).
+    pub depth: u32,
 }
 
 /// [`search_page`] plus where its time went.
@@ -416,6 +419,9 @@ struct CursorBody {
     t: i64,
     v: Option<f64>,
     k: Vec<serde_json::Value>,
+    /// Pages already served, so the page this cursor opens has depth `d`.
+    #[serde(default)]
+    d: u32,
 }
 
 fn fingerprint(c: &CompiledSearch) -> String {
@@ -538,6 +544,7 @@ fn cursor_page(
             let keys = keys
                 .filter(|k| k.len() == parts.len())
                 .ok_or_else(invalid)?;
+            timings.depth = body.d;
             (body.t, body.v, Some(keys))
         }
     };
@@ -572,6 +579,7 @@ fn cursor_page(
             t: total,
             v: total_value,
             k: keys.iter().map(to_json).collect(),
+            d: timings.depth + 1,
         })),
         _ => None,
     };

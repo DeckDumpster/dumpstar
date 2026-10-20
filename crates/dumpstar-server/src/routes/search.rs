@@ -185,10 +185,16 @@ async fn collection_search(
     }
     compiled.override_order(sort, p.dir.as_deref());
 
+    let paging = match &slice {
+        search::Slice::Page { limit, offset } => crate::metrics::Paging::Offset(*limit, *offset),
+        search::Slice::Cursor { .. } => crate::metrics::Paging::Cursor,
+        search::Slice::All => crate::metrics::Paging::All,
+    };
     let (page, t) = blocking(&state, move |c| {
         search::search_page_timed(c, &compiled, slice)
     })
     .await?;
+    state.metrics.search(sort, paging, &t, page.rows.len());
     // Per-stage timings, so a slow sort can be told apart from a slow client.
     // A cursor page after the first carries its totals and does not count.
     let totals = t

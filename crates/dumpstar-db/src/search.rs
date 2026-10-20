@@ -187,6 +187,10 @@ pub struct SearchPage {
     pub limit: u32,
     #[ts(type = "number")]
     pub offset: u32,
+    /// Opaque token for the page after this one; `None` when this is the last,
+    /// and always `None` for offset and [`Slice::All`] requests. Only a
+    /// [`Slice::Cursor`] walk emits it.
+    pub next_cursor: Option<String>,
 }
 
 /// Rows returned when a caller names no `limit`.
@@ -309,11 +313,16 @@ pub fn search(conn: &Connection, compiled: &CompiledSearch) -> Result<Vec<Search
 }
 
 /// How much of a result set a caller wants.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Slice {
     /// `limit` rows starting at `offset` — the bounded default, and what any
     /// caller that draws a fixed number of rows should ask for.
     Page { limit: u32, offset: u32 },
+    /// `limit` rows after the row an opaque cursor names, or from the start
+    /// when `cursor` is `None`. Page N+1 seeks past the last row of page N
+    /// rather than re-running and discarding N-1 pages, and the totals ride in
+    /// the cursor so only the first page counts the result.
+    Cursor { limit: u32, cursor: Option<String> },
     /// Every matching row, however many that is.
     ///
     /// What the collection page asks for (pd-7z4o): it holds the whole result
@@ -351,7 +360,8 @@ pub fn search_page(
 /// query) and `copies` (the per-printing copy expansion).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SearchTimings {
-    pub totals_ms: f64,
+    /// `None` when the totals were not computed (a cursor page after the first).
+    pub totals_ms: Option<f64>,
     pub rows_ms: f64,
     pub copies_ms: f64,
 }
@@ -363,22 +373,25 @@ pub fn search_page_timed(
     slice: Slice,
 ) -> Result<(SearchPage, SearchTimings)> {
     let ms = |t: std::time::Instant| t.elapsed().as_secs_f64() * 1000.0;
+    if let Slice::Cursor { limit, ref cursor } = slice {
+        return cursor_page(conn, compiled, limit, cursor.as_deref());
+    }
     let t = std::time::Instant::now();
     let (total, total_value) = totals(conn, compiled)?;
     let mut timings = SearchTimings {
-        totals_ms: ms(t),
+        totals_ms: Some(ms(t)),
         ..Default::default()
     };
     let page = match slice {
         Slice::Page { limit, offset } => Some((limit, offset)),
-        Slice::All => None,
+        _ => None,
     };
     let (rows, rows_ms, copies_ms) = run_timed(conn, compiled, page)?;
     timings.rows_ms = rows_ms;
     timings.copies_ms = copies_ms;
     let (limit, offset) = match slice {
         Slice::Page { limit, offset } => (limit, offset),
-        Slice::All => (u32::try_from(rows.len()).unwrap_or(u32::MAX), 0),
+        _ => (u32::try_from(rows.len()).unwrap_or(u32::MAX), 0),
     };
     Ok((
         SearchPage {
@@ -387,6 +400,193 @@ pub fn search_page_timed(
             total_value,
             limit,
             offset,
+            next_cursor: None,
+        },
+        timings,
+    ))
+}
+
+/// What a cursor carries: which query it belongs to, the totals the first page
+/// computed, and the sort-key tuple of the last row served.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct CursorBody {
+    f: String,
+    t: i64,
+    v: Option<f64>,
+    k: Vec<serde_json::Value>,
+}
+
+fn fingerprint(c: &CompiledSearch) -> String {
+    let mut h: u64 = 0xcbf29ce484222325;
+    let mut feed = |bytes: &[u8]| {
+        for b in bytes.iter().chain(&[0xff]) {
+            h ^= u64::from(*b);
+            h = h.wrapping_mul(0x100000001b3);
+        }
+    };
+    feed(where_clause(c).as_bytes());
+    for p in &c.params {
+        feed(format!("{p:?}").as_bytes());
+    }
+    for (expr, desc) in order_parts(c) {
+        feed(expr.as_bytes());
+        feed(&[u8::from(desc)]);
+    }
+    format!("{h:016x}")
+}
+
+fn encode_cursor(body: &CursorBody) -> String {
+    let json = serde_json::to_vec(body).expect("cursor serialises");
+    json.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn decode_cursor(raw: &str) -> Option<CursorBody> {
+    if !raw.len().is_multiple_of(2) || !raw.is_ascii() {
+        return None;
+    }
+    let bytes: Option<Vec<u8>> = (0..raw.len() / 2)
+        .map(|i| u8::from_str_radix(&raw[2 * i..2 * i + 2], 16).ok())
+        .collect();
+    serde_json::from_slice(&bytes?).ok()
+}
+
+fn to_json(v: &Value) -> serde_json::Value {
+    match v {
+        Value::Null => serde_json::Value::Null,
+        Value::Integer(i) => (*i).into(),
+        Value::Real(f) => {
+            serde_json::Number::from_f64(*f).map_or(serde_json::Value::Null, Into::into)
+        }
+        Value::Text(t) => t.clone().into(),
+        Value::Blob(_) => serde_json::Value::Null,
+    }
+}
+
+fn from_json(v: &serde_json::Value) -> Option<Value> {
+    Some(match v {
+        serde_json::Value::Null => Value::Null,
+        serde_json::Value::Number(n) => match n.as_i64() {
+            Some(i) => Value::Integer(i),
+            None => Value::Real(n.as_f64()?),
+        },
+        serde_json::Value::String(s) => Value::Text(s.clone()),
+        _ => return None,
+    })
+}
+
+/// The predicate "sorts strictly after the tuple `after`" under `parts`, with
+/// SQLite's NULL placement (first ascending, last descending), and its params.
+fn seek_predicate(parts: &[(String, bool)], after: &[Value]) -> (String, Vec<Value>) {
+    let mut ors = Vec::new();
+    let mut params = Vec::new();
+    for (i, ((expr, desc), v)) in parts.iter().zip(after).enumerate() {
+        let mut terms: Vec<String> = Vec::new();
+        let mut ps: Vec<Value> = Vec::new();
+        for ((e, _), pv) in parts.iter().zip(after).take(i) {
+            terms.push(format!("{e} IS ?"));
+            ps.push(pv.clone());
+        }
+        let null = matches!(v, Value::Null);
+        let cmp = match (desc, null) {
+            (false, true) => format!("{expr} IS NOT NULL"),
+            (false, false) => {
+                ps.push(v.clone());
+                format!("{expr} > ?")
+            }
+            (true, true) => "0".to_string(),
+            (true, false) => {
+                ps.push(v.clone());
+                format!("({expr} < ? OR {expr} IS NULL)")
+            }
+        };
+        terms.push(cmp);
+        ors.push(format!("({})", terms.join(" AND ")));
+        params.extend(ps);
+    }
+    (ors.join(" OR "), params)
+}
+
+fn cursor_page(
+    conn: &Connection,
+    compiled: &CompiledSearch,
+    limit: u32,
+    cursor: Option<&str>,
+) -> Result<(SearchPage, SearchTimings)> {
+    let ms = |t: std::time::Instant| t.elapsed().as_secs_f64() * 1000.0;
+    let fp = fingerprint(compiled);
+    let parts = order_parts(compiled);
+    let mut timings = SearchTimings::default();
+    let (total, total_value, seek) = match cursor {
+        None => {
+            let t = std::time::Instant::now();
+            let (total, value) = totals(conn, compiled)?;
+            timings.totals_ms = Some(ms(t));
+            (total, value, None)
+        }
+        Some(raw) => {
+            let invalid = || crate::error::DbError::Invalid("cursor is not valid".to_string());
+            let body = decode_cursor(raw).ok_or_else(invalid)?;
+            if body.f != fp {
+                return Err(crate::error::DbError::Invalid(
+                    "cursor belongs to a different query or sort; start again without it"
+                        .to_string(),
+                ));
+            }
+            let keys: Option<Vec<Value>> = body.k.iter().map(from_json).collect();
+            let keys = keys
+                .filter(|k| k.len() == parts.len())
+                .ok_or_else(invalid)?;
+            (body.t, body.v, Some(keys))
+        }
+    };
+
+    let t = std::time::Instant::now();
+    let seek = seek.map(|k| seek_predicate(&parts, &k));
+    let sql = build_sql(
+        compiled,
+        Paging::Keyset(seek.as_ref().map(|s| s.0.as_str())),
+    );
+    let mut params = compiled.params.clone();
+    if let Some((_, sp)) = &seek {
+        params.extend(sp.iter().cloned());
+    }
+    // One row past the page says whether another page exists.
+    params.push(Value::Integer(i64::from(limit) + 1));
+    let mut stmt = conn.prepare(&sql)?;
+    let mut fetched: Vec<(SearchRow, Vec<Value>)> = stmt
+        .query_map(params_from_iter(params.iter()), |r| {
+            let keys = (0..parts.len())
+                .map(|i| r.get::<_, Value>(KEY_COL + i))
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            Ok((row_from(r)?, keys))
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    timings.rows_ms = ms(t);
+    let more = fetched.len() > limit as usize;
+    fetched.truncate(limit as usize);
+    let next_cursor = match (more, fetched.last()) {
+        (true, Some((_, keys))) => Some(encode_cursor(&CursorBody {
+            f: fp,
+            t: total,
+            v: total_value,
+            k: keys.iter().map(to_json).collect(),
+        })),
+        _ => None,
+    };
+    let mut rows: Vec<SearchRow> = fetched.into_iter().map(|(r, _)| r).collect();
+    let t = std::time::Instant::now();
+    if !rows.is_empty() {
+        attach_copies(conn, &mut rows)?;
+    }
+    timings.copies_ms = ms(t);
+    Ok((
+        SearchPage {
+            rows,
+            total,
+            total_value,
+            limit,
+            offset: 0,
+            next_cursor,
         },
         timings,
     ))
@@ -1018,38 +1218,89 @@ fn where_clause(c: &CompiledSearch) -> String {
     }
 }
 
-fn build_full_sql(c: &CompiledSearch, page: Option<(u32, u32)>) -> String {
-    let where_clause = where_clause(c);
-    let dir = if matches!(c.order_dir, Dir::Desc) {
-        "DESC"
-    } else {
-        "ASC"
-    };
-    // `p.printing_id` is unique, so the ORDER BY is a total order. Without a
-    // unique final key, rows tied on the sort column (a card's Standard and
-    // Hyperspace printings share a name) may sit in either order from one
-    // statement to the next, and OFFSET paging then drops and duplicates them.
-    let paging = if page.is_some() {
-        " LIMIT ? OFFSET ?"
-    } else {
-        ""
-    };
+/// The ORDER BY as `(expression, descending)` pairs. The last is unique
+/// (`p.printing_id`), so the order is total.
+fn order_parts(c: &CompiledSearch) -> Vec<(String, bool)> {
+    let desc = matches!(c.order_dir, Dir::Desc);
+    let number = NUMBER_KEY.to_string();
+    let pid = "p.printing_id".to_string();
     // sort=set needs two set-level keys under dir so that sets sharing a
     // release_date still group correctly; within a set, collector number is
     // always ascending regardless of dir.
-    let order_clause = if c.order_by.as_deref() == Some("set") {
-        format!("s.release_date {dir}, s.set_code {dir}, {NUMBER_KEY} ASC, p.printing_id ASC")
+    if c.order_by.as_deref() == Some("set") {
+        vec![
+            ("s.release_date".to_string(), desc),
+            ("s.set_code".to_string(), desc),
+            (number, false),
+            (pid, false),
+        ]
     } else if c.order_by.as_deref() == Some("aspects") {
         // Unaspected cards last in both directions; cost then name break ties
         // ascending, like the number tiebreak.
         let key = aspects_key_sql();
-        format!(
-            "({key} IS NULL) ASC, {key} {dir}, cd.cost ASC, cd.name ASC, {NUMBER_KEY} ASC, \
-             p.printing_id ASC"
-        )
+        vec![
+            (format!("({key} IS NULL)"), false),
+            (key, desc),
+            ("cd.cost".to_string(), false),
+            ("cd.name".to_string(), false),
+            (number, false),
+            (pid, false),
+        ]
     } else {
-        let order_col = order_sql(c.order_by.as_deref());
-        format!("{order_col} {dir}, {NUMBER_KEY} ASC, p.printing_id ASC")
+        vec![
+            (order_sql(c.order_by.as_deref()), desc),
+            (number, false),
+            (pid, false),
+        ]
+    }
+}
+
+/// First column of the sort-key tuple a keyset query appends to the SELECT.
+const KEY_COL: usize = 21;
+
+enum Paging<'a> {
+    None,
+    Offset,
+    /// `LIMIT ?`, seeking past the given predicate when there is one.
+    Keyset(Option<&'a str>),
+}
+
+fn build_full_sql(c: &CompiledSearch, page: Option<(u32, u32)>) -> String {
+    build_sql(
+        c,
+        if page.is_some() {
+            Paging::Offset
+        } else {
+            Paging::None
+        },
+    )
+}
+
+fn build_sql(c: &CompiledSearch, paging: Paging) -> String {
+    let mut where_clause = where_clause(c);
+    let parts = order_parts(c);
+    // `p.printing_id` is unique, so the ORDER BY is a total order. Without a
+    // unique final key, rows tied on the sort column (a card's Standard and
+    // Hyperspace printings share a name) may sit in either order from one
+    // statement to the next, and paging then drops and duplicates them.
+    let order_clause = parts
+        .iter()
+        .map(|(e, d)| format!("{e} {}", if *d { "DESC" } else { "ASC" }))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut keys = String::new();
+    let tail = match paging {
+        Paging::None => "",
+        Paging::Offset => " LIMIT ? OFFSET ?",
+        Paging::Keyset(seek) => {
+            for (i, (e, _)) in parts.iter().enumerate() {
+                keys.push_str(&format!(", {e} AS k{i}"));
+            }
+            if let Some(seek) = seek {
+                where_clause = format!("({where_clause}) AND ({seek})");
+            }
+            " LIMIT ?"
+        }
     };
     format!(
         "SELECT p.printing_id, cd.card_id, p.set_code, s.name AS set_name, p.number, \
@@ -1057,10 +1308,10 @@ fn build_full_sql(c: &CompiledSearch, page: Option<(u32, u32)>) -> String {
                 cd.aspects, cd.arenas, \
                 {MARKET_PRICE_EXPR} AS market_price, \
                 p.image_url, p.variant, p.finish, \
-                ({OWNED_COUNT_SUBQ}) AS owned_count, cd.traits, p.back_image_url \
+                ({OWNED_COUNT_SUBQ}) AS owned_count, cd.traits, p.back_image_url{keys} \
          {FROM_CLAUSE} \
          WHERE {where_clause} \
-         ORDER BY {order_clause}{paging}"
+         ORDER BY {order_clause}{tail}"
     )
 }
 
@@ -2373,7 +2624,7 @@ mod tests {
                 offset: 999,
             },
         ] {
-            let page = search_page(&f.conn, &all_printings(), slice).unwrap();
+            let page = search_page(&f.conn, &all_printings(), slice.clone()).unwrap();
             let got = page.total_value.expect("the fixture owns priced copies");
             assert!(
                 (got - expected).abs() < 1e-9,
@@ -2501,6 +2752,167 @@ mod tests {
         // And the bounds are bound parameters, never formatted into the SQL.
         assert!(sql.ends_with("LIMIT ? OFFSET ?"), "bounds are bound: {sql}");
         assert!(build_full_sql(&all_printings(), None).ends_with("p.printing_id ASC"));
+    }
+
+    fn cursor_walk(f: &Fix, c: &CompiledSearch, limit: u32) -> (Vec<String>, Vec<SearchTimings>) {
+        let mut ids = Vec::new();
+        let mut timings = Vec::new();
+        let mut cursor = None;
+        loop {
+            let (page, t) = search_page_timed(
+                &f.conn,
+                c,
+                Slice::Cursor {
+                    limit,
+                    cursor: cursor.take(),
+                },
+            )
+            .unwrap();
+            timings.push(t);
+            ids.extend(page.rows.into_iter().map(|r| r.printing_id));
+            match page.next_cursor {
+                Some(next) => cursor = Some(next),
+                None => break,
+            }
+        }
+        (ids, timings)
+    }
+
+    #[test]
+    fn cursor_walk_returns_every_row_once_for_every_sort_and_direction() {
+        let f = fixture();
+        for sort in SORT_KEYS {
+            for dir in ["asc", "desc"] {
+                let mut c = all_printings();
+                c.override_order(Some(sort), Some(dir));
+                let expected: Vec<String> = search(&f.conn, &c)
+                    .unwrap()
+                    .into_iter()
+                    .map(|r| r.printing_id)
+                    .collect();
+                for limit in [1, 2, 3, 100] {
+                    let (walked, _) = cursor_walk(&f, &c, limit);
+                    assert_eq!(walked, expected, "sort={sort} dir={dir} limit={limit}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cursor_walk_over_the_set_fixture_matches_the_full_order() {
+        let f = set_sort_fixture();
+        for sort in ["set", "aspects", "name", "cost", "power"] {
+            for dir in ["asc", "desc"] {
+                let mut c = all_printings();
+                c.override_order(Some(sort), Some(dir));
+                let expected: Vec<String> = search(&f.conn, &c)
+                    .unwrap()
+                    .into_iter()
+                    .map(|r| r.printing_id)
+                    .collect();
+                assert_eq!(cursor_walk(&f, &c, 2).0, expected, "sort={sort} dir={dir}");
+            }
+        }
+    }
+
+    #[test]
+    fn only_the_first_cursor_page_counts_and_the_totals_ride_along() {
+        let f = fixture();
+        let c = all_printings();
+        let (_, timings) = cursor_walk(&f, &c, 1);
+        assert!(timings.len() > 1);
+        assert!(timings[0].totals_ms.is_some());
+        assert!(timings[1..].iter().all(|t| t.totals_ms.is_none()));
+
+        let first = search_page(
+            &f.conn,
+            &c,
+            Slice::Cursor {
+                limit: 1,
+                cursor: None,
+            },
+        )
+        .unwrap();
+        let second = search_page(
+            &f.conn,
+            &c,
+            Slice::Cursor {
+                limit: 1,
+                cursor: first.next_cursor.clone(),
+            },
+        )
+        .unwrap();
+        assert_eq!(second.total, first.total);
+        assert_eq!(second.total_value, first.total_value);
+    }
+
+    #[test]
+    fn a_cursor_from_another_query_or_sort_is_refused() {
+        let f = fixture();
+        let c = all_printings();
+        let cursor = search_page(
+            &f.conn,
+            &c,
+            Slice::Cursor {
+                limit: 1,
+                cursor: None,
+            },
+        )
+        .unwrap()
+        .next_cursor
+        .unwrap();
+        let mut other_sort = all_printings();
+        other_sort.override_order(Some("cost"), Some("desc"));
+        for (compiled, cursor) in [
+            (&other_sort, cursor.clone()),
+            (&f.compile("name:falcon"), cursor.clone()),
+            (&c, "not-a-cursor".to_string()),
+        ] {
+            let err = search_page(
+                &f.conn,
+                compiled,
+                Slice::Cursor {
+                    limit: 1,
+                    cursor: Some(cursor),
+                },
+            )
+            .unwrap_err();
+            assert!(matches!(err, crate::error::DbError::Invalid(_)), "{err}");
+        }
+    }
+
+    // A later cursor page puts the seek in the WHERE and bounds with LIMIT
+    // alone. It is not an index seek: the sort keys are computed expressions
+    // over a printings union, so SQLite plans a scan and a sorter either way
+    // (EXPLAIN QUERY PLAN shows `USE TEMP B-TREE FOR ORDER BY`). What the
+    // cursor removes is the OFFSET discard and the recount.
+    #[test]
+    fn a_later_cursor_page_filters_past_the_cursor_and_has_no_offset() {
+        let f = fixture();
+        let mut c = all_printings();
+        c.override_order(Some("number"), Some("asc"));
+        let next = search_page(
+            &f.conn,
+            &c,
+            Slice::Cursor {
+                limit: 1,
+                cursor: None,
+            },
+        )
+        .unwrap()
+        .next_cursor
+        .unwrap();
+        let keys: Vec<Value> = decode_cursor(&next)
+            .unwrap()
+            .k
+            .iter()
+            .map(|k| from_json(k).unwrap())
+            .collect();
+        let (seek, _) = seek_predicate(&order_parts(&c), &keys);
+        let sql = build_sql(&c, Paging::Keyset(Some(&seek)));
+        assert!(!sql.contains("OFFSET"), "{sql}");
+        assert!(sql.ends_with("LIMIT ?"), "{sql}");
+        assert!(sql.contains(&seek), "{sql}");
     }
 
     #[test]

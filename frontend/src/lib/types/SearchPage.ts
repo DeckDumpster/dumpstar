@@ -34,4 +34,10 @@ total: number,
  * different question — what completing the set would cost — which is a
  * figure worth having and is not this one.
  */
-total_value: number | null, limit: number, offset: number, };
+total_value: number | null, limit: number, offset: number, 
+/**
+ * Opaque token for the page after this one; `None` when this is the last,
+ * and always `None` for offset and [`Slice::All`] requests. Only a
+ * [`Slice::Cursor`] walk emits it.
+ */
+next_cursor: string | null, };

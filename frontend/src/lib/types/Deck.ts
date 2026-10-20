@@ -7,4 +7,8 @@ export type Deck = { id: number, name: string, description: string | null, forma
 /**
  * `idea` | `ready` | `built`.
  */
-state: string, sleeve_color: string | null, storage_location: string | null, notes: string | null, created_at: string, updated_at: string, card_count: number, };
+state: string, sleeve_color: string | null, storage_location: string | null, notes: string | null, created_at: string, updated_at: string, card_count: number, 
+/**
+ * Optional free-text group (a cube, a set of packs).
+ */
+group: string | null, };

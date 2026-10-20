@@ -310,8 +310,16 @@ fn anakin_tempted_by_the_dark_side_has_no_color_in_the_official_record() {
     let page = official::parse_page(&read("off-lof-18.json.gz")).unwrap();
     let c = &page.payload.cards[0];
     assert_eq!(
-        (c.name.as_str(), c.subtitle.as_deref(), c.card_type.as_deref()),
-        ("Anakin Skywalker", Some("Tempted by the Dark Side"), Some("Leader"))
+        (
+            c.name.as_str(),
+            c.subtitle.as_deref(),
+            c.card_type.as_deref()
+        ),
+        (
+            "Anakin Skywalker",
+            Some("Tempted by the Dark Side"),
+            Some("Leader")
+        )
     );
     assert_eq!(c.aspects, ["Heroism"]);
 }

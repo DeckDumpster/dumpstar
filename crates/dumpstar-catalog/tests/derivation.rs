@@ -154,3 +154,16 @@ fn a_keyword_with_a_number_in_the_text_but_null_value_is_flagged() {
         .collect();
     assert_eq!(keys, vec![("keyword_number_missing", "DEVOTION")]);
 }
+
+#[test]
+fn reapplying_records_the_derivation_version_in_force() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut c = Catalog::open_writer(&dir.path().join("shared.sqlite")).unwrap();
+    assert!(c.derivation_versions().unwrap().is_empty());
+    c.reapply_landed(&dir.path().join("raw")).unwrap();
+    assert!(c.derivation_versions().unwrap().contains(&(
+        "official".to_string(),
+        dumpstar_catalog::apply::derivation_version("official")
+    )));
+    assert!(dumpstar_catalog::apply::derivation_version("official") >= 8);
+}

@@ -26,6 +26,8 @@ use crate::error::Result;
 use crate::search_meta::SearchFlag;
 
 // Scalar subqueries reused across the SELECT list and predicates.
+const AVAILABLE_COUNT_SUBQ: &str =
+    "SELECT COUNT(*) FROM collection c WHERE c.printing_id = p.printing_id AND c.deck_id IS NULL";
 const OWNED_COUNT_SUBQ: &str =
     "SELECT COUNT(*) FROM collection c WHERE c.printing_id = p.printing_id";
 // What this printing's OWNED copies are worth: its market price times the sum
@@ -848,12 +850,15 @@ fn compile_comparison(
         ),
         "deck" => container(op, value, "deck_id", "decks"),
         "binder" => container(op, value, "binder_id", "binders"),
+        "deck_group" => deck_group(op, value),
 
         // --- price (market) ---
         "price" => numeric(&format!("({MARKET_PRICE_EXPR})"), op, value, None),
 
         // --- quantity (per-printing, D4) ---
         "qty" => numeric(&format!("({OWNED_COUNT_SUBQ})"), op, value, None),
+        // --- availability: owned copies no deck has reserved ---
+        "avail" => numeric(&format!("({AVAILABLE_COUNT_SUBQ})"), op, value, None),
 
         // Parsed but not compilable.
         _ => ("1=0 /* unsupported keyword */".to_string(), Vec::new()),
@@ -1069,6 +1074,28 @@ fn container(op: Op, val: &str, fk: &str, table: &str) -> (String, Vec<Value>) {
                 "EXISTS (SELECT 1 FROM collection c JOIN {table} x ON c.{fk} = x.id \
                  WHERE c.printing_id = p.printing_id AND x.name LIKE ? COLLATE NOCASE)"
             ),
+            vec![text(pct(val))],
+        ),
+    }
+}
+
+/// `group:` — a copy sits in a deck whose group matches (`*` = any group).
+fn deck_group(op: Op, val: &str) -> (String, Vec<Value>) {
+    const FROM: &str = "EXISTS (SELECT 1 FROM collection c JOIN decks x ON c.deck_id = x.id \
+                        WHERE c.printing_id = p.printing_id AND ";
+    match (val, op) {
+        ("*", Op::Ne) => (format!("{FROM}x.deck_group IS NULL)"), Vec::new()),
+        ("*", _) => (format!("{FROM}x.deck_group IS NOT NULL)"), Vec::new()),
+        (_, Op::Eq) => (
+            format!("{FROM}x.deck_group = ? COLLATE NOCASE)"),
+            vec![text(val)],
+        ),
+        (_, Op::Ne) => (
+            format!("{FROM}(x.deck_group IS NULL OR x.deck_group != ? COLLATE NOCASE))"),
+            vec![text(val)],
+        ),
+        _ => (
+            format!("{FROM}x.deck_group LIKE ? COLLATE NOCASE)"),
             vec![text(pct(val))],
         ),
     }
@@ -1595,6 +1622,55 @@ mod tests {
             ids.sort();
             ids
         }
+    }
+
+    // --- reservation terms (sp-t78nrb) --------------------------------------
+
+    fn reserve_one_luke(f: &Fix, group: Option<&str>) {
+        f.conn
+            .execute(
+                "INSERT INTO decks (id, name, deck_group, created_at, updated_at) \
+                 VALUES (7, 'Pack 1', ?1, '2026-10-19', '2026-10-19')",
+                [group],
+            )
+            .unwrap();
+        f.conn
+            .execute(
+                "UPDATE collection SET deck_id = 7 WHERE id = \
+                 (SELECT MIN(id) FROM collection WHERE printing_id = 'luke-foil')",
+                [],
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn avail_counts_unreserved_copies() {
+        let f = fixture();
+        reserve_one_luke(&f, None);
+        assert_eq!(f.ids("avail>=2"), Vec::<String>::new());
+        assert_eq!(f.ids("avail>=1 s:sor"), vec!["luke-foil"]);
+        assert_eq!(f.ids("free=1 name:luke"), vec!["luke-foil"]);
+        assert!(f.ids("qty>=2").contains(&"luke-foil".to_string()));
+    }
+
+    #[test]
+    fn negated_any_deck_means_in_no_deck() {
+        let f = fixture();
+        reserve_one_luke(&f, None);
+        let ids = f.ids("-deck:* is:owned");
+        assert!(!ids.contains(&"luke-foil".to_string()), "{ids:?}");
+        assert!(ids.contains(&"falcon-std".to_string()), "{ids:?}");
+        assert_eq!(f.ids("deck:*"), vec!["luke-foil"]);
+    }
+
+    #[test]
+    fn group_matches_decks_of_that_group() {
+        let f = fixture();
+        reserve_one_luke(&f, Some("Jumpstart Cube"));
+        assert_eq!(f.ids("group:jumpstart"), vec!["luke-foil"]);
+        assert_eq!(f.ids("group=\"jumpstart cube\""), vec!["luke-foil"]);
+        assert_eq!(f.ids("group:other"), Vec::<String>::new());
+        assert_eq!(f.ids("group:*"), vec!["luke-foil"]);
     }
 
     // --- compile-shape assertions ------------------------------------------

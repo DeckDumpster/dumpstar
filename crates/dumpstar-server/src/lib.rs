@@ -3059,6 +3059,52 @@ mod tests {
                 .unwrap();
         }
 
+        /// sp-8y7ro4: the skill's second search (`a:<color> -a:heroism -a:villainy -t:base`) finds
+        /// the same-color card with no alignment that the aligned search cannot.
+        #[tokio::test]
+        async fn the_skills_unaligned_search_returns_a_same_color_card() {
+            let sql = "INSERT INTO cards (card_id, name, card_type, cost, arenas, aspects) VALUES \
+                 ('V1', 'Aligned Vigilance', 'Event', 2, '[]', '[\"Vigilance\",\"Heroism\"]'), \
+                 ('V2', 'Vanquish', 'Event', 5, '[]', '[\"Vigilance\"]'); \
+                 INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) VALUES \
+                 ('V1-p', 'V1', 'SOR', 'V1', 'Standard', 'Normal'), \
+                 ('V2-p', 'V2', 'SOR', 'V2', 'Standard', 'Normal');";
+            let mut site = Site::with_catalog(&["alice"], sql).await;
+            site.sign_in(member("alice@example.com")).await;
+            for p in ["V1-p", "V2-p"] {
+                let body = json!({"printing_id": p, "source": "manual_id"}).to_string();
+                let r = site.send("POST", "/api/collection", Some(&body)).await;
+                assert_eq!(r.status(), StatusCode::CREATED);
+            }
+            let t = site.token_for("alice@example.com");
+            let ids = |r: &serde_json::Value| -> Vec<String> {
+                r["results"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|c| c["id"].as_str().unwrap().to_string())
+                    .collect()
+            };
+            let aligned = site
+                .tool(
+                    &t,
+                    "search_cards",
+                    json!({"q": "a:vigilance a:heroism", "owned_only": true, "limit": 100}),
+                )
+                .await
+                .unwrap();
+            assert_eq!(ids(&aligned), vec!["SOR-V1"]);
+            let unaligned = site
+                .tool(
+                    &t,
+                    "search_cards",
+                    json!({"q": "a:vigilance -a:heroism -a:villainy -t:base", "owned_only": true, "limit": 100}),
+                )
+                .await
+                .unwrap();
+            assert_eq!(ids(&unaligned), vec!["SOR-V2"]);
+        }
+
         /// Acceptance (sp-kk6hn8): the swu-jumpstart-cube skill's method, scripted with no model,
         /// through the `/mcp` tools over a fixture collection saves 20 decks that pass `check_cube`.
         #[tokio::test]

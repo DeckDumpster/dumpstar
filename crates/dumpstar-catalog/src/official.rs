@@ -161,6 +161,31 @@ fn keywords_of(attrs: &Value, card_id: &str, alarms: &mut Vec<AlarmRecord>) -> V
 
 /// The number after `name` where it begins a line or a list item.
 fn keyword_value(rules: &str, name: &str) -> Option<i64> {
+    line_start_value(rules, name).or_else(|| granted_value(rules, name))
+}
+
+/// The number after `name` anywhere in the text, as a keyword granted mid-line:
+/// Devotion's "Attached unit gains Restore 2" (sp-8p9a57).
+fn granted_value(rules: &str, name: &str) -> Option<i64> {
+    let mut from = 0;
+    while let Some(at) = rules[from..].find(name) {
+        let start = from + at;
+        let end = start + name.len();
+        let before_ok = rules[..start]
+            .chars()
+            .next_back()
+            .is_none_or(|c| !c.is_alphanumeric());
+        let rest = rules[end..].strip_prefix(' ').unwrap_or("");
+        let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+        if before_ok && !digits.is_empty() {
+            return digits.parse().ok();
+        }
+        from = end;
+    }
+    None
+}
+
+fn line_start_value(rules: &str, name: &str) -> Option<i64> {
     rules
         .lines()
         .flat_map(|l| l.split(','))
@@ -183,11 +208,25 @@ fn keyword_value(rules: &str, name: &str) -> Option<i64> {
 /// `upgradePower`/`upgradeHp`, so it is written out (Resilient has no `text`).
 fn rules_text_of(attrs: &Value) -> Option<String> {
     let mut lines: Vec<String> = Vec::new();
-    for key in ["text", "deployBox", "epicAction"] {
+    let leader = rel_name(attrs, "type").as_deref() == Some("Leader");
+    // A leader's front side is `text` and `epicAction`; `deployBox` is the
+    // deployed side, set apart by a line of its own (sp-8p9a57).
+    let keys: &[&str] = if leader {
+        &["text", "epicAction", "deployBox"]
+    } else {
+        &["text", "deployBox", "epicAction"]
+    };
+    for key in keys {
         let Some(t) = text(attrs, key) else { continue };
+        let mut opened = false;
         for line in t.lines().map(str::trim).filter(|l| !l.is_empty()) {
-            if !lines.iter().any(|l| l == line) {
-                lines.push(line.to_string());
+            let line = tidy_icon_spaces(line);
+            if !lines.contains(&line) {
+                if leader && *key == "deployBox" && !opened && !lines.is_empty() {
+                    lines.push(DEPLOYED_SIDE.to_string());
+                    opened = true;
+                }
+                lines.push(line);
             }
         }
     }
@@ -210,6 +249,26 @@ fn rules_text_of(attrs: &Value) -> Option<String> {
     } else {
         Some(lines.join("\n"))
     }
+}
+
+/// The line that opens a leader's deployed side in `rules_text`.
+pub const DEPLOYED_SIDE: &str = "Deployed:";
+
+/// The official text drops an inline icon and keeps the spaces around it:
+/// "use the Force . If you do". Close the gap before punctuation and collapse
+/// doubled spaces.
+fn tidy_icon_spaces(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    for word in line.split_whitespace() {
+        let punct = word
+            .chars()
+            .all(|c| matches!(c, '.' | ',' | ';' | ':' | '!' | '?' | ')'));
+        if !out.is_empty() && !punct {
+            out.push(' ');
+        }
+        out.push_str(word);
+    }
+    out
 }
 
 fn text(attrs: &Value, key: &str) -> Option<String> {

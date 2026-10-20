@@ -328,6 +328,51 @@ pub fn suspect_rules_text(conn: &Connection) -> Result<Vec<AlarmRecord>> {
     Ok(out)
 }
 
+/// A keyword stored with no number although the card's text gives it one:
+/// `Restore` null on a card that says "gains Restore 2" (sp-8p9a57).
+pub fn keyword_number_missing(conn: &Connection) -> Result<Vec<AlarmRecord>> {
+    let mut out = Vec::new();
+    let mut stmt = conn.prepare(
+        "SELECT card_id, keywords, rules_text FROM cards
+         WHERE keywords != '[]' AND rules_text IS NOT NULL ORDER BY card_id",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+        ))
+    })?;
+    for row in rows {
+        let (id, keywords, rules) = row?;
+        let Ok(serde_json::Value::Array(kws)) = serde_json::from_str(&keywords) else {
+            continue;
+        };
+        for k in kws {
+            let Some(name) = k.get("name").and_then(|n| n.as_str()) else {
+                continue;
+            };
+            if k.get("value").is_some_and(|v| !v.is_null()) {
+                continue;
+            }
+            let numbered = rules.match_indices(name).any(|(at, _)| {
+                let before = rules[..at].chars().next_back();
+                let rest = rules[at + name.len()..].strip_prefix(' ');
+                before.is_none_or(|c| !c.is_alphanumeric())
+                    && rest.is_some_and(|r| r.starts_with(|c: char| c.is_ascii_digit()))
+            });
+            if numbered {
+                out.push(AlarmRecord::alarm(
+                    "keyword_number_missing",
+                    id.clone(),
+                    format!("{name} has a number in the rules text but a null value"),
+                ));
+            }
+        }
+    }
+    Ok(out)
+}
+
 /// A sentence or line of at least ten characters that occurs twice.
 fn repeated_sentence(rules: &str) -> Option<String> {
     let mut seen: Vec<&str> = Vec::new();
@@ -568,6 +613,7 @@ pub fn run(conn: &Connection, now: DateTime<Utc>) -> Result<Vec<AlarmRecord>> {
     out.extend(numbering(conn)?);
     out.extend(missing_structured_text(conn)?);
     out.extend(suspect_rules_text(conn)?);
+    out.extend(keyword_number_missing(conn)?);
     out.extend(wrong_group(conn)?);
     out.extend(image_wrong_card(conn)?);
     out.extend(variant_image_shared(conn)?);

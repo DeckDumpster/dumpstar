@@ -118,3 +118,39 @@ fn repeated_or_missing_rules_text_is_flagged() {
         ]
     );
 }
+
+#[test]
+fn a_keyword_with_a_number_in_the_text_but_null_value_is_flagged() {
+    let dir = tempfile::tempdir().unwrap();
+    let c = Catalog::open_writer(&dir.path().join("shared.sqlite")).unwrap();
+    for (id, kws, text) in [
+        (
+            "DEVOTION",
+            "[{\"name\":\"Restore\",\"value\":null}]",
+            "Attached unit gains Restore 2.",
+        ),
+        (
+            "OK",
+            "[{\"name\":\"Restore\",\"value\":2}]",
+            "Attached unit gains Restore 2.",
+        ),
+        (
+            "PLAIN",
+            "[{\"name\":\"Sentinel\",\"value\":null}]",
+            "Sentinel",
+        ),
+    ] {
+        c.conn()
+            .execute(
+                "INSERT INTO cards (card_id, name, card_type, rules_text, keywords) VALUES (?1, ?1, 'Upgrade', ?3, ?2)",
+                rusqlite::params![id, kws, text],
+            )
+            .unwrap();
+    }
+    let a = dumpstar_catalog::check::keyword_number_missing(c.conn()).unwrap();
+    let keys: Vec<(&str, &str)> = a
+        .iter()
+        .map(|r| (r.kind.as_str(), r.key.as_str()))
+        .collect();
+    assert_eq!(keys, vec![("keyword_number_missing", "DEVOTION")]);
+}

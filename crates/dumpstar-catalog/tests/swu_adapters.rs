@@ -1735,3 +1735,47 @@ fn an_upgrade_without_text_prints_its_stat_line() {
     .unwrap();
     assert_eq!(t, "Attach to a Force unit.\nAttached unit gets +1/+1.");
 }
+
+#[test]
+fn a_leaders_sides_are_kept_apart() {
+    let t = rules_of(
+        "Anakin Skywalker",
+        "Leader",
+        json!({
+            "text": "Action [Exhaust]: Use the Force.",
+            "deployBox": "Action [Exhaust]: Use the Force. If you do, draw a card.",
+            "epicAction": "Epic Action: Deploy this leader."
+        }),
+    )
+    .unwrap();
+    assert_eq!(
+        t,
+        "Action [Exhaust]: Use the Force.\nEpic Action: Deploy this leader.\nDeployed:\nAction [Exhaust]: Use the Force. If you do, draw a card."
+    );
+}
+
+#[test]
+fn a_stripped_icon_leaves_no_stray_space() {
+    let t = rules_of(
+        "Test",
+        "Event",
+        json!({"text": "The Force is with you .\nYou may use the Force . If you do,  draw."}),
+    )
+    .unwrap();
+    assert_eq!(
+        t,
+        "The Force is with you.\nYou may use the Force. If you do, draw."
+    );
+}
+
+#[test]
+fn devotions_granted_restore_has_its_number() {
+    let raw = keyword_page(
+        &["Restore"],
+        "Attached unit gains Restore 2. (When this unit attacks, heal 2 damage from your base.)",
+        json!({"type": {"data": {"attributes": {"name": "Upgrade"}}}}),
+    );
+    let page = official::parse_page(&raw).unwrap();
+    assert_eq!(page.payload.cards[0].keywords[0].value, Some(2));
+    assert!(page.payload.alarms.is_empty(), "{:?}", page.payload.alarms);
+}

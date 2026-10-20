@@ -2817,7 +2817,8 @@ mod tests {
             let site = Site::with_catalog(
                 &["alice"],
                 &format!("{SECOND_CARD} UPDATE cards SET keywords='[{{\"name\":\"Raid\",\"value\":2}}]', is_unique=1, \
-                   epic_action='Deal 3 damage to a unit.' WHERE card_id='SOR-2'; \
+                   epic_action='Deal 3 damage to a unit.', \
+                   rules_text='Raid 2\nShielded\nEpic Action: Deal 3 damage to a unit.' WHERE card_id='SOR-2'; \
                  INSERT INTO cards (card_id, name, card_type) VALUES ('SOR-9', 'Plain', 'Event'); \
                  INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
                    VALUES ('SOR-9-normal', 'SOR-9', 'SOR', '9', 'Standard', 'Normal');"),
@@ -2847,6 +2848,24 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(found["results"][0]["game"]["unique"], json!(true));
+            let text = "Raid 2\nShielded\nEpic Action: Deal 3 damage to a unit.";
+            assert_eq!(found["results"][0]["game"]["rules_text"], json!(text));
+            assert_eq!(
+                found["results"][0]["game"]["epic_action"],
+                json!("Deal 3 damage to a unit.")
+            );
+            assert_eq!(
+                found["results"][0]["game"]["keywords"],
+                json!([{"name": "Raid", "value": 2}])
+            );
+            assert_eq!(han["card"]["game"]["rules_text"], json!(text));
+            for q in ["k:raid", "has:epic", "is:unique"] {
+                let r = site
+                    .tool(&token, "search_cards", json!({"q": q}))
+                    .await
+                    .unwrap();
+                assert_eq!(r["total"], json!(1), "{q}: {r}");
+            }
         }
 
         /// A bearer token opens nothing under `/api`.

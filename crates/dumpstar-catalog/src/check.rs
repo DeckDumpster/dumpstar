@@ -259,6 +259,34 @@ pub fn missing_sealed_images(conn: &Connection) -> Result<Vec<AlarmRecord>> {
     Ok(vec![])
 }
 
+/// Below this many cards with rules text a catalog is a fixture, not a sync.
+const MIN_CARDS_FOR_TEXT_CHECK: i64 = 50;
+
+/// A catalog with text but no structured text: `k:` and `has:epic` match
+/// nothing and the agent tools return empty keywords (sp-nb4vqy). The columns
+/// were added in place to a catalog whose payloads were already applied, and
+/// nothing re-derived them.
+pub fn missing_structured_text(conn: &Connection) -> Result<Vec<AlarmRecord>> {
+    let (texted, keyworded, epic): (i64, i64, i64) = conn.query_row(
+        "SELECT COALESCE(SUM(rules_text IS NOT NULL AND rules_text != ''), 0),
+                COALESCE(SUM(keywords != '[]'), 0),
+                COALESCE(SUM(epic_action IS NOT NULL AND epic_action != ''), 0)
+         FROM cards",
+        [],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    )?;
+    if texted >= MIN_CARDS_FOR_TEXT_CHECK && (keyworded == 0 || epic == 0) {
+        return Ok(vec![AlarmRecord::alarm(
+            "structured_text_missing",
+            "cards".to_string(),
+            format!(
+                "{texted} cards have rules text but {keyworded} carry keywords and {epic} an epic action"
+            ),
+        )]);
+    }
+    Ok(vec![])
+}
+
 /// The numbering invariants of the printings table, as alarms.
 ///
 /// Within a set code a collector number names one card per variant
@@ -482,6 +510,7 @@ pub fn run(conn: &Connection, now: DateTime<Utc>) -> Result<Vec<AlarmRecord>> {
     out.extend(coverage_drops(conn)?);
     out.extend(missing_sealed_images(conn)?);
     out.extend(numbering(conn)?);
+    out.extend(missing_structured_text(conn)?);
     out.extend(wrong_group(conn)?);
     out.extend(image_wrong_card(conn)?);
     out.extend(variant_image_shared(conn)?);

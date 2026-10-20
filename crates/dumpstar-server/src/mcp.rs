@@ -167,6 +167,7 @@ struct Structured {
     keywords: Value,
     unique: bool,
     epic_action: Option<String>,
+    rules_text: Option<String>,
 }
 
 fn structured_for(
@@ -175,7 +176,9 @@ fn structured_for(
 ) -> Result<HashMap<String, Structured>, ToolError> {
     let mut out = HashMap::new();
     let mut stmt = conn
-        .prepare("SELECT keywords, is_unique, epic_action FROM cards WHERE card_id = ?1")
+        .prepare(
+            "SELECT keywords, is_unique, epic_action, rules_text FROM cards WHERE card_id = ?1",
+        )
         .map_err(|e| db_err(e.into()))?;
     for id in ids {
         let row = stmt
@@ -184,17 +187,19 @@ fn structured_for(
                     r.get::<_, String>(0)?,
                     r.get::<_, i64>(1)?,
                     r.get::<_, Option<String>>(2)?,
+                    r.get::<_, Option<String>>(3)?,
                 ))
             })
             .optional()
             .map_err(|e| db_err(e.into()))?;
-        if let Some((kw, unique, epic)) = row {
+        if let Some((kw, unique, epic, rules)) = row {
             out.insert(
                 id.clone(),
                 Structured {
                     keywords: serde_json::from_str(&kw).unwrap_or_else(|_| json!([])),
                     unique: unique != 0,
                     epic_action: epic.filter(|e| !e.is_empty()),
+                    rules_text: rules,
                 },
             );
         }
@@ -208,10 +213,16 @@ fn card_object(
     counts: &HashMap<String, CardCount>,
     structured: &HashMap<String, Structured>,
 ) -> Value {
-    let (keywords, unique, epic_action) = match structured.get(f.card_id) {
-        Some(s) => (s.keywords.clone(), json!(s.unique), json!(s.epic_action)),
-        None => (json!([]), json!(false), Value::Null),
+    let (keywords, unique, epic_action, stored_text) = match structured.get(f.card_id) {
+        Some(s) => (
+            s.keywords.clone(),
+            json!(s.unique),
+            json!(s.epic_action),
+            s.rules_text.as_deref(),
+        ),
+        None => (json!([]), json!(false), Value::Null, None),
     };
+    let rules_text = f.rules_text.or(stored_text);
     let aspects = json_array(f.aspects);
     let (owned, available) = counts
         .get(f.card_id)
@@ -238,7 +249,7 @@ fn card_object(
             "keywords": keywords,
             "unique": unique,
             "epic_action": epic_action,
-            "rules_text": f.rules_text,
+            "rules_text": rules_text,
         },
     })
 }

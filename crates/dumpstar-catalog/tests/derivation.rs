@@ -53,3 +53,30 @@ fn a_bumped_derivation_reapplies_an_applied_payload_once_and_only_then() {
         "once per version"
     );
 }
+
+#[test]
+fn a_text_catalog_without_keywords_or_epic_actions_alarms() {
+    let dir = tempfile::tempdir().unwrap();
+    let c = Catalog::open_writer(&dir.path().join("shared.sqlite")).unwrap();
+    for i in 0..60 {
+        c.conn()
+            .execute(
+                "INSERT INTO cards (card_id, name, rules_text) VALUES (?1, ?1, 'Sentinel')",
+                [format!("C-{i}")],
+            )
+            .unwrap();
+    }
+    let a = dumpstar_catalog::check::missing_structured_text(c.conn()).unwrap();
+    assert_eq!(a.len(), 1, "{a:?}");
+    c.conn()
+        .execute(
+            "UPDATE cards SET keywords='[{\"name\":\"Sentinel\",\"value\":null}]', epic_action='x' WHERE card_id='C-1'",
+            [],
+        )
+        .unwrap();
+    assert!(
+        dumpstar_catalog::check::missing_structured_text(c.conn())
+            .unwrap()
+            .is_empty()
+    );
+}

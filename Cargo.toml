@@ -4,6 +4,7 @@ members = [
     "crates/dumpstar-catalog",
     "crates/dumpstar-cli",
     "crates/dumpstar-core",
+    "crates/dumpstar-cube",
     "crates/dumpstar-db",
     "crates/dumpstar-derive",
     "crates/dumpstar-erase",
@@ -24,6 +25,7 @@ repository = "https://github.com/DeckDumpster/dumpstar"
 # Internal crates
 dumpstar-catalog = { path = "crates/dumpstar-catalog" }
 dumpstar-core = { path = "crates/dumpstar-core" }
+dumpstar-cube = { path = "crates/dumpstar-cube" }
 dumpstar-db = { path = "crates/dumpstar-db" }
 dumpstar-derive = { path = "crates/dumpstar-derive" }
 dumpstar-erase = { path = "crates/dumpstar-erase" }

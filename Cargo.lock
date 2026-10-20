@@ -1231,6 +1231,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dumpstar-cube"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "dumpstar-db"
 version = "0.1.0"
 dependencies = [
@@ -1337,6 +1346,7 @@ dependencies = [
  "chrono",
  "dumpstar-catalog",
  "dumpstar-core",
+ "dumpstar-cube",
  "dumpstar-db",
  "dumpster-kit-conformance",
  "dumpster-kit-mcp",

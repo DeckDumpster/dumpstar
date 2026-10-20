@@ -2928,6 +2928,231 @@ mod tests {
                 .unwrap();
         }
 
+        /// Acceptance (sp-kk6hn8): the swu-jumpstart-cube skill's method, scripted with no model,
+        /// through the `/mcp` tools over a fixture collection saves 20 decks that pass `check_cube`.
+        #[tokio::test]
+        async fn the_jumpstart_cube_method_saves_20_packs_that_pass_check_cube() {
+            use dumpstar_cube::fixture::SKELETON;
+
+            // (color, heroism packs); the other packs of the color are villainy: 10 and 10.
+            let plan = [
+                ("Command", 3),
+                ("Vigilance", 2),
+                ("Aggression", 3),
+                ("Cunning", 2),
+            ];
+            let epic = [
+                "Energy Conversion Lab",
+                "Security Complex",
+                "Tarkintown",
+                "Jedha City",
+            ];
+            let mut packs: Vec<(usize, &str, &str)> = vec![];
+            for (color, heroes) in plan {
+                for k in 0..5 {
+                    let a = if k < heroes { "Heroism" } else { "Villainy" };
+                    packs.push((packs.len() + 1, color, a));
+                }
+            }
+
+            // The fixture collection: a leader and 15 skeleton cards per pack, and five copies of
+            // each color's two bases.
+            let mut sql = String::new();
+            let mut owned: Vec<(String, u32)> = vec![];
+            let mut add = |id: &str,
+                           name: &str,
+                           kind: &str,
+                           cost: u32,
+                           arena: &str,
+                           hp: Option<i64>,
+                           aspects: &str,
+                           copies: u32| {
+                let arenas = if arena.is_empty() {
+                    "[]".to_string()
+                } else {
+                    format!("[\"{arena}\"]")
+                };
+                let hp = hp.map_or("NULL".to_string(), |h| h.to_string());
+                sql.push_str(&format!(
+                    "INSERT INTO cards (card_id, name, card_type, cost, hp, arenas, aspects) \
+                       VALUES ('{id}', '{name}', '{kind}', {cost}, {hp}, '{arenas}', '{aspects}'); \
+                     INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
+                       VALUES ('{id}-p', '{id}', 'SOR', '{id}', 'Standard', 'Normal'); "
+                ));
+                owned.push((format!("{id}-p"), copies));
+            };
+            for (n, color, align) in &packs {
+                let aspects = format!("[\"{color}\",\"{align}\"]");
+                add(
+                    &format!("L{n}"),
+                    &format!("Leader {n}"),
+                    "Leader",
+                    5,
+                    "Ground",
+                    Some(6),
+                    &aspects,
+                    1,
+                );
+                for (i, (kind, arena, cost)) in SKELETON.iter().enumerate() {
+                    add(
+                        &format!("C{n}x{i}"),
+                        &format!("Card {n} {i}"),
+                        kind,
+                        *cost,
+                        arena,
+                        None,
+                        &aspects,
+                        1,
+                    );
+                }
+            }
+            for (i, (color, _)) in plan.iter().enumerate() {
+                let one = format!("[\"{color}\"]");
+                add(
+                    &format!("B25{color}"),
+                    epic[i],
+                    "Base",
+                    0,
+                    "",
+                    Some(25),
+                    &one,
+                    5,
+                );
+                add(
+                    &format!("B30{color}"),
+                    &format!("{color} Vanilla Base"),
+                    "Base",
+                    0,
+                    "",
+                    Some(30),
+                    &one,
+                    5,
+                );
+            }
+
+            let mut site = Site::with_catalog(&["alice"], &sql).await;
+            site.sign_in(member("alice@example.com")).await;
+            for (printing, copies) in &owned {
+                for _ in 0..*copies {
+                    let body = json!({"printing_id": printing, "source": "manual_id"}).to_string();
+                    let r = site.send("POST", "/api/collection", Some(&body)).await;
+                    assert_eq!(r.status(), StatusCode::CREATED);
+                }
+            }
+            let t = site.token_for("alice@example.com");
+
+            // Step 1: collection_summary.
+            let summary = site
+                .tool(&t, "collection_summary", json!({}))
+                .await
+                .unwrap();
+            assert_eq!(summary["reserved_copies"], 0);
+
+            // Steps 2-5: for each pack, fill the skeleton from what is still available, save it,
+            // read it back.
+            let mut docs = vec![];
+            for (n, color, align) in &packs {
+                let (c, a) = (color.to_lowercase(), align.to_lowercase());
+                let mut cards = serde_json::Map::new();
+                let mut lines = vec![];
+                // Two searches a pack keep the whole run inside the endpoint's 120 calls a minute:
+                // the pool of the leader's two aspects, and the color's bases.
+                let pool = site
+                    .tool(
+                        &t,
+                        "search_cards",
+                        json!({"q": format!("a:{c} a:{a}"), "owned_only": true, "limit": 100}),
+                    )
+                    .await
+                    .unwrap();
+                let bases = site
+                    .tool(
+                        &t,
+                        "search_cards",
+                        json!({"q": format!("t:base a:{c}"), "owned_only": true}),
+                    )
+                    .await
+                    .unwrap();
+                let mut taken: Vec<String> = vec![];
+                type Want = (String, Option<i64>, Option<u64>, Option<String>);
+                let mut wants: Vec<Want> = vec![
+                    ("Leader".into(), None, None, None),
+                    ("Base".into(), Some(25), None, None),
+                    ("Base".into(), Some(30), None, None),
+                ];
+                for (kind, arena, cost) in SKELETON {
+                    wants.push((
+                        kind.into(),
+                        None,
+                        Some(u64::from(cost)),
+                        (!arena.is_empty()).then(|| arena.to_string()),
+                    ));
+                }
+                for (kind, hp, cost, arena) in wants {
+                    let from = if kind == "Base" { &bases } else { &pool };
+                    let card = from["results"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .find(|r| {
+                            r["type"] == kind.as_str()
+                                && r["available_count"].as_u64().unwrap() >= 1
+                                && !taken.contains(&r["id"].as_str().unwrap().to_string())
+                                && hp.is_none_or(|h| r["game"]["hp"] == h)
+                                && cost.is_none_or(|k| r["cost"] == k)
+                                && arena
+                                    .as_ref()
+                                    .is_none_or(|ar| r["game"]["arenas"][0] == ar.as_str())
+                        })
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "pack {n}: nothing available for {kind} {hp:?} {cost:?} {arena:?}"
+                            )
+                        })
+                        .clone();
+                    let id = card["id"].as_str().unwrap().to_string();
+                    taken.push(id.clone());
+                    lines.push(json!({"card_id": id, "qty": 1}));
+                    cards.insert(id, card);
+                }
+                let deck = site
+                    .tool(
+                        &t,
+                        "create_deck",
+                        json!({
+                            "name": format!("Pack {n}"), "format": "SWU Jumpstart Cube",
+                            "group": format!("swu-jumpstart-cube-{n}"),
+                        }),
+                    )
+                    .await
+                    .unwrap()["deck"]["id"]
+                    .as_i64()
+                    .unwrap();
+                site.tool(&t, "set_deck_lines", json!({"id": deck, "lines": lines}))
+                    .await
+                    .unwrap();
+                let got = site
+                    .tool(&t, "get_deck", json!({"id": deck}))
+                    .await
+                    .unwrap();
+                let mut doc = got.clone();
+                doc["cards"] = Value::Object(cards);
+                let failures = dumpstar_cube::check_pack_value(&doc).unwrap();
+                assert!(failures.is_empty(), "pack {n}: {failures:?}");
+                docs.push(doc);
+            }
+
+            let cube = dumpstar_cube::check_cube_value(&Value::Array(docs)).unwrap();
+            assert!(cube.is_empty(), "{cube:?}");
+            let decks = site.tool(&t, "list_decks", json!({})).await.unwrap();
+            assert_eq!(decks["decks"].as_array().unwrap().len(), 20);
+            let after = site
+                .tool(&t, "collection_summary", json!({}))
+                .await
+                .unwrap();
+            assert_eq!(after["reserved_copies"], 20 * 18);
+        }
+
         /// An unknown term gets the nearest valid ones, not an empty result.
         #[tokio::test]
         async fn a_misspelled_term_names_the_nearest_valid_ones() {

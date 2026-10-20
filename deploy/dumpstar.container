@@ -27,8 +27,8 @@ EnvironmentFile=%h/.config/dumpstar/{{INSTANCE}}/access.env
 # the server signs users in itself and ignores Access. See deploy/TENANTS.md.
 EnvironmentFile=%h/.config/dumpstar/{{INSTANCE}}/oidc.env
 # Optional OTLP metrics push (DUMPSTER_OTLP_METRICS_ENDPOINT=<product stack>/opentelemetry/v1/metrics).
-# Absent or empty: metrics are off. See deploy/dashboards/dumpstar.json.
-EnvironmentFile=-%h/.config/dumpstar/{{INSTANCE}}/metrics.env
+# Unset: metrics are off (the file is scaffolded commented out). See deploy/dashboards/dumpstar.json.
+EnvironmentFile=%h/.config/dumpstar/{{INSTANCE}}/metrics.env
 # Bind to loopback only: a Cloudflare Access logout revokes the session at
 # the edge, but the server verifies tokens locally (no revocation check) and
 # accepts them until exp. Binding to 127.0.0.1 closes the path that bypasses

@@ -72,6 +72,25 @@ EOF
     fi
 }
 
+# Write the OTLP metrics config for <instance> into <conf_dir> if it does not already exist,
+# commented out and mode 600. The Quadlet unit loads it with a mandatory 'EnvironmentFile='
+# (Quadlet rejects a leading '-'), so the file always exists. Left commented, metrics are off.
+#
+# Usage: dumpstar_scaffold_metrics_env <instance> <conf_dir>
+dumpstar_scaffold_metrics_env() {
+    local instance="$1" conf_dir="$2"
+    if [ ! -f "${conf_dir}/metrics.env" ]; then
+        mkdir -p "$conf_dir"
+        cat > "${conf_dir}/metrics.env" <<EOF
+# OTLP metrics push for instance '${instance}'. Uncomment and set the product stack's endpoint to
+# turn metrics on; leave it commented and nothing is sent. Put comments on their own lines.
+#DUMPSTER_OTLP_METRICS_ENDPOINT=https://CHANGE_ME/opentelemetry/v1/metrics
+EOF
+        chmod 600 "${conf_dir}/metrics.env"
+        echo "    Wrote ${conf_dir}/metrics.env — commented out; set the endpoint to send metrics."
+    fi
+}
+
 # Scaffold every config file the instance's units read: the host-wide alerts.env,
 # store.env and lake.env, and the per-instance litestream.env, alerts.env and
 # access.env. Idempotent and never clobbering; setup.sh and deploy.sh both call it
@@ -294,6 +313,7 @@ fi
 # config-lib.sh so deploy.sh can scaffold it for existing instances too).
 dumpstar_scaffold_access_env "$INSTANCE" "$LS_CONF_DIR"
 dumpstar_scaffold_oidc_env "$INSTANCE" "$LS_CONF_DIR"
+dumpstar_scaffold_metrics_env "$INSTANCE" "$LS_CONF_DIR"
 }
 
 # --- Required keys, checked before a deploy restarts anything (sp-kaj3xv) ----

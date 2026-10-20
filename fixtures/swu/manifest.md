@@ -18,6 +18,7 @@ Verbatim captures for the dumpstar (Star Wars: Unlimited) data-source feasibilit
 | off-cards-p2.json | https://admin.starwarsunlimited.com/api/cards?pagination[pageSize]=2 | official API default shape, 2 cards, all relations populated (182 KB) |
 | off-en-meta.json, off-sor-meta.json, off-hmw-meta.json | same endpoint, pageSize=1 + filters | pagination.total: 10193 overall, 991 SOR, 954 HMW |
 | off-single-uid.json | ...?locale=en&filters[cardUid][$eq]=6202608327 | single-card lookup by cardUid |
+| off-lof-18.json.gz | ...?filters[cardUid][$eq]=8536024453&populate[0]=aspects&populate[1]=type&populate[2]=expansion&populate[3]=variantTypes&populate[4]=rarity&populate[5]=aspectDuplicates&locale=en (retrieved 2026-10-20, sp-8ikiyo) | Anakin Skywalker, Tempted by the Dark Side (LOF-18): the official record lists the single aspect Heroism, no color |
 | off-cid.json | ...?locale=en&filters[cardId][$eq]=2579145458 | cardId groups printings of one card (3 rows) |
 | off-lite-100.json | ...?locale=en&pagination[pageSize]=100&fields...&populate... | 100-card lite page, 5.6 MB uncompressed (~373 KB gzip) |
 | off-sample-page40/80/102.json | same lite query, pagination[page]=40/80/102 | later pages: later sets, variant types |

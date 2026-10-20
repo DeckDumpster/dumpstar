@@ -306,6 +306,17 @@ fn the_single_card_fetch_parses_to_one_hyperspace_printing() {
 }
 
 #[test]
+fn anakin_tempted_by_the_dark_side_has_no_color_in_the_official_record() {
+    let page = official::parse_page(&read("off-lof-18.json.gz")).unwrap();
+    let c = &page.payload.cards[0];
+    assert_eq!(
+        (c.name.as_str(), c.subtitle.as_deref(), c.card_type.as_deref()),
+        ("Anakin Skywalker", Some("Tempted by the Dark Side"), Some("Leader"))
+    );
+    assert_eq!(c.aspects, ["Heroism"]);
+}
+
+#[test]
 fn the_bulk_page_parses_both_entries_and_reports_the_page_count() {
     let page = official::parse_page(&read("off-cards-p2.json.gz")).unwrap();
     assert_eq!(page.payload.printings.len(), 2);

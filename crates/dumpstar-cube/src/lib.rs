@@ -280,6 +280,14 @@ pub fn check_pack(pack: &Pack) -> Vec<Failure> {
                     l.name
                 ),
             ));
+        } else if l.colors().is_empty() {
+            out.push(fail(
+                "leader",
+                format!(
+                    "leader '{}' has no color aspect ({:?}); a pack is defined by its leader's color, so a colorless leader cannot lead a pack",
+                    l.name, l.aspects
+                ),
+            ));
         } else {
             out.push(fail(
                 "leader",
@@ -684,6 +692,19 @@ mod tests {
                 .iter()
                 .any(|f| f.rule == "leader"
                     && f.message.contains("Neutral leader does not lead a pack")),
+            "{fails:?}"
+        );
+    }
+
+    #[test]
+    fn a_colorless_leader_cannot_lead_a_pack() {
+        let mut p = pack(1, "Heroism", "Command");
+        edit(&mut p, "L1", |c| c["game"]["aspects"] = json!(["Heroism"]));
+        let fails = check_pack_value(&p).unwrap();
+        assert!(
+            fails.iter().any(|f| f.rule == "leader"
+                && f.message.contains("has no color aspect")
+                && f.message.contains("pack is defined by its leader's color")),
             "{fails:?}"
         );
     }

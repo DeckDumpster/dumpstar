@@ -31,6 +31,9 @@ use crate::search_meta::SearchFlag;
 const AVAILABLE_COUNT_SUBQ: &str = "SELECT COUNT(*) FROM collection c \
      JOIN printings cp ON cp.printing_id = c.printing_id \
      WHERE cp.card_id = p.card_id AND c.deck_id IS NULL";
+const CARD_OWNED_COUNT_SUBQ: &str = "SELECT COUNT(*) FROM collection c \
+     JOIN printings cp ON cp.printing_id = c.printing_id \
+     WHERE cp.card_id = p.card_id";
 const OWNED_COUNT_SUBQ: &str =
     "SELECT COUNT(*) FROM collection c WHERE c.printing_id = p.printing_id";
 // What this printing's OWNED copies are worth: its market price times the sum
@@ -769,7 +772,8 @@ fn compile_comparison(
         "aspect" => json_array(op, "cd.aspects", value),
         "arena" => json_array(op, "cd.arenas", value),
         "trait" => json_array(op, "cd.traits", value),
-        "keyword" => keyword_match(op, value),
+        "keyword" => keyword_match(op, value, false),
+        "grants" => keyword_match(op, value, true),
 
         // --- numeric ---
         "cost" => numeric("cd.cost", op, value, Some("cd.cost IS NOT NULL")),
@@ -885,6 +889,8 @@ fn compile_comparison(
 
         // --- quantity (per-printing, D4) ---
         "qty" => numeric(&format!("({OWNED_COUNT_SUBQ})"), op, value, None),
+        // --- copies of the card owned across all its printings ---
+        "owned" => numeric(&format!("({CARD_OWNED_COUNT_SUBQ})"), op, value, None),
         // --- availability: owned copies no deck has reserved ---
         "avail" => numeric(&format!("({AVAILABLE_COUNT_SUBQ})"), op, value, None),
 
@@ -943,15 +949,20 @@ fn json_array(op: Op, col: &str, val: &str) -> (String, Vec<Value>) {
 
 /// `keyword:raid` is any Raid; `keyword:"raid 2"` is Raid with that number.
 /// `!=` negates either.
-fn keyword_match(op: Op, val: &str) -> (String, Vec<Value>) {
+///
+/// `keyword:` matches the keywords a card has itself; `grants:` those its text
+/// gives to another unit (an upgrade's "Attached unit gains Sentinel").
+fn keyword_match(op: Op, val: &str, granted: bool) -> (String, Vec<Value>) {
     let val = val.trim();
     let (name, number) = match val.rsplit_once(' ') {
         Some((n, v)) if v.parse::<i64>().is_ok() => (n.trim(), Some(v.parse::<i64>().unwrap())),
         _ => (val, None),
     };
     let mut sql = "EXISTS (SELECT 1 FROM json_each(cd.keywords) \
-                    WHERE json_extract(value, '$.name') = ? COLLATE NOCASE"
+                    WHERE json_extract(value, '$.name') = ? COLLATE NOCASE \
+                      AND COALESCE(json_extract(value, '$.granted'), 0) = "
         .to_string();
+    sql.push_str(if granted { "1" } else { "0" });
     let mut params = vec![text(name)];
     if let Some(n) = number {
         sql.push_str(" AND json_extract(value, '$.value') = ?");
@@ -1683,6 +1694,41 @@ mod tests {
         assert_eq!(f.ids("avail>=1 s:sor"), vec!["luke-foil"]);
         assert_eq!(f.ids("free=1 name:luke"), vec!["luke-foil"]);
         assert!(f.ids("qty>=2").contains(&"luke-foil".to_string()));
+    }
+
+    #[test]
+    fn owned_counts_copies_of_the_card_across_printings() {
+        let f = fixture();
+        f.conn
+            .execute(
+                "INSERT INTO collection (printing_id,condition,language,acquired_at,source,status)
+                 VALUES ('falcon-hyper','Near Mint','English','2025-04-01','manual_id','owned')",
+                [],
+            )
+            .unwrap();
+        // One copy of each Falcon printing: qty sees one per printing, owned both.
+        assert!(f.ids("name:falcon qty>=2").is_empty());
+        assert_eq!(
+            f.ids("name:falcon owned>=2"),
+            vec!["falcon-hyper", "falcon-std"]
+        );
+        assert!(f.ids("name:falcon owned>=3").is_empty());
+        assert_eq!(f.ids("owned>=2 name:luke"), vec!["luke-foil"]);
+    }
+
+    #[test]
+    fn keyword_matches_own_keywords_not_granted_ones() {
+        let f = fixture();
+        {
+            let c = open_shared(&f.shared).unwrap();
+            c.execute_batch(
+                r#"UPDATE cards SET keywords='[{"name":"Sentinel","value":null}]' WHERE card_id='luke';
+                   UPDATE cards SET keywords='[{"name":"Sentinel","value":null,"granted":true}]' WHERE card_id='falcon';"#,
+            )
+            .unwrap();
+        }
+        assert_eq!(f.ids("k:sentinel"), vec!["luke-foil"]);
+        assert_eq!(f.ids("grants:sentinel"), vec!["falcon-std"]);
     }
 
     #[test]

@@ -375,12 +375,18 @@ fn card_object(
         .get(f.card_id)
         .map(|c| (c.owned, c.available))
         .unwrap_or((0, 0));
+    // The card's set and number are those of its canonical printing, the ones its id
+    // names, whichever printing the search matched (sp-wxj6lr).
+    let (set, number) = match f.display_id.split_once('-') {
+        Some((s, n)) if f.display_id != f.card_id => (s, n),
+        _ => (f.set, f.number),
+    };
     json!({
         "id": f.display_id,
         "name": f.name,
         "subtitle": f.subtitle,
-        "set": f.set,
-        "number": f.number,
+        "set": set,
+        "number": number,
         "rarity": f.rarity,
         "type": f.card_type,
         "cost": f.cost,
@@ -431,6 +437,8 @@ fn row_object(
     );
     if expand {
         v["printing_id"] = json!(r.printing_id);
+        v["printing_set"] = json!(r.set_code);
+        v["printing_number"] = json!(r.number);
         v["variant"] = json!(r.variant);
         v["finish"] = json!(r.finish);
         v["owned_printing_count"] = json!(r.owned_count);

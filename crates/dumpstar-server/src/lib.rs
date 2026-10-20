@@ -2849,6 +2849,70 @@ mod tests {
             assert_eq!(found["results"][0]["game"]["unique"], json!(true));
         }
 
+        /// sp-sk3oz4: every card id the tools return is `<SET>-<number>`, whatever the catalog's
+        /// own key is, and the catalog's older forms (`n:<slug>`, bare numerics) still go in.
+        #[tokio::test]
+        async fn mcp_card_ids_are_one_documented_form_and_old_forms_are_accepted() {
+            let site = Site::with_catalog(
+                &["alice"],
+                "INSERT OR IGNORE INTO sets (set_code, name) VALUES ('JTL', 'Jump to Lightspeed'); \
+                 INSERT INTO cards (card_id, name, card_type) VALUES ('n:vanquish', 'Vanquish', 'Event'); \
+                 INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
+                   VALUES ('p-van-h', 'n:vanquish', 'JTL', '300', 'Hyperspace', 'Normal'), \
+                          ('p-van', 'n:vanquish', 'JTL', '045', 'Standard', 'Normal'); \
+                 INSERT INTO cards (card_id, name, card_type) VALUES ('6472095064', 'Krennic', 'Unit'); \
+                 INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
+                   VALUES ('p-kre', '6472095064', 'SOR', '12', 'Standard', 'Normal');",
+            )
+            .await;
+            let token = site.token_for("alice@example.com");
+            let found = site
+                .tool(&token, "search_cards", json!({"q": "", "limit": 100}))
+                .await
+                .unwrap();
+            let shape = |id: &str| {
+                id.split_once('-').is_some_and(|(set, n)| {
+                    !set.is_empty()
+                        && set
+                            .chars()
+                            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+                        && !n.is_empty()
+                        && n.chars().all(|c| c.is_ascii_alphanumeric())
+                })
+            };
+            let rows = found["results"].as_array().unwrap();
+            assert!(rows.len() >= 3);
+            for r in rows {
+                let id = r["id"].as_str().unwrap();
+                assert!(shape(id), "id {id} is not <SET>-<number>");
+            }
+            let van: Vec<_> = rows.iter().filter(|r| r["name"] == "Vanquish").collect();
+            assert!(van.iter().all(|r| r["id"] == "JTL-045"), "one id per card");
+
+            for given in ["n:vanquish", "JTL-045", "jtl-45", "JTL-300"] {
+                let got = site
+                    .tool(&token, "get_card", json!({"id": given}))
+                    .await
+                    .unwrap();
+                assert_eq!(got["card"]["id"], "JTL-045", "{given}");
+            }
+            let deck = site
+                .tool(&token, "create_deck", json!({"name": "d", "format": "x"}))
+                .await
+                .unwrap()["deck"]["id"]
+                .as_i64()
+                .unwrap();
+            let short = site
+                .tool(
+                    &token,
+                    "set_deck_lines",
+                    json!({"id": deck, "lines": [{"card_id": "6472095064", "qty": 1}]}),
+                )
+                .await;
+            let err = short.unwrap_err();
+            assert!(err.contains("SOR-12"), "{err}");
+        }
+
         /// A bearer token opens nothing under `/api`.
         #[tokio::test]
         async fn a_bearer_token_does_not_open_the_api() {

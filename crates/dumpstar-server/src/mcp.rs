@@ -103,6 +103,9 @@ pub fn tools(
     ))
 }
 
+/// How every tool describes a card id.
+const CARD_ID_DOC: &str = "Card id: <SET>-<number> of the card's standard printing, e.g. SOR-005. Older ids (n:<slug>, bare numbers) are still accepted.";
+
 fn db_err(e: DbError) -> ToolError {
     match e {
         DbError::NotFound(_) | DbError::Conflict(_) | DbError::Invalid(_) | DbError::Import(_) => {
@@ -147,6 +150,7 @@ fn alignment(aspects: &[String]) -> &'static str {
 
 struct Facts<'a> {
     card_id: &'a str,
+    display_id: String,
     name: &'a str,
     subtitle: &'a Option<String>,
     set: &'a str,
@@ -202,6 +206,66 @@ fn structured_for(
     Ok(out)
 }
 
+/// The one card-id form the tools speak: `<SET>-<number>` of the card's canonical printing
+/// (Standard before other variants, Normal before foil), e.g. `SOR-005`.
+const CANONICAL_PRINTING: &str =
+    "ORDER BY variant <> 'Standard', finish <> 'Normal', printing_id LIMIT 1";
+
+fn display_id(conn: &Connection, card_id: &str) -> Result<String, ToolError> {
+    let sql = format!(
+        "SELECT set_code || '-' || number FROM shared.printings WHERE card_id = ?1 {CANONICAL_PRINTING}"
+    );
+    Ok(conn
+        .query_row(&sql, [card_id], |r| r.get::<_, String>(0))
+        .optional()
+        .map_err(|e| db_err(e.into()))?
+        .unwrap_or_else(|| card_id.to_string()))
+}
+
+/// Accepts the documented `<SET>-<number>` and the older internal forms (`n:<slug>`, bare
+/// numeric ids) and returns the catalog's own card id.
+fn resolve_card_id(conn: &Connection, given: &str) -> Result<String, ToolError> {
+    let given = given.trim();
+    let known = conn
+        .query_row(
+            "SELECT card_id FROM shared.cards WHERE card_id = ?1",
+            [given],
+            |r| r.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|e| db_err(e.into()))?;
+    if let Some(id) = known {
+        return Ok(id);
+    }
+    if let Some((set, number)) = given.split_once('-') {
+        let sql = format!(
+            "SELECT card_id FROM shared.printings WHERE upper(set_code) = upper(?1) \
+               AND (number = ?2 OR ltrim(number, '0') = ltrim(?2, '0')) {CANONICAL_PRINTING}"
+        );
+        let found = conn
+            .query_row(&sql, [set, number], |r| r.get::<_, String>(0))
+            .optional()
+            .map_err(|e| db_err(e.into()))?;
+        if let Some(id) = found {
+            return Ok(id);
+        }
+    }
+    Err(failed(format!(
+        "no card '{given}'; ids look like SOR-005 (<SET>-<number>), search_cards finds them"
+    )))
+}
+
+/// Rewrites every `card_id` in a serialized list of deck lines to the documented form.
+fn display_lines(conn: &Connection, lines: impl serde::Serialize) -> Result<Value, ToolError> {
+    let mut v = json!(lines);
+    for l in v.as_array_mut().into_iter().flatten() {
+        if let Some(id) = l["card_id"].as_str().map(String::from) {
+            l["card_id"] = json!(display_id(conn, &id)?);
+        }
+    }
+    Ok(v)
+}
+
 /// The card object: the common fields plus a `game` block.
 fn card_object(
     f: Facts,
@@ -218,7 +282,7 @@ fn card_object(
         .map(|c| (c.owned, c.available))
         .unwrap_or((0, 0));
     json!({
-        "id": f.card_id,
+        "id": f.display_id,
         "name": f.name,
         "subtitle": f.subtitle,
         "set": f.set,
@@ -244,13 +308,15 @@ fn card_object(
 }
 
 fn row_object(
+    conn: &Connection,
     r: &SearchRow,
     counts: &HashMap<String, CardCount>,
     structured: &HashMap<String, Structured>,
-) -> Value {
+) -> Result<Value, ToolError> {
     let mut v = card_object(
         Facts {
             card_id: &r.card_id,
+            display_id: display_id(conn, &r.card_id)?,
             name: &r.name,
             subtitle: &r.subtitle,
             set: &r.set_code,
@@ -272,7 +338,7 @@ fn row_object(
     v["variant"] = json!(r.variant);
     v["finish"] = json!(r.finish);
     v["owned_printing_count"] = json!(r.owned_count);
-    v
+    Ok(v)
 }
 
 fn counts_for(conn: &Connection, ids: &[String]) -> Result<HashMap<String, CardCount>, ToolError> {
@@ -325,6 +391,7 @@ fn detail_card_object(c: &Connection, card: &Card) -> Result<Value, ToolError> {
     Ok(card_object(
         Facts {
             card_id,
+            display_id: display_id(c, card_id)?,
             name,
             subtitle,
             set: set_code,
@@ -395,7 +462,7 @@ impl DumpstarTools {
             let counts = counts_for(c, &ids)?;
             let structured = structured_for(c, &ids)?;
             Ok(json!({
-                "results": page.rows.iter().map(|r| row_object(r, &counts, &structured)).collect::<Vec<_>>(),
+                "results": page.rows.iter().map(|r| row_object(c, r, &counts, &structured)).collect::<Result<Vec<_>, _>>()?,
                 "total": page.total,
                 "next_cursor": page.next_cursor,
             }))
@@ -405,7 +472,9 @@ impl DumpstarTools {
     fn get_card(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
         self.with_conn(ctx, |c| {
             let (set, number, variant) = match arg_str(args, "id") {
-                Some(card_id) => {
+                Some(given) => {
+                    let card_id = resolve_card_id(c, given)?;
+                    let card_id = card_id.as_str();
                     c.query_row(
                         "SELECT set_code, number, variant FROM shared.printings WHERE card_id = ?1 \
                           ORDER BY variant <> 'Standard', finish <> 'Normal', printing_id LIMIT 1",
@@ -491,7 +560,7 @@ impl DumpstarTools {
             let lines = decks::line_states(c, id).map_err(db_err)?;
             let mut cards = serde_json::Map::new();
             for l in &lines {
-                if cards.contains_key(&l.card_id) {
+                if cards.contains_key(&display_id(c, &l.card_id)?) {
                     continue;
                 }
                 let found: Option<(String, String, String)> = c
@@ -509,10 +578,10 @@ impl DumpstarTools {
                 if let Some(d) = cards::get_card_detail_variant(c, &set, &number, Some(&variant))
                     .map_err(db_err)?
                 {
-                    cards.insert(l.card_id.clone(), detail_card_object(c, &d.card)?);
+                    cards.insert(display_id(c, &l.card_id)?, detail_card_object(c, &d.card)?);
                 }
             }
-            Ok(json!({ "deck": deck, "lines": lines, "cards": cards }))
+            Ok(json!({ "deck": deck, "lines": display_lines(c, lines)?, "cards": cards }))
         })
     }
 
@@ -564,14 +633,17 @@ impl DumpstarTools {
             });
         }
         self.with_conn(ctx, |c| {
+            for l in &mut lines {
+                l.card_id = resolve_card_id(c, &l.card_id)?;
+            }
             match decks::set_lines(c, id, &lines).map_err(db_err)? {
                 SetLines::Short(short) => Err(failed(format!(
                     "not enough free copies; nothing changed. short lines: {}",
-                    json!(short)
+                    display_lines(c, short)?
                 ))),
                 SetLines::Set { reserved } => Ok(json!({
                     "reserved": reserved,
-                    "lines": decks::line_states(c, id).map_err(db_err)?,
+                    "lines": display_lines(c, decks::line_states(c, id).map_err(db_err)?)?,
                 })),
             }
         })
@@ -625,7 +697,7 @@ impl ToolProvider for DumpstarTools {
                 self.keywords.tool_description(
                     "Search the Star Wars: Unlimited catalog with the site's query language. \
                      Each result is one printing; owned_count and available_count are per card \
-                     (copies owned, and owned copies in no deck). Page with next_cursor.",
+                     (copies owned, and owned copies in no deck). Page with next_cursor. Every result's id is a card id of the form <SET>-<number>, e.g. SOR-005; every tool takes and returns that form.",
                     10,
                     &EXAMPLES,
                 ),
@@ -641,10 +713,10 @@ impl ToolProvider for DumpstarTools {
             ),
             def(
                 "get_card",
-                "One card in full: its game block and rules text, its printings with owned counts, and the user's copies with the deck each sits in. Give id (a card id from search_cards) or set and number.".into(),
+                "One card in full: its game block and rules text, its printings with owned counts, and the user's copies with the deck each sits in. Give id (a card id, e.g. SOR-005) or set and number.".into(),
                 schema(
                     json!({
-                        "id": {"type": "string", "description": "Card id"},
+                        "id": {"type": "string", "description": CARD_ID_DOC},
                         "set": {"type": "string", "description": "Set code, e.g. SOR"},
                         "number": {"type": "string", "description": "Collector number"},
                         "variant": {"type": "string", "description": "Standard, Hyperspace, Showcase or Promo"},
@@ -701,7 +773,7 @@ impl ToolProvider for DumpstarTools {
                         "lines": {"type": "array", "description": "Objects {card_id, qty, zone?} with zone main (default) or sideboard", "items": {
                             "type": "object",
                             "properties": {
-                                "card_id": {"type": "string"},
+                                "card_id": {"type": "string", "description": CARD_ID_DOC},
                                 "qty": {"type": "integer"},
                                 "zone": {"type": "string", "enum": ["main", "sideboard"]},
                             },

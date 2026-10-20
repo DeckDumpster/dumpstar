@@ -639,7 +639,7 @@ check "the rendered prod unit sets DUMPSTAR_MCP_RESOURCE" "1" \
 	. "${REPO_DIR}/deploy/units-lib.sh"
 	dumpstar_units_install mcptest 8123 >/dev/null 2>&1 || true
 	check "a non-prod unit does not set it" "0" \
-		"$(grep -c 'DUMPSTAR_MCP_RESOURCE' "$HOME/.config/containers/systemd/dumpstar-mcptest.container" || echo 0)"
+		"$(grep -c 'DUMPSTAR_MCP_RESOURCE' "$HOME/.config/containers/systemd/dumpstar-mcptest.container" || true)"
 ) || true
 check "mcp-check passes against a server that serves /mcp" "0" \
 	"$(FAKE_MCP=on PATH="${WORK}/deploybin:$PATH" bash "${REPO_DIR}/deploy/mcp-check.sh" >/dev/null 2>&1; echo $?)"

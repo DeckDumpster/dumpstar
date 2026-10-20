@@ -113,6 +113,12 @@ fi
 
 echo "==> ${SERVICE_NAME} restarted. Port: podman port systemd-${SERVICE_NAME}"
 
+# /mcp is on only if the unit carried DUMPSTAR_MCP_RESOURCE (sp-tfkp9o): probe the public URL.
+if [ "$INSTANCE" = prod ]; then
+    echo "==> Checking /mcp is served..."
+    bash "$SCRIPT_DIR/mcp-check.sh" || exit 1
+fi
+
 # Every timer this checkout ships must be enabled (sp-892w24): enable them, then
 # fail the deploy if any still is not.
 echo "==> Enabling the shipped timers..."

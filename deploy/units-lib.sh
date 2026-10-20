@@ -431,6 +431,7 @@ dumpstar_units_enable_timers() {
 dumpstar_units_install() {
     local _alert_sed=()
     dumpstar_units_alerting "$1" || _alert_sed=(-e '/^OnFailure=/d')
+    [ "$1" = prod ] || _alert_sed+=(-e '/^Environment=DUMPSTAR_MCP_RESOURCE=/d')
     local instance="$1" port="${2:-0}"
     local repo_dir quadlet_dir systemd_user_dir service_name
     repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

@@ -558,6 +558,28 @@ echo "SYSTEMCTL: $*" >> "$DUMPSTAR_TEST_SYSTEMCTL_LOG"
 exit 0
 EOF
 chmod +x "${WORK}/deploybin/podman" "${WORK}/deploybin/systemctl"
+# A stand-in public origin for deploy/mcp-check.sh: FAKE_MCP=on serves what a server with
+# DUMPSTAR_MCP_RESOURCE set does, anything else what one without it does (sp-tfkp9o).
+cat > "${WORK}/deploybin/curl" <<'EOS'
+#!/usr/bin/env bash
+case "$*" in
+*-D*)
+	if [ "${FAKE_MCP:-on}" = on ]; then
+		printf 'HTTP/2 401\r\nwww-authenticate: Bearer resource_metadata="https://star.dumpster.cards/.well-known/oauth-protected-resource"\r\n\r\n'
+	else
+		printf 'HTTP/2 401\r\ncontent-type: application/json\r\n\r\n'
+	fi
+	;;
+*)
+	if [ "${FAKE_MCP:-on}" = on ]; then
+		printf '{"resource":"https://star.dumpster.cards/mcp","authorization_servers":["https://id.gantt.pub"]}\n200'
+	else
+		printf '\n303'
+	fi
+	;;
+esac
+EOS
+chmod +x "${WORK}/deploybin/curl"
 
 # The instance as it exists on the box: a unit from an older checkout, still
 # publishing the port everything reaches it on.
@@ -604,6 +626,28 @@ sed -e 's|{{INSTANCE}}|prod|g' -e 's|{{PORT}}:8080|8090:8080|' \
 	"${REPO_DIR}/deploy/dumpstar.container" > "${WORK}/app.expected"
 check "app unit matches the template" "same" \
 	"$(cmp -s "${QUADLET}/dumpstar-prod.container" "${WORK}/app.expected" && echo same || echo differs)"
+
+# sp-tfkp9o: /mcp was never switched on in production — the unit carried no
+# DUMPSTAR_MCP_RESOURCE, and nothing noticed. The rendered prod unit sets it; no other
+# instance does (the server refuses to start with it and no Pocket ID sign-in); a deploy
+# probes the public metadata and a server without it fails that probe.
+check "the rendered prod unit sets DUMPSTAR_MCP_RESOURCE" "1" \
+	"$(grep -c '^Environment=DUMPSTAR_MCP_RESOURCE=https://star\.dumpster\.cards/mcp$' "${QUADLET}/dumpstar-prod.container" || true)"
+(
+	HOME="${WORK}/mcphome"
+	mkdir -p "$HOME"
+	. "${REPO_DIR}/deploy/units-lib.sh"
+	dumpstar_units_install mcptest 8123 >/dev/null 2>&1 || true
+	check "a non-prod unit does not set it" "0" \
+		"$(grep -c 'DUMPSTAR_MCP_RESOURCE' "$HOME/.config/containers/systemd/dumpstar-mcptest.container" || true)"
+) || true
+check "mcp-check passes against a server that serves /mcp" "0" \
+	"$(FAKE_MCP=on PATH="${WORK}/deploybin:$PATH" bash "${REPO_DIR}/deploy/mcp-check.sh" >/dev/null 2>&1; echo $?)"
+check "mcp-check fails against a server without DUMPSTAR_MCP_RESOURCE" "1" \
+	"$(FAKE_MCP=off DUMPSTAR_MCP_CHECK_WAIT=0 PATH="${WORK}/deploybin:$PATH" bash "${REPO_DIR}/deploy/mcp-check.sh" >/dev/null 2>&1; echo $?)"
+check "the prod deploy runs the mcp check" "1" \
+	"$(grep -c 'mcp-check.sh' "${REPO_DIR}/deploy/deploy.sh" || true)"
+
 # Explicit alerting checks on the app unit — the template match above is
 # the whole-file assertion; these name the specific lines so a regression
 # is legible rather than a byte diff. (db-rl3o: app unit was the one gap)
@@ -2915,6 +2959,15 @@ echo "SYSTEMCTL: $*" >> "$DUMPSTAR_TEST_SYSTEMCTL_LOG"
 exit 0
 EOF
 chmod +x "${WORK}/bin20/systemctl"
+# The /mcp probe deploy.sh runs on prod (sp-tfkp9o) reaches the public URL; answer it as a healthy site would.
+cat > "${WORK}/bin20/curl" <<'EOF'
+#!/usr/bin/env bash
+for a in "$@"; do
+	[ "$a" = -D ] && { printf 'HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Bearer\r\n\r\n'; exit 0; }
+done
+printf '{"resource":"https://star.dumpster.cards/mcp"}\n200'
+EOF
+chmod +x "${WORK}/bin20/curl"
 printf 'DUMPSTAR_ACCESS_TEAM_DOMAIN=https://t.example\nDUMPSTAR_ACCESS_AUD=aud\nDUMPSTAR_ACCESS_JWKS_URL=https://t.example/certs\n' > "${CONF20}/access.env"
 printf '[Unit]\nDescription=running\n\n[Container]\nImage=localhost/dumpstar:prod\nPublishPort=127.0.0.1:8091:8080\n' > "${Q20}/dumpstar-prod.container"
 cp "${Q20}/dumpstar-prod.container" "${WORK}/unit20.before"

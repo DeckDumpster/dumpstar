@@ -220,10 +220,12 @@ fn search_to(
     if args.timing {
         writeln!(
             out,
-            "-- timing ms: registry-load {:.1}, parse+compile {:.1}, totals {:.1}, rows {:.1}, copies {:.1}, total {:.1}",
+            "-- timing ms: registry-load {:.1}, parse+compile {:.1}, totals {}, rows {:.1}, copies {:.1}, total {:.1}",
             ms(load),
             ms(compile),
-            timings.totals_ms,
+            timings
+                .totals_ms
+                .map_or_else(|| "-".to_string(), |d| format!("{d:.1}")),
             timings.rows_ms,
             timings.copies_ms,
             ms(total_start.elapsed()),

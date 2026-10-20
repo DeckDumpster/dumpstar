@@ -292,10 +292,13 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
         "traits",
         "arenas",
         "rules_text",
+        "keywords",
+        "is_unique",
+        "epic_action",
     ];
     let sql = format!(
-        "INSERT INTO cards (card_id, name, subtitle, card_type, cost, power, hp, aspects, traits, arenas, rules_text)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)
+        "INSERT INTO cards (card_id, name, subtitle, card_type, cost, power, hp, aspects, traits, arenas, rules_text, keywords, is_unique, epic_action)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)
          ON CONFLICT(card_id) DO UPDATE SET {}
          WHERE {}",
         cols.iter().map(|c| format!("{c}=excluded.{c}")).collect::<Vec<_>>().join(", "),
@@ -317,6 +320,9 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
                 serde_json::to_string(&c.traits)?,
                 serde_json::to_string(&c.arenas)?,
                 c.rules_text,
+                serde_json::to_string(&c.keywords)?,
+                c.unique,
+                c.epic_action,
             ],
         )?;
         if changed > 0 {

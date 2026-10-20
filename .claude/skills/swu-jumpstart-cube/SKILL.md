@@ -22,7 +22,10 @@ copies and that no copy is in two decks. `swu-cube-check` (below) is what tells 
 1. **1 Leader.** It sets the alignment (Heroism/Villainy) and the color aspect.
 2. **1 Epic Action Base (25 HP)**, strictly the Leader's color aspect: any 25-HP base of that aspect with an epic action.
 3. **1 Vanilla Base (30 HP)**, strictly the Leader's color aspect: any 30-HP base of that aspect without an epic action.
-4. **15 draw cards**, all matching the Leader's alignment and color aspect (no off-aspect penalties).
+4. **15 draw cards**, none off the Leader's alignment or color aspect (no off-aspect penalties).
+   A card of the Leader's color with no Heroism/Villainy aspect (Make an Opening, Vanquish) carries
+   no aspect penalty and is allowed; so is a card with no aspect at all. A card of another color,
+   or of the other alignment, is not.
 
 ### 3. Pre-game setup (why the aspects must match)
 
@@ -89,6 +92,10 @@ The archetypes and the leader guidance are advice. `swu-cube-check` does not tes
 
 ## Method
 
+**Group name.** Ask the user which group the packs go in; default `swu-jumpstart-cube`. A partial
+or test build names its own group so it never lands in the real cube's group. Use that one group
+for every `create_deck` and `list_decks` below.
+
 Mind the rate limit: `/mcp` allows about 120 tool calls a minute per sign-in. Search once per pack
 and choose from the results yourself; do not search once per card.
 
@@ -103,13 +110,14 @@ and choose from the results yourself; do not search once per card.
    One more for the color's bases: `t:base a:<color>`. Then pick from the results the 15 cards
    that meet section 4, the 25-HP and 30-HP bases, and the Leader. A card already chosen for an
    earlier pack has less available; re-search per pack so `available_count` is current. Prefer
-   cards of the Leader's own alignment and color, or neutral ones with neither.
+   cards of the Leader's own alignment and color; same-color cards with no alignment and cards with
+   no aspects are also allowed.
 4. **Check the planned pack, then save it.** Before any write, assemble the pack document (below)
    and run `swu-cube-check pack`. Fix every `FAIL` line, then `create_deck` (`format`:
-   `SWU Jumpstart Cube`, `group`: `swu-jumpstart-cube` (the same group for all 20 packs), `name`: `Pack <n>`) and
+   `SWU Jumpstart Cube`, `group`: the group name (the same for all 20 packs), `name`: `Pack <n>`) and
    `set_deck_lines` with the 18 `{card_id, qty: 1}` lines. A refusal says which lines are short and
    changes nothing: swap those cards and retry.
-5. **Check the whole group.** `list_decks` with `group: swu-jumpstart-cube`, `get_deck` for each of the 20, build the
+5. **Check the whole group.** `list_decks` with that group, `get_deck` for each of the 20, build the
    cube document, run `swu-cube-check cube`. `reserved` must equal `qty` on every line.
 
 ## The checker
@@ -132,8 +140,9 @@ pack before saving it, build the same document by hand from your `search_cards`/
 A **cube document** is an array of pack documents, or `{"packs": [...], "cards": {...}}` with the
 cards shared. Rules reported: `shape`, `leader`, `base-hp`, `base-aspect`, `base-name`,
 `draw-aspect`, `arena`, `curve`, `reserved`, `unknown-card`, and for the cube `cube-size`,
-`cube-alignment`, `cube-bases`. A card that has neither Heroism nor Villainy and no color counts as
-neutral and passes `draw-aspect`.
+`cube-alignment`, `cube-bases`. `draw-aspect` rejects a draw card with any color other than the Leader's or any
+alignment other than the Leader's. A card with no alignment (of the Leader's color) or with no
+aspects at all passes.
 
 Finish by telling the user which packs were built, which Leaders you chose and why, and the
 `swu-cube-check cube` output.

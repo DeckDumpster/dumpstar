@@ -26,14 +26,16 @@ EnvironmentFile=%h/.config/dumpstar/{{INSTANCE}}/access.env
 # Pocket ID sign-in (DUMPSTAR_OIDC_*). Scaffolded commented out by the same step; when filled
 # the server signs users in itself and ignores Access. See deploy/TENANTS.md.
 EnvironmentFile=%h/.config/dumpstar/{{INSTANCE}}/oidc.env
-# Optional OTLP metrics push (DUMPSTER_OTLP_METRICS_ENDPOINT=<product stack>/opentelemetry/v1/metrics).
-# Unset: metrics are off (the file is scaffolded commented out). See deploy/dashboards/dumpstar.json.
+# OTLP metrics push (DUMPSTER_OTLP_METRICS_ENDPOINT). The scaffold sets it for prod to the product
+# stack's VictoriaMetrics, which listens on the host's loopback; the pasta network below maps that
+# loopback to 10.0.2.2 inside the container. See deploy/dashboards/dumpstar.json.
 EnvironmentFile=%h/.config/dumpstar/{{INSTANCE}}/metrics.env
 # Bind to loopback only: a Cloudflare Access logout revokes the session at
 # the edge, but the server verifies tokens locally (no revocation check) and
 # accepts them until exp. Binding to 127.0.0.1 closes the path that bypasses
 # the edge — only the cloudflared tunnel (loopback) reaches the container.
 # (db-a5g0)
+Network=pasta:--map-host-loopback,10.0.2.2
 PublishPort=127.0.0.1:{{PORT}}:8080
 Volume=dumpstar-{{INSTANCE}}-data:/data:Z
 AutoUpdate=local

@@ -3117,6 +3117,28 @@ check "deploy.sh enables the timers and fails on drift" "2" \
 check "the heartbeat alarms on drift" "1" \
 	"$(grep -c 'dumpstar_units_timer_drift' "${REPO_DIR}/deploy/heartbeat.sh" || true)"
 
+log "22. The prod deploy renders a real OTLP endpoint (sp-66sd9c)"
+# shellcheck source=deploy/config-lib.sh
+. "${REPO_DIR}/deploy/config-lib.sh"
+M22="${WORK}/m22"
+dumpstar_scaffold_metrics_env prod "$M22/prod" >/dev/null
+EP22="$(sed -n 's/^DUMPSTER_OTLP_METRICS_ENDPOINT=//p' "$M22/prod/metrics.env")"
+check "prod's metrics.env sets the endpoint, uncommented" "1" 	"$(grep -c '^DUMPSTER_OTLP_METRICS_ENDPOINT=http' "$M22/prod/metrics.env" || true)"
+check "the endpoint is the product stack's OTLP path" "http://10.0.2.2:8428/opentelemetry/v1/metrics" "$EP22"
+check "prod's metrics.env has no placeholder" "0" "$(grep -c 'CHANGE_ME' "$M22/prod/metrics.env" || true)"
+check "the unit maps the host loopback to that address" "1" 	"$(grep -c '^Network=pasta:--map-host-loopback,10.0.2.2$' "${REPO_DIR}/deploy/dumpstar.container" || true)"
+mkdir -p "$M22/old"
+printf '#DUMPSTER_OTLP_METRICS_ENDPOINT=https://CHANGE_ME/opentelemetry/v1/metrics
+' > "$M22/old/metrics.env"
+dumpstar_scaffold_metrics_env prod "$M22/old" >/dev/null
+check "an old prod placeholder file is rewritten" "$EP22" 	"$(sed -n 's/^DUMPSTER_OTLP_METRICS_ENDPOINT=//p' "$M22/old/metrics.env")"
+printf 'DUMPSTER_OTLP_METRICS_ENDPOINT=http://elsewhere:1/x
+' > "$M22/old/metrics.env"
+dumpstar_scaffold_metrics_env prod "$M22/old" >/dev/null
+check "a set prod endpoint is left alone" "http://elsewhere:1/x" 	"$(sed -n 's/^DUMPSTER_OTLP_METRICS_ENDPOINT=//p' "$M22/old/metrics.env")"
+dumpstar_scaffold_metrics_env test1 "$M22/t" >/dev/null
+check "a test instance sends nothing" "0" "$(grep -c '^DUMPSTER_OTLP' "$M22/t/metrics.env" || true)"
+
 reset_store
 
 # ---------------------------------------------------------------------------

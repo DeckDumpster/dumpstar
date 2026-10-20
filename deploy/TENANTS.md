@@ -718,7 +718,7 @@ JWKS, `iss`, `aud` equal to that URL, `exp`), requires the same group and resolv
 token's email through the registry, exactly as a browser session does. The URL must be registered in
 Pocket ID as an API resource. `/mcp` and `/.well-known/oauth-protected-resource*` skip the browser
 sign-in; a bearer token is honoured nowhere else, and the cookie session is not accepted on `/mcp`.
-Unset, `/mcp` does not exist. Metrics go to `DUMPSTER_OTLP_METRICS_ENDPOINT`; the prod deploy sets it to the product stack's VictoriaMetrics (`http://10.0.2.2:8428/opentelemetry/v1/metrics`, the host loopback as the unit's pasta network maps it), and other instances leave it unset.
+Unset, `/mcp` does not exist. Metrics go to `DUMPSTER_OTLP_METRICS_ENDPOINT`; the prod deploy sets it to the product stack's VictoriaMetrics (`http://10.0.2.2:8428/opentelemetry/v1/metrics`, the host loopback as the unit's slirp4netns network maps it), and other instances leave it unset.
 
 With no `DUMPSTAR_OIDC_*` set the server runs behind Cloudflare Access as before (the
 `access.env` section below); with OIDC configured, the Cloudflare JWT is not consulted.

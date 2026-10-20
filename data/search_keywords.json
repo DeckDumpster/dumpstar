@@ -5,6 +5,7 @@
   {"canonical":"arena","aliases":["arena"],"operators":[":","=","!="],"kind":"json_array","target":"cards.arenas","value_enum":"arena","help":"Arena: Ground or Space"},
   {"canonical":"trait","aliases":["trait"],"operators":[":","=","!="],"kind":"json_array","target":"cards.traits","help":"Trait: Rebel, Force, Vehicle, Trooper…"},
   {"canonical":"keyword","aliases":["k","keyword"],"operators":[":","=","!="],"kind":"json_array","target":"cards.keywords","help":"Keyword: Sentinel, Raid, Restore, Saboteur, Shielded, Smuggle, Overwhelm, Ambush, Grit, Bounty, Coordinate, Exploit, Piloting, Hidden; k:\"raid 2\" matches its number"},
+  {"canonical":"grants","aliases":["grants","gives"],"operators":[":","=","!="],"kind":"json_array","target":"cards.keywords","help":"Keyword the card gives to another unit (an upgrade's 'Attached unit gains Sentinel'); k: matches only keywords the card has itself"},
   {"canonical":"epic","aliases":["epic"],"operators":[":","=","!="],"kind":"text","target":"cards.epic_action","help":"Epic action text of a leader or base (e.g. epic:shield; has:epic for any)"},
   {"canonical":"cost","aliases":["c","cost"],"operators":[":","=","!=","<",">","<=",">="],"kind":"numeric","target":"cards.cost","help":"Resource cost"},
   {"canonical":"power","aliases":["p","power"],"operators":[":","=","!=","<",">","<=",">="],"kind":"numeric","target":"cards.power","help":"Power"},
@@ -35,7 +36,8 @@
   {"canonical":"source","aliases":["source"],"operators":[":","=","!="],"kind":"enum","target":"collection.source","semantics":"exists","help":"Acquisition source"},
   {"canonical":"tag","aliases":["tag"],"operators":[":"],"kind":"json_array","target":"collection.tags","semantics":"exists","help":"Collection tag"},
   {"canonical":"note","aliases":["note","notes"],"operators":[":"],"kind":"text","target":"collection.notes","semantics":"exists","help":"Notes text"},
-  {"canonical":"qty","aliases":["qty","count"],"operators":[":","=","!=","<",">","<=",">="],"kind":"numeric","target":"owned_count","help":"Copies owned of a printing"},
+  {"canonical":"qty","aliases":["qty","count"],"operators":[":","=","!=","<",">","<=",">="],"kind":"numeric","target":"owned_count","help":"Copies owned of this printing (owned counts the card across all its printings)"},
+  {"canonical":"owned","aliases":["owned"],"operators":[":","=","!=","<",">","<=",">="],"kind":"numeric","target":"owned_count","help":"Copies owned of the card, across all its printings (owned>=2 finds a Normal and a Foil of one card; qty counts one printing)"},
   {"canonical":"avail","aliases":["free"],"operators":[":","=","!=","<",">","<=",">="],"kind":"numeric","target":"available_count","help":"Owned copies of the card, across all its printings, not reserved by any deck (matches available_count)"},
   {"canonical":"order","aliases":["order"],"operators":[":"],"kind":"modifier","value_enum":"order_field","help":"Sort by: name, number, set, rarity, type, cost, power, hp, price, added, qty"},
   {"canonical":"direction","aliases":["direction","dir"],"operators":[":"],"kind":"modifier","value_enum":"direction","help":"Sort direction: asc or desc"}

@@ -153,10 +153,25 @@ fn keywords_of(attrs: &Value, card_id: &str, alarms: &mut Vec<AlarmRecord>) -> V
             out.push(KeywordRecord {
                 name: (*known).to_string(),
                 value,
+                granted: !rules.is_empty() && !stands_alone(&rules, known),
             });
         }
     }
     out
+}
+
+/// Whether the card has `name` itself: it begins a line or a comma-separated
+/// list item of the rules text. A keyword found only mid-sentence ("Attached
+/// unit gains Sentinel") is one the card grants (sp-wxj6lr).
+fn stands_alone(rules: &str, name: &str) -> bool {
+    rules
+        .lines()
+        .flat_map(|l| l.split(','))
+        .map(|item| item.trim_start_matches(['*', ' ']))
+        .any(|item| {
+            item.strip_prefix(name)
+                .is_some_and(|rest| !rest.starts_with(|c: char| c.is_alphanumeric()))
+        })
 }
 
 /// The number after `name` where it begins a line or a list item.
@@ -563,4 +578,25 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
         entries,
         max_updated_at: max_updated,
     })
+}
+
+#[cfg(test)]
+mod granted_keyword_tests {
+    use super::stands_alone;
+
+    #[test]
+    fn a_keyword_the_card_gives_is_not_its_own() {
+        assert!(!stands_alone("Attached unit gains Sentinel.", "Sentinel"));
+        assert!(!stands_alone(
+            "Give a unit Sentinel for this phase.",
+            "Sentinel"
+        ));
+        assert!(stands_alone("Sentinel", "Sentinel"));
+        assert!(stands_alone(
+            "Raid 2, Sentinel\nWhen Played: draw",
+            "Sentinel"
+        ));
+        assert!(stands_alone("Smuggle [3]. Ambush", "Smuggle"));
+        assert!(!stands_alone("Sentinelfoo", "Sentinel"));
+    }
 }

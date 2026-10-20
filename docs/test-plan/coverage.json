@@ -693,7 +693,7 @@
         {
           "id": "UC-collection-30",
           "tier": "T3",
-          "statement": "With the All cards toggle on, a query like t:water returns both the Water cards I own and the ones I'm missing. The unowned printings render as dimmed missing tiles alongside the owned ones, so I can see the gaps in m... (collection_search_unowned)",
+          "statement": "With the All cards toggle on, a query like t:unit returns both the Unit cards I own and the ones I'm missing. The unowned printings render as dimmed missing tiles alongside the owned ones, so I can see the gaps in my ... (collection_search_unowned)",
           "covering_suites": [
             {
               "path": "tests/ui/implementations/collection_search_unowned.ts",

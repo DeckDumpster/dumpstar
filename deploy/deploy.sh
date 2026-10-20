@@ -87,6 +87,10 @@ else
     # No port argument: the instance keeps the port it already publishes. Passing
     # nothing here would otherwise mean "let Podman pick", which moves prod off
     # 8090 — refreshing the units must not change the address they serve on.
+    # Keep the unit the instance is running, to put back if the new one does not
+    # come up (sp-5ekmwm).
+    PREVIOUS_UNIT="$(mktemp)"
+    cp "$QUADLET_FILE" "$PREVIOUS_UNIT"
     echo "==> Installing unit files from this checkout..."
     # shellcheck source=deploy/units-lib.sh
     . "$SCRIPT_DIR/units-lib.sh"
@@ -99,7 +103,30 @@ echo "==> Reloading systemd and restarting ${SERVICE_NAME}..."
 # shellcheck source=deploy/diagnostics-lib.sh
 . "$SCRIPT_DIR/diagnostics-lib.sh"
 systemctl --user daemon-reload
-systemctl --user restart "$SERVICE_NAME" || { dump_unit_diagnostics "$SERVICE_NAME"; exit 1; }
+
+# A unit that does not come up is rolled back to the one it replaced, so a bad
+# option in a new unit costs seconds, not an outage (sp-5ekmwm: a pasta option the
+# host's podman rejected left prod at 502 until it was fixed by hand).
+dumpstar_unit_serves() {
+    local url i
+    url="$(dumpstar_origin_url "$INSTANCE")" || return 1
+    for i in $(seq 1 "${DUMPSTAR_DEPLOY_HEALTH_TRIES:-30}"); do
+        [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$url" 2>/dev/null)" = "200" ] && return 0
+        sleep "${DUMPSTAR_DEPLOY_HEALTH_SLEEP:-2}"
+    done
+    return 1
+}
+if ! { systemctl --user restart "$SERVICE_NAME" && dumpstar_unit_serves; }; then
+    dump_unit_diagnostics "$SERVICE_NAME"
+    if [ -n "${PREVIOUS_UNIT:-}" ] && [ -s "$PREVIOUS_UNIT" ]; then
+        echo "ERROR: ${SERVICE_NAME} did not come up healthy; restoring the previous unit." >&2
+        cp "$PREVIOUS_UNIT" "$QUADLET_FILE"
+        systemctl --user daemon-reload
+        systemctl --user reset-failed "$SERVICE_NAME" 2>/dev/null || true
+        systemctl --user restart "$SERVICE_NAME" || true
+    fi
+    exit 1
+fi
 
 # The sidecar is a separate unit with its own container: daemon-reload makes
 # systemd read the new file, but the running container keeps the arguments it

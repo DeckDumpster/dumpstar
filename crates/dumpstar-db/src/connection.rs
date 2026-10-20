@@ -300,6 +300,13 @@ pub fn open_shared_readonly(path: &Path) -> Result<Connection> {
 /// broken for a column that costs nothing to ignore — the same reasoning
 /// `schema_user.sql` records for dropping `refinery_schema_history`.
 const USER_ADDED_COLUMNS: &[(&str, &str, &str)] = &[
+    // sp-mmdoxy. A deck gains an optional group; no `user_version` bump, an
+    // older binary ignores the column.
+    (
+        "decks",
+        "deck_group",
+        "ALTER TABLE decks ADD COLUMN deck_group TEXT",
+    ),
     (
         "ownership_outbox",
         "source",

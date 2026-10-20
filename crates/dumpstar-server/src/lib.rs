@@ -3183,8 +3183,11 @@ mod tests {
                     .tool(&t, "get_deck", json!({"id": deck}))
                     .await
                     .unwrap();
-                let mut doc = got.clone();
-                doc["cards"] = Value::Object(cards);
+                for (id, card) in &cards {
+                    assert_eq!(got["cards"][id]["id"], card["id"], "pack {n}: {id}");
+                    assert_eq!(got["cards"][id]["type"], card["type"]);
+                }
+                let doc = got.clone();
                 let failures = dumpstar_cube::check_pack_value(&doc).unwrap();
                 assert!(failures.is_empty(), "pack {n}: {failures:?}");
                 docs.push(doc);

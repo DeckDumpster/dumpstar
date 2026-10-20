@@ -287,6 +287,62 @@ pub fn missing_structured_text(conn: &Connection) -> Result<Vec<AlarmRecord>> {
     Ok(vec![])
 }
 
+/// Rules text that cannot be the printed card: a clause stated twice, or none
+/// at all on a card type that always prints some. A unit may be vanilla or a
+/// lone keyword, so units are not held to it; tokens never are.
+pub fn suspect_rules_text(conn: &Connection) -> Result<Vec<AlarmRecord>> {
+    let mut out = Vec::new();
+    let mut stmt = conn.prepare(
+        "SELECT card_id, card_type, rules_text FROM cards
+         WHERE card_type NOT LIKE '%Token%' ORDER BY card_id",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, Option<String>>(1)?,
+            r.get::<_, Option<String>>(2)?,
+        ))
+    })?;
+    for row in rows {
+        let (id, ty, rules) = row?;
+        let rules = rules.unwrap_or_default();
+        if let Some(dup) = repeated_sentence(&rules) {
+            out.push(AlarmRecord::alarm(
+                "rules_text_repeated",
+                id.clone(),
+                format!("{dup:?} appears twice in the rules text"),
+            ));
+        }
+        let always_texted = matches!(ty.as_deref(), Some("Event" | "Upgrade" | "Leader" | "Base"));
+        if always_texted && rules.split_whitespace().count() <= 1 {
+            out.push(AlarmRecord::info(
+                "rules_text_sparse",
+                id,
+                format!(
+                    "{} card has {rules:?} for rules text",
+                    ty.unwrap_or_default()
+                ),
+            ));
+        }
+    }
+    Ok(out)
+}
+
+/// A sentence or line of at least ten characters that occurs twice.
+fn repeated_sentence(rules: &str) -> Option<String> {
+    let mut seen: Vec<&str> = Vec::new();
+    for part in rules.split(['\n', '.']).map(str::trim) {
+        if part.len() < 10 {
+            continue;
+        }
+        if seen.contains(&part) {
+            return Some(part.to_string());
+        }
+        seen.push(part);
+    }
+    None
+}
+
 /// The numbering invariants of the printings table, as alarms.
 ///
 /// Within a set code a collector number names one card per variant
@@ -511,6 +567,7 @@ pub fn run(conn: &Connection, now: DateTime<Utc>) -> Result<Vec<AlarmRecord>> {
     out.extend(missing_sealed_images(conn)?);
     out.extend(numbering(conn)?);
     out.extend(missing_structured_text(conn)?);
+    out.extend(suspect_rules_text(conn)?);
     out.extend(wrong_group(conn)?);
     out.extend(image_wrong_card(conn)?);
     out.extend(variant_image_shared(conn)?);

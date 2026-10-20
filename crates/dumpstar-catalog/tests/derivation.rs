@@ -80,3 +80,41 @@ fn a_text_catalog_without_keywords_or_epic_actions_alarms() {
             .is_empty()
     );
 }
+
+#[test]
+fn repeated_or_missing_rules_text_is_flagged() {
+    let dir = tempfile::tempdir().unwrap();
+    let c = Catalog::open_writer(&dir.path().join("shared.sqlite")).unwrap();
+    for (id, ty, text) in [
+        (
+            "K",
+            "Leader",
+            Some("Each friendly damaged unit gets +1/+0.\nEach friendly damaged unit gets +1/+0."),
+        ),
+        ("R", "Upgrade", None),
+        ("A", "Upgrade", Some("Plot")),
+        ("OK", "Upgrade", Some("Plot\nAttached unit gets +0/+2.")),
+        ("V", "Unit", Some("Sentinel")),
+        ("T", "Token Upgrade", None),
+    ] {
+        c.conn()
+            .execute(
+                "INSERT INTO cards (card_id, name, card_type, rules_text) VALUES (?1, ?1, ?2, ?3)",
+                rusqlite::params![id, ty, text],
+            )
+            .unwrap();
+    }
+    let a = dumpstar_catalog::check::suspect_rules_text(c.conn()).unwrap();
+    let keys: Vec<(&str, &str)> = a
+        .iter()
+        .map(|r| (r.kind.as_str(), r.key.as_str()))
+        .collect();
+    assert_eq!(
+        keys,
+        vec![
+            ("rules_text_sparse", "A"),
+            ("rules_text_repeated", "K"),
+            ("rules_text_sparse", "R"),
+        ]
+    );
+}

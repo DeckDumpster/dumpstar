@@ -1659,3 +1659,64 @@ fn the_variant_image_alarm_covers_main_sets_and_names_the_set() {
         "{got:?}"
     );
 }
+
+fn rules_of(title: &str, ty: &str, fields: Value) -> Option<String> {
+    let mut a = json!({
+        "title": title, "subtitle": null, "cardUid": "9100", "cardNumber": 1,
+        "serialCode": "0101001", "cardId": null, "text": null,
+        "expansion": {"data": {"attributes": {"code": "SOR", "name": "Spark of Rebellion", "sortValue": 1}}},
+        "variantTypes": {"data": [{"attributes": {"name": "Standard", "foil": false}}]},
+        "rarity": {"data": {"attributes": {"name": "Common"}}},
+        "type": {"data": {"attributes": {"name": ty}}}
+    });
+    for (k, v) in fields.as_object().unwrap() {
+        a[k] = v.clone();
+    }
+    let raw = serde_json::to_vec(
+        &json!({"data": [{"id": 1, "attributes": a}], "meta": {"pagination": {"pageCount": 1}}}),
+    )
+    .unwrap();
+    official::parse_page(&raw).unwrap().payload.cards[0]
+        .rules_text
+        .clone()
+}
+
+#[test]
+fn director_krennics_clause_is_stated_once() {
+    let t = rules_of(
+        "Director Krennic",
+        "Leader",
+        json!({
+            "text": "Each friendly damaged unit gets +1/+0. ",
+            "deployBox": "Restore 2 (When this unit attacks, heal 2 damage from your base.)\n\nEach friendly damaged unit gets +1/+0.",
+            "epicAction": "Epic Action: If you control 5 or more resources, deploy this leader. "
+        }),
+    )
+    .unwrap();
+    assert_eq!(t.matches("Each friendly damaged unit").count(), 1, "{t}");
+    assert!(t.contains("Restore 2") && t.contains("Epic Action"), "{t}");
+}
+
+#[test]
+fn an_upgrade_without_text_prints_its_stat_line() {
+    let t = rules_of(
+        "Resilient",
+        "Upgrade",
+        json!({"text": null, "upgradePower": 0, "upgradeHp": 3}),
+    );
+    assert_eq!(t.as_deref(), Some("Attached unit gets +0/+3."));
+    let t = rules_of(
+        "Armor of Fortune",
+        "Upgrade",
+        json!({"text": "Plot", "upgradePower": 0, "upgradeHp": 2}),
+    )
+    .unwrap();
+    assert_eq!(t, "Plot\nAttached unit gets +0/+2.");
+    let t = rules_of(
+        "Bolstered Endurance",
+        "Upgrade",
+        json!({"text": "Attach to a Force unit.", "upgradePower": 1, "upgradeHp": 1}),
+    )
+    .unwrap();
+    assert_eq!(t, "Attach to a Force unit.\nAttached unit gets +1/+1.");
+}

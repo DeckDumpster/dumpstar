@@ -162,9 +162,56 @@ struct Facts<'a> {
     rules_text: Option<&'a str>,
 }
 
-/// The card object: the common fields plus a `game` block. `keywords`, `unique` and
-/// `epic_action` are `null` until the catalog carries them as structured data.
-fn card_object(f: Facts, counts: &HashMap<String, CardCount>) -> Value {
+/// The catalog's structured card text: keywords, uniqueness and the epic action.
+struct Structured {
+    keywords: Value,
+    unique: bool,
+    epic_action: Option<String>,
+}
+
+fn structured_for(
+    conn: &Connection,
+    ids: &[String],
+) -> Result<HashMap<String, Structured>, ToolError> {
+    let mut out = HashMap::new();
+    let mut stmt = conn
+        .prepare("SELECT keywords, is_unique, epic_action FROM cards WHERE card_id = ?1")
+        .map_err(|e| db_err(e.into()))?;
+    for id in ids {
+        let row = stmt
+            .query_row([id], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, Option<String>>(2)?,
+                ))
+            })
+            .optional()
+            .map_err(|e| db_err(e.into()))?;
+        if let Some((kw, unique, epic)) = row {
+            out.insert(
+                id.clone(),
+                Structured {
+                    keywords: serde_json::from_str(&kw).unwrap_or_else(|_| json!([])),
+                    unique: unique != 0,
+                    epic_action: epic.filter(|e| !e.is_empty()),
+                },
+            );
+        }
+    }
+    Ok(out)
+}
+
+/// The card object: the common fields plus a `game` block.
+fn card_object(
+    f: Facts,
+    counts: &HashMap<String, CardCount>,
+    structured: &HashMap<String, Structured>,
+) -> Value {
+    let (keywords, unique, epic_action) = match structured.get(f.card_id) {
+        Some(s) => (s.keywords.clone(), json!(s.unique), json!(s.epic_action)),
+        None => (json!([]), json!(false), Value::Null),
+    };
     let aspects = json_array(f.aspects);
     let (owned, available) = counts
         .get(f.card_id)
@@ -188,15 +235,19 @@ fn card_object(f: Facts, counts: &HashMap<String, CardCount>) -> Value {
             "power": f.power,
             "hp": f.hp,
             "traits": json_array(f.traits),
-            "keywords": null,
-            "unique": null,
-            "epic_action": null,
+            "keywords": keywords,
+            "unique": unique,
+            "epic_action": epic_action,
             "rules_text": f.rules_text,
         },
     })
 }
 
-fn row_object(r: &SearchRow, counts: &HashMap<String, CardCount>) -> Value {
+fn row_object(
+    r: &SearchRow,
+    counts: &HashMap<String, CardCount>,
+    structured: &HashMap<String, Structured>,
+) -> Value {
     let mut v = card_object(
         Facts {
             card_id: &r.card_id,
@@ -215,6 +266,7 @@ fn row_object(r: &SearchRow, counts: &HashMap<String, CardCount>) -> Value {
             rules_text: None,
         },
         counts,
+        structured,
     );
     v["printing_id"] = json!(r.printing_id);
     v["variant"] = json!(r.variant);
@@ -298,8 +350,9 @@ impl DumpstarTools {
                 .map_err(db_err)?;
             let ids: Vec<String> = page.rows.iter().map(|r| r.card_id.clone()).collect();
             let counts = counts_for(c, &ids)?;
+            let structured = structured_for(c, &ids)?;
             Ok(json!({
-                "results": page.rows.iter().map(|r| row_object(r, &counts)).collect::<Vec<_>>(),
+                "results": page.rows.iter().map(|r| row_object(r, &counts, &structured)).collect::<Vec<_>>(),
                 "total": page.total,
                 "next_cursor": page.next_cursor,
             }))
@@ -356,6 +409,7 @@ impl DumpstarTools {
                 ..
             } = &detail.card;
             let counts = counts_for(c, std::slice::from_ref(card_id))?;
+            let structured = structured_for(c, std::slice::from_ref(card_id))?;
             let card = card_object(
                 Facts {
                     card_id,
@@ -374,6 +428,7 @@ impl DumpstarTools {
                     rules_text: rules_text.as_deref(),
                 },
                 &counts,
+                &structured,
             );
             Ok(json!({
                 "card": card,

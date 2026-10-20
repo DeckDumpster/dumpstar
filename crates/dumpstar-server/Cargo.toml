@@ -10,6 +10,7 @@ dumpstar-core.workspace = true
 dumpstar-db.workspace = true
 dumpster-kit-tenancy.workspace = true
 dumpster-kit-oidc.workspace = true
+dumpster-kit-telemetry.workspace = true
 rusqlite.workspace = true
 axum.workspace = true
 tokio.workspace = true

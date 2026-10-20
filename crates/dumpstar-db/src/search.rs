@@ -260,6 +260,23 @@ impl CompiledSearch {
         }
     }
 
+    /// Collapse the result to one row per card: the card's original printing among those the
+    /// query matches (Standard before other variants, Normal before Foil, then the earliest
+    /// set). `total` then counts cards. Call after `set_catalog_wide`.
+    pub fn set_one_per_card(&mut self) {
+        let inner = where_clause(self);
+        self.where_sql = format!(
+            "({inner}) AND p.printing_id IN (SELECT printing_id FROM (\
+               SELECT p.printing_id AS printing_id, ROW_NUMBER() OVER (PARTITION BY cd.card_id \
+                 ORDER BY (p.variant <> 'Standard'), (p.finish <> 'Normal'), \
+                          COALESCE(s.release_date, '9999'), s.sort_order, p.printing_id) AS rn \
+               {FROM_CLAUSE} WHERE {inner}) WHERE rn = 1)"
+        );
+        let doubled = [self.params.clone(), self.params.clone()].concat();
+        self.params = doubled;
+        self.catalog_wide = true;
+    }
+
     /// Override the sort produced by `order:`/`direction:` modifiers with
     /// explicit values (e.g. from a column-header click in the UI).
     pub fn override_order(&mut self, sort: Option<&str>, dir: Option<&str>) {
@@ -1033,10 +1050,21 @@ fn legality(format: &str, banned: bool) -> (String, Vec<Value>) {
 }
 
 fn variant_match(val: &str) -> (String, Vec<Value>) {
-    let pat = pct(val);
+    variant_sql(val)
+}
+
+/// `standard` names the Standard variant alone; the Prestige and Serialized variants
+/// ("Standard Prestige", "Serialized Prestige") are asked for as `prestige` or `serialized`.
+fn variant_sql(val: &str) -> (String, Vec<Value>) {
+    if val.eq_ignore_ascii_case("standard") {
+        return (
+            "p.variant = ? COLLATE NOCASE".to_string(),
+            vec![text("Standard")],
+        );
+    }
     (
         "p.variant LIKE ? COLLATE NOCASE".to_string(),
-        vec![text(&pat)],
+        vec![text(&pct(val))],
     )
 }
 
@@ -1136,14 +1164,7 @@ fn is_flag(value: &str, flags: &[SearchFlag], ctx: &mut Ctx) -> (String, Vec<Val
             "p.finish = ? COLLATE NOCASE".to_string(),
             vec![text(flag.match_str.clone().unwrap_or_default())],
         ),
-        "variant_match" => {
-            let m = flag.match_str.clone().unwrap_or_default();
-            let pat = pct(&m);
-            (
-                "p.variant LIKE ? COLLATE NOCASE".to_string(),
-                vec![text(&pat)],
-            )
-        }
+        "variant_match" => variant_sql(&flag.match_str.clone().unwrap_or_default()),
         _ => ("1=0 /* unknown flag kind */".to_string(), Vec::new()),
     }
 }

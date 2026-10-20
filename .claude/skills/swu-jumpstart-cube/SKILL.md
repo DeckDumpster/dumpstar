@@ -19,7 +19,8 @@ copies and that no copy is in two decks. `swu-cube-check` (below) is what tells 
 
 ### 2. The 18-card pack
 
-1. **1 Leader.** It sets the alignment (Heroism/Villainy, the aspect names; `game.alignment` and the summary use them too) and the color aspect.
+1. **1 Leader.** It must be Heroism or Villainy: a **Neutral** leader (no alignment, such as
+   Fennec Shand) does not lead a pack, and `swu-cube-check` rejects one. It sets the alignment (Heroism/Villainy, the aspect names; `game.alignment` and the summary use them too) and the color aspect.
 2. **1 Epic Action Base (25 HP)**, strictly the Leader's color aspect: any 25-HP base of that aspect with an epic action.
 3. **1 Vanilla Base (30 HP)**, strictly the Leader's color aspect: any 30-HP base of that aspect without an epic action.
 4. **15 draw cards**, none off the Leader's alignment or color aspect (no off-aspect penalties).
@@ -108,8 +109,12 @@ and choose from the results yourself; do not search once per card.
    because section 2 allows same-color cards with no alignment and one `a:<color> a:<alignment>`
    query misses them. Both pass `avail>=1` in the query (when `query_help` lists `avail`; otherwise
    pass `owned_only: true` and keep results whose `available_count` is at least 1), `limit: 100`:
-   - aligned: `a:<color> a:<alignment> avail>=1`
-   - unaligned: `a:<color> -a:heroism -a:villainy -t:base avail>=1`
+   - aligned: `a:<color> a:<alignment> -a:<each other color> avail>=1`
+   - unaligned: `a:<color> -a:heroism -a:villainy -a:<each other color> -t:base avail>=1`
+
+   Each `-a:<other color>` drops the cards that carry a second color (a Vigilance + Cunning unit, a
+   three-aspect IG-88): they fail the pack's aspect rule. For Vigilance and Heroism the aligned query
+   is `a:vigilance a:heroism -a:command -a:aggression -a:cunning avail>=1`.
 
    One more for the color's bases: `t:base a:<color>`. Then pick from the combined results the 15
    cards that meet section 4, the 25-HP and 30-HP bases, and the Leader. A card already chosen for

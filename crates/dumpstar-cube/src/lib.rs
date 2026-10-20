@@ -272,13 +272,23 @@ pub fn check_pack(pack: &Pack) -> Vec<Failure> {
     } else if let Some(l) = leader
         && pack.leader().is_none()
     {
-        out.push(fail(
-            "leader",
-            format!(
-                "leader '{}' must have exactly one alignment and one color, has {:?}",
-                l.name, l.aspects
-            ),
-        ));
+        if l.alignments().is_empty() {
+            out.push(fail(
+                "leader",
+                format!(
+                    "leader '{}' is Neutral (no Heroism or Villainy); a Neutral leader does not lead a pack",
+                    l.name
+                ),
+            ));
+        } else {
+            out.push(fail(
+                "leader",
+                format!(
+                    "leader '{}' must have exactly one alignment and one color, has {:?}",
+                    l.name, l.aspects
+                ),
+            ));
+        }
     }
 
     let bases: Vec<&Card> = pack.of_kind("Base").map(|(c, _)| c).collect();
@@ -659,6 +669,23 @@ mod tests {
             c["game"]["aspects"] = json!(["Heroism", "Command", "Cunning"])
         });
         assert!(rules(&p).contains(&"leader"));
+    }
+
+    #[test]
+    fn a_neutral_leader_is_rejected_as_neutral() {
+        let mut p = pack(1, "Heroism", "Command");
+        edit(&mut p, "L1", |c| {
+            c["game"]["aspects"] = json!(["Aggression", "Cunning"]);
+            c["game"]["alignment"] = json!("Neutral");
+        });
+        let fails = check_pack_value(&p).unwrap();
+        assert!(
+            fails
+                .iter()
+                .any(|f| f.rule == "leader"
+                    && f.message.contains("Neutral leader does not lead a pack")),
+            "{fails:?}"
+        );
     }
 
     #[test]

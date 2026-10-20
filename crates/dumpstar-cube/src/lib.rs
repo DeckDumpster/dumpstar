@@ -710,10 +710,17 @@ mod tests {
     #[test]
     fn a_same_color_card_with_no_alignment_is_accepted_and_an_off_color_one_rejected() {
         let mut p = pack(1, "Heroism", "Command");
-        edit(&mut p, "C1-3", |c| c["game"]["aspects"] = json!(["Command"]));
-        assert!(rules(&p).is_empty(), "no Heroism/Villainy aspect, no penalty");
+        edit(&mut p, "C1-3", |c| {
+            c["game"]["aspects"] = json!(["Command"])
+        });
+        assert!(
+            rules(&p).is_empty(),
+            "no Heroism/Villainy aspect, no penalty"
+        );
         let mut p = pack(1, "Heroism", "Command");
-        edit(&mut p, "C1-3", |c| c["game"]["aspects"] = json!(["Cunning"]));
+        edit(&mut p, "C1-3", |c| {
+            c["game"]["aspects"] = json!(["Cunning"])
+        });
         assert!(rules(&p).contains(&"draw-aspect"));
     }
 

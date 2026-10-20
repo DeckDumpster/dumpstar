@@ -104,7 +104,7 @@ pub fn tools(
 }
 
 /// How every tool describes a card id.
-const CARD_ID_DOC: &str = "Card id: <SET>-<number> of the card's original (earliest standard) printing, e.g. SOR-005. Older ids (n:<slug>, bare numbers) are still accepted.";
+const CARD_ID_DOC: &str = "Card id: <SET>-<number> of the card's original (earliest standard) printing, e.g. SOR-5. Older ids (n:<slug>, bare numbers) are still accepted.";
 
 fn db_err(e: DbError) -> ToolError {
     match e {
@@ -137,15 +137,12 @@ fn json_array(raw: &Option<String>) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Heroism is Heroic, Villainy is Villainous, anything else is Neutral.
+/// Alignment in the aspect names: Heroism, Villainy, otherwise Neutral.
 fn alignment(aspects: &[String]) -> &'static str {
-    if aspects.iter().any(|a| a == "Heroism") {
-        "Heroic"
-    } else if aspects.iter().any(|a| a == "Villainy") {
-        "Villainous"
-    } else {
-        "Neutral"
-    }
+    ["Heroism", "Villainy"]
+        .into_iter()
+        .find(|n| aspects.iter().any(|a| a == n))
+        .unwrap_or("Neutral")
 }
 
 struct Facts<'a> {
@@ -199,13 +196,15 @@ impl Tally {
 /// leaders by aspect and alignment. A card with two aspects counts under each.
 fn breakdown(conn: &Connection) -> Result<Value, ToolError> {
     let mut stmt = conn
-        .prepare(
-            "SELECT cd.card_type, cd.aspects, cd.hp, cd.epic_action, p.set_code, c.deck_id IS NULL \
+        .prepare(&format!(
+            "SELECT cd.card_type, cd.aspects, cd.hp, cd.epic_action, \
+                    (SELECT set_code FROM shared.printings WHERE card_id = cd.card_id \
+                      {CANONICAL_PRINTING}), c.deck_id IS NULL \
                FROM collection c \
                JOIN shared.printings p ON p.printing_id = c.printing_id \
                JOIN shared.cards cd ON cd.card_id = p.card_id \
-              WHERE c.status = 'owned'",
-        )
+              WHERE c.status = 'owned'"
+        ))
         .map_err(|e| db_err(e.into()))?;
     let rows = stmt
         .query_map([], |r| {
@@ -242,11 +241,7 @@ fn breakdown(conn: &Connection) -> Result<Value, ToolError> {
                 for a in &aspects {
                     leader_aspect.add(a, available);
                 }
-                let align = ["Heroism", "Villainy"]
-                    .into_iter()
-                    .find(|n| aspects.iter().any(|a| a == n))
-                    .unwrap_or("Neutral");
-                leader_align.add(align, available);
+                leader_align.add(alignment(&aspects), available);
             }
             _ => {}
         }
@@ -298,7 +293,7 @@ fn structured_for(
 }
 
 /// The one card-id form the tools speak: `<SET>-<number>` of the card's canonical printing
-/// (Standard before other variants, Normal before foil, the earliest set first), e.g. `SOR-005`.
+/// (Standard before other variants, Normal before foil, the earliest set first), e.g. `SOR-5`.
 /// Mirrors the ranking `CompiledSearch::set_one_per_card` picks a row by.
 const CANONICAL_PRINTING: &str = "ORDER BY variant <> 'Standard', finish <> 'Normal', \
     (SELECT COALESCE(release_date, '9999') FROM shared.sets WHERE set_code = printings.set_code), \
@@ -344,7 +339,7 @@ fn resolve_card_id(conn: &Connection, given: &str) -> Result<String, ToolError> 
         }
     }
     Err(failed(format!(
-        "no card '{given}'; ids look like SOR-005 (<SET>-<number>), search_cards finds them"
+        "no card '{given}'; ids look like SOR-5 (<SET>-<number>), search_cards finds them"
     )))
 }
 
@@ -803,7 +798,7 @@ impl ToolProvider for DumpstarTools {
                     "Search the Star Wars: Unlimited catalog with the site's query language. \
                      Each result is one card (its original printing); owned_count and available_count \
                      are across all its printings (copies owned, and owned copies in no deck). \
-                     Pass expand_printings for one row per printing instead. Page with next_cursor. Every result's id is a card id of the form <SET>-<number>, e.g. SOR-005; every tool takes and returns that form.",
+                     Pass expand_printings for one row per printing instead. Page with next_cursor. Every result's id is a card id of the form <SET>-<number>, e.g. SOR-5; every tool takes and returns that form.",
                     10,
                     &EXAMPLES,
                 ),
@@ -820,7 +815,7 @@ impl ToolProvider for DumpstarTools {
             ),
             def(
                 "get_card",
-                "One card in full: its game block and rules text, its printings with owned counts, and the user's copies with the deck each sits in. Give id (a card id, e.g. SOR-005) or set and number.".into(),
+                "One card in full: its game block and rules text, its printings with owned counts, and the user's copies with the deck each sits in. Give id (a card id, e.g. SOR-5) or set and number.".into(),
                 schema(
                     json!({
                         "id": {"type": "string", "description": CARD_ID_DOC},

@@ -5,8 +5,10 @@
 # (design row S5).
 #
 # What it holds:
-#   * it triggers on the main-branch event and nothing else: no pull_request (a PR
-#     must never reach prod), no manual or scheduled trigger.
+#   * it triggers on the main-branch event and a manual workflow_dispatch (to
+#     redeploy current main) and nothing else: no pull_request (a PR must never
+#     reach prod), no schedule. A dispatch is refused for any ref but main, and
+#     shares the dumpstar-deploy concurrency group with the push deploy.
 #   * it runs on the dumpstar-prod runner, in the production checkout; never from the
 #     runner workspace (a merge does not deploy from /workspaces-style checkouts).
 #   * it runs `deploy.sh prod`, and ends by asking the origin whether it serves.
@@ -22,9 +24,12 @@ problems() {
     has() { [ "$(grep -c -E "$1" "$wf")" -gt 0 ]; }
     has '^  push:' || echo "does not trigger on the main-branch event"
     has 'branches: \[main\]$' || echo "is not limited to main"
-    if has '^  (pull_request|pull_request_target|workflow_dispatch|schedule):'; then
-        echo "has a trigger other than the main-branch event"
+    has '^  workflow_dispatch:' || echo "has no workflow_dispatch trigger"
+    if has '^  (pull_request|pull_request_target|schedule):'; then
+        echo "has a trigger other than push and workflow_dispatch"
     fi
+    has "github\\.ref == 'refs/heads/main'" || echo "does not refuse a dispatch from a ref other than main"
+    has '^  group: dumpstar-deploy$' || echo "does not share the dumpstar-deploy concurrency group"
     has 'dumpstar-prod' || echo "does not run on the dumpstar-prod runner"
     has 'deploy/deploy\.sh" prod' || echo "does not run deploy.sh prod"
     has 'PROD_CHECKOUT' || echo "does not deploy from the production checkout"
@@ -57,8 +62,14 @@ sed -E 's/^  push:/  pull_request:/' "$wf" >"$scratch/a.yml"
 expect "a deploy triggered by pull requests" "trigger" "$scratch/a.yml"
 sed -E 's/branches: \[main\]/branches: [main, dev]/' "$wf" >"$scratch/b.yml"
 expect "a deploy not limited to main" "limited to main" "$scratch/b.yml"
-{ cat "$wf"; printf '  workflow_dispatch:\n'; } >"$scratch/c.yml"
-expect "a manual trigger" "other than" "$scratch/c.yml"
+{ cat "$wf"; printf '  schedule:\n'; } >"$scratch/c.yml"
+expect "a scheduled trigger" "other than" "$scratch/c.yml"
+grep -v '^  workflow_dispatch:' "$wf" >"$scratch/h.yml"
+expect "a deploy that cannot be dispatched" "no workflow_dispatch" "$scratch/h.yml"
+sed "s/github.ref == 'refs\/heads\/main'/true/" "$wf" >"$scratch/i.yml"
+expect "a dispatch from any ref" "ref other than main" "$scratch/i.yml"
+sed 's/group: dumpstar-deploy/group: other/' "$wf" >"$scratch/j.yml"
+expect "a dispatch outside the deploy group" "concurrency group" "$scratch/j.yml"
 sed -E 's/^(    steps:)/\1\n      - uses: actions\/checkout@v4/' "$wf" >"$scratch/d.yml"
 expect "a deploy from the runner workspace" "workspace" "$scratch/d.yml"
 grep -v 'heartbeat\.sh' "$wf" >"$scratch/e.yml"

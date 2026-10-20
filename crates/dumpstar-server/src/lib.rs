@@ -3292,6 +3292,124 @@ mod tests {
             assert_eq!(after["reserved_copies"], 20 * 18);
         }
 
+        /// sp-jceiw2: collection_summary breaks owned and available copies down by type,
+        /// aspect and set, bases by HP and epic/vanilla, leaders by aspect and alignment.
+        #[tokio::test]
+        async fn collection_summary_breaks_the_collection_down() {
+            let mut sql = String::from(
+                "INSERT INTO sets (set_code, name, release_date, sort_order) \
+                   VALUES ('JTL', 'Jump to Lightspeed', '2025-03-14', 2); ",
+            );
+            let mut owned: Vec<(&str, u32)> = vec![];
+            for (id, set, kind, hp, aspects, epic, copies) in [
+                (
+                    "T-L1",
+                    "SOR",
+                    "Leader",
+                    None,
+                    r#"["Vigilance","Heroism"]"#,
+                    false,
+                    1,
+                ),
+                (
+                    "T-L2",
+                    "SOR",
+                    "Leader",
+                    None,
+                    r#"["Aggression","Villainy"]"#,
+                    false,
+                    2,
+                ),
+                ("T-U1", "JTL", "Unit", None, r#"["Vigilance"]"#, false, 3),
+                ("T-B1", "SOR", "Base", Some(25), r#"["Command"]"#, true, 2),
+                (
+                    "T-B2",
+                    "JTL",
+                    "Base",
+                    Some(30),
+                    r#"["Vigilance"]"#,
+                    false,
+                    1,
+                ),
+            ] {
+                let hp = hp.map_or("NULL".to_string(), |h: i64| h.to_string());
+                let epic = if epic {
+                    "'Epic Action: Draw a card.'"
+                } else {
+                    "NULL"
+                };
+                sql.push_str(&format!(
+                    "INSERT INTO cards (card_id, name, card_type, hp, aspects, epic_action) \
+                       VALUES ('{id}', '{id}', '{kind}', {hp}, '{aspects}', {epic}); \
+                     INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
+                       VALUES ('{id}-p', '{id}', '{set}', '{id}', 'Standard', 'Normal'); "
+                ));
+                owned.push((Box::leak(format!("{id}-p").into_boxed_str()), copies));
+            }
+            let mut site = Site::with_catalog(&["alice"], &sql).await;
+            site.sign_in(member("alice@example.com")).await;
+            for (printing, copies) in &owned {
+                for _ in 0..*copies {
+                    let body = json!({"printing_id": printing, "source": "manual_id"}).to_string();
+                    let r = site.send("POST", "/api/collection", Some(&body)).await;
+                    assert_eq!(r.status(), StatusCode::CREATED);
+                }
+            }
+            let t = site.token_for("alice@example.com");
+            let deck = site
+                .tool(
+                    &t,
+                    "create_deck",
+                    json!({"name": "One", "format": "Jumpstart", "group": "Cube"}),
+                )
+                .await
+                .unwrap()["deck"]["id"]
+                .as_i64()
+                .unwrap();
+            site.tool(
+                &t,
+                "set_deck_lines",
+                json!({"id": deck, "lines": [{"card_id": "T-U1", "qty": 1}]}),
+            )
+            .await
+            .unwrap();
+
+            let b = site
+                .tool(&t, "collection_summary", json!({}))
+                .await
+                .unwrap()["breakdown"]
+                .clone();
+            let oa = |o: u64, a: u64| json!({"owned": o, "available": a});
+            assert_eq!(
+                b["by_type"],
+                json!({"Base": oa(3, 3), "Leader": oa(3, 3), "Unit": oa(3, 2)})
+            );
+            assert_eq!(
+                b["by_aspect"],
+                json!({
+                    "Aggression": oa(2, 2), "Command": oa(2, 2), "Heroism": oa(1, 1),
+                    "Vigilance": oa(5, 4), "Villainy": oa(2, 2),
+                })
+            );
+            assert_eq!(b["by_set"], json!({"JTL": oa(4, 3), "SOR": oa(5, 5)}));
+            assert_eq!(b["bases"]["by_hp"], json!({"25": oa(2, 2), "30": oa(1, 1)}));
+            assert_eq!(
+                b["bases"]["by_kind"],
+                json!({"epic": oa(2, 2), "vanilla": oa(1, 1)})
+            );
+            assert_eq!(
+                b["leaders"]["by_aspect"],
+                json!({
+                    "Aggression": oa(2, 2), "Heroism": oa(1, 1),
+                    "Vigilance": oa(1, 1), "Villainy": oa(2, 2),
+                })
+            );
+            assert_eq!(
+                b["leaders"]["by_alignment"],
+                json!({"Heroism": oa(1, 1), "Villainy": oa(2, 2)})
+            );
+        }
+
         /// An unknown term gets the nearest valid ones, not an empty result.
         #[tokio::test]
         async fn a_misspelled_term_names_the_nearest_valid_ones() {

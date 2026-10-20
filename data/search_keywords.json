@@ -36,7 +36,7 @@
   {"canonical":"tag","aliases":["tag"],"operators":[":"],"kind":"json_array","target":"collection.tags","semantics":"exists","help":"Collection tag"},
   {"canonical":"note","aliases":["note","notes"],"operators":[":"],"kind":"text","target":"collection.notes","semantics":"exists","help":"Notes text"},
   {"canonical":"qty","aliases":["qty","count"],"operators":[":","=","!=","<",">","<=",">="],"kind":"numeric","target":"owned_count","help":"Copies owned of a printing"},
-  {"canonical":"avail","aliases":["free"],"operators":[":","=","!=","<",">","<=",">="],"kind":"numeric","target":"available_count","help":"Owned copies of a printing not reserved by any deck"},
+  {"canonical":"avail","aliases":["free"],"operators":[":","=","!=","<",">","<=",">="],"kind":"numeric","target":"available_count","help":"Owned copies of the card, across all its printings, not reserved by any deck (matches available_count)"},
   {"canonical":"order","aliases":["order"],"operators":[":"],"kind":"modifier","value_enum":"order_field","help":"Sort by: name, number, set, rarity, type, cost, power, hp, price, added, qty"},
   {"canonical":"direction","aliases":["direction","dir"],"operators":[":"],"kind":"modifier","value_enum":"direction","help":"Sort direction: asc or desc"}
 ]

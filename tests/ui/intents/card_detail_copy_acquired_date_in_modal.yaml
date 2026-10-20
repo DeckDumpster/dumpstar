@@ -1,0 +1,20 @@
+# Scenario: The card modal shows when each owned copy was acquired
+# Use case: UC-card-26
+#
+# Related:
+#   issues: [sp-kx1odm]
+#   pull_requests: []
+
+description: >
+  Opening an owned card from the collection shows, in "Your copies", an
+  Acquired column giving each copy's acquisition date as YYYY-MM-DD.
+start_page: /collection
+involves:
+  - "collection tile for Death Star Stormtrooper, which opens the card modal"
+  - "Acquired cell of each copy row"
+fixture_data:
+  start_card: "Death Star Stormtrooper"
+  acquired: "2025-06-10"
+notes: >
+  Open the Death Star Stormtrooper tile and assert the copy rows carry the fixture's
+  acquisition date.

@@ -536,7 +536,7 @@
 									aria-label="Select all copies"
 								/></th
 							>{/if}
-						<th>Variant</th><th>Condition</th><th>Status</th><th>Location</th><th>Paid</th><th
+						<th>Variant</th><th>Condition</th><th>Status</th><th>Location</th><th>Acquired</th><th>Paid</th><th
 							>Value</th
 						>
 					</tr>
@@ -596,13 +596,16 @@
 								</select>
 								{@render savedTick(`${copy.id}:location`)}
 							</td>
+							<td data-label="Acquired" data-testid="copy-acquired"
+								>{copy.acquired_at.slice(0, 10)}</td
+							>
 							<td data-label="Paid">{price(copy.purchase_price)}</td>
 							<td data-label="Value" title="NM market × condition multiplier"
 								>{price(copyValue(copy))}</td
 							>
 						</tr>
 						<tr class="noterow">
-							<td colspan={multiCopy ? 7 : 6}>
+							<td colspan={multiCopy ? 8 : 7}>
 								<input
 									class="noteinput"
 									type="text"

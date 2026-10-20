@@ -1,0 +1,10 @@
+start_page: /card/SOR/100
+involves:
+  - "card page for Death Star Stormtrooper (SOR 100)"
+  - "Acquired cell of each copy row"
+fixture_data:
+  start_card: "Death Star Stormtrooper"
+  acquired: "2025-06-10"
+notes: >
+  Open the Death Star Stormtrooper card page and assert the copy rows carry the fixture's
+  acquisition date.

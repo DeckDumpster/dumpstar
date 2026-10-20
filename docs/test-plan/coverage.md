@@ -81,6 +81,8 @@ Generated from docs/test-plan/*.toml, every suite's # tier:/# covers: header, an
 | UC-card-23 | T3 | The card page of a Star Wars: Unlimited leader shows its type, Leader, with cost, power and HP. (card_detail_swu_leader_type) | tests/ui/implementations/card_detail_swu_leader_type.ts | covered |
 | UC-card-24 | T3 | The card page of a Star Wars: Unlimited unit shows its SWU attributes: type, cost, aspects, arena, power and HP. It shows no energy icon, Pokédex row, attack, weakness or retreat. (card_detail_swu_unit_attributes) | tests/ui/implementations/card_detail_swu_unit_attributes.ts | covered |
 | UC-card-25 | T4 | On the card detail page, I can click the Want control to add the card to my wishlist. The control changes to a Wanted state. Clicking it again removes the card from the wishlist and reverts the control to Want. (card_detail_want_toggle) | — | **GAP** |
+| UC-card-26 | T3 | Opening an owned card from the collection shows, in Your copies, an Acquired column giving each copy's acquisition date as YYYY-MM-DD. (card_detail_copy_acquired_date_in_modal) | tests/ui/implementations/card_detail_copy_acquired_date_in_modal.ts | covered |
+| UC-card-27 | T3 | The full card page of an owned card shows, in Your copies, an Acquired column giving each copy's acquisition date as YYYY-MM-DD. (card_detail_copy_acquired_date_on_page) | tests/ui/implementations/card_detail_copy_acquired_date_on_page.ts | covered |
 
 ## collection
 

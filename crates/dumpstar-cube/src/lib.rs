@@ -264,7 +264,12 @@ pub fn check_pack(pack: &Pack) -> Vec<Failure> {
     }
 
     let leader = pack.of_kind("Leader").next().map(|(c, _)| c);
-    if let Some(l) = leader
+    if count("Leader") > 1 {
+        out.push(fail(
+            "leader",
+            format!("the pack has {} leaders, not 1", count("Leader")),
+        ));
+    } else if let Some(l) = leader
         && pack.leader().is_none()
     {
         out.push(fail(
@@ -284,6 +289,33 @@ pub fn check_pack(pack: &Pack) -> Vec<Failure> {
             "base-hp",
             format!("bases have HP {hps:?}, not one 25 and one 30"),
         ));
+    }
+
+    let base_color = pack.leader().map(|(_, c)| c).or_else(|| {
+        let colors: Vec<String> = pack
+            .of_kind("Leader")
+            .filter_map(|(l, _)| match l.colors().as_slice() {
+                [c] => Some(c.to_string()),
+                _ => None,
+            })
+            .collect();
+        colors.first().cloned()
+    });
+    if pack.leader().is_none()
+        && let Some(color) = &base_color
+    {
+        for b in &bases {
+            if b.colors() != [color.as_str()] {
+                out.push(fail(
+                    "base-aspect",
+                    format!(
+                        "base '{}' is {:?}, the leader's color is {color}",
+                        b.name,
+                        b.colors()
+                    ),
+                ));
+            }
+        }
     }
 
     if let Some((alignment, color)) = pack.leader() {
@@ -627,6 +659,30 @@ mod tests {
             c["game"]["aspects"] = json!(["Heroism", "Command", "Cunning"])
         });
         assert!(rules(&p).contains(&"leader"));
+    }
+
+    #[test]
+    fn two_leaders_report_the_leader_count_not_an_alignment_fault() {
+        let mut p = pack(1, "Heroism", "Vigilance");
+        edit(&mut p, "C1-0", |c| {
+            c["type"] = json!("Leader");
+            c["game"]["aspects"] = json!(["Villainy", "Command"]);
+        });
+        let fails = check_pack_value(&p).unwrap();
+        let leader: Vec<&str> = fails
+            .iter()
+            .filter(|f| f.rule == "leader")
+            .map(|f| f.message.as_str())
+            .collect();
+        assert_eq!(leader, ["the pack has 2 leaders, not 1"]);
+    }
+
+    #[test]
+    fn an_off_color_base_fails_even_when_the_pack_has_two_leaders() {
+        let mut p = pack(1, "Heroism", "Vigilance");
+        edit(&mut p, "C1-0", |c| c["type"] = json!("Leader"));
+        edit(&mut p, "B30", |c| c["game"]["aspects"] = json!(["Command"]));
+        assert!(rules(&p).contains(&"base-aspect"));
     }
 
     #[test]

@@ -1664,8 +1664,8 @@ mod tests {
         assert_eq!(f.ids("k:piloting"), vec!["falcon-std"]);
         assert!(!f.ids("k!=sentinel").contains(&"luke-foil".to_string()));
         assert_eq!(f.ids("is:unique"), vec!["luke-foil"]);
-        assert_eq!(f.ids("epic:damage"), vec!["han-std"]);
-        assert_eq!(f.ids("has:epic"), vec!["han-std"]);
+        assert_eq!(f.ids("is:missing epic:damage"), vec!["han-std"]);
+        assert_eq!(f.ids("is:missing has:epic"), vec!["han-std"]);
     }
 
     #[test]

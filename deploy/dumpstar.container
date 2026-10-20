@@ -18,6 +18,7 @@ Image=localhost/dumpstar:{{INSTANCE}}
 Environment=DUMPSTAR_HOME=/data
 # The agent-tool endpoint (/mcp): its own URL, the `aud` its tokens carry. It needs the Pocket ID
 # sign-in below, so units_install keeps this line for prod only and deletes it elsewhere.
+Environment=DUMPSTAR_MCP_RESOURCE=https://star.dumpster.cards/mcp
 # Per-instance Cloudflare Access config. deploy/setup.sh scaffolds this file on
 # every setup, so it always exists. All three values are mandatory: the server
 # refuses to start without them.

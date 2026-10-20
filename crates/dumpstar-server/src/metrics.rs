@@ -28,7 +28,20 @@ pub struct Metrics {
 
 /// The page index a request lands on, bucketed: `0`, `1`, `2-4`, `5-19`, `20+`.
 pub fn depth_bucket(limit: u32, offset: u32) -> &'static str {
-    let depth = if limit == 0 { 0 } else { offset / limit };
+    bucket_of(if limit == 0 { 0 } else { offset / limit })
+}
+
+/// How a search was sliced.
+#[derive(Clone, Copy)]
+pub enum Paging {
+    /// `(limit, offset)`.
+    Offset(u32, u32),
+    /// Keyset cursor; the depth comes from the cursor's page counter.
+    Cursor,
+    All,
+}
+
+fn bucket_of(depth: u32) -> &'static str {
     match depth {
         0 => "0",
         1 => "1",
@@ -81,18 +94,19 @@ impl Metrics {
         &self.telemetry
     }
 
-    /// One served search. `page` is `(limit, offset)`, `None` for `limit=all`. Totals time is
-    /// reported only for the first page (or the whole result).
+    /// One served search. Totals time is reported only when the totals were computed (the
+    /// first page, or the whole result).
     pub fn search(
         &self,
         sort: Option<&str>,
-        page: Option<(u32, u32)>,
+        paging: Paging,
         timings: &dumpstar_db::search::SearchTimings,
         rows: usize,
     ) {
-        let (bucket, paged) = match page {
-            Some((limit, offset)) => (depth_bucket(limit, offset), "offset"),
-            None => ("0", "all"),
+        let (bucket, paged) = match paging {
+            Paging::Offset(limit, offset) => (depth_bucket(limit, offset), "offset"),
+            Paging::Cursor => (bucket_of(timings.depth), "cursor"),
+            Paging::All => ("0", "all"),
         };
         let sort = sort.unwrap_or("default");
         self.page_ms.record(
@@ -103,8 +117,9 @@ impl Metrics {
                 ("paged", paged),
             ],
         );
-        if matches!(page, None | Some((_, 0))) {
-            self.totals_ms.record(timings.totals_ms, &[("sort", sort)]);
+        let first = !matches!(paging, Paging::Offset(_, o) if o > 0);
+        if let (true, Some(totals)) = (first, timings.totals_ms) {
+            self.totals_ms.record(totals, &[("sort", sort)]);
         }
         self.rows.record(rows as f64, &[("paged", paged)]);
     }

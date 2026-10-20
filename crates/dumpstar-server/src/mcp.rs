@@ -43,17 +43,17 @@ pub struct DumpstarTools {
     registry: Arc<KeywordRegistry>,
     flags: Arc<Vec<SearchFlag>>,
     keywords: Keywords,
-    ids: Arc<TenantIds>,
+    ids: Arc<MintedTenants>,
 }
 
 /// The kit hands a provider the tenant as a string (a `TenantId` can only be minted by the
 /// registry). The resolver records the id it was given under that string and the provider looks
 /// it up, so no tenant is ever named from a request value.
 #[derive(Default)]
-pub struct TenantIds(Mutex<HashMap<String, TenantId>>);
+pub struct MintedTenants(Mutex<HashMap<String, TenantId>>);
 
 pub struct Resolver {
-    ids: Arc<TenantIds>,
+    ids: Arc<MintedTenants>,
 }
 
 impl ContextResolver for Resolver {
@@ -90,7 +90,7 @@ pub fn tools(
     flags: Arc<Vec<SearchFlag>>,
 ) -> Result<(Arc<DumpstarTools>, Arc<Resolver>), String> {
     let keywords = Keywords::parse(dumpstar_db::search_meta::keywords_json())?;
-    let ids = Arc::new(TenantIds::default());
+    let ids = Arc::new(MintedTenants::default());
     Ok((
         Arc::new(DumpstarTools {
             tenants,

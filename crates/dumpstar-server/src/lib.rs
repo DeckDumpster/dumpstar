@@ -3104,9 +3104,14 @@ mod tests {
                     format!("[\"{arena}\"]")
                 };
                 let hp = hp.map_or("NULL".to_string(), |h| h.to_string());
+                let epic_action = if hp == "25" {
+                    "'Epic Action: Draw a card.'"
+                } else {
+                    "NULL"
+                };
                 sql.push_str(&format!(
-                    "INSERT INTO cards (card_id, name, card_type, cost, hp, arenas, aspects) \
-                       VALUES ('{id}', '{name}', '{kind}', {cost}, {hp}, '{arenas}', '{aspects}'); \
+                    "INSERT INTO cards (card_id, name, card_type, cost, hp, arenas, aspects, epic_action) \
+                       VALUES ('{id}', '{name}', '{kind}', {cost}, {hp}, '{arenas}', '{aspects}', {epic_action}); \
                      INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
                        VALUES ('{id}-p', '{id}', 'SOR', '{id}', 'Standard', 'Normal'); "
                 ));
@@ -3252,7 +3257,7 @@ mod tests {
                         "create_deck",
                         json!({
                             "name": format!("Pack {n}"), "format": "SWU Jumpstart Cube",
-                            "group": format!("swu-jumpstart-cube-{n}"),
+                            "group": "swu-jumpstart-cube",
                         }),
                     )
                     .await

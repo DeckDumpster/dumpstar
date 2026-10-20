@@ -301,6 +301,49 @@ fn schema(properties: Value, required: &[&str]) -> Value {
     json!({"type": "object", "properties": properties, "required": required})
 }
 
+/// The card object of one card, as `get_card` and `get_deck` return it.
+fn detail_card_object(c: &Connection, card: &Card) -> Result<Value, ToolError> {
+    let Card {
+        card_id,
+        set_code,
+        number,
+        name,
+        subtitle,
+        card_type,
+        cost,
+        power,
+        hp,
+        aspects,
+        traits,
+        arenas,
+        rules_text,
+        rarity,
+        ..
+    } = card;
+    let counts = counts_for(c, std::slice::from_ref(card_id))?;
+    let structured = structured_for(c, std::slice::from_ref(card_id))?;
+    Ok(card_object(
+        Facts {
+            card_id,
+            name,
+            subtitle,
+            set: set_code,
+            number,
+            rarity,
+            card_type,
+            cost: *cost,
+            power: *power,
+            hp: *hp,
+            aspects,
+            arenas,
+            traits,
+            rules_text: rules_text.as_deref(),
+        },
+        &counts,
+        &structured,
+    ))
+}
+
 impl DumpstarTools {
     fn with_conn<T>(
         &self,
@@ -391,45 +434,7 @@ impl DumpstarTools {
             let detail = cards::get_card_detail_variant(c, &set, &number, variant.as_deref())
                 .map_err(db_err)?
                 .ok_or_else(|| failed(format!("no card printed as {set}/{number}")))?;
-            let Card {
-                card_id,
-                set_code,
-                number,
-                name,
-                subtitle,
-                card_type,
-                cost,
-                power,
-                hp,
-                aspects,
-                traits,
-                arenas,
-                rules_text,
-                rarity,
-                ..
-            } = &detail.card;
-            let counts = counts_for(c, std::slice::from_ref(card_id))?;
-            let structured = structured_for(c, std::slice::from_ref(card_id))?;
-            let card = card_object(
-                Facts {
-                    card_id,
-                    name,
-                    subtitle,
-                    set: set_code,
-                    number,
-                    rarity,
-                    card_type,
-                    cost: *cost,
-                    power: *power,
-                    hp: *hp,
-                    aspects,
-                    arenas,
-                    traits,
-                    rules_text: rules_text.as_deref(),
-                },
-                &counts,
-                &structured,
-            );
+            let card = detail_card_object(c, &detail.card)?;
             Ok(json!({
                 "card": card,
                 "printings": detail.printings.iter().map(|p| json!({
@@ -484,7 +489,30 @@ impl DumpstarTools {
                 .map_err(db_err)?
                 .ok_or_else(|| failed(format!("not found: deck {id}")))?;
             let lines = decks::line_states(c, id).map_err(db_err)?;
-            Ok(json!({ "deck": deck, "lines": lines }))
+            let mut cards = serde_json::Map::new();
+            for l in &lines {
+                if cards.contains_key(&l.card_id) {
+                    continue;
+                }
+                let found: Option<(String, String, String)> = c
+                    .query_row(
+                        "SELECT set_code, number, variant FROM shared.printings WHERE card_id = ?1 \
+                          ORDER BY variant <> 'Standard', finish <> 'Normal', printing_id LIMIT 1",
+                        [&l.card_id],
+                        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                    )
+                    .optional()
+                    .map_err(|e| db_err(e.into()))?;
+                let Some((set, number, variant)) = found else {
+                    continue;
+                };
+                if let Some(d) = cards::get_card_detail_variant(c, &set, &number, Some(&variant))
+                    .map_err(db_err)?
+                {
+                    cards.insert(l.card_id.clone(), detail_card_object(c, &d.card)?);
+                }
+            }
+            Ok(json!({ "deck": deck, "lines": lines, "cards": cards }))
         })
     }
 
@@ -647,7 +675,7 @@ impl ToolProvider for DumpstarTools {
             ),
             def(
                 "get_deck",
-                "One deck and its lines, each with the copies it reserves.".into(),
+                "One deck and its lines, each with the copies it reserves, and under cards the full card object of every line keyed by card id (as get_card returns it), so the result is a self-contained pack document.".into(),
                 schema(json!({"id": id}), &["id"]),
             ),
             def(

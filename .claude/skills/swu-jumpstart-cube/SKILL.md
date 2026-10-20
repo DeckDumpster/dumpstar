@@ -110,8 +110,9 @@ and choose from the results yourself; do not search once per card.
 `FAIL <rule>: <what is wrong>` line per broken rule, and exit 1 on any failure. Build it with
 `cargo build -p dumpstar-cube --release` (binary `target/release/swu-cube-check`).
 
-A **pack document** is `get_deck`'s result plus the card objects its lines name, taken from your
-`search_cards`/`get_card` results, under `cards` keyed by card id:
+A **pack document** is `get_deck`'s result as-is: it carries the card object of every line under
+`cards`, keyed by card id, in the shape `get_card` returns. To check a pack before saving it, build
+the same document by hand from your `search_cards`/`get_card` results:
 
 ```json
 {"deck": {"name": "Pack 1", "group": "swu-jumpstart-cube-1"},

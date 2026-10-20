@@ -6,7 +6,7 @@
 //!
 //! # Input
 //!
-//! A *pack document* is `get_deck`'s result with the card objects its lines name, as
+//! A *pack document* is `get_deck`'s result as-is: it carries the card objects its lines name, as
 //! `search_cards`/`get_card` return them, under `cards` keyed by card id:
 //!
 //! ```json

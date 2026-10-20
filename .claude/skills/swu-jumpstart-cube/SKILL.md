@@ -20,8 +20,8 @@ copies and that no copy is in two decks. `swu-cube-check` (below) is what tells 
 ### 2. The 18-card pack
 
 1. **1 Leader.** It sets the alignment (Heroism/Villainy) and the color aspect.
-2. **1 Epic Action Base (25 HP)**, strictly the Leader's color aspect.
-3. **1 Vanilla Base (30 HP)**, strictly the Leader's color aspect.
+2. **1 Epic Action Base (25 HP)**, strictly the Leader's color aspect: any 25-HP base of that aspect with an epic action.
+3. **1 Vanilla Base (30 HP)**, strictly the Leader's color aspect: any 30-HP base of that aspect without an epic action.
 4. **15 draw cards**, all matching the Leader's alignment and color aspect (no off-aspect penalties).
 
 ### 3. Pre-game setup (why the aspects must match)
@@ -51,14 +51,22 @@ epic action) or health (30 HP vanilla).
 
 ### 5. Command zone
 
-Exactly **5 of each pair** across the 20 packs:
+Exactly **5 packs per color** across the 20, each with an epic base and a vanilla base of that
+color. There are no cards named "Vanilla <color> Base": the vanilla base is any 30-HP base of the
+Leader's aspect without an epic action, and the epic base is any 25-HP base of that aspect with one
+(`epic_action` on the card object). Ryan's preferred epic bases are the preference, not a requirement:
 
-| Color | Epic (25 HP) | Vanilla (30 HP) |
-| --- | --- | --- |
-| Command (Green) | Energy Conversion Lab | Vanilla Command Base |
-| Vigilance (Blue) | Security Complex | Vanilla Vigilance Base |
-| Aggression (Red) | Tarkintown | Vanilla Aggression Base |
-| Cunning (Yellow) | Jedha City | Vanilla Cunning Base |
+| Color | Preferred epic (25 HP) |
+| --- | --- |
+| Command (Green) | Energy Conversion Lab |
+| Vigilance (Blue) | Security Complex |
+| Aggression (Red) | Tarkintown |
+| Cunning (Yellow) | Jedha City |
+
+Other real epic bases (Mystic Monastery, Vergence Temple, Shadow Collective Camp, Temple of
+Destruction, Tomb of Eilram) are accepted. A collection may not own enough epic bases for 5 per
+color (Ryan's owns only Security Complex): report the shortfall to the user and build the packs
+that are possible; never fail silently.
 
 **Leaders: the universality rule.** Prefer Common Leaders with universal, unconditional abilities
 (damage, shielding, resource readying). Avoid Rare, parasitic Leaders whose abilities need
@@ -85,10 +93,10 @@ Mind the rate limit: `/mcp` allows about 120 tool calls a minute per sign-in. Se
 and choose from the results yourself; do not search once per card.
 
 1. **`collection_summary`.** Learn what is owned and what is still available. A cube needs about
-   20 Leaders, 40 bases (5 copies of each of the 8 base cards) and 300 draw cards.
+   20 Leaders, 40 bases (5 epic and 5 vanilla per color) and 300 draw cards.
 2. **Allocate leaders and base pairs.** Pick 20 Leaders: 10 Heroism, 10 Villainy, 5 of each color
    (for example Command 3+2, Vigilance 2+3, Aggression 3+2, Cunning 2+3). Apply the universality
-   rule. Each pack takes the Epic and Vanilla base of its Leader's color.
+   rule. Each pack takes an epic and a vanilla base of its Leader's color; if the collection lacks them, say so and build what is possible.
 3. **Fill each pack to the skeleton.** One `search_cards` per pack, for the Leader's pool:
    `a:<color> a:<alignment> avail>=1` (when `query_help` lists `avail`; otherwise pass
    `owned_only: true` and keep results whose `available_count` is at least 1), `limit: 100`.
@@ -98,10 +106,10 @@ and choose from the results yourself; do not search once per card.
    cards of the Leader's own alignment and color, or neutral ones with neither.
 4. **Check the planned pack, then save it.** Before any write, assemble the pack document (below)
    and run `swu-cube-check pack`. Fix every `FAIL` line, then `create_deck` (`format`:
-   `SWU Jumpstart Cube`, `group`: `swu-jumpstart-cube-<n>`, `name`: `Pack <n>`) and
+   `SWU Jumpstart Cube`, `group`: `swu-jumpstart-cube` (the same group for all 20 packs), `name`: `Pack <n>`) and
    `set_deck_lines` with the 18 `{card_id, qty: 1}` lines. A refusal says which lines are short and
    changes nothing: swap those cards and retry.
-5. **Check the whole group.** `list_decks` with `group`, `get_deck` for each of the 20, build the
+5. **Check the whole group.** `list_decks` with `group: swu-jumpstart-cube`, `get_deck` for each of the 20, build the
    cube document, run `swu-cube-check cube`. `reserved` must equal `qty` on every line.
 
 ## The checker
@@ -115,7 +123,7 @@ A **pack document** is `get_deck`'s result as-is: it carries the card object of 
 the same document by hand from your `search_cards`/`get_card` results:
 
 ```json
-{"deck": {"name": "Pack 1", "group": "swu-jumpstart-cube-1"},
+{"deck": {"name": "Pack 1", "group": "swu-jumpstart-cube"},
  "lines": [{"card_id": "SOR-005", "qty": 1, "zone": "main", "reserved": 1}],
  "cards": {"SOR-005": {"name": "...", "type": "Leader", "cost": 5,
                         "game": {"aspects": ["Vigilance", "Heroism"], "arenas": ["Ground"], "hp": 6}}}}

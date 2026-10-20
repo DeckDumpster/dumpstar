@@ -10,7 +10,7 @@
 //! `search_cards`/`get_card` return them, under `cards` keyed by card id:
 //!
 //! ```json
-//! {"deck": {"name": "Pack 1", "group": "swu-jumpstart-cube-1"},
+//! {"deck": {"name": "Pack 1", "group": "swu-jumpstart-cube"},
 //!  "lines": [{"card_id": "SOR-5", "qty": 1, "zone": "main", "reserved": 1}],
 //!  "cards": {"SOR-5": {"name": "...", "type": "Leader", "cost": 5,
 //!                       "game": {"aspects": ["Vigilance", "Heroism"], "arenas": ["Ground"], "hp": 6}}}}
@@ -26,12 +26,25 @@ use serde_json::Value;
 
 pub const COLORS: [&str; 4] = ["Command", "Vigilance", "Aggression", "Cunning"];
 pub const ALIGNMENTS: [&str; 2] = ["Heroism", "Villainy"];
-/// The 25-HP epic-action base of each color.
+/// Ryan's preferred 25-HP epic-action base of each color; a preference, not a requirement.
 pub const EPIC_BASES: [(&str, &str); 4] = [
     ("Command", "Energy Conversion Lab"),
     ("Vigilance", "Security Complex"),
     ("Aggression", "Tarkintown"),
     ("Cunning", "Jedha City"),
+];
+
+/// Real 25-HP epic bases, recognised by name when the card object carries no `epic_action`.
+pub const KNOWN_EPIC_BASES: [&str; 9] = [
+    "Energy Conversion Lab",
+    "Security Complex",
+    "Tarkintown",
+    "Jedha City",
+    "Mystic Monastery",
+    "Vergence Temple",
+    "Shadow Collective Camp",
+    "Temple of Destruction",
+    "Tomb of Eilram",
 ];
 
 pub const PACK_SIZE: u32 = 18;
@@ -69,6 +82,8 @@ struct Card {
     kind: String,
     cost: Option<u32>,
     hp: Option<i64>,
+    /// `Some` when the card object says whether it has an epic action.
+    epic_action: Option<bool>,
     aspects: BTreeSet<String>,
     arenas: BTreeSet<String>,
 }
@@ -88,9 +103,18 @@ impl Card {
             kind: v["type"].as_str().unwrap_or("").to_string(),
             cost: v["cost"].as_u64().and_then(|c| u32::try_from(c).ok()),
             hp: game["hp"].as_i64(),
+            epic_action: game
+                .get("epic_action")
+                .map(|e| e.as_str().is_some_and(|t| !t.is_empty())),
             aspects: strings(&game["aspects"]),
             arenas: strings(&game["arenas"]),
         }
+    }
+
+    /// Whether this base has an epic action: the card object's word, else the known names.
+    fn is_epic(&self) -> bool {
+        self.epic_action
+            .unwrap_or_else(|| KNOWN_EPIC_BASES.contains(&self.name.as_str()))
     }
 
     fn colors(&self) -> Vec<&str> {
@@ -273,16 +297,20 @@ pub fn check_pack(pack: &Pack) -> Vec<Failure> {
                     ),
                 ));
             }
-            let epic = EPIC_BASES
-                .iter()
-                .find(|(c, _)| *c == color)
-                .map(|(_, n)| *n);
-            if b.hp == Some(25) && epic.is_some_and(|n| n != b.name) {
+            if b.hp == Some(25) && !b.is_epic() {
                 out.push(fail(
                     "base-name",
                     format!(
-                        "the 25-HP {color} base is {}, not '{}'",
-                        epic.unwrap_or("?"),
+                        "the 25-HP {color} base must be an epic base, but '{}' has no epic action",
+                        b.name
+                    ),
+                ));
+            }
+            if b.hp == Some(30) && b.epic_action == Some(true) {
+                out.push(fail(
+                    "base-name",
+                    format!(
+                        "the 30-HP {color} base must be vanilla, but '{}' has an epic action",
                         b.name
                     ),
                 ));
@@ -508,7 +536,7 @@ pub mod fixture {
                 ),
             );
         }
-        json!({"deck": {"name": format!("Pack {n}"), "group": format!("swu-jumpstart-cube-{n}")}, "lines": lines, "cards": cards})
+        json!({"deck": {"name": format!("Pack {n}"), "group": "swu-jumpstart-cube"}, "lines": lines, "cards": cards})
     }
 
     /// The passing cube: 20 packs, 10 of each alignment, 5 per color.
@@ -615,10 +643,51 @@ mod tests {
     }
 
     #[test]
-    fn the_epic_base_is_the_colors_named_one() {
+    fn the_25_hp_base_must_be_an_epic_base() {
         let mut p = pack(1, "Heroism", "Command");
-        edit(&mut p, "B25", |c| c["name"] = json!("Tarkintown"));
+        edit(&mut p, "B25", |c| c["name"] = json!("Plain Outpost"));
         assert!(rules(&p).contains(&"base-name"));
+        let mut p = pack(1, "Heroism", "Command");
+        edit(&mut p, "B25", |c| c["game"]["epic_action"] = json!(null));
+        assert!(rules(&p).contains(&"base-name"));
+    }
+
+    #[test]
+    fn any_real_25_hp_epic_base_of_the_color_is_accepted() {
+        let mut p = pack(1, "Heroism", "Command");
+        edit(&mut p, "B25", |c| c["name"] = json!("Mystic Monastery"));
+        assert!(rules(&p).is_empty());
+        let mut p = pack(1, "Heroism", "Command");
+        edit(&mut p, "B25", |c| {
+            c["name"] = json!("Some Future Base");
+            c["game"]["epic_action"] = json!("Epic Action: Draw a card.");
+        });
+        assert!(rules(&p).is_empty());
+    }
+
+    #[test]
+    fn any_real_30_hp_vanilla_base_is_accepted() {
+        let mut p = pack(1, "Heroism", "Command");
+        edit(&mut p, "B30", |c| {
+            c["name"] = json!("Echo Base");
+            c["game"]["epic_action"] = json!(null);
+        });
+        assert!(rules(&p).is_empty());
+        edit(&mut p, "B30", |c| {
+            c["game"]["epic_action"] = json!("Epic Action: Draw a card.")
+        });
+        assert!(rules(&p).contains(&"base-name"));
+    }
+
+    #[test]
+    fn the_base_name_message_names_the_actual_base() {
+        let mut p = pack(1, "Heroism", "Command");
+        edit(&mut p, "B25", |c| c["name"] = json!("Plain Outpost"));
+        let f = check_pack_value(&p).unwrap();
+        assert_eq!(
+            f[0].message,
+            "the 25-HP Command base must be an epic base, but 'Plain Outpost' has no epic action"
+        );
     }
 
     #[test]

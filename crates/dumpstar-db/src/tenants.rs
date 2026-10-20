@@ -795,6 +795,210 @@ fn remove_sidecars(path: &Path) {
     }
 }
 
+/// Row counts and a content digest for the tables [`clone_collection`] copies.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CloneCounts {
+    pub collection: i64,
+    pub binders: i64,
+    pub decks: i64,
+    pub deck_cards: i64,
+    /// FNV-1a over every copied column of every copied row, in id order.
+    pub digest: u64,
+}
+
+/// What [`clone_collection`] did: the source as it was read, the target as it
+/// now stands. They are equal, or the clone did not finish.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Cloned {
+    pub source: CloneCounts,
+    pub target: CloneCounts,
+}
+
+/// Columns a clone never carries across: they point at rows (orders, import
+/// batches) that are not copied, so a copy would dangle.
+const CLONE_NULLED: [(&str, &str); 2] = [("collection", "order_id"), ("collection", "batch_id")];
+
+fn table_columns(conn: &Connection, schema: &str, table: &str) -> Result<Vec<String>> {
+    let mut stmt = conn.prepare(&format!("PRAGMA {schema}.table_info({table})"))?;
+    let cols = stmt
+        .query_map([], |r| r.get::<_, String>(1))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok(cols)
+}
+
+/// Expression that reads `col` of `table` from the snapshot, or NULL where a
+/// clone must not carry it.
+fn clone_expr(table: &str, col: &str, include_decks: bool) -> String {
+    let nulled = CLONE_NULLED.contains(&(table, col)) || (!include_decks && col == "deck_id");
+    if nulled {
+        "NULL".to_string()
+    } else {
+        format!("\"{col}\"")
+    }
+}
+
+fn clone_tables(include_decks: bool) -> Vec<&'static str> {
+    let mut t = vec!["binders"];
+    if include_decks {
+        t.extend(["decks", "deck_cards"]);
+    }
+    t.push("collection");
+    t
+}
+
+/// Digest and counts of what a clone carries, read through `schema`
+/// (`main` for the target, `snap` for the source snapshot).
+fn clone_counts(conn: &Connection, schema: &str, include_decks: bool) -> Result<CloneCounts> {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut counts = [0i64; 4];
+    for table in clone_tables(include_decks) {
+        let cols = table_columns(conn, "main", table)?;
+        let row = cols
+            .iter()
+            .map(|c| format!("quote({})", clone_expr(table, c, include_decks)))
+            .collect::<Vec<_>>()
+            .join(" || '|' || ");
+        let order = if table == "deck_cards" {
+            "deck_id, card_id, zone"
+        } else {
+            "id"
+        };
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {row} FROM {schema}.{table} ORDER BY {order}"
+        ))?;
+        let mut rows = stmt.query([])?;
+        let mut n = 0i64;
+        for b in table.bytes().chain(std::iter::once(b'\n')) {
+            hash = (hash ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+        }
+        while let Some(r) = rows.next()? {
+            let line: String = r.get(0)?;
+            for b in line.bytes().chain(std::iter::once(b'\n')) {
+                hash = (hash ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+            }
+            n += 1;
+        }
+        match table {
+            "collection" => counts[0] = n,
+            "binders" => counts[1] = n,
+            "decks" => counts[2] = n,
+            _ => counts[3] = n,
+        }
+    }
+    Ok(CloneCounts {
+        collection: counts[0],
+        binders: counts[1],
+        decks: counts[2],
+        deck_cards: counts[3],
+        digest: hash,
+    })
+}
+
+/// Copy `from`'s owned collection into `to`, an existing empty tenant.
+///
+/// The source is read through a snapshot taken with SQLite's backup API on a
+/// read-only connection, so its file is never written and the copy is
+/// transactionally consistent. The snapshot is brought to the current schema
+/// (it is a scratch copy) and attached to the target; the copy runs in one
+/// transaction that is rolled back unless source and target counts and digest
+/// agree. Orders and import batches are not copied (the copies' `order_id` and
+/// `batch_id` are NULL); decks, their card lists and the copies they reserve
+/// are copied only with `include_decks`, otherwise every copy arrives free.
+/// No third tenant is opened.
+pub fn clone_collection(from: &str, to: &str, include_decks: bool) -> Result<Cloned> {
+    if from == to {
+        return Err(DbError::Conflict(
+            "cannot clone a tenant into itself".to_string(),
+        ));
+    }
+    let find = |h: &str| -> Result<Tenant> {
+        lookup(h)?.ok_or_else(|| DbError::NotFound(format!("no active tenant with handle {h:?}")))
+    };
+    let (src, dst) = (find(from)?, find(to)?);
+    for t in [&src, &dst] {
+        if !t.present {
+            return Err(DbError::NotFound(format!(
+                "database for {:?} is missing at {}",
+                t.user.handle,
+                t.path.display()
+            )));
+        }
+    }
+
+    let mut target = open_user(&dst.path)?;
+    for table in [
+        "collection",
+        "binders",
+        "decks",
+        "deck_cards",
+        "sealed_collection",
+    ] {
+        let n: i64 =
+            target.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))?;
+        if n != 0 {
+            return Err(DbError::Conflict(format!(
+                "target tenant {to:?} is not empty ({n} row(s) in {table}); clone only fills an empty tenant"
+            )));
+        }
+    }
+
+    // Snapshot beside the target, so it is on the same volume and the
+    // production data directory, never somewhere shared.
+    let snap_path = sidecar(&dst.path, ".clone-snapshot");
+    let _ = std::fs::remove_file(&snap_path);
+    let result = (|| -> Result<Cloned> {
+        {
+            let source =
+                Connection::open_with_flags(&src.path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+            source.busy_timeout(Duration::from_secs(10))?;
+            let mut snap = Connection::open(&snap_path)?;
+            let backup = rusqlite::backup::Backup::new(&source, &mut snap)?;
+            backup.run_to_completion(256, Duration::from_millis(50), None)?;
+        }
+        // Bring the scratch copy to the current schema so columns line up.
+        drop(open_user(&snap_path)?);
+
+        target.execute("ATTACH DATABASE ?1 AS snap", [snap_path.to_string_lossy()])?;
+        let source_counts = clone_counts(&target, "snap", include_decks)?;
+        let tx = target.transaction()?;
+        for table in clone_tables(include_decks) {
+            let cols = table_columns(&tx, "main", table)?;
+            let from_cols = table_columns(&tx, "snap", table)?;
+            let cols: Vec<&String> = cols.iter().filter(|c| from_cols.contains(c)).collect();
+            let names = cols
+                .iter()
+                .map(|c| format!("\"{c}\""))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let exprs = cols
+                .iter()
+                .map(|c| clone_expr(table, c, include_decks))
+                .collect::<Vec<_>>()
+                .join(", ");
+            tx.execute(
+                &format!("INSERT INTO main.{table} ({names}) SELECT {exprs} FROM snap.{table}"),
+                [],
+            )?;
+        }
+        let target_counts = clone_counts(&tx, "main", include_decks)?;
+        if source_counts != target_counts {
+            return Err(DbError::Conflict(format!(
+                "clone did not reproduce the source (source {source_counts:?}, target {target_counts:?}); nothing was written"
+            )));
+        }
+        tx.commit()?;
+        Ok(Cloned {
+            source: source_counts,
+            target: target_counts,
+        })
+    })();
+    let _ = target.execute("DETACH DATABASE snap", []);
+    drop(target);
+    let _ = std::fs::remove_file(&snap_path);
+    remove_sidecars(&snap_path);
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1790,6 +1994,92 @@ mod tests {
             assert!(adopt("../escape").is_err());
             assert!(resolve("../escape").is_err());
             assert!(!home.join("escape.sqlite").exists());
+        });
+    }
+
+    fn fill(path: &Path) {
+        let c = open_user(path).unwrap();
+        c.execute_batch(
+            "INSERT INTO binders (name, created_at, updated_at) VALUES ('Trade', 'now', 'now');
+             INSERT INTO decks (name, created_at, updated_at) VALUES ('Aggro', 'now', 'now');
+             INSERT INTO deck_cards (deck_id, card_id, zone, qty) VALUES (1, 'SOR-1', 'main', 2);
+             INSERT INTO collection (printing_id, condition, purchase_price, acquired_at, source, binder_id)
+                VALUES ('SOR-1-n', 'Lightly Played', 1.5, '2026-01-02', 'manual_id', 1);
+             INSERT INTO collection (printing_id, acquired_at, source, deck_id)
+                VALUES ('SOR-1-n', '2026-02-03', 'manual_id', 1);",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn clone_copies_collection_and_leaves_source_untouched() {
+        with_home(|_| {
+            let a = create("alice").unwrap();
+            let b = create("bob").unwrap();
+            fill(&a.path);
+            let before = std::fs::read(&a.path).unwrap();
+
+            let done = clone_collection("alice", "bob", false).unwrap();
+            assert_eq!(done.source, done.target);
+            assert_eq!(done.target.collection, 2);
+            assert_eq!(done.target.binders, 1);
+            assert_eq!(done.target.decks, 0);
+
+            let c = open_user(&b.path).unwrap();
+            let reserved: i64 = c
+                .query_row(
+                    "SELECT count(*) FROM collection WHERE deck_id IS NOT NULL",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(reserved, 0, "every copy arrives free");
+            drop(c);
+            assert_eq!(
+                std::fs::read(&a.path).unwrap(),
+                before,
+                "source bytes unchanged"
+            );
+            assert!(!sidecar(&b.path, ".clone-snapshot").exists());
+
+            // Target is no longer empty.
+            assert!(matches!(
+                clone_collection("alice", "bob", false),
+                Err(DbError::Conflict(_))
+            ));
+        });
+    }
+
+    #[test]
+    fn clone_with_decks_keeps_reservations() {
+        with_home(|_| {
+            let a = create("alice").unwrap();
+            let b = create("bob").unwrap();
+            fill(&a.path);
+            let done = clone_collection("alice", "bob", true).unwrap();
+            assert_eq!(done.source, done.target);
+            assert_eq!((done.target.decks, done.target.deck_cards), (1, 1));
+            let c = open_user(&b.path).unwrap();
+            let reserved: i64 = c
+                .query_row(
+                    "SELECT count(*) FROM collection WHERE deck_id = 1",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(reserved, 1);
+        });
+    }
+
+    #[test]
+    fn clone_refuses_self_and_unknown() {
+        with_home(|_| {
+            create("alice").unwrap();
+            assert!(clone_collection("alice", "alice", false).is_err());
+            assert!(matches!(
+                clone_collection("alice", "nobody", false),
+                Err(DbError::NotFound(_))
+            ));
         });
     }
 }

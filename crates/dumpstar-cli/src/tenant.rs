@@ -11,6 +11,7 @@
 //! dumpstar tenant detach <handle> --yes      # release the handle, KEEP the data
 //! dumpstar tenant reattach <database-id>     # restore a detached user
 //! dumpstar tenant purge <database-id> --yes  # destroy a detached collection
+//! dumpstar tenant clone <from> <to>          # copy a collection into an empty tenant
 //! ```
 //!
 //! **`remove` is now an alias for `detach`, and no longer deletes anything.**
@@ -72,6 +73,8 @@ enum TenantCommand {
     Reattach(ReattachArgs),
     /// Destroy a detached user's collection database. Irreversible.
     Purge(PurgeArgs),
+    /// Copy a tenant's collection into an existing, empty tenant.
+    Clone(CloneArgs),
     /// Move a pre-`tenants/` collection database into the tenant layout.
     Adopt(OptionalNameArgs),
     /// Roll `adopt` back: move the database out of `tenants/` again.
@@ -132,6 +135,17 @@ pub struct PurgeArgs {
     /// Confirm the deletion. Without it nothing is removed.
     #[arg(long)]
     yes: bool,
+}
+
+#[derive(clap::Args)]
+pub struct CloneArgs {
+    /// Source tenant handle. It is only read, through a snapshot.
+    from: String,
+    /// Target tenant handle. Must exist and be empty.
+    to: String,
+    /// Also copy decks, their card lists and the copies they reserve.
+    #[arg(long)]
+    include_decks: bool,
 }
 
 #[derive(clap::Args)]
@@ -250,6 +264,16 @@ pub fn run(args: TenantArgs) -> anyhow::Result<()> {
                  Its S3 replica outlives it until retention expires.",
                 user.database_id, user.handle
             );
+        }
+        TenantCommand::Clone(a) => {
+            let done = tenants::clone_collection(&a.from, &a.to, a.include_decks)?;
+            for (label, c) in [("source", &done.source), ("target", &done.target)] {
+                println!(
+                    "{label}: {} copies, {} binders, {} decks, {} deck lines, digest {:016x}",
+                    c.collection, c.binders, c.decks, c.deck_cards, c.digest
+                );
+            }
+            println!("Cloned {} -> {}; counts and digest match.", a.from, a.to);
         }
         TenantCommand::Adopt(a) => {
             let name = a.name.unwrap_or_else(dumpstar_db::current_user);
@@ -660,6 +684,16 @@ mod tests {
             panic!("`tenant reattach` must parse");
         };
         assert_eq!(a.database_id, "01J0000000000000000000000Z");
+    }
+
+    #[test]
+    fn clone_takes_two_handles_and_a_flag() {
+        let TenantCommand::Clone(a) = parse(&["clone", "ryan", "concierge", "--include-decks"])
+        else {
+            panic!("`tenant clone` must parse");
+        };
+        assert_eq!((a.from.as_str(), a.to.as_str()), ("ryan", "concierge"));
+        assert!(a.include_decks);
     }
 
     #[test]

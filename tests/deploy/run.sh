@@ -563,6 +563,7 @@ chmod +x "${WORK}/deploybin/podman" "${WORK}/deploybin/systemctl"
 cat > "${WORK}/deploybin/curl" <<'EOS'
 #!/usr/bin/env bash
 case "$*" in
+*'-w %{http_code}'*) printf 200 ;; # the deploy's health wait (sp-5ekmwm)
 *-D*)
 	if [ "${FAKE_MCP:-on}" = on ]; then
 		printf 'HTTP/2 401\r\nwww-authenticate: Bearer resource_metadata="https://star.dumpster.cards/.well-known/oauth-protected-resource"\r\n\r\n'
@@ -2962,6 +2963,7 @@ chmod +x "${WORK}/bin20/systemctl"
 # The /mcp probe deploy.sh runs on prod (sp-tfkp9o) reaches the public URL; answer it as a healthy site would.
 cat > "${WORK}/bin20/curl" <<'EOF'
 #!/usr/bin/env bash
+case "$*" in *'-w %{http_code}'*) printf 200; exit 0 ;; esac # the deploy's health wait (sp-5ekmwm)
 for a in "$@"; do
 	[ "$a" = -D ] && { printf 'HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Bearer\r\n\r\n'; exit 0; }
 done
@@ -3181,7 +3183,7 @@ EP22="$(sed -n 's/^DUMPSTER_OTLP_METRICS_ENDPOINT=//p' "$M22/prod/metrics.env")"
 check "prod's metrics.env sets the endpoint, uncommented" "1" 	"$(grep -c '^DUMPSTER_OTLP_METRICS_ENDPOINT=http' "$M22/prod/metrics.env" || true)"
 check "the endpoint is the product stack's OTLP path" "http://10.0.2.2:8428/opentelemetry/v1/metrics" "$EP22"
 check "prod's metrics.env has no placeholder" "0" "$(grep -c 'CHANGE_ME' "$M22/prod/metrics.env" || true)"
-check "the unit maps the host loopback to that address" "1" 	"$(grep -c '^Network=pasta:--map-host-loopback,10.0.2.2$' "${REPO_DIR}/deploy/dumpstar.container" || true)"
+check "the unit maps the host loopback to that address" "1" 	"$(grep -c '^Network=slirp4netns:allow_host_loopback=true$' "${REPO_DIR}/deploy/dumpstar.container" || true)"
 mkdir -p "$M22/old"
 printf '#DUMPSTER_OTLP_METRICS_ENDPOINT=https://CHANGE_ME/opentelemetry/v1/metrics
 ' > "$M22/old/metrics.env"
@@ -3193,6 +3195,35 @@ dumpstar_scaffold_metrics_env prod "$M22/old" >/dev/null
 check "a set prod endpoint is left alone" "http://elsewhere:1/x" 	"$(sed -n 's/^DUMPSTER_OTLP_METRICS_ENDPOINT=//p' "$M22/old/metrics.env")"
 dumpstar_scaffold_metrics_env test1 "$M22/t" >/dev/null
 check "a test instance sends nothing" "0" "$(grep -c '^DUMPSTER_OTLP' "$M22/t/metrics.env" || true)"
+
+# --- The unit's network options are ones the product host's podman supports ---
+# sp-5ekmwm: Network=pasta:--map-host-loopback,... exited 126 on podman 4.9's pasta and took prod
+# down. Only the forms known to work there are allowed; a new one is a deliberate edit here.
+NETS="$(sed -n 's/^Network=//p' "${REPO_DIR}"/deploy/*.container)"
+check "no unit names a pasta option" "0" "$(printf '%s\n' "$NETS" | grep -c '^pasta' || true)"
+check "every unit network is on the supported list" "0" \
+	"$(printf '%s\n' "$NETS" | grep -v '^$' | grep -vc '^\(slirp4netns:allow_host_loopback=true\|host\|none\|dumpstar-lake-{{INSTANCE}}\)$' || true)"
+
+# --- A unit that does not come up is rolled back (sp-5ekmwm) ---
+HOME23="${WORK}/home23"
+Q23="${HOME23}/.config/containers/systemd"
+mkdir -p "$Q23" "${HOME23}/.config/dumpstar/prod" "${WORK}/bin23"
+cp "${WORK}/deploybin/podman" "${WORK}/bin23/podman"
+cp "${WORK}/bin20/systemctl" "${WORK}/bin23/systemctl"
+printf '#!/usr/bin/env bash\nprintf 502\n' > "${WORK}/bin23/curl"
+chmod +x "${WORK}/bin23/curl"
+printf 'DUMPSTAR_ACCESS_TEAM_DOMAIN=https://t.example\nDUMPSTAR_ACCESS_AUD=aud\nDUMPSTAR_ACCESS_JWKS_URL=https://t.example/certs\n' > "${HOME23}/.config/dumpstar/prod/access.env"
+printf '[Unit]\nDescription=running\n\n[Container]\nImage=localhost/dumpstar:prod\nPublishPort=127.0.0.1:8091:8080\n' > "${Q23}/dumpstar-prod.container"
+cp "${Q23}/dumpstar-prod.container" "${WORK}/unit23.before"
+: > "$SYSCTL_LOG"
+RC23=0
+PATH="${WORK}/bin23:${ORIG_PATH}" HOME="$HOME23" DUMPSTAR_DEPLOY_HEALTH_TRIES=2 DUMPSTAR_DEPLOY_HEALTH_SLEEP=0 \
+	DUMPSTAR_TEST_SYSTEMCTL_LOG="$SYSCTL_LOG" DUMPSTAR_TEST_DEPLOY_PODMAN_LOG="$PODMAN_LOG" \
+	bash "${REPO_DIR}/deploy/deploy.sh" prod >/dev/null 2>&1 || RC23=$?
+check "a deploy whose service never serves fails" "1" "$RC23"
+check "…and puts the previous unit back" "same" \
+	"$(cmp -s "${Q23}/dumpstar-prod.container" "${WORK}/unit23.before" && echo same || echo differs)"
+check "…and restarts it" "2" "$(grep -c '^SYSTEMCTL: --user restart dumpstar-prod$' "$SYSCTL_LOG" || true)"
 
 reset_store
 

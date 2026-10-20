@@ -38,6 +38,16 @@ tier = "T3"
 statement = "On the card detail page, editing an owned copy's condition updates the copy but must NOT rebuild/refresh the price chart — the catalog price history is unchanged, so destroying and recreating the chart (which replay... (card_detail_condition_edit_no_chart_rebuild)"
 
 [[use_case]]
+id = "UC-card-26"
+tier = "T3"
+statement = "Opening an owned card from the collection shows, in Your copies, an Acquired column giving each copy's acquisition date as YYYY-MM-DD. (card_detail_copy_acquired_date_in_modal)"
+
+[[use_case]]
+id = "UC-card-27"
+tier = "T3"
+statement = "The full card page of an owned card shows, in Your copies, an Acquired column giving each copy's acquisition date as YYYY-MM-DD. (card_detail_copy_acquired_date_on_page)"
+
+[[use_case]]
 id = "UC-card-08"
 tier = "T4"
 statement = "On the card detail page, a copy in the Your copies section exposes a History toggle. Clicking it expands a timeline showing that copy's status changes and binder/deck movements in chronological order. Clicking the tog... (card_detail_copy_history)"

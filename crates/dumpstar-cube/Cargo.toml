@@ -1,0 +1,22 @@
+[package]
+name = "dumpstar-cube"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "check_pack and check_cube: the swu-jumpstart-cube skill's rule checkers over the deck JSON the /mcp tools return"
+
+[lib]
+name = "dumpstar_cube"
+
+[[bin]]
+name = "swu-cube-check"
+path = "src/main.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

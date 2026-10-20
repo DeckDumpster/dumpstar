@@ -711,6 +711,15 @@ without one is sent to Pocket ID, an `/api` call is a 401, and a signed-in user 
 (`dumpstar tenant identity add`), exactly as the Access email was; an unbound email is a 403.
 The header's "Sign out" link is `/auth/logout`: it ends the app session and Pocket ID's.
 
+**Agent tools (`/mcp`).** Set `DUMPSTAR_MCP_RESOURCE=https://star.dumpster.cards/mcp` (in the same
+`oidc.env`; it needs the `DUMPSTAR_OIDC_*` block) to serve the MCP endpoint. Pocket ID is the
+authorization server: the server only validates the bearer access token (signature from Pocket ID's
+JWKS, `iss`, `aud` equal to that URL, `exp`), requires the same group and resolves the tenant from the
+token's email through the registry, exactly as a browser session does. The URL must be registered in
+Pocket ID as an API resource. `/mcp` and `/.well-known/oauth-protected-resource*` skip the browser
+sign-in; a bearer token is honoured nowhere else, and the cookie session is not accepted on `/mcp`.
+Unset, `/mcp` does not exist. Metrics go to `DUMPSTER_OTLP_METRICS_ENDPOINT` when set.
+
 With no `DUMPSTAR_OIDC_*` set the server runs behind Cloudflare Access as before (the
 `access.env` section below); with OIDC configured, the Cloudflare JWT is not consulted.
 

@@ -2963,6 +2963,7 @@ chmod +x "${WORK}/bin20/systemctl"
 # The /mcp probe deploy.sh runs on prod (sp-tfkp9o) reaches the public URL; answer it as a healthy site would.
 cat > "${WORK}/bin20/curl" <<'EOF'
 #!/usr/bin/env bash
+case "$*" in *'-w %{http_code}'*) printf 200; exit 0 ;; esac # the deploy's health wait (sp-5ekmwm)
 for a in "$@"; do
 	[ "$a" = -D ] && { printf 'HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Bearer\r\n\r\n'; exit 0; }
 done
@@ -3201,7 +3202,7 @@ check "a test instance sends nothing" "0" "$(grep -c '^DUMPSTER_OTLP' "$M22/t/me
 NETS="$(sed -n 's/^Network=//p' "${REPO_DIR}"/deploy/*.container)"
 check "no unit names a pasta option" "0" "$(printf '%s\n' "$NETS" | grep -c '^pasta' || true)"
 check "every unit network is on the supported list" "0" \
-	"$(printf '%s\n' "$NETS" | grep -v '^$' | grep -vc '^\(slirp4netns:allow_host_loopback=true\|host\|none\)$' || true)"
+	"$(printf '%s\n' "$NETS" | grep -v '^$' | grep -vc '^\(slirp4netns:allow_host_loopback=true\|host\|none\|dumpstar-lake-{{INSTANCE}}\)$' || true)"
 
 # --- A unit that does not come up is rolled back (sp-5ekmwm) ---
 HOME23="${WORK}/home23"

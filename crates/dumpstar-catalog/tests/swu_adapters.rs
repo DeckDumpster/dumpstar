@@ -31,6 +31,91 @@ fn read(rel: &str) -> Vec<u8> {
     }
 }
 
+/// One official entry with the keyword relation and the text the importer
+/// reads the keyword numbers from.
+fn keyword_page(keywords: &[&str], text: &str, extra: Value) -> Vec<u8> {
+    let kws: Vec<Value> = keywords
+        .iter()
+        .map(|k| json!({"id": 1, "attributes": {"name": k}}))
+        .collect();
+    let mut a = json!({
+        "title": "Test Unit", "subtitle": null, "cardUid": "9001", "cardNumber": 1,
+        "serialCode": "0101001", "cardId": "kw-1", "text": text,
+        "expansion": {"data": {"attributes": {"code": "SOR", "name": "Spark of Rebellion", "sortValue": 1}}},
+        "variantTypes": {"data": [{"attributes": {"name": "Standard", "foil": false}}]},
+        "rarity": {"data": {"attributes": {"name": "Common"}}},
+        "type": {"data": {"attributes": {"name": "Unit"}}},
+        "keywords": {"data": kws}
+    });
+    for (k, v) in extra.as_object().unwrap() {
+        a[k] = v.clone();
+    }
+    serde_json::to_vec(
+        &json!({"data": [{"id": 1, "attributes": a}], "meta": {"pagination": {"pageCount": 1}}}),
+    )
+    .unwrap()
+}
+
+#[test]
+fn every_known_keyword_parses_with_its_number() {
+    let all: Vec<&str> = official::KNOWN_KEYWORDS.to_vec();
+    let text = "Raid 2\nRestore 1, Exploit 3\nSentinel\nSmuggle [2 resources]\nPiloting [Rebel]\nBounty - x";
+    let page = official::parse_page(&keyword_page(
+        &all,
+        text,
+        json!({"unique": true, "epicAction": "Epic Action: Deal 4 damage."}),
+    ))
+    .unwrap();
+    assert!(page.payload.alarms.is_empty(), "{:?}", page.payload.alarms);
+    let c = &page.payload.cards[0];
+    assert_eq!(c.keywords.len(), all.len());
+    let val = |n: &str| c.keywords.iter().find(|k| k.name == n).unwrap().value;
+    assert_eq!(val("Raid"), Some(2));
+    assert_eq!(val("Restore"), Some(1));
+    assert_eq!(val("Exploit"), Some(3));
+    assert_eq!(val("Sentinel"), None);
+    assert!(c.unique);
+    assert_eq!(
+        c.epic_action.as_deref(),
+        Some("Epic Action: Deal 4 damage.")
+    );
+}
+
+#[test]
+fn an_unparseable_keyword_is_an_alarm_not_silence() {
+    let page =
+        official::parse_page(&keyword_page(&["Frobnicate"], "Frobnicate", json!({}))).unwrap();
+    assert_eq!(page.payload.alarms[0].kind, "official_unparseable_keyword");
+    let page = official::parse_page(&keyword_page(&["Raid"], "Raid", json!({}))).unwrap();
+    assert_eq!(page.payload.alarms[0].kind, "official_unparseable_keyword");
+    assert!(!page.payload.cards[0].unique);
+}
+
+#[test]
+fn keywords_survive_apply() {
+    let raw = keyword_page(&["Raid"], "Raid 2", json!({"unique": true}));
+    let dir = tempfile::tempdir().unwrap();
+    let mut cat = Catalog::open_writer(&dir.path().join("c.sqlite")).unwrap();
+    let bytes = raw;
+    let prov = dumpstar_catalog::landing::Provenance {
+        source: "official".into(),
+        url: "test://keywords".into(),
+        fetched_at: at(1, 0).to_rfc3339(),
+        sha256: "kw".into(),
+        bytes: 0,
+        as_of: None,
+    };
+    dumpstar_catalog::apply::apply(&mut cat, &bytes, &prov).unwrap();
+    let (kw, uniq): (String, bool) = cat
+        .conn()
+        .query_row("SELECT keywords, is_unique FROM cards", [], |r| {
+            Ok((r.get(0)?, r.get(1)?))
+        })
+        .unwrap();
+    assert_eq!(kw, r#"[{"name":"Raid","value":2}]"#);
+    assert!(uniq);
+}
+
 fn at(day: u32, hour: u32) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2026, 10, day, hour, 0, 0).unwrap()
 }

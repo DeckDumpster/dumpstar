@@ -17,7 +17,7 @@ use serde_json::Value;
 
 use crate::error::{CatalogError, Result};
 use crate::record::{
-    AlarmRecord, CardRecord, CatalogPayload, PrintingRecord, RarityRecord, SetRecord,
+    AlarmRecord, CardRecord, CatalogPayload, KeywordRecord, PrintingRecord, RarityRecord, SetRecord,
 };
 
 pub const PAGE_SIZE: u32 = 100;
@@ -95,6 +95,85 @@ fn rel_names(attrs: &Value, name: &str) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// Every keyword in the card pool. A keyword the feed names that is not here
+/// is an alarm: the importer does not guess at a rule it has not read.
+pub const KNOWN_KEYWORDS: &[&str] = &[
+    "Ambush",
+    "Bounty",
+    "Coordinate",
+    "Exploit",
+    "Grit",
+    "Hidden",
+    "Overwhelm",
+    "Piloting",
+    "Raid",
+    "Restore",
+    "Saboteur",
+    "Sentinel",
+    "Shielded",
+    "Smuggle",
+];
+
+/// The keywords whose rules text always carries a number: `Raid 2`.
+const NUMBERED_KEYWORDS: &[&str] = &["Exploit", "Raid", "Restore"];
+
+/// The keyword relation of an entry, each with the number its rules text gives
+/// it. The relation names the keywords; the number is read from the text, where
+/// the keyword stands at the start of a line or of a comma-separated list.
+fn keywords_of(attrs: &Value, card_id: &str, alarms: &mut Vec<AlarmRecord>) -> Vec<KeywordRecord> {
+    let rules = ["text", "deployBox", "epicAction"]
+        .iter()
+        .filter_map(|k| text(attrs, k))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut out: Vec<KeywordRecord> = Vec::new();
+    for name in rel_names(attrs, "keywords") {
+        let Some(known) = KNOWN_KEYWORDS
+            .iter()
+            .find(|k| k.eq_ignore_ascii_case(&name))
+        else {
+            alarms.push(AlarmRecord::alarm(
+                "official_unparseable_keyword",
+                card_id,
+                format!("unknown keyword {name:?}"),
+            ));
+            continue;
+        };
+        let value = keyword_value(&rules, known);
+        if value.is_none() && !rules.is_empty() && NUMBERED_KEYWORDS.contains(known) {
+            alarms.push(AlarmRecord::alarm(
+                "official_unparseable_keyword",
+                card_id,
+                format!("{known} has no number in its rules text"),
+            ));
+        }
+        if !out.iter().any(|k| k.name == *known) {
+            out.push(KeywordRecord {
+                name: (*known).to_string(),
+                value,
+            });
+        }
+    }
+    out
+}
+
+/// The number after `name` where it begins a line or a list item.
+fn keyword_value(rules: &str, name: &str) -> Option<i64> {
+    rules
+        .lines()
+        .flat_map(|l| l.split(','))
+        .map(|item| item.trim_start_matches(['*', ' ']))
+        .find_map(|item| {
+            let rest = item.strip_prefix(name)?;
+            let digits: String = rest
+                .trim_start()
+                .chars()
+                .take_while(char::is_ascii_digit)
+                .collect();
+            digits.parse().ok()
+        })
 }
 
 fn text(attrs: &Value, key: &str) -> Option<String> {
@@ -333,6 +412,9 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
                         Some(parts.join("\n"))
                     }
                 },
+                keywords: keywords_of(a, &card_id, &mut payload.alarms),
+                unique: a.get("unique").and_then(Value::as_bool).unwrap_or(false),
+                epic_action: text(a, "epicAction"),
                 rules_html: {
                     let parts: Vec<String> = ["textStyled", "deployBoxStyled", "epicActionStyled"]
                         .iter()

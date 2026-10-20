@@ -1064,7 +1064,7 @@ fn variant_sql(val: &str) -> (String, Vec<Value>) {
     }
     (
         "p.variant LIKE ? COLLATE NOCASE".to_string(),
-        vec![text(&pct(val))],
+        vec![text(pct(val))],
     )
 }
 

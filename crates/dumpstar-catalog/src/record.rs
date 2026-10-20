@@ -103,10 +103,28 @@ pub struct CardRecord {
     #[serde(default)]
     pub arenas: Vec<String>,
     pub rules_text: Option<String>,
+    /// The card's keywords, with the value the keyword carries (Raid 2).
+    #[serde(default)]
+    pub keywords: Vec<KeywordRecord>,
+    /// A unique card: only one copy of it may be in play at a time.
+    #[serde(default)]
+    pub unique: bool,
+    /// A leader's or base's epic action, when it has one.
+    #[serde(default)]
+    pub epic_action: Option<String>,
     /// The official styled text as HTML, icons included; see
     /// `card_text_styled` in schema.sql.
     #[serde(default)]
     pub rules_html: Option<String>,
+}
+
+/// One keyword on a card. `value` is the number the keyword carries (Raid 2,
+/// Restore 1, Exploit 3) and `None` for one that has none (Sentinel, Bounty).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct KeywordRecord {
+    pub name: String,
+    #[serde(default)]
+    pub value: Option<i64>,
 }
 
 /// One official rarity: the mark (a one-letter character in a colour) and the

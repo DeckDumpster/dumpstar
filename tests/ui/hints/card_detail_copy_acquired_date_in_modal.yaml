@@ -1,0 +1,10 @@
+start_page: /collection
+involves:
+  - "collection tile for Death Star Stormtrooper, which opens the card modal"
+  - "Acquired cell of each copy row"
+fixture_data:
+  start_card: "Death Star Stormtrooper"
+  acquired: "2025-06-10"
+notes: >
+  Open the Death Star Stormtrooper tile and assert the copy rows carry the fixture's
+  acquisition date.

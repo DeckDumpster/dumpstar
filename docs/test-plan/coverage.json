@@ -450,6 +450,30 @@
           "tier": "T4",
           "statement": "On the card detail page, I can click the Want control to add the card to my wishlist. The control changes to a Wanted state. Clicking it again removes the card from the wishlist and reverts the control to Want. (card_detail_want_toggle)",
           "covering_suites": []
+        },
+        {
+          "id": "UC-card-26",
+          "tier": "T3",
+          "statement": "Opening an owned card from the collection shows, in Your copies, an Acquired column giving each copy's acquisition date as YYYY-MM-DD. (card_detail_copy_acquired_date_in_modal)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/card_detail_copy_acquired_date_in_modal.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
+        },
+        {
+          "id": "UC-card-27",
+          "tier": "T3",
+          "statement": "The full card page of an owned card shows, in Your copies, an Acquired column giving each copy's acquisition date as YYYY-MM-DD. (card_detail_copy_acquired_date_on_page)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/card_detail_copy_acquired_date_on_page.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
         }
       ]
     },
@@ -669,7 +693,7 @@
         {
           "id": "UC-collection-30",
           "tier": "T3",
-          "statement": "With the All cards toggle on, a query like t:water returns both the Water cards I own and the ones I'm missing. The unowned printings render as dimmed missing tiles alongside the owned ones, so I can see the gaps in m... (collection_search_unowned)",
+          "statement": "With the All cards toggle on, a query like t:unit returns both the Unit cards I own and the ones I'm missing. The unowned printings render as dimmed missing tiles alongside the owned ones, so I can see the gaps in my ... (collection_search_unowned)",
           "covering_suites": [
             {
               "path": "tests/ui/implementations/collection_search_unowned.ts",

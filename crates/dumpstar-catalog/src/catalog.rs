@@ -92,6 +92,10 @@ const ADDITIVE_COLUMNS: &[(&str, &str, &str)] = &[
     ("sets", "category", "TEXT"),
     // A leader printing's deployed side.
     ("printings", "back_image_url", "TEXT"),
+    // Structured keywords, uniqueness and epic-action text (sp-f2db5u).
+    ("cards", "keywords", "TEXT NOT NULL DEFAULT '[]'"),
+    ("cards", "is_unique", "INTEGER NOT NULL DEFAULT 0"),
+    ("cards", "epic_action", "TEXT"),
 ];
 
 /// Add every [`ADDITIVE_COLUMNS`] entry a populated table lacks. Tables that do

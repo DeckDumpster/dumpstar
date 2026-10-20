@@ -130,6 +130,44 @@ impl Parser<'_> {
 
     fn parse_comparison(&mut self, raw: String, op: Op, kw_pos: usize) -> Result<Ast, QueryError> {
         self.pos += 1; // consume the keyword token
+        let canonical = match self.registry.resolve(&raw) {
+            Some(c) => c.to_string(),
+            None => {
+                let near = self.registry.nearest(&raw);
+                let hint = match near.as_slice() {
+                    [] => String::new(),
+                    names => format!(
+                        ", did you mean {}?",
+                        names
+                            .iter()
+                            .map(|n| format!("'{n}:'"))
+                            .collect::<Vec<_>>()
+                            .join(" or ")
+                    ),
+                };
+                return Err(QueryError::new(
+                    format!("unknown keyword: '{raw}:'{hint}"),
+                    kw_pos,
+                ));
+            }
+        };
+        if let Some(def) = self.registry.get(&canonical)
+            && !def.operators.is_empty()
+            && !def.operators.iter().any(|o| o == op.as_str())
+        {
+            return Err(QueryError::new(
+                format!(
+                    "'{raw}' does not accept '{}'; use {}",
+                    op.as_str(),
+                    def.operators
+                        .iter()
+                        .map(|o| format!("'{raw}{o}'"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                kw_pos,
+            ));
+        }
         let value = match self.peek() {
             Some(Token {
                 kind: Tok::Value(v),
@@ -144,12 +182,6 @@ impl Parser<'_> {
                     format!("expected a value after '{}{}'", raw, op.as_str()),
                     kw_pos,
                 ));
-            }
-        };
-        let canonical = match self.registry.resolve(&raw) {
-            Some(c) => c.to_string(),
-            None => {
-                return Err(QueryError::new(format!("unknown keyword: '{raw}'"), kw_pos));
             }
         };
         Ok(Ast::Comparison {
@@ -438,5 +470,44 @@ mod tests {
     fn missing_close_paren_errors() {
         let err = parse("(t:fire", &registry()).unwrap_err();
         assert!(err.message.to_lowercase().contains("paren"));
+    }
+
+    fn reg_with_ops() -> KeywordRegistry {
+        let mut aspect = KeywordDef::new("aspect", &["a"]);
+        aspect.operators = vec![":".into(), "=".into(), "!=".into()];
+        let mut avail = KeywordDef::new("avail", &["free"]);
+        avail.operators = vec![":".into(), ">=".into(), "<=".into()];
+        KeywordRegistry::new(vec![aspect, avail])
+    }
+
+    #[test]
+    fn near_miss_keyword_names_the_valid_term() {
+        let err = parse("aspec:vigilance", &reg_with_ops()).unwrap_err();
+        assert!(
+            err.message.contains("did you mean 'aspect:'"),
+            "{}",
+            err.message
+        );
+        let err = parse("fre>=1", &reg_with_ops()).unwrap_err();
+        assert!(err.message.contains("'free:'"), "{}", err.message);
+    }
+
+    #[test]
+    fn far_keyword_has_no_suggestion() {
+        let err = parse("zzzzzz:1", &reg_with_ops()).unwrap_err();
+        assert!(!err.message.contains("did you mean"), "{}", err.message);
+    }
+
+    #[test]
+    fn misused_operator_names_the_valid_ones() {
+        let err = parse("a>3", &reg_with_ops()).unwrap_err();
+        assert!(err.message.contains("'a:'"), "{}", err.message);
+        assert!(parse("free>=2", &reg_with_ops()).is_ok());
+    }
+
+    #[test]
+    fn negated_wildcard_deck_parses() {
+        let reg = KeywordRegistry::new(vec![KeywordDef::new("deck", &["deck"])]);
+        assert!(matches!(parse("-deck:*", &reg), Ok(Ast::Not(_))));
     }
 }

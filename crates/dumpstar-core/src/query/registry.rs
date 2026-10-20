@@ -97,6 +97,27 @@ impl KeywordRegistry {
         self.defs.iter().find(|d| d.canonical == canonical)
     }
 
+    /// The valid terms nearest to an unknown `raw`, best first (at most three):
+    /// within a small edit distance, or sharing a prefix of three or more
+    /// letters with it (`aspec` -> `aspect`).
+    pub fn nearest(&self, raw: &str) -> Vec<String> {
+        let raw = raw.to_ascii_lowercase();
+        let limit = if raw.len() <= 2 { 1 } else { 2 };
+        let mut scored: Vec<(usize, String)> = self
+            .alias_to_canonical
+            .keys()
+            .filter_map(|name| {
+                let d = edit_distance(&raw, name);
+                let related = raw.len() >= 3
+                    && (name.starts_with(&raw)
+                        || raw.starts_with(name.as_str()) && name.len() >= 3);
+                (d <= limit || related).then(|| (d, name.clone()))
+            })
+            .collect();
+        scored.sort();
+        scored.into_iter().take(3).map(|(_, n)| n).collect()
+    }
+
     /// All definitions (for autocomplete / help rendering).
     pub fn defs(&self) -> &[KeywordDef] {
         &self.defs
@@ -111,6 +132,21 @@ impl KeywordRegistry {
     }
 }
 
+fn edit_distance(a: &str, b: &str) -> usize {
+    let b: Vec<char> = b.chars().collect();
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.chars().enumerate() {
+        let mut prev = row[0];
+        row[0] = i + 1;
+        for (j, cb) in b.iter().enumerate() {
+            let cur = row[j + 1];
+            row[j + 1] = (prev + usize::from(ca != *cb)).min(row[j] + 1).min(cur + 1);
+            prev = cur;
+        }
+    }
+    row[b.len()]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -122,5 +158,16 @@ mod tests {
         assert_eq!(reg.resolve("TYPE"), Some("card_type"));
         assert_eq!(reg.resolve("card_type"), Some("card_type"));
         assert_eq!(reg.resolve("nope"), None);
+    }
+
+    #[test]
+    fn nearest_names_a_near_miss() {
+        let reg = KeywordRegistry::new(vec![
+            KeywordDef::new("aspect", &["a", "aspect"]),
+            KeywordDef::new("card_type", &["t", "type"]),
+        ]);
+        assert_eq!(reg.nearest("aspec"), vec!["aspect"]);
+        assert_eq!(reg.nearest("tpye"), vec!["type"]);
+        assert!(reg.nearest("zzzzzz").is_empty());
     }
 }

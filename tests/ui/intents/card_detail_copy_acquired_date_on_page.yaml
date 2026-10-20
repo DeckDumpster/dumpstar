@@ -1,0 +1,20 @@
+# Scenario: The card page shows when each owned copy was acquired
+# Use case: UC-card-27
+#
+# Related:
+#   issues: [sp-kx1odm]
+#   pull_requests: []
+
+description: >
+  The full card page of an owned card shows, in "Your copies", an
+  Acquired column giving each copy's acquisition date as YYYY-MM-DD.
+start_page: /card/SOR/100
+involves:
+  - "card page for Death Star Stormtrooper (SOR 100)"
+  - "Acquired cell of each copy row"
+fixture_data:
+  start_card: "Death Star Stormtrooper"
+  acquired: "2025-06-10"
+notes: >
+  Open the Death Star Stormtrooper card page and assert the copy rows carry the fixture's
+  acquisition date.

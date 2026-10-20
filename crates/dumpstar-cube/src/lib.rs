@@ -722,6 +722,16 @@ mod tests {
     }
 
     #[test]
+    fn a_same_color_card_with_no_alignment_is_accepted_and_an_off_color_one_rejected() {
+        let mut p = pack(1, "Heroism", "Command");
+        edit(&mut p, "C1-3", |c| c["game"]["aspects"] = json!(["Command"]));
+        assert!(rules(&p).is_empty(), "no Heroism/Villainy aspect, no penalty");
+        let mut p = pack(1, "Heroism", "Command");
+        edit(&mut p, "C1-3", |c| c["game"]["aspects"] = json!(["Cunning"]));
+        assert!(rules(&p).contains(&"draw-aspect"));
+    }
+
+    #[test]
     fn the_arena_split_is_8_ground_3_or_4_space_3_or_4_spells() {
         let mut p = pack(1, "Heroism", "Command");
         edit(&mut p, "C1-8", |c| c["game"]["arenas"] = json!(["Ground"]));

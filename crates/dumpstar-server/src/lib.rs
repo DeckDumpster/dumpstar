@@ -3410,6 +3410,88 @@ mod tests {
             );
         }
 
+        /// sp-jsizxw: search_cards is one row per card with its original printing's id, and
+        /// `v:standard` leaves the Prestige and Serialized variants out.
+        #[tokio::test]
+        async fn mcp_search_is_one_row_per_card_with_the_original_id() {
+            let site = Site::with_catalog(
+                &["alice"],
+                "INSERT INTO sets (set_code, name, release_date, sort_order) \
+                   VALUES ('LAW', 'A Later Set', '2025-11-14', 9); \
+                 INSERT INTO cards (card_id, name, card_type) VALUES ('c-repair', 'Repair', 'Event'); \
+                 INSERT INTO cards (card_id, name, card_type) VALUES ('c-priest', 'Priestesses', 'Unit'); \
+                 INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
+                   VALUES ('r-law', 'c-repair', 'LAW', '75', 'Standard', 'Normal'), \
+                          ('r-sor-h', 'c-repair', 'SOR', '300', 'Hyperspace', 'Normal'), \
+                          ('r-sor-f', 'c-repair', 'SOR', '74', 'Standard', 'Foil'), \
+                          ('r-sor', 'c-repair', 'SOR', '74', 'Standard', 'Normal'), \
+                          ('p-std', 'c-priest', 'SOR', '90', 'Standard', 'Normal'), \
+                          ('p-pre', 'c-priest', 'SOR', '500', 'Standard Prestige', 'Normal'), \
+                          ('p-fpre', 'c-priest', 'SOR', '500', 'Foil Prestige', 'Foil'), \
+                          ('p-ser', 'c-priest', 'SOR', '500', 'Serialized Prestige', 'Normal');",
+            )
+            .await;
+            let token = site.token_for("alice@example.com");
+            let all = site
+                .tool(&token, "search_cards", json!({"q": "t:event OR t:unit"}))
+                .await
+                .unwrap();
+            let rows = all["results"].as_array().unwrap();
+            assert_eq!(all["total"], json!(3), "{all}");
+            assert_eq!(rows.len(), 3);
+            assert!(rows.iter().all(|r| r.get("printing_id").is_none()));
+            let repair = rows.iter().find(|r| r["name"] == "Repair").unwrap();
+            assert_eq!(repair["id"], "SOR-74", "the original, not the LAW reprint");
+
+            let expanded = site
+                .tool(
+                    &token,
+                    "search_cards",
+                    json!({"q": "t:event OR t:unit", "expand_printings": true}),
+                )
+                .await
+                .unwrap();
+            assert_eq!(expanded["total"], json!(9), "{expanded}");
+            assert!(
+                expanded["results"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|r| r["id"] == "SOR-74" || r["id"] == "SOR-90" || r["id"] == "SOR-1")
+            );
+
+            let standard = site
+                .tool(
+                    &token,
+                    "search_cards",
+                    json!({"q": "v:standard", "expand_printings": true}),
+                )
+                .await
+                .unwrap();
+            let variants: Vec<_> = standard["results"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| r["variant"].as_str().unwrap().to_string())
+                .collect();
+            assert!(variants.iter().all(|v| v == "Standard"), "{variants:?}");
+            let prestige = site
+                .tool(
+                    &token,
+                    "search_cards",
+                    json!({"q": "v:prestige", "expand_printings": true}),
+                )
+                .await
+                .unwrap();
+            assert_eq!(prestige["total"], json!(3), "{prestige}");
+            let hyper = site
+                .tool(&token, "search_cards", json!({"q": "v:hyperspace"}))
+                .await
+                .unwrap();
+            assert_eq!(hyper["total"], json!(1), "{hyper}");
+            assert_eq!(hyper["results"][0]["id"], "SOR-74");
+        }
+
         /// An unknown term gets the nearest valid ones, not an empty result.
         #[tokio::test]
         async fn a_misspelled_term_names_the_nearest_valid_ones() {

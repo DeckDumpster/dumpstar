@@ -104,7 +104,7 @@ pub fn tools(
 }
 
 /// How every tool describes a card id.
-const CARD_ID_DOC: &str = "Card id: <SET>-<number> of the card's standard printing, e.g. SOR-005. Older ids (n:<slug>, bare numbers) are still accepted.";
+const CARD_ID_DOC: &str = "Card id: <SET>-<number> of the card's original (earliest standard) printing, e.g. SOR-005. Older ids (n:<slug>, bare numbers) are still accepted.";
 
 fn db_err(e: DbError) -> ToolError {
     match e {
@@ -298,9 +298,11 @@ fn structured_for(
 }
 
 /// The one card-id form the tools speak: `<SET>-<number>` of the card's canonical printing
-/// (Standard before other variants, Normal before foil), e.g. `SOR-005`.
-const CANONICAL_PRINTING: &str =
-    "ORDER BY variant <> 'Standard', finish <> 'Normal', printing_id LIMIT 1";
+/// (Standard before other variants, Normal before foil, the earliest set first), e.g. `SOR-005`.
+/// Mirrors the ranking `CompiledSearch::set_one_per_card` picks a row by.
+const CANONICAL_PRINTING: &str = "ORDER BY variant <> 'Standard', finish <> 'Normal', \
+    (SELECT COALESCE(release_date, '9999') FROM shared.sets WHERE set_code = printings.set_code), \
+    (SELECT sort_order FROM shared.sets WHERE set_code = printings.set_code), printing_id LIMIT 1";
 
 fn display_id(conn: &Connection, card_id: &str) -> Result<String, ToolError> {
     let sql = format!(
@@ -409,6 +411,7 @@ fn row_object(
     r: &SearchRow,
     counts: &HashMap<String, CardCount>,
     structured: &HashMap<String, Structured>,
+    expand: bool,
 ) -> Result<Value, ToolError> {
     let mut v = card_object(
         Facts {
@@ -431,10 +434,12 @@ fn row_object(
         counts,
         structured,
     );
-    v["printing_id"] = json!(r.printing_id);
-    v["variant"] = json!(r.variant);
-    v["finish"] = json!(r.finish);
-    v["owned_printing_count"] = json!(r.owned_count);
+    if expand {
+        v["printing_id"] = json!(r.printing_id);
+        v["variant"] = json!(r.variant);
+        v["finish"] = json!(r.finish);
+        v["owned_printing_count"] = json!(r.owned_count);
+    }
     Ok(v)
 }
 
@@ -551,6 +556,10 @@ impl DumpstarTools {
         };
         let owned_only = args.get("owned_only").and_then(Value::as_bool) == Some(true);
         compiled.set_catalog_wide(!owned_only);
+        let expand = args.get("expand_printings").and_then(Value::as_bool) == Some(true);
+        if !expand {
+            compiled.set_one_per_card();
+        }
         let cursor = arg_str(args, "cursor").map(String::from);
         self.with_conn(ctx, |c| {
             let page = search::search_page(c, &compiled, Slice::Cursor { limit, cursor })
@@ -559,7 +568,7 @@ impl DumpstarTools {
             let counts = counts_for(c, &ids)?;
             let structured = structured_for(c, &ids)?;
             Ok(json!({
-                "results": page.rows.iter().map(|r| row_object(c, r, &counts, &structured)).collect::<Result<Vec<_>, _>>()?,
+                "results": page.rows.iter().map(|r| row_object(c, r, &counts, &structured, expand)).collect::<Result<Vec<_>, _>>()?,
                 "total": page.total,
                 "next_cursor": page.next_cursor,
             }))
@@ -573,8 +582,7 @@ impl DumpstarTools {
                     let card_id = resolve_card_id(c, given)?;
                     let card_id = card_id.as_str();
                     c.query_row(
-                        "SELECT set_code, number, variant FROM shared.printings WHERE card_id = ?1 \
-                          ORDER BY variant <> 'Standard', finish <> 'Normal', printing_id LIMIT 1",
+                        &format!("SELECT set_code, number, variant FROM shared.printings WHERE card_id = ?1 {CANONICAL_PRINTING}"),
                         [card_id],
                         |r| {
                             Ok((
@@ -663,8 +671,7 @@ impl DumpstarTools {
                 }
                 let found: Option<(String, String, String)> = c
                     .query_row(
-                        "SELECT set_code, number, variant FROM shared.printings WHERE card_id = ?1 \
-                          ORDER BY variant <> 'Standard', finish <> 'Normal', printing_id LIMIT 1",
+                        &format!("SELECT set_code, number, variant FROM shared.printings WHERE card_id = ?1 {CANONICAL_PRINTING}"),
                         [&l.card_id],
                         |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
                     )
@@ -794,8 +801,9 @@ impl ToolProvider for DumpstarTools {
                 "search_cards",
                 self.keywords.tool_description(
                     "Search the Star Wars: Unlimited catalog with the site's query language. \
-                     Each result is one printing; owned_count and available_count are per card \
-                     (copies owned, and owned copies in no deck). Page with next_cursor. Every result's id is a card id of the form <SET>-<number>, e.g. SOR-005; every tool takes and returns that form.",
+                     Each result is one card (its original printing); owned_count and available_count \
+                     are across all its printings (copies owned, and owned copies in no deck). \
+                     Pass expand_printings for one row per printing instead. Page with next_cursor. Every result's id is a card id of the form <SET>-<number>, e.g. SOR-005; every tool takes and returns that form.",
                     10,
                     &EXAMPLES,
                 ),
@@ -804,7 +812,8 @@ impl ToolProvider for DumpstarTools {
                         "q": {"type": "string", "description": "The query; empty matches everything"},
                         "cursor": {"type": "string", "description": "next_cursor of the previous page"},
                         "limit": {"type": "integer", "description": format!("Rows per page, 1 to {MAX_PAGE}; default {DEFAULT_PAGE}")},
-                        "owned_only": {"type": "boolean", "description": "Only printings the user owns; default false (whole catalog)"},
+                        "owned_only": {"type": "boolean", "description": "Only cards the user owns; default false (whole catalog)"},
+                        "expand_printings": {"type": "boolean", "description": "One row per printing, with printing_id, variant, finish and owned_printing_count; default false (one row per card)"},
                     }),
                     &["q"],
                 ),

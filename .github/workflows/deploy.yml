@@ -20,6 +20,10 @@ name: Deploy
 on:
   push:
     branches: [main]
+  # Redeploys the current main without a new commit (the fix for a broken unit
+  # can merge while Deploy is disabled, and no push run exists to re-run). The
+  # job refuses any ref but main, and shares the concurrency group below.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -33,6 +37,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.ref == 'refs/heads/main'
     runs-on: [self-hosted, dumpstar-prod]
     timeout-minutes: 45
     env:

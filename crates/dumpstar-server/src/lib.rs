@@ -3065,13 +3065,17 @@ mod tests {
         async fn the_skills_unaligned_search_returns_a_same_color_card() {
             let sql = "INSERT INTO cards (card_id, name, card_type, cost, arenas, aspects) VALUES \
                  ('V1', 'Aligned Vigilance', 'Event', 2, '[]', '[\"Vigilance\",\"Heroism\"]'), \
-                 ('V2', 'Vanquish', 'Event', 5, '[]', '[\"Vigilance\"]'); \
+                 ('V2', 'Vanquish', 'Event', 5, '[]', '[\"Vigilance\"]'), \
+                 ('V3', 'Off Color Pair', 'Unit', 3, '[]', '[\"Vigilance\",\"Cunning\"]'), \
+                 ('V4', 'Off Color Aligned', 'Unit', 3, '[]', '[\"Vigilance\",\"Command\",\"Heroism\"]'); \
                  INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) VALUES \
                  ('V1-p', 'V1', 'SOR', 'V1', 'Standard', 'Normal'), \
-                 ('V2-p', 'V2', 'SOR', 'V2', 'Standard', 'Normal');";
+                 ('V2-p', 'V2', 'SOR', 'V2', 'Standard', 'Normal'), \
+                 ('V3-p', 'V3', 'SOR', 'V3', 'Standard', 'Normal'), \
+                 ('V4-p', 'V4', 'SOR', 'V4', 'Standard', 'Normal');";
             let mut site = Site::with_catalog(&["alice"], sql).await;
             site.sign_in(member("alice@example.com")).await;
-            for p in ["V1-p", "V2-p"] {
+            for p in ["V1-p", "V2-p", "V3-p", "V4-p"] {
                 let body = json!({"printing_id": p, "source": "manual_id"}).to_string();
                 let r = site.send("POST", "/api/collection", Some(&body)).await;
                 assert_eq!(r.status(), StatusCode::CREATED);
@@ -3089,7 +3093,7 @@ mod tests {
                 .tool(
                     &t,
                     "search_cards",
-                    json!({"q": "a:vigilance a:heroism", "owned_only": true, "limit": 100}),
+                    json!({"q": "a:vigilance a:heroism -a:command -a:aggression -a:cunning", "owned_only": true, "limit": 100}),
                 )
                 .await
                 .unwrap();
@@ -3098,7 +3102,7 @@ mod tests {
                 .tool(
                     &t,
                     "search_cards",
-                    json!({"q": "a:vigilance -a:heroism -a:villainy -t:base", "owned_only": true, "limit": 100}),
+                    json!({"q": "a:vigilance -a:heroism -a:villainy -a:command -a:aggression -a:cunning -t:base", "owned_only": true, "limit": 100}),
                 )
                 .await
                 .unwrap();

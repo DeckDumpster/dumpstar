@@ -1116,6 +1116,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn search_cursor_first_page_counts_and_a_bad_cursor_is_a_400() {
+        let (_d, router, fx) = test_app().await;
+        let tok = fx.valid_token("u@example.com");
+        let resp = router
+            .clone()
+            .oneshot(request(
+                "GET",
+                "/api/collection/search?include_unowned=1&limit=1&cursor=",
+                Some(&tok),
+                None,
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let timing = resp.headers()["server-timing"]
+            .to_str()
+            .unwrap()
+            .to_string();
+        assert!(timing.starts_with("totals;"), "{timing}");
+        let body: serde_json::Value = serde_json::from_str(&body_string(resp).await).unwrap();
+        assert!(body["next_cursor"].is_null(), "one row, one page");
+
+        for uri in [
+            "/api/collection/search?cursor=zz",
+            "/api/collection/search?cursor=&offset=1",
+            "/api/collection/search?cursor=&limit=all",
+        ] {
+            let resp = router
+                .clone()
+                .oneshot(request("GET", uri, Some(&tok), None))
+                .await
+                .unwrap();
+            assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "{uri}");
+        }
+    }
+
+    #[tokio::test]
     async fn search_prices_the_whole_result_and_not_the_page() {
         let (dir, router, fx) = test_app().await;
         let tok = fx.valid_token("u@example.com");

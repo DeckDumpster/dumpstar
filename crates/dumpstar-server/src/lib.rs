@@ -27,6 +27,7 @@ use dumpstar_db::DbError;
 use dumpstar_db::search_meta::SearchFlag;
 
 mod mcp;
+mod metrics;
 mod routes;
 
 use dumpster_kit_mcp_auth::{McpAuth, McpAuthConfig};
@@ -77,6 +78,8 @@ pub struct AppState {
     /// The agent-tool endpoint (`/mcp`), when configured. Needs `oidc`: Pocket ID is its
     /// authorization server.
     pub(crate) mcp: Option<McpMount>,
+    /// OTLP metrics; a no-op unless `DUMPSTER_OTLP_METRICS_ENDPOINT` is set.
+    pub(crate) metrics: metrics::Metrics,
 }
 
 /// What `/mcp` is served from: the token validator and the tool set.
@@ -392,6 +395,9 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
         .fallback(get(spa))
         .layer(middleware::from_fn_with_state(state_for_gate, sign_in_gate))
         .layer(middleware::from_fn(api_responses_are_private))
+        .layer(dumpster_kit_telemetry::RouteMetricsLayer::new(
+            state.metrics.telemetry(),
+        ))
         // Outermost, so it sees the final response of every route above.
         .layer(compression())
 }
@@ -523,6 +529,7 @@ pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
         oidc,
         access,
         mcp,
+        metrics: metrics::Metrics::from_env(),
     };
     let addr = SocketAddr::new(cfg.host, cfg.port);
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -588,6 +595,7 @@ mod tests {
             oidc: None,
             access: Some(access),
             mcp: None,
+            metrics: metrics::Metrics::disabled(),
         };
         app(state, dir.join("static"), data_dir)
     }
@@ -1610,6 +1618,7 @@ mod tests {
                         resolver,
                         telemetry,
                     }),
+                    metrics: metrics::Metrics::disabled(),
                 };
                 Site {
                     router: app(state, dir.path().join("static"), dir.path().to_path_buf()),
@@ -2105,6 +2114,7 @@ mod tests {
                 oidc: None,
                 access: Some(fx.access.clone()),
                 mcp: None,
+                metrics: metrics::Metrics::disabled(),
             };
 
             let unscoped = blocking(&state, |c| {

@@ -769,6 +769,9 @@ if tier lint; then
     step "No pipeline into grep -q, which inverts under pipefail (tests/ci/grepq_test.sh)"
     bash "$REPO_DIR/tests/ci/grepq_test.sh"
 
+    step "Dashboard JSON is valid and queries only metrics the server sends (tests/ci/dashboard_test.sh)"
+    bash "$REPO_DIR/tests/ci/dashboard_test.sh"
+
     step "No committed sqlite under tests/ (tests/ci/fixture_untracked_test.sh)"
     bash "$REPO_DIR/tests/ci/fixture_untracked_test.sh"
 

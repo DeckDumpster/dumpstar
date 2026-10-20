@@ -1330,6 +1330,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             sleeve_color: "black".into_some(),
             storage_location: "Deck Box 1".into_some(),
             notes: "Tournament-ready.".into_some(),
+            group: None,
         },
     )?;
     decks::set_card(conn, luke_deck, "SOR_005", Zone::Main, 1)?;
@@ -1349,6 +1350,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             sleeve_color: "red".into_some(),
             storage_location: "Deck Box 2".into_some(),
             notes: None,
+            group: None,
         },
     )?;
     decks::set_card(conn, vader_deck, "SOR_010", Zone::Main, 1)?;
@@ -1367,6 +1369,7 @@ fn seed_user(conn: &mut Connection) -> anyhow::Result<()> {
             sleeve_color: None,
             storage_location: None,
             notes: "Needs a lot more bounties.".into_some(),
+            group: None,
         },
     )?;
     decks::set_card(conn, bounty_deck, "SHD_001", Zone::Main, 1)?;

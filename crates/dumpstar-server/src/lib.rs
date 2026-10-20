@@ -3598,6 +3598,13 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(prestige["total"], json!(3), "{prestige}");
+            // A prestige printing keeps its card's standard id, set and number (sp-wxj6lr).
+            for r in prestige["results"].as_array().unwrap() {
+                assert_eq!(r["id"], "SOR-90", "{r}");
+                assert_eq!(r["set"], "SOR", "{r}");
+                assert_eq!(r["number"], "90", "{r}");
+                assert_eq!(r["printing_number"], "500", "{r}");
+            }
             let hyper = site
                 .tool(&token, "search_cards", json!({"q": "v:hyperspace"}))
                 .await

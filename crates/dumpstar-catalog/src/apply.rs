@@ -116,7 +116,10 @@ const DERIVATIONS: &[(&str, u32)] = &[
     // 6: cards.keywords, is_unique and epic_action, columns added in place to a
     // catalog whose payloads were already applied (sp-nb4vqy).
     // 7: a base's epic_action is read from its text (sp-qnkbmh).
-    (swu::SRC_OFFICIAL, 7),
+    // 8: leader sides, stripped icon spaces, keyword values and Anakin's
+    // aspects (sp-8p9a57, which landed without a bump and so never reached the
+    // stored rows).
+    (swu::SRC_OFFICIAL, 8),
 ];
 
 pub fn derivation_version(source: &str) -> u32 {
@@ -727,6 +730,10 @@ fn crosswalk_rev() -> String {
     hex::encode(h.finalize())
 }
 
+fn derivation_key(source: &str) -> String {
+    format!("derivation.{source}")
+}
+
 const KEY_CROSSWALK_REV: &str = "crosswalk.rev";
 
 impl Catalog {
@@ -738,8 +745,25 @@ impl Catalog {
         let mut n = 0;
         for (source, v) in DERIVATIONS {
             n += self.reapply_landed_at(raw_root, source, *v)?;
+            self.conn.execute(
+                "INSERT INTO sync_state (key, value) VALUES (?1, ?2)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                params![derivation_key(source), v.to_string()],
+            )?;
         }
         Ok(n)
+    }
+
+    /// The derivation version each source's stored rows were last re-derived
+    /// under, so "is the fix in force" is a query: `(source, version)`.
+    pub fn derivation_versions(&self) -> Result<Vec<(String, u32)>> {
+        let mut out = Vec::new();
+        for (source, _) in DERIVATIONS {
+            if let Some(v) = self.sync_state(&derivation_key(source))? {
+                out.push((source.to_string(), v.parse().unwrap_or(0)));
+            }
+        }
+        Ok(out)
     }
 
     pub fn reapply_landed_at(

@@ -192,12 +192,12 @@ impl Tally {
     }
 }
 
-/// Owned and available copies by type, aspect and set; bases by HP and epic or vanilla;
+/// Owned and available copies by type, aspect and set; bases by HP and epic, ability or vanilla;
 /// leaders by aspect and alignment. A card with two aspects counts under each.
 fn breakdown(conn: &Connection) -> Result<Value, ToolError> {
     let mut stmt = conn
         .prepare(&format!(
-            "SELECT cd.card_type, cd.aspects, cd.hp, cd.epic_action, \
+            "SELECT cd.card_type, cd.aspects, cd.hp, cd.epic_action, cd.rules_text, \
                     (SELECT set_code FROM shared.printings WHERE card_id = cd.card_id \
                       {CANONICAL_PRINTING}), c.deck_id IS NULL \
                FROM collection c \
@@ -213,8 +213,9 @@ fn breakdown(conn: &Connection) -> Result<Value, ToolError> {
                 r.get::<_, String>(1)?,
                 r.get::<_, Option<i64>>(2)?,
                 r.get::<_, Option<String>>(3)?,
-                r.get::<_, String>(4)?,
-                r.get::<_, bool>(5)?,
+                r.get::<_, Option<String>>(4)?,
+                r.get::<_, String>(5)?,
+                r.get::<_, bool>(6)?,
             ))
         })
         .map_err(|e| db_err(e.into()))?;
@@ -223,7 +224,7 @@ fn breakdown(conn: &Connection) -> Result<Value, ToolError> {
     let (mut base_hp, mut base_kind) = (Tally::default(), Tally::default());
     let (mut leader_aspect, mut leader_align) = (Tally::default(), Tally::default());
     for row in rows {
-        let (kind, aspects, hp, epic, set, available) = row.map_err(|e| db_err(e.into()))?;
+        let (kind, aspects, hp, epic, rules, set, available) = row.map_err(|e| db_err(e.into()))?;
         let kind = kind.unwrap_or_else(|| "Unknown".into());
         let aspects: Vec<String> = serde_json::from_str(&aspects).unwrap_or_default();
         by_type.add(&kind, available);
@@ -234,8 +235,15 @@ fn breakdown(conn: &Connection) -> Result<Value, ToolError> {
         match kind.as_str() {
             "Base" => {
                 base_hp.add(&hp.map_or("unknown".into(), |h| h.to_string()), available);
-                let epic = epic.is_some_and(|e| !e.is_empty());
-                base_kind.add(if epic { "epic" } else { "vanilla" }, available);
+                let has = |t: &Option<String>| t.as_deref().is_some_and(|t| !t.trim().is_empty());
+                let kind = if has(&epic) {
+                    "epic"
+                } else if has(&rules) {
+                    "ability"
+                } else {
+                    "vanilla"
+                };
+                base_kind.add(kind, available);
             }
             "Leader" => {
                 for a in &aspects {

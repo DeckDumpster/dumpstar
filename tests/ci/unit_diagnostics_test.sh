@@ -117,8 +117,7 @@ check "no bare journalctl in deploy.sh" "" "$BARE_JOURNAL_DEPLOY"
 log "§5 deploy.sh calls dump_unit_diagnostics on restart failure (db-g6ku)"
 
 check "deploy.sh restart failure calls dump_unit_diagnostics" "yes" \
-    "$(grep -qE 'if ! \{ systemctl --user restart .*\}; then' "$DEPLOY_SH" \
-        && grep -A1 -E 'if ! \{ systemctl --user restart .*\}; then' "$DEPLOY_SH" | grep -q dump_unit_diagnostics && echo yes || echo no)"
+    "$(grep -A1 -E 'if ! \{ systemctl --user restart .*\}; then' "$DEPLOY_SH" | grep -c dump_unit_diagnostics | sed 's/^[1-9].*/yes/;s/^0$/no/')"
 
 # ---------------------------------------------------------------------------
 echo ""

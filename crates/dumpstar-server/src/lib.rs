@@ -1715,6 +1715,63 @@ mod tests {
             assert!(body_string(alices).await.contains("SOR-1-normal"));
         }
 
+        /// The deck-line routes act on the signed-in tenant's decks only, and a
+        /// line the tenant cannot fill is refused with the card named (sp-mmdoxy).
+        #[tokio::test]
+        async fn deck_lines_are_per_tenant_and_over_reservation_is_refused() {
+            let (_d, router, _dir, fx) = multi_tenant_app(&["alice", "bob"]).await;
+            let alice_tok = fx.valid_token("alice@example.com");
+            let bob_tok = fx.valid_token("bob@example.com");
+            let send = |method: &'static str, uri: &'static str, tok: &str, body: Option<&str>| {
+                let router = router.clone();
+                let req = request(method, uri, Some(tok), body);
+                async move {
+                    let resp = router.oneshot(req).await.unwrap();
+                    (resp.status(), body_string(resp).await)
+                }
+            };
+            let (s, _) = send(
+                "POST",
+                "/api/decks",
+                &alice_tok,
+                Some(r#"{"name":"Pack 1","format":"Jumpstart","group":"cube"}"#),
+            )
+            .await;
+            assert_eq!(s, StatusCode::CREATED);
+
+            let lines = r#"{"lines":[{"card_id":"NOPE","zone":"main","qty":2}]}"#;
+            let (s, body) = send("PUT", "/api/decks/1/lines", &alice_tok, Some(lines)).await;
+            assert_eq!(s, StatusCode::CONFLICT);
+            assert!(
+                body.contains("NOPE") && body.contains("\"needed\":2"),
+                "{body}"
+            );
+
+            for (m, u) in [
+                ("GET", "/api/decks/1/lines"),
+                ("POST", "/api/decks/1/release"),
+                ("GET", "/api/decks/1/validate"),
+            ] {
+                let (s, _) = send(m, u, &bob_tok, None).await;
+                assert_eq!(
+                    s,
+                    StatusCode::NOT_FOUND,
+                    "bob reached alice's deck: {m} {u}"
+                );
+            }
+            let (s, _) = send(
+                "PUT",
+                "/api/decks/1/lines",
+                &bob_tok,
+                Some(r#"{"lines":[]}"#),
+            )
+            .await;
+            assert_eq!(s, StatusCode::NOT_FOUND);
+
+            let (s, body) = send("GET", "/api/card-counts", &alice_tok, None).await;
+            assert_eq!(s, StatusCode::OK, "{body}");
+        }
+
         /// An unbound email is a 403 and does not create a database.
         #[tokio::test]
         async fn an_unbound_email_is_a_403_and_creates_nothing() {

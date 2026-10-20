@@ -33,7 +33,7 @@ probe() {
         HTTP*" 401"*) ;;
         *) echo "POST /mcp without a token: want 401" >&2; return 1 ;;
     esac
-    printf '%s' "$hdrs" | grep -qi '^www-authenticate:' || { echo "401 lacks WWW-Authenticate" >&2; return 1; }
+    grep -qi '^www-authenticate:' <<<"$hdrs" || { echo "401 lacks WWW-Authenticate" >&2; return 1; }
 }
 
 deadline=$((SECONDS + WAIT))

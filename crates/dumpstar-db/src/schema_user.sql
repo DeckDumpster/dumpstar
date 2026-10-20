@@ -77,7 +77,8 @@ CREATE TABLE IF NOT EXISTS decks (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     name              TEXT NOT NULL,
     description       TEXT,
-    format            TEXT,                    -- free-text tag: 'standard'|'expanded'|'casual'
+    format            TEXT,                    -- free-text label; a sanctioned one ('Premier') is rule-checked, any other is user-defined
+    deck_group        TEXT,                    -- optional free-text group (a cube, a set of packs)
     owner             TEXT,                    -- free-text: "Ryan"|"Alice"
     state             TEXT NOT NULL DEFAULT 'idea'
         CHECK (state IN ('idea', 'ready', 'built')),
@@ -90,7 +91,8 @@ CREATE TABLE IF NOT EXISTS decks (
 
 -- A deck's card list: game cards (shared.printings.card_id, an app-layer FK),
 -- never printings, and never physical copies — owned/missing is computed
--- against the collection, nothing is reserved.
+-- against the collection. A deck's lines reserve concrete copies through
+-- `collection.deck_id` (decks::set_lines); a copy is in at most one deck.
 CREATE TABLE IF NOT EXISTS deck_cards (
     deck_id   INTEGER NOT NULL REFERENCES decks(id) ON DELETE CASCADE,
     card_id   TEXT NOT NULL,

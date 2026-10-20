@@ -3343,7 +3343,7 @@ mod tests {
         }
 
         /// sp-jceiw2: collection_summary breaks owned and available copies down by type,
-        /// aspect and set, bases by HP and epic/vanilla, leaders by aspect and alignment.
+        /// aspect and set, bases by HP and epic/ability/vanilla, leaders by aspect and alignment.
         #[tokio::test]
         async fn collection_summary_breaks_the_collection_down() {
             let mut sql = String::from(
@@ -3381,6 +3381,7 @@ mod tests {
                     false,
                     1,
                 ),
+                ("T-B3", "SOR", "Base", Some(28), r#"["Command"]"#, false, 1),
             ] {
                 let hp = hp.map_or("NULL".to_string(), |h: i64| h.to_string());
                 let epic = if epic {
@@ -3396,6 +3397,9 @@ mod tests {
                 ));
                 owned.push((Box::leak(format!("{id}-p").into_boxed_str()), copies));
             }
+            sql.push_str(
+                "UPDATE cards SET rules_text = 'When played, heal 2.' WHERE card_id = 'T-B3';",
+            );
             let mut site = Site::with_catalog(&["alice"], &sql).await;
             site.sign_in(member("alice@example.com")).await;
             for (printing, copies) in &owned {
@@ -3432,20 +3436,23 @@ mod tests {
             let oa = |o: u64, a: u64| json!({"owned": o, "available": a});
             assert_eq!(
                 b["by_type"],
-                json!({"Base": oa(3, 3), "Leader": oa(3, 3), "Unit": oa(3, 2)})
+                json!({"Base": oa(4, 4), "Leader": oa(3, 3), "Unit": oa(3, 2)})
             );
             assert_eq!(
                 b["by_aspect"],
                 json!({
-                    "Aggression": oa(2, 2), "Command": oa(2, 2), "Heroism": oa(1, 1),
+                    "Aggression": oa(2, 2), "Command": oa(3, 3), "Heroism": oa(1, 1),
                     "Vigilance": oa(5, 4), "Villainy": oa(2, 2),
                 })
             );
-            assert_eq!(b["by_set"], json!({"JTL": oa(4, 3), "SOR": oa(5, 5)}));
-            assert_eq!(b["bases"]["by_hp"], json!({"25": oa(2, 2), "30": oa(1, 1)}));
+            assert_eq!(b["by_set"], json!({"JTL": oa(4, 3), "SOR": oa(6, 6)}));
+            assert_eq!(
+                b["bases"]["by_hp"],
+                json!({"25": oa(2, 2), "28": oa(1, 1), "30": oa(1, 1)})
+            );
             assert_eq!(
                 b["bases"]["by_kind"],
-                json!({"epic": oa(2, 2), "vanilla": oa(1, 1)})
+                json!({"ability": oa(1, 1), "epic": oa(2, 2), "vanilla": oa(1, 1)})
             );
             assert_eq!(
                 b["leaders"]["by_aspect"],

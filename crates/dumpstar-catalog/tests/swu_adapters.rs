@@ -82,6 +82,21 @@ fn every_known_keyword_parses_with_its_number() {
 }
 
 #[test]
+fn a_base_with_its_epic_action_in_text_has_epic_action_populated() {
+    let text = "Epic Action: Give a Shield token to a non-leader unit.";
+    let page = official::parse_page(&keyword_page(
+        &[],
+        text,
+        json!({"title": "Security Complex", "hp": 25, "epicAction": null,
+               "type": {"data": {"attributes": {"name": "Base"}}}}),
+    ))
+    .unwrap();
+    assert_eq!(page.payload.cards[0].epic_action.as_deref(), Some(text));
+    let page = official::parse_page(&keyword_page(&[], "Raid 2", json!({}))).unwrap();
+    assert_eq!(page.payload.cards[0].epic_action, None);
+}
+
+#[test]
 fn an_unparseable_keyword_is_an_alarm_not_silence() {
     let page =
         official::parse_page(&keyword_page(&["Frobnicate"], "Frobnicate", json!({}))).unwrap();

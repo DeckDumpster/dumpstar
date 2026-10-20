@@ -221,6 +221,16 @@ fn text(attrs: &Value, key: &str) -> Option<String> {
         .map(str::to_string)
 }
 
+/// A base prints its Epic Action inside `text`, with no `epicAction` of its own
+/// (sp-qnkbmh): take the lines from the one that opens with "Epic Action".
+fn epic_action_in(attrs: &Value) -> Option<String> {
+    let body = text(attrs, "text")?;
+    let at = body
+        .lines()
+        .position(|l| l.trim_start().starts_with("Epic Action"))?;
+    Some(body.lines().skip(at).collect::<Vec<_>>().join("\n"))
+}
+
 fn image(attrs: &Value) -> Option<String> {
     art(attrs, "artFront")
 }
@@ -440,7 +450,7 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
                 rules_text: rules_text_of(a),
                 keywords: keywords_of(a, &card_id, &mut payload.alarms),
                 unique: a.get("unique").and_then(Value::as_bool).unwrap_or(false),
-                epic_action: text(a, "epicAction"),
+                epic_action: text(a, "epicAction").or_else(|| epic_action_in(a)),
                 rules_html: {
                     let parts: Vec<String> = ["textStyled", "deployBoxStyled", "epicActionStyled"]
                         .iter()

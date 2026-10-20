@@ -2904,6 +2904,8 @@ CONF20="${HOME20}/.config/dumpstar/prod"
 Q20="${HOME20}/.config/containers/systemd"
 mkdir -p "$CONF20" "$Q20" "${WORK}/bin20"
 cp "${WORK}/deploybin/podman" "${WORK}/bin20/podman"
+# A prod deploy probes the public /mcp origin (deploy/mcp-check.sh, sp-tfkp9o) with curl; stub it when the fixture has one.
+[ -x "${WORK}/deploybin/curl" ] && cp "${WORK}/deploybin/curl" "${WORK}/bin20/curl"
 cat > "${WORK}/bin20/systemctl" <<'EOF'
 #!/usr/bin/env bash
 for a in "$@"; do [ "$a" = is-active ] && exit 3; done

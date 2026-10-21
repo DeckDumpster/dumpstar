@@ -12,7 +12,8 @@ fn main() {
         thread::spawn(move || {
             let mut buf = [0u8; 4096];
             let _ = conn.read(&mut buf);
-            let _ = conn.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok");
+            let _ = conn
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok");
         });
     }
 }

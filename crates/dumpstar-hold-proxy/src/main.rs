@@ -76,7 +76,10 @@ fn handle(client: TcpStream, args: &Args, log: &Logger) {
             Ok(s) => break s,
             Err(_) if start.elapsed() < hold => thread::sleep(Duration::from_secs_f64(args.retry)),
             Err(_) => {
-                log.line(&format!("refused after {:.0}s: upstream never answered", args.hold));
+                log.line(&format!(
+                    "refused after {:.0}s: upstream never answered",
+                    args.hold
+                ));
                 return;
             }
         }
@@ -102,10 +105,14 @@ fn main() {
         }
     };
     let file = args.log.as_ref().map(|p| {
-        OpenOptions::new().create(true).append(true).open(p).unwrap_or_else(|e| {
-            eprintln!("dumpstar-hold-proxy: --log {p}: {e}");
-            exit(2);
-        })
+        OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(p)
+            .unwrap_or_else(|e| {
+                eprintln!("dumpstar-hold-proxy: --log {p}: {e}");
+                exit(2);
+            })
     });
     let log = Arc::new(Logger(Mutex::new(file)));
     let listener = TcpListener::bind(&args.listen).unwrap_or_else(|e| {

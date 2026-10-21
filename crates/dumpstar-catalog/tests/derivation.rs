@@ -156,6 +156,34 @@ fn a_keyword_with_a_number_in_the_text_but_null_value_is_flagged() {
 }
 
 #[test]
+fn a_keyword_in_the_text_but_not_in_the_keywords_is_flagged() {
+    let dir = tempfile::tempdir().unwrap();
+    let c = Catalog::open_writer(&dir.path().join("shared.sqlite")).unwrap();
+    for (id, kws, text) in [
+        ("NITE-OWL", "[]", "Support\nWhen Played: draw a card."),
+        ("SNUB", "[]", "Plot\nOn Attack: deal 1 damage."),
+        ("HAS", "[{\"name\":\"Support\",\"value\":null}]", "Support"),
+        ("GRANTS", "[]", "Attached unit gains Sentinel."),
+    ] {
+        c.conn()
+            .execute(
+                "INSERT INTO cards (card_id, name, card_type, rules_text, keywords) VALUES (?1, ?1, 'Unit', ?3, ?2)",
+                rusqlite::params![id, kws, text],
+            )
+            .unwrap();
+    }
+    let a = dumpstar_catalog::check::keyword_missing_from_keywords(c.conn()).unwrap();
+    let keys: Vec<(&str, &str)> = a
+        .iter()
+        .map(|r| (r.kind.as_str(), r.key.as_str()))
+        .collect();
+    assert_eq!(
+        keys,
+        vec![("keyword_missing", "NITE-OWL"), ("keyword_missing", "SNUB")]
+    );
+}
+
+#[test]
 fn reapplying_records_the_derivation_version_in_force() {
     let dir = tempfile::tempdir().unwrap();
     let mut c = Catalog::open_writer(&dir.path().join("shared.sqlite")).unwrap();

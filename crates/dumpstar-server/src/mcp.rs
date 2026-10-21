@@ -89,7 +89,7 @@ pub fn tools(
     registry: Arc<KeywordRegistry>,
     flags: Arc<Vec<SearchFlag>>,
 ) -> Result<(Arc<DumpstarTools>, Arc<Resolver>), String> {
-    let keywords = Keywords::parse(dumpstar_db::search_meta::keywords_json())?;
+    let keywords = Keywords::parse(&dumpstar_db::search_meta::keywords_json())?;
     let ids = Arc::new(MintedTenants::default());
     Ok((
         Arc::new(DumpstarTools {

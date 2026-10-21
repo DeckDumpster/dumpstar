@@ -22,8 +22,17 @@ pub(crate) const KEYWORDS_SEED: &str = include_str!("../../../data/search_keywor
 
 /// The search vocabulary file, verbatim: what the agent tool description and `query_help` are
 /// generated from, so they cannot drift from the UI's own help.
-pub fn keywords_json() -> &'static str {
-    KEYWORDS_SEED
+pub fn keywords_json() -> String {
+    keywords_seed()
+}
+
+/// `KEYWORDS_SEED` with the `{{KEYWORDS}}` placeholder of the `keyword` help replaced by the
+/// adapter's own keyword list, so the help names every keyword the catalog derives.
+pub(crate) fn keywords_seed() -> String {
+    KEYWORDS_SEED.replace(
+        "{{KEYWORDS}}",
+        &dumpstar_catalog::official::KNOWN_KEYWORDS.join(", "),
+    )
 }
 // `rarities.json` ranks the Star Wars: Unlimited tiers (Common through
 // Legendary, Special, and Promo) so `r>=` / `r<` compare by rank.
@@ -118,7 +127,7 @@ pub fn counts(conn: &Connection) -> Result<SearchMetaCounts> {
 /// tables hold no dynamic rows and nothing references them, so each is fully
 /// replaced — idempotent by construction.
 pub fn reconcile(conn: &mut Connection) -> Result<SearchMetaCounts> {
-    let keywords: Vec<KeywordDef> = serde_json::from_str(KEYWORDS_SEED)?;
+    let keywords: Vec<KeywordDef> = serde_json::from_str(&keywords_seed())?;
     let rarities: Vec<Rarity> = serde_json::from_str(RARITIES_SEED)?;
     let flags: Vec<SearchFlag> = serde_json::from_str(FLAGS_SEED)?;
 
@@ -343,10 +352,26 @@ mod tests {
     }
 
     #[test]
+    fn keyword_help_lists_every_derived_keyword() {
+        let json = keywords_json();
+        assert!(!json.contains("{{KEYWORDS}}"));
+        let defs: Vec<KeywordDef> = serde_json::from_str(&json).unwrap();
+        let help = defs
+            .iter()
+            .find(|k| k.canonical == "keyword")
+            .and_then(|k| k.help.clone())
+            .unwrap();
+        for k in dumpstar_catalog::official::KNOWN_KEYWORDS {
+            assert!(help.contains(k), "{k} missing from {help}");
+        }
+        assert!(help.contains("Support") && help.contains("Plot"));
+    }
+
+    #[test]
     fn seeds_parse_and_have_unique_aliases() {
         // The embedded JSON must parse, and no alias may map to two keywords
         // (a HashMap would silently clobber the duplicate).
-        let keywords: Vec<KeywordDef> = serde_json::from_str(KEYWORDS_SEED).unwrap();
+        let keywords: Vec<KeywordDef> = serde_json::from_str(&keywords_seed()).unwrap();
         assert!(keywords.len() >= 35, "expected the full keyword map");
         let mut seen: std::collections::HashMap<String, String> = std::collections::HashMap::new();
         for k in &keywords {

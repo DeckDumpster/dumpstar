@@ -119,7 +119,8 @@ const DERIVATIONS: &[(&str, u32)] = &[
     // 8: leader sides, stripped icon spaces, keyword values and Anakin's
     // aspects (sp-8p9a57, which landed without a bump and so never reached the
     // stored rows).
-    (swu::SRC_OFFICIAL, 8),
+    // 9: Support and Plot are known keywords (sp-pljdpa).
+    (swu::SRC_OFFICIAL, 9),
 ];
 
 pub fn derivation_version(source: &str) -> u32 {

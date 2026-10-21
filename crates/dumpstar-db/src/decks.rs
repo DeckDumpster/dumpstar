@@ -411,9 +411,13 @@ pub fn set_lines(conn: &Connection, deck_id: i64, lines: &[Line]) -> Result<SetL
                 } else {
                     let names: Vec<String> = held_by
                         .iter()
-                        .map(|h| format!("'{}' (deck {}, {})", h.name, h.id, h.qty))
+                        .map(|h| format!("'{}' (id {}, qty {})", h.name, h.id, h.qty))
                         .collect();
-                    format!("swap the card or free it from {}", names.join(", "))
+                    format!(
+                        "{card} has {owned} {}, held by deck {}: substitute a card, or remove it from the holding deck with set_deck_lines",
+                        if owned == 1 { "copy" } else { "copies" },
+                        names.join(", ")
+                    )
                 };
                 short.push(ShortLine {
                     card_id: (*card).to_string(),
@@ -856,7 +860,9 @@ mod tests {
                     name: "A".into(),
                     qty: 2
                 }],
-                hint: format!("swap the card or free it from 'A' (deck {a}, 2)"),
+                hint: format!(
+                    "C1 has 3 copies, held by deck 'A' (id {a}, qty 2): substitute a card, or remove it from the holding deck with set_deck_lines"
+                ),
             }
         );
         assert_eq!(

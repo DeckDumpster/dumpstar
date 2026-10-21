@@ -118,12 +118,15 @@ of searches per pack (step 3) and choose from the results yourself; never search
    `{"owned": {"<card id>": <available copies>}, "packs": [{"name": "Pack 1", "slots": 15,
    "eligible": [<search_cards row>, ...]}]}` (eligible = the rows that pack's searches returned, as
    they came back: `allocate` reads each row's `id`, `type`, `cost` and `game.arenas`) and run
-   `swu-cube-check allocate plan.json`, or pipe it on stdin. It reserves each card's copies to specific packs (`reserve <card>: Pack 2`)
-   and prints `ok`, or `FAIL allocation:` naming the card and the packs competing for it, which you
-   report to the user. Build each pack only from the cards reserved to it; a pack takes one copy of a card. With rows, the
-   15 reserved cards already meet the pack skeleton (8 ground, 3-4 space, 3-4 events or upgrades, the
-   cost curve), so a pack built from them passes `pack`; when no such 15 exist `FAIL allocation:` says
-   what the pack's pool lacks. Bare card ids carry no type and are never chosen for a 15-slot pack.
+   `swu-cube-check allocate plan.json`, or pipe it on stdin. It reserves only the **contested** copies: cards more packs want than
+   there are copies of (`reserve <card>: Pack 2 (contested: 1 copy, 2 packs)`); with none it prints
+   `no contested cards`. It does not pick any pack's draw list. It prints `ok`, or `FAIL allocation:`
+   naming the card and the packs competing for it, which you report to the user; with rows, that
+   also means no 15 cards meet the pack skeleton (8 ground, 3-4 space, 3-4 events or upgrades, the
+   cost curve) from the pack's pool, and the message says what the pool lacks. Bare card ids carry no
+   type and are never counted toward a 15-slot pack. Choose each pack's cards by the quality rules
+   below from its pool; where a card is contested, use the allocator's assignment (a card reserved
+   to another pack is not yours to pick; a pack takes one copy of a card).
 4. **Fill each pack to the skeleton.** Four `search_cards` per pack cover the Leader's whole pool,
    because section 2 allows four sets and no one query returns them all: color and alignment, color
    only, alignment only, and no aspect at all. None returns Leaders or bases, which are chosen
@@ -144,7 +147,7 @@ of searches per pack (step 3) and choose from the results yourself; never search
    Villainy leader's pool has AT-ST there. The checker accepts exactly these four sets.
 
    One more for the color's bases: `t:base a:<color> -t:leader avail>=1`. Then pick from the combined results the 15
-   cards that meet section 4, the 25-HP and 30-HP bases, and the Leader. A card reserved to another pack in step 3 is not yours to pick. Prefer
+   cards that meet section 4, the 25-HP and 30-HP bases, and the Leader. A contested card reserved to another pack in step 3 is not yours to pick. Prefer
    cards of the Leader's own alignment and color; same-color cards with no alignment, cards of the Leader's
    alignment with no color, and cards with no aspects are also allowed.
 5. **Check the planned pack, then save it.** Before any write, assemble the pack document (below)

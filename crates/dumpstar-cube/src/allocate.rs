@@ -21,7 +21,10 @@ use crate::{CURVE, DRAW_CARDS, Failure, GROUND_UNITS, fail};
 
 pub struct Plan {
     /// card id -> the packs it is reserved to, in pack order.
+    /// Only contested cards appear: the plan never picks a pack's draw list.
     pub reservations: BTreeMap<String, Vec<String>>,
+    /// card id -> (copies owned, packs wanting it), for every contested card.
+    pub contested: BTreeMap<String, (usize, usize)>,
     pub failures: Vec<Failure>,
 }
 
@@ -41,6 +44,7 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
             .ok_or(format!("allocate: copies of {id} is not a number"))?;
         copies.insert(id, n as usize);
     }
+    let copies_owned = copies.clone();
     let mut names = Vec::new();
     let mut slots = Vec::new();
     let mut eligible: Vec<Vec<&str>> = Vec::new();
@@ -92,6 +96,23 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
                 .collect()
         });
     }
+
+    // A card is contested when more packs want it than there are copies.
+    let mut demand: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
+    for p in 0..packs.len() {
+        let wanted: Vec<&str> = match &skel[p] {
+            Some(pool) => pool.iter().map(|(id, _)| *id).collect(),
+            None => eligible[p].clone(),
+        };
+        for c in wanted {
+            demand.entry(c).or_default().push(p);
+        }
+    }
+    demand.retain(|c, ps| ps.len() > copies[c]);
+    let contested: BTreeMap<String, (usize, usize)> = demand
+        .iter()
+        .map(|(c, ps)| (c.to_string(), (copies[c], ps.len())))
+        .collect();
 
     let mut failures = Vec::new();
     let mut fixed: BTreeMap<&str, BTreeSet<usize>> = BTreeMap::new();
@@ -173,18 +194,25 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
     for (c, ps) in fixed {
         users.entry(c).or_default().extend(ps);
     }
-    let reservations = users
-        .into_iter()
-        .filter(|(_, ps)| !ps.is_empty())
-        .map(|(c, ps)| {
-            (
-                c.to_string(),
-                ps.into_iter().map(|p| names[p].clone()).collect(),
-            )
-        })
-        .collect();
+    // Reserve contested copies only. A copy the plan left unheld goes to the next pack that wants
+    // it, so no pack outside the assignment can take a copy another pack was promised.
+    let mut reservations = BTreeMap::new();
+    for (c, wanting) in &demand {
+        let mut ps = users.remove(c).unwrap_or_default();
+        for &p in wanting {
+            if ps.len() >= copies_owned[c] {
+                break;
+            }
+            ps.insert(p);
+        }
+        reservations.insert(
+            c.to_string(),
+            ps.into_iter().map(|p| names[p].clone()).collect(),
+        );
+    }
     Ok(Plan {
         reservations,
+        contested,
         failures,
     })
 }
@@ -595,7 +623,7 @@ mod tests {
             plan.reservations["Longbeam Cruiser"],
             vec!["Pack 2 (Vigilance)"]
         );
-        assert_eq!(plan.reservations["Command Unit"], vec!["Pack 1 (Command)"]);
+        assert!(!plan.reservations.contains_key("Command Unit"));
     }
 
     #[test]
@@ -642,58 +670,23 @@ mod tests {
         json!({"owned": owned, "packs": (0..packs).map(pack).collect::<Vec<_>>()})
     }
 
-    /// The pack documents the allocation implies, run through the real pack checker.
-    fn check_allocation(doc: &Value, plan: &Plan) -> Vec<String> {
-        use crate::fixture::{card, pack};
-        let mut bad = Vec::new();
-        for (n, p) in doc["packs"].as_array().unwrap().iter().enumerate() {
-            let name = p["name"].as_str().unwrap();
-            let mut d = pack(1, "Heroism", "Command");
-            let mut cards = d["cards"].clone();
-            let mut lines: Vec<Value> = d["lines"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .filter(|l| !l["card_id"].as_str().unwrap().starts_with('C'))
-                .cloned()
-                .collect();
-            for (id, packs) in &plan.reservations {
-                if !packs.iter().any(|q| q == name) {
-                    continue;
-                }
-                let row = p["eligible"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .find(|r| r["id"] == json!(id))
-                    .unwrap();
-                let arena = row["game"]["arenas"][0].as_str().unwrap_or("");
-                cards[id] = card(
-                    id,
-                    row["type"].as_str().unwrap(),
-                    row["cost"].as_u64().unwrap() as u32,
-                    arena,
-                    None,
-                    &["Heroism", "Command"],
-                );
-                lines.push(json!({"card_id": id, "qty": 1, "zone": "main", "reserved": 1}));
-            }
-            d["cards"] = cards;
-            d["lines"] = json!(lines);
-            let failures = crate::check_pack_value(&d).unwrap();
-            if !failures.is_empty() {
-                bad.push(format!("{} (pack {n}): {failures:?}", name));
-            }
-        }
-        bad
+    #[test]
+    fn one_pack_reserves_nothing() {
+        let doc = skeleton_doc(1);
+        let plan = allocate_value(&doc).unwrap();
+        assert!(plan.failures.is_empty(), "{:?}", plan.failures);
+        assert!(plan.reservations.is_empty(), "{:?}", plan.reservations);
     }
 
     #[test]
-    fn card_id_order_would_break_the_skeleton_and_the_plan_keeps_it() {
+    fn two_packs_wanting_one_copy_assign_it_to_exactly_one() {
         let doc = skeleton_doc(2);
         let plan = allocate_value(&doc).unwrap();
         assert!(plan.failures.is_empty(), "{:?}", plan.failures);
-        assert_eq!(check_allocation(&doc, &plan), Vec::<String>::new());
+        // Every card is wanted by both packs and owned once: all are contested, each to one pack.
+        assert_eq!(plan.reservations.len(), 10 + 2 * 15);
+        assert!(plan.reservations.values().all(|ps| ps.len() == 1));
+        assert_eq!(plan.contested["A-000"], (1, 2));
     }
 
     #[test]
@@ -708,21 +701,19 @@ mod tests {
     }
 
     #[test]
-    fn packs_sharing_scarce_copies_still_each_pass() {
-        // One skeleton's worth of cards for two packs plus a second set only for pack 2.
+    fn a_card_only_one_pack_wants_is_left_to_the_skill() {
         let mut doc = skeleton_doc(2);
-        let shared: Vec<Value> = doc["packs"][0]["eligible"]
+        let own: Vec<Value> = doc["packs"][0]["eligible"]
             .as_array()
             .unwrap()
             .iter()
-            .filter(|r| {
-                r["id"].as_str().unwrap() != "A-000" && !r["id"].as_str().unwrap().starts_with("Z1")
-            })
+            .filter(|r| !r["id"].as_str().unwrap().starts_with("Z1"))
             .cloned()
             .collect();
-        doc["packs"][0]["eligible"] = json!(shared);
+        doc["packs"][0]["eligible"] = json!(own);
         let plan = allocate_value(&doc).unwrap();
         assert!(plan.failures.is_empty(), "{:?}", plan.failures);
-        assert_eq!(check_allocation(&doc, &plan), Vec::<String>::new());
+        assert!(!plan.reservations.contains_key("Z1-00"));
+        assert_eq!(plan.reservations["A-000"].len(), 1);
     }
 }

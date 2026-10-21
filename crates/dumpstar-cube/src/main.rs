@@ -113,8 +113,16 @@ fn allocate(path: &str) -> ExitCode {
             ExitCode::from(2)
         }
         Ok(plan) if plan.failures.is_empty() => {
+            if plan.reservations.is_empty() {
+                println!("no contested cards");
+            }
             for (card, packs) in &plan.reservations {
-                println!("reserve {card}: {}", packs.join(", "));
+                let (copies, wanting) = plan.contested[card];
+                println!(
+                    "reserve {card}: {} (contested: {copies} cop{}, {wanting} packs)",
+                    packs.join(", "),
+                    if copies == 1 { "y" } else { "ies" }
+                );
             }
             println!("ok");
             ExitCode::SUCCESS

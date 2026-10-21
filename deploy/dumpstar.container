@@ -49,13 +49,15 @@ PublishPort=127.0.0.1:{{PORT}}:8080
 Volume=dumpstar-{{INSTANCE}}-data:/data:Z
 AutoUpdate=local
 # podman's grace before SIGKILL: longer than the drain, so the drain is never cut short.
-StopTimeout=40
+# PodmanArgs, not StopTimeout=: the product host runs podman 4.9.3 whose quadlet rejects that key and
+# generates no unit at all (sp-mxinc0).
+PodmanArgs=--stop-timeout=40
 
 [Service]
 Restart=on-failure
 RestartSec=10
 TimeoutStartSec=120
-# systemd's own bound on a stop, above StopTimeout so podman's SIGKILL comes first and cleanly.
+# systemd's own bound on a stop, above the stop timeout so podman's SIGKILL comes first and cleanly.
 TimeoutStopSec=45
 
 [Install]

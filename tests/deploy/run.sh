@@ -2869,10 +2869,10 @@ check "and it is longer than an ordinary open's patience" "1" \
 
 log "§18b — the stop timeouts outlast the drain (sp-4kt4e8)"
 DRAIN_SECS="$(sed -n 's/^Environment=DUMPSTAR_DRAIN_TIMEOUT_SECS=\([0-9]*\)$/\1/p' "$UNIT_CONTAINER")"
-STOP_PODMAN="$(sed -n 's/^StopTimeout=\([0-9]*\)$/\1/p' "$UNIT_CONTAINER")"
+STOP_PODMAN="$(sed -n 's/^PodmanArgs=--stop-timeout=\([0-9]*\)$/\1/p' "$UNIT_CONTAINER")"
 STOP_SYSTEMD="$(sed -n 's/^TimeoutStopSec=\([0-9]*\)$/\1/p' "$UNIT_CONTAINER")"
 check "the unit sets a drain timeout" "1" "$([ -n "$DRAIN_SECS" ] && echo 1 || echo 0)"
-check "podman's StopTimeout is greater than the drain timeout" "1" \
+check "podman's --stop-timeout is greater than the drain timeout" "1" \
 	"$([ "${STOP_PODMAN:-0}" -gt "${DRAIN_SECS:-999}" ] && echo 1 || echo 0)"
 check "systemd's TimeoutStopSec is greater than the drain timeout" "1" \
 	"$([ "${STOP_SYSTEMD:-0}" -gt "${DRAIN_SECS:-999}" ] && echo 1 || echo 0)"

@@ -156,6 +156,45 @@ pub fn update(conn: &Connection, id: i64, edit: &DeckEdit) -> Result<bool> {
     Ok(n > 0)
 }
 
+/// A partial update that can also clear: `None` leaves a field unchanged, `Some(None)` clears it.
+#[derive(Debug, Clone, Default)]
+pub struct DeckPatch {
+    pub name: Option<String>,
+    pub description: Option<Option<String>>,
+    pub format: Option<Option<String>>,
+    pub group: Option<Option<String>>,
+    pub notes: Option<Option<String>>,
+}
+
+/// Apply a [`DeckPatch`]. Returns whether the deck exists.
+pub fn patch(conn: &Connection, id: i64, p: &DeckPatch) -> Result<bool> {
+    let flat = |f: &Option<Option<String>>| f.clone().flatten();
+    let n = conn.execute(
+        "UPDATE decks SET \
+           name        = COALESCE(?2, name), \
+           description = CASE WHEN ?3 THEN ?4 ELSE description END, \
+           format      = CASE WHEN ?5 THEN ?6 ELSE format END, \
+           deck_group  = CASE WHEN ?7 THEN ?8 ELSE deck_group END, \
+           notes       = CASE WHEN ?9 THEN ?10 ELSE notes END, \
+           updated_at  = ?11 \
+         WHERE id = ?1",
+        params![
+            id,
+            p.name,
+            p.description.is_some(),
+            flat(&p.description),
+            p.format.is_some(),
+            flat(&p.format),
+            p.group.is_some(),
+            flat(&p.group),
+            p.notes.is_some(),
+            flat(&p.notes),
+            crate::clock::now_rfc3339(),
+        ],
+    )?;
+    Ok(n > 0)
+}
+
 /// Set the quantity of a game card in a deck zone; `qty == 0` removes the line.
 pub fn set_card(
     conn: &Connection,

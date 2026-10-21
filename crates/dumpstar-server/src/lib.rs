@@ -3129,6 +3129,111 @@ mod tests {
                 .unwrap();
         }
 
+        /// sp-4be2yr: every resource an agent can create (a `create_<r>` tool) has get, list,
+        /// update and delete tools too, so no resource needs delete-and-recreate to change.
+        #[tokio::test]
+        async fn every_agent_writable_resource_has_create_get_list_update_delete() {
+            let site = Site::new(&["alice"]).await;
+            let t = site.token_for("alice@example.com");
+            let listed = site.rpc(&t, "tools/list", json!({})).await;
+            let names: Vec<String> = listed["result"]["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|t| t["name"].as_str().unwrap().to_string())
+                .collect();
+            let resources: Vec<&str> = names
+                .iter()
+                .filter_map(|n| n.strip_prefix("create_"))
+                .collect();
+            assert!(resources.contains(&"deck"), "decks are agent-writable");
+            for r in resources {
+                for want in [
+                    format!("get_{r}"),
+                    format!("list_{r}s"),
+                    format!("update_{r}"),
+                    format!("delete_{r}"),
+                ] {
+                    assert!(
+                        names.contains(&want),
+                        "{r} is writable but {want} is missing"
+                    );
+                }
+            }
+        }
+
+        async fn get_deck(site: &Site, tok: &str, id: i64) -> Value {
+            site.tool(tok, "get_deck", json!({"id": id})).await.unwrap()["deck"].clone()
+        }
+
+        /// sp-4be2yr: update_deck is a partial update that keeps the id.
+        #[tokio::test]
+        async fn update_deck_renames_regroups_and_clears_keeping_the_id() {
+            let mut site = Site::with_catalog(&["alice", "bob"], SECOND_CARD).await;
+            site.sign_in(member("alice@example.com")).await;
+            let alice = site.token_for("alice@example.com");
+            let bob = site.token_for("bob@example.com");
+            let id = site
+                .tool(
+                    &alice,
+                    "create_deck",
+                    json!({"name": "Pack 1", "format": "Jumpstart", "group": "Cube A", "description": "d", "notes": "n"}),
+                )
+                .await
+                .unwrap()["deck"]["id"]
+                .as_i64()
+                .unwrap();
+
+            let r = site
+                .tool(&alice, "update_deck", json!({"id": id, "name": "Pack One"}))
+                .await
+                .unwrap();
+            assert_eq!(r["deck"]["id"], id);
+            let d = get_deck(&site, &alice, id).await;
+            assert_eq!(d["name"], "Pack One");
+            assert_eq!(d["group"], "Cube A", "absent key unchanged");
+            assert_eq!(d["description"], "d");
+
+            site.tool(&alice, "update_deck", json!({"id": id, "group": "Cube B"}))
+                .await
+                .unwrap();
+            let d = get_deck(&site, &alice, id).await;
+            assert_eq!(
+                (d["group"].as_str(), d["name"].as_str()),
+                (Some("Cube B"), Some("Pack One"))
+            );
+
+            site.tool(
+                &alice,
+                "update_deck",
+                json!({"id": id, "description": null}),
+            )
+            .await
+            .unwrap();
+            let d = get_deck(&site, &alice, id).await;
+            assert!(d["description"].is_null());
+            assert_eq!(d["notes"], "n");
+            assert_eq!(d["id"], id);
+
+            let e = site
+                .tool(&alice, "update_deck", json!({"id": 9999, "name": "x"}))
+                .await;
+            assert!(e.unwrap_err().contains("not found"));
+            let e = site
+                .tool(&bob, "update_deck", json!({"id": id, "name": "x"}))
+                .await;
+            assert!(e.unwrap_err().contains("not found"));
+            assert_eq!(get_deck(&site, &alice, id).await["name"], "Pack One");
+            let e = site
+                .tool(&alice, "update_deck", json!({"id": id, "colour": "red"}))
+                .await;
+            assert!(e.unwrap_err().contains("unknown key 'colour'"));
+            let e = site
+                .tool(&alice, "update_deck", json!({"id": id, "name": null}))
+                .await;
+            assert!(e.is_err());
+        }
+
         /// sp-8y7ro4: the skill's second search (`a:<color> -a:heroism -a:villainy -t:base`) finds
         /// the same-color card with no alignment that the aligned search cannot.
         #[tokio::test]

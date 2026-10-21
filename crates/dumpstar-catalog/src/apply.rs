@@ -122,7 +122,10 @@ const DERIVATIONS: &[(&str, u32)] = &[
     // 9: Support and Plot are known keywords (sp-pljdpa).
     // 10: a keyword the card gives itself under a condition is its own, not
     // granted (sp-voif2q).
-    (swu::SRC_OFFICIAL, 10),
+    // 11: one keyword rule for every card: own (conditional when under a
+    // condition), granted to another unit, or removed and so not recorded
+    // (sp-gww4nf).
+    (swu::SRC_OFFICIAL, 11),
 ];
 
 pub fn derivation_version(source: &str) -> u32 {

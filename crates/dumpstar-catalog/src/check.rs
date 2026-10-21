@@ -419,6 +419,53 @@ pub fn keyword_missing_from_keywords(conn: &Connection) -> Result<Vec<AlarmRecor
 }
 
 /// A sentence or line of at least ten characters that occurs twice.
+/// A stored keyword whose granted or conditional flag disagrees with the one
+/// rule its rules text derives (sp-gww4nf): own, conditional own, granted to
+/// another unit, or removed ("lose X") and so not stored at all.
+pub fn keyword_misclassified(conn: &Connection) -> Result<Vec<AlarmRecord>> {
+    use crate::official::{Standing, standing};
+    let mut out = Vec::new();
+    let mut stmt = conn.prepare(
+        "SELECT card_id, keywords, rules_text FROM cards
+         WHERE keywords != '[]' AND rules_text IS NOT NULL ORDER BY card_id",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+        ))
+    })?;
+    for row in rows {
+        let (id, keywords, rules) = row?;
+        let Ok(serde_json::Value::Array(kws)) = serde_json::from_str(&keywords) else {
+            continue;
+        };
+        for k in kws {
+            let Some(name) = k.get("name").and_then(|n| n.as_str()) else {
+                continue;
+            };
+            let flag = |f: &str| k.get(f).and_then(|v| v.as_bool()).unwrap_or(false);
+            let (granted, conditional) = (flag("granted"), flag("conditional"));
+            let want = match standing(&rules, name) {
+                Standing::Own { conditional } => Some((false, conditional)),
+                Standing::Granted => Some((true, false)),
+                Standing::Absent => None,
+            };
+            if want != Some((granted, conditional)) {
+                out.push(AlarmRecord::alarm(
+                    "keyword_misclassified",
+                    id.clone(),
+                    format!(
+                        "{name} is stored granted={granted} conditional={conditional} but its rules text gives {want:?}"
+                    ),
+                ));
+            }
+        }
+    }
+    Ok(out)
+}
+
 fn repeated_sentence(rules: &str) -> Option<String> {
     let mut seen: Vec<&str> = Vec::new();
     for part in rules.split(['\n', '.']).map(str::trim) {
@@ -660,6 +707,7 @@ pub fn run(conn: &Connection, now: DateTime<Utc>) -> Result<Vec<AlarmRecord>> {
     out.extend(suspect_rules_text(conn)?);
     out.extend(keyword_number_missing(conn)?);
     out.extend(keyword_missing_from_keywords(conn)?);
+    out.extend(keyword_misclassified(conn)?);
     out.extend(wrong_group(conn)?);
     out.extend(image_wrong_card(conn)?);
     out.extend(variant_image_shared(conn)?);

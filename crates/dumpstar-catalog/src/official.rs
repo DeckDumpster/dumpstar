@@ -151,29 +151,95 @@ fn keywords_of(attrs: &Value, card_id: &str, alarms: &mut Vec<AlarmRecord>) -> V
                 format!("{known} has no number in its rules text"),
             ));
         }
+        let (granted, conditional) = match standing(&rules, known) {
+            Standing::Own { conditional } => (false, conditional),
+            Standing::Granted => (true, false),
+            Standing::Absent => continue,
+        };
         if !out.iter().any(|k| k.name == *known) {
             out.push(KeywordRecord {
                 name: (*known).to_string(),
                 value,
-                granted: !rules.is_empty() && !has_itself(&rules, known),
+                granted,
+                conditional,
             });
         }
     }
     out
 }
 
+/// How a keyword stands on a card (sp-gww4nf): the one rule every card is
+/// derived by.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Standing {
+    /// The card has it, always or, when `conditional`, only under a condition
+    /// ("While …, this unit gains X").
+    Own { conditional: bool },
+    /// The text gives it to another unit ("Attached unit gains X").
+    Granted,
+    /// The text only takes it away ("All units lose X"): neither.
+    Absent,
+}
+
+pub(crate) fn standing(rules: &str, name: &str) -> Standing {
+    if rules.is_empty() || stands_alone(rules, name) {
+        return Standing::Own { conditional: false };
+    }
+    if has_itself(rules, name) {
+        return Standing::Own { conditional: true };
+    }
+    if only_lost(rules, name) {
+        return Standing::Absent;
+    }
+    Standing::Granted
+}
+
+/// Whether every mention of `name` in the text is one being removed ("lose X").
+fn only_lost(rules: &str, name: &str) -> bool {
+    let mut seen = false;
+    let mut from = 0;
+    while let Some(at) = rules[from..].find(name) {
+        let start = from + at;
+        let end = start + name.len();
+        from = end;
+        let word = rules[..start]
+            .chars()
+            .next_back()
+            .is_none_or(|c| !c.is_alphanumeric())
+            && !rules[end..].starts_with(|c: char| c.is_alphanumeric());
+        if !word {
+            continue;
+        }
+        seen = true;
+        let before = rules[..start].to_ascii_lowercase();
+        let before = before.trim_end();
+        if !(before.ends_with(" lose") || before.ends_with(" loses") || before == "lose") {
+            return false;
+        }
+    }
+    seen
+}
+
 /// Whether the card has `name` itself: it begins a line or a comma-separated
 /// list item of the rules text. A keyword found only mid-sentence ("Attached
 /// unit gains Sentinel") is one the card grants (sp-wxj6lr).
 pub(crate) fn stands_alone(rules: &str, name: &str) -> bool {
-    rules
-        .lines()
-        .flat_map(|l| l.split(','))
-        .map(|item| item.trim_start_matches(['*', ' ']))
-        .any(|item| {
-            item.strip_prefix(name)
+    rules.lines().any(|line| {
+        let mut items = line.split(',').map(|i| i.trim_start_matches(['*', ' ']));
+        let begins = |item: &str, n: &str| {
+            item.strip_prefix(n)
                 .is_some_and(|rest| !rest.starts_with(|c: char| c.is_alphanumeric()))
-        })
+        };
+        let Some(first) = items.next() else {
+            return false;
+        };
+        if begins(first, name) {
+            return true;
+        }
+        // Later items count only on a line that opens with a keyword, so the
+        // tail of "While …, Sentinel" is not a keyword list.
+        KNOWN_KEYWORDS.iter().any(|k| begins(first, k)) && items.any(|i| begins(i, name))
+    })
 }
 
 /// Whether the card can have `name` itself: it stands alone, or the text gives

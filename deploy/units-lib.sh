@@ -42,7 +42,7 @@ DUMPSTAR_UNITS_CHANGED=()
 # Cloudflare tunnel route (a dashboard step) targets it. The number lives in
 # deploy/prod-origin-port, configuration rather than a literal in a script.
 DUMPSTAR_PROD_PORT="$(tr -d '[:space:]' <"$(dirname "${BASH_SOURCE[0]}")/prod-origin-port")"
-# Prod's container publishes here, not on the origin port: dumpstar-front@prod (hold-proxy.py)
+# Prod's container publishes here, not on the origin port: dumpstar-front@prod (dumpstar-hold-proxy)
 # owns the origin port and holds requests while a deploy restarts the container (sp-slm2ib).
 DUMPSTAR_PROD_BACKEND_PORT="$(tr -d '[:space:]' <"$(dirname "${BASH_SOURCE[0]}")/prod-backend-port")"
 

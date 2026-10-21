@@ -8,6 +8,7 @@ members = [
     "crates/dumpstar-db",
     "crates/dumpstar-derive",
     "crates/dumpstar-erase",
+    "crates/dumpstar-hold-proxy",
     "crates/dumpstar-ingest",
     "crates/dumpstar-lakehouse",
     "crates/dumpstar-server",

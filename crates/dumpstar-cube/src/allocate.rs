@@ -329,6 +329,8 @@ fn solve_pack<'a>(
             sizes[c][b] = cells[c][b].len();
         }
     }
+    // The 6+ slot is a unit: an event or upgrade never fills it.
+    sizes[2][5] = 0;
     let mut found: Vec<(f64, Vec<&'a str>)> = Vec::new();
     for classes in CLASS_PROFILES {
         for buckets in bucket_profiles() {

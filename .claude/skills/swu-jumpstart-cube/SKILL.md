@@ -55,7 +55,7 @@ epic action) or health (30 HP vanilla).
 | 3 | 4 to 5 | Critical. Maintains tempo on turn 2. |
 | 4 | 2 to 3 | Mid-game stabilizers and Sentinels. |
 | 5 | 1 to 2 | Heavy hitters before the Leader flips. |
-| 6+ | 1 | The Bomb: one massive unit. |
+| 6+ | 1 | The Bomb: one massive unit. The checker's `curve` rule fails a 6+ card that is not a unit ("the 6+ slot must be a unit; <name> is an <type>"). |
 
 ### 5. Command zone
 

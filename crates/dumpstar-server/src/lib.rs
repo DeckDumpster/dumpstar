@@ -3461,8 +3461,9 @@ mod tests {
                 sql.push_str(&format!(
                     "INSERT INTO cards (card_id, name, card_type, cost, hp, arenas, aspects, epic_action) \
                        VALUES ('{id}', '{name}', '{kind}', {cost}, {hp}, '{arenas}', '{aspects}', {epic_action}); \
-                     INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
-                       VALUES ('{id}-p', '{id}', 'SOR', '{id}', 'Standard', 'Normal'); "
+                     INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish, rarity) \
+                       VALUES ('{id}-p', '{id}', 'SOR', '{id}', 'Standard', 'Normal', '{}'); ",
+                    if kind == "Leader" { "Rare" } else { "Common" }
                 ));
                 owned.push((format!("{id}-p"), copies));
             };

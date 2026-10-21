@@ -68,6 +68,9 @@ fn fail(rule: &'static str, message: impl Into<String>) -> Failure {
 #[derive(Debug, Clone)]
 struct Card {
     name: String,
+    /// `None` when the card object has no `subtitle` key; a null subtitle is `Some("")`.
+    subtitle: Option<String>,
+    rarity: Option<String>,
     kind: String,
     cost: Option<u32>,
     hp: Option<i64>,
@@ -91,6 +94,13 @@ impl Card {
         let game = &v["game"];
         Card {
             name: v["name"].as_str().unwrap_or("?").to_string(),
+            subtitle: v
+                .get("subtitle")
+                .map(|s| s.as_str().unwrap_or("").to_string()),
+            rarity: v["rarity"]
+                .as_str()
+                .filter(|r| !r.is_empty())
+                .map(String::from),
             kind: v["type"].as_str().unwrap_or("").to_string(),
             cost: v["cost"].as_u64().and_then(|c| u32::try_from(c).ok()),
             hp: game["hp"].as_i64(),
@@ -470,11 +480,12 @@ pub fn strip_reservations(doc: &mut Value) {
 }
 
 /// The card fields the digest covers, per line: the ones the checker reads (name, type, cost, HP,
-/// epic action, aspects, arenas) and rarity. Each is a JSON pointer into the card object; arrays
+/// epic action, aspects, arenas), subtitle and rarity. Each is a JSON pointer into the card object; arrays
 /// are sorted. This list is the single source for the server (which computes the digest) and the
 /// checker (which recomputes it), so they cannot drift.
-pub const DIGEST_CARD_FIELDS: [&str; 8] = [
+pub const DIGEST_CARD_FIELDS: [&str; 9] = [
     "/name",
+    "/subtitle",
     "/type",
     "/rarity",
     "/cost",
@@ -537,8 +548,8 @@ pub fn verify_digest(doc: &Value) -> Result<(), String> {
 
 /// The shared test vector: the server and the checker both compute this digest of these lines.
 pub const VECTOR_LINES: &str = r#"[{"card_id":"SOR-5","qty":1,"zone":"main","reserved":1},{"card_id":"C1-3","qty":2,"zone":"main","reserved":2},{"card_id":"JTL-10","qty":1,"zone":"sideboard","reserved":0}]"#;
-pub const VECTOR_CARDS: &str = r#"{"SOR-5":{"name":"Leader","type":"Leader","rarity":"Rare","cost":5,"game":{"aspects":["Villainy","Command"],"arenas":["Ground"],"hp":6,"epic_action":null}},"C1-3":{"name":"Base","type":"Base","rarity":"Common","cost":null,"game":{"aspects":["Vigilance"],"arenas":[],"hp":25,"epic_action":"Epic Action: Draw a card."}}}"#;
-pub const VECTOR_DIGEST: &str = "6e69ce1d7cc2d3687a8df1bc2c08a8cfaf1314b4deae52012cba72c5bb2f2942";
+pub const VECTOR_CARDS: &str = r#"{"SOR-5":{"name":"Leader","subtitle":"Sub","type":"Leader","rarity":"Rare","cost":5,"game":{"aspects":["Villainy","Command"],"arenas":["Ground"],"hp":6,"epic_action":null}},"C1-3":{"name":"Base","subtitle":null,"type":"Base","rarity":"Common","cost":null,"game":{"aspects":["Vigilance"],"arenas":[],"hp":25,"epic_action":"Epic Action: Draw a card."}}}"#;
+pub const VECTOR_DIGEST: &str = "39b256e5fe319322da2c7e8a6cbf4eda2c5ae6471249ea1741894edb101eee3e";
 
 pub fn check_pack_value(doc: &Value) -> Result<Vec<Failure>, String> {
     Ok(check_pack(&Pack::from_value(doc, &Value::Null)?))
@@ -620,16 +631,58 @@ fn copies_failures(packs: &[Pack]) -> Vec<Failure> {
         .collect()
 }
 
-/// Leaders are singleton: a Leader leads at most one pack, by name, so two printings of one card
-/// count as one. Bases and draw cards may repeat; the collection's copies are the only limit.
+/// A card's title and subtitle: the identity the singleton rule counts, so printings of one card
+/// are one and a different subtitle is a different card.
+fn identity(c: &Card) -> String {
+    match c.subtitle.as_deref() {
+        Some(s) if !s.is_empty() => format!("{} — {s}", c.name),
+        _ => c.name.clone(),
+    }
+}
+
+/// Whether the singleton rule binds this card: every Leader, and every non-base Rare or Legendary.
+fn is_singleton(c: &Card) -> bool {
+    c.kind == "Leader"
+        || (c.kind != "Base" && matches!(c.rarity.as_deref(), Some("Rare" | "Legendary")))
+}
+
+/// Refuses a cube whose cards cannot be told apart or sorted by rarity: every non-base card needs a
+/// rarity, and every card a `subtitle` member (null for a card with none). The singleton rule would
+/// otherwise guess, and a control that cannot check must refuse.
+fn require_identity(packs: &[Pack]) -> Result<(), String> {
+    for p in packs {
+        for l in &p.lines {
+            let Some(c) = p.cards.get(&l.card_id) else {
+                continue;
+            };
+            if c.kind != "Base" && c.rarity.is_none() {
+                return Err(format!(
+                    "pack '{}': card '{}' ('{}') has no rarity; copy the card object from get_deck or get_card as-is",
+                    p.name, l.card_id, c.name
+                ));
+            }
+            if c.subtitle.is_none() {
+                return Err(format!(
+                    "pack '{}': card '{}' ('{}') has no subtitle member; copy the card object from get_deck or get_card as-is",
+                    p.name, l.card_id, c.name
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Every Leader and every non-base Rare or Legendary is singleton: one card (title and subtitle,
+/// printings collapsed) appears in at most one pack. Bases and the other rarities may repeat; the
+/// collection's copies are the only limit.
 fn singleton_failures(packs: &[Pack]) -> Vec<Failure> {
     let mut seen: BTreeMap<String, Vec<&str>> = BTreeMap::new();
     for p in packs {
         for l in &p.lines {
-            let Some(c) = p.cards.get(&l.card_id).filter(|c| c.kind == "Leader") else {
+            let Some(c) = p.cards.get(&l.card_id).filter(|c| is_singleton(c)) else {
                 continue;
             };
-            let in_packs = seen.entry(c.name.clone()).or_default();
+            let in_packs = seen.entry(identity(c)).or_default();
             if !in_packs.contains(&p.name.as_str()) {
                 in_packs.push(&p.name);
             }
@@ -641,7 +694,7 @@ fn singleton_failures(packs: &[Pack]) -> Vec<Failure> {
             fail(
                 "cube-singleton",
                 format!(
-                    "Leader '{name}' leads {} packs ({}); a Leader leads at most one pack",
+                    "'{name}' is in {} packs ({}); Leaders and non-base Rares and Legendaries are singleton",
                     in_packs.len(),
                     in_packs.join(", ")
                 ),
@@ -666,7 +719,9 @@ fn packs_of(doc: &Value) -> Result<Vec<Pack>, String> {
 
 /// Reads a cube document (see the crate docs) and checks it.
 pub fn check_cube_value(doc: &Value) -> Result<Vec<Failure>, String> {
-    Ok(check_cube(&packs_of(doc)?))
+    let packs = packs_of(doc)?;
+    require_identity(&packs)?;
+    Ok(check_cube(&packs))
 }
 
 /// Only the copy-count rule over any number of packs, for a partial or test build that the
@@ -711,7 +766,8 @@ pub mod fixture {
         aspects: &[&str],
     ) -> Value {
         json!({
-            "name": name, "type": kind, "cost": cost,
+            "name": name, "subtitle": null, "rarity": if kind == "Leader" { "Rare" } else { "Common" },
+            "type": kind, "cost": cost,
             "game": {"aspects": aspects, "arenas": if arena.is_empty() { vec![] } else { vec![arena] }, "hp": hp},
         })
     }
@@ -1216,31 +1272,136 @@ mod tests {
         assert!(cube_rules(c).contains(&"cube-bases"));
     }
 
-    fn rename(doc: &mut Value, id: &str, name: &str) {
-        let key = doc["cards"]
-            .as_object()
+    fn set(doc: &mut Value, id: &str, name: &str, subtitle: Value, rarity: &str) {
+        edit(doc, id, |c| {
+            c["name"] = json!(name);
+            c["subtitle"] = subtitle.clone();
+            c["rarity"] = json!(rarity);
+        });
+    }
+
+    fn singleton(packs: Vec<Value>) -> Vec<String> {
+        check_cube_value(&Value::Array(packs))
             .unwrap()
-            .keys()
-            .find(|k| k.starts_with(id))
-            .unwrap()
-            .clone();
-        doc["cards"][key]["name"] = json!(name);
+            .into_iter()
+            .filter(|f| f.rule == "cube-singleton")
+            .map(|f| f.message)
+            .collect()
     }
 
     #[test]
     fn a_leader_in_two_packs_fails_naming_both() {
         let mut c = cube();
-        rename(&mut c[1], "L", "Leader 1");
-        let f = check_cube_value(&Value::Array(c)).unwrap();
-        let m = f.iter().find(|f| f.rule == "cube-singleton").unwrap();
-        assert!(m.message.contains("Leader 'Leader 1'") && m.message.contains("Pack 1, Pack 2"));
+        set(
+            &mut c[0],
+            "L",
+            "Grand Inquisitor",
+            json!("Hunting the Jedi"),
+            "Rare",
+        );
+        set(
+            &mut c[1],
+            "L",
+            "Grand Inquisitor",
+            json!("Hunting the Jedi"),
+            "Rare",
+        );
+        c[1]["cards"]["L2"]["rarity"] = json!("Legendary");
+        let m = singleton(c);
+        assert_eq!(m.len(), 1, "{m:?}");
+        assert!(
+            m[0].contains("'Grand Inquisitor — Hunting the Jedi'")
+                && m[0].contains("Pack 1, Pack 2")
+        );
     }
 
     #[test]
-    fn a_draw_card_in_two_packs_is_ok() {
+    fn a_leader_and_a_unit_sharing_a_title_are_distinct_cards() {
         let mut c = cube();
-        rename(&mut c[3], "C4-5", "Card 1-5");
-        assert!(!cube_rules(c).contains(&"cube-singleton"));
+        set(
+            &mut c[0],
+            "L",
+            "Grand Inquisitor",
+            json!("Hunting the Jedi"),
+            "Rare",
+        );
+        set(
+            &mut c[1],
+            "C2-5",
+            "Grand Inquisitor",
+            json!("Fallen Jedi"),
+            "Rare",
+        );
+        assert_eq!(singleton(c), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_rare_draw_card_in_two_packs_fails() {
+        let mut c = cube();
+        set(&mut c[0], "C1-5", "Rare Unit", json!(null), "Rare");
+        set(&mut c[3], "C4-5", "Rare Unit", json!(null), "Rare");
+        let m = singleton(c);
+        assert_eq!(m.len(), 1, "{m:?}");
+        assert!(m[0].contains("'Rare Unit'") && m[0].contains("Pack 1, Pack 4"));
+    }
+
+    #[test]
+    fn a_common_or_uncommon_draw_card_in_two_packs_is_ok() {
+        for rarity in ["Common", "Uncommon", "Special"] {
+            let mut c = cube();
+            set(&mut c[0], "C1-5", "Filler", json!(null), rarity);
+            set(&mut c[3], "C4-5", "Filler", json!(null), rarity);
+            assert_eq!(singleton(c), Vec::<String>::new(), "{rarity}");
+        }
+    }
+
+    #[test]
+    fn a_legendary_draw_card_in_two_packs_fails() {
+        let mut c = cube();
+        set(&mut c[0], "C1-5", "Legend", json!(null), "Legendary");
+        set(&mut c[3], "C4-5", "Legend", json!(null), "Legendary");
+        assert_eq!(singleton(c).len(), 1);
+    }
+
+    #[test]
+    fn two_printings_of_one_card_collapse_to_one() {
+        let mut c = cube();
+        set(&mut c[0], "L", "Twin", json!("Printing"), "Rare");
+        set(&mut c[1], "L", "Twin", json!("Printing"), "Legendary");
+        let ids: Vec<String> = [0, 1]
+            .iter()
+            .map(|i| {
+                c[*i]["cards"]
+                    .as_object()
+                    .unwrap()
+                    .keys()
+                    .find(|k| k.starts_with('L'))
+                    .unwrap()
+                    .clone()
+            })
+            .collect();
+        assert_ne!(ids[0], ids[1]);
+        assert_eq!(singleton(c).len(), 1);
+    }
+
+    #[test]
+    fn a_card_with_no_rarity_refuses() {
+        let mut c = cube();
+        edit(&mut c[0], "C1-5", |x| {
+            x.as_object_mut().unwrap().remove("rarity");
+        });
+        let e = check_cube_value(&Value::Array(c)).unwrap_err();
+        assert!(e.contains("no rarity") && e.contains("Card 1-5"), "{e}");
+    }
+
+    #[test]
+    fn a_card_with_no_subtitle_member_refuses() {
+        let mut c = cube();
+        edit(&mut c[0], "L", |x| {
+            x.as_object_mut().unwrap().remove("subtitle");
+        });
+        let e = check_cube_value(&Value::Array(c)).unwrap_err();
+        assert!(e.contains("no subtitle"), "{e}");
     }
 
     #[test]

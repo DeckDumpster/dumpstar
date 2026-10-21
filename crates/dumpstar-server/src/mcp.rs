@@ -782,7 +782,12 @@ impl DumpstarTools {
                 if let Some(d) = cards::get_card_detail_variant(c, &set, &number, Some(&variant))
                     .map_err(db_err)?
                 {
-                    cards.insert(display_id(c, &l.card_id)?, detail_card_object(c, &d.card)?);
+                    let mut card = detail_card_object(c, &d.card)?;
+                    card["in_decks"] = json!(holders_for(c, std::slice::from_ref(&d.card.card_id))?
+                        .get(&d.card.card_id)
+                        .cloned()
+                        .unwrap_or_default());
+                    cards.insert(display_id(c, &l.card_id)?, card);
                 }
             }
             let lines = display_lines(c, lines)?;

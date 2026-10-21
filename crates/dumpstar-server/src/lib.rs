@@ -3053,7 +3053,9 @@ mod tests {
                 "refusal names the holder: {refusal}"
             );
             assert!(
-                refusal.contains("free it from"),
+                refusal.contains("(id ")
+                    && refusal.contains("qty ")
+                    && refusal.contains("set_deck_lines"),
                 "refusal gives a next step: {refusal}"
             );
             let found = site
@@ -3078,6 +3080,17 @@ mod tests {
                 got["card"]["in_decks"],
                 json!([{"id": a, "name": "Pack 1", "qty": 2}])
             );
+            let deck = site
+                .tool(&alice, "get_deck", json!({"id": a}))
+                .await
+                .unwrap();
+            let in_deck = deck["cards"]
+                .as_object()
+                .unwrap()
+                .values()
+                .find(|c| c["id"] == "SOR-1")
+                .expect("SOR-1 in get_deck cards");
+            assert_eq!(in_deck["in_decks"], row["in_decks"]);
             let summary = site
                 .tool(&alice, "collection_summary", json!({}))
                 .await

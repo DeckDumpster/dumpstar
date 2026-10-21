@@ -132,6 +132,9 @@ and choose from the results yourself; do not search once per card.
    script needed). `reserved` must equal `qty` on every line. The cube-level check applies to a
    complete 20-pack cube only; a partial or test build checks each saved deck with
    `swu-cube-check pack <file>` instead (`cube-size`, `cube-alignment` and `cube-bases` would fail).
+   `get_deck` carries a `lines_digest` and the checker recomputes it from the file's `lines`. If it
+   refuses with "this is not the saved deck: digest mismatch", your copy drifted: copy the
+   `get_deck` result again. Never edit the file (or the digest) to make it pass.
 
 ## The checker
 

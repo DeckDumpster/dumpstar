@@ -3411,6 +3411,12 @@ mod tests {
                     assert_eq!(got["cards"][id]["id"], card["id"], "pack {n}: {id}");
                     assert_eq!(got["cards"][id]["type"], card["type"]);
                 }
+                assert_eq!(
+                    got["lines_digest"].as_str().map(str::len),
+                    Some(64),
+                    "pack {n}: get_deck carries a SHA-256 lines_digest"
+                );
+                dumpstar_cube::verify_digest(&got).unwrap();
                 let doc = got.clone();
                 let failures = dumpstar_cube::check_pack_value(&doc).unwrap();
                 assert!(failures.is_empty(), "pack {n}: {failures:?}");

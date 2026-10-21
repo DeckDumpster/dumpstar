@@ -27,7 +27,19 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
         match serde_json::from_str::<serde_json::Value>(&text) {
-            Ok(v) => docs.push(v),
+            Ok(v) => {
+                let each = match &v {
+                    serde_json::Value::Array(a) => a.iter().collect(),
+                    one => vec![one],
+                };
+                for d in each {
+                    if let Err(e) = dumpstar_cube::verify_digest(d) {
+                        eprintln!("{path}: {e}");
+                        return ExitCode::from(2);
+                    }
+                }
+                docs.push(v)
+            }
             Err(e) => {
                 eprintln!("not JSON: {path}: {e}");
                 return ExitCode::from(2);

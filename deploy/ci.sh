@@ -1000,6 +1000,8 @@ g_deploy_scripts() {
 if tier deploy; then
     step "Deploy scripts: unit install + store resolution + low-disk guard + scheduling"
     bash "$REPO_DIR/tests/deploy/run.sh"
+    step "Quadlet dry-run at the production podman version (tests/deploy/quadlet_dryrun_test.sh)"
+    bash "$REPO_DIR/tests/deploy/quadlet_dryrun_test.sh"
 fi
 }
 lane_rust() { g_clippy; g_nextest; g_isolation; }

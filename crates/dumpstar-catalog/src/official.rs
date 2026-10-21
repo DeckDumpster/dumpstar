@@ -155,7 +155,7 @@ fn keywords_of(attrs: &Value, card_id: &str, alarms: &mut Vec<AlarmRecord>) -> V
             out.push(KeywordRecord {
                 name: (*known).to_string(),
                 value,
-                granted: !rules.is_empty() && !stands_alone(&rules, known),
+                granted: !rules.is_empty() && !has_itself(&rules, known),
             });
         }
     }
@@ -174,6 +174,31 @@ pub(crate) fn stands_alone(rules: &str, name: &str) -> bool {
             item.strip_prefix(name)
                 .is_some_and(|rest| !rest.starts_with(|c: char| c.is_alphanumeric()))
         })
+}
+
+/// Whether the card can have `name` itself: it stands alone, or the text gives
+/// it to this very unit under a condition ("While you control a Vigilance unit,
+/// this unit gains Sentinel"). Only a keyword given to another unit is granted.
+pub(crate) fn has_itself(rules: &str, name: &str) -> bool {
+    if stands_alone(rules, name) {
+        return true;
+    }
+    let lower = rules.to_ascii_lowercase();
+    let name = name.to_ascii_lowercase();
+    ["this unit", "this leader"].iter().any(|who| {
+        ["gains", "gain", "has", "have"].iter().any(|verb| {
+            let needle = format!("{who} {verb} {name}");
+            lower.match_indices(&needle).any(|(at, _)| {
+                let before_ok = lower[..at]
+                    .chars()
+                    .next_back()
+                    .is_none_or(|c| !c.is_alphanumeric());
+                let after_ok =
+                    !lower[at + needle.len()..].starts_with(|c: char| c.is_alphanumeric());
+                before_ok && after_ok
+            })
+        })
+    })
 }
 
 /// The number after `name` where it begins a line or a list item.
@@ -635,7 +660,30 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
 
 #[cfg(test)]
 mod granted_keyword_tests {
-    use super::stands_alone;
+    use super::{has_itself, stands_alone};
+
+    #[test]
+    fn a_conditional_self_keyword_is_the_cards_own() {
+        // Shin Hati (ASH-49), Baze Malbus (SOR-65): the card gives itself Sentinel.
+        assert!(has_itself(
+            "While you control another Aggression unit, this unit gains Sentinel.",
+            "Sentinel"
+        ));
+        assert!(has_itself(
+            "When Played: This unit gains Sentinel for this phase.",
+            "Sentinel"
+        ));
+        // Gladiator Star Destroyer (SOR-86), Buy Time (ASH-91): given to another unit.
+        assert!(!has_itself(
+            "When Played: Give a unit Sentinel.",
+            "Sentinel"
+        ));
+        assert!(!has_itself(
+            "Attach to a unit. Attached unit gains Sentinel.",
+            "Sentinel"
+        ));
+        assert!(!has_itself("This unit gains Sentinelfoo.", "Sentinel"));
+    }
 
     #[test]
     fn a_keyword_the_card_gives_is_not_its_own() {

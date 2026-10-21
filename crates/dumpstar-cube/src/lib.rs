@@ -426,6 +426,24 @@ pub fn check_pack(pack: &Pack) -> Vec<Failure> {
             ));
         }
     }
+    let big: Vec<&Card> = draw
+        .iter()
+        .filter(|(c, _)| c.cost.is_some_and(|n| n >= 6))
+        .map(|(c, _)| *c)
+        .collect();
+    if !big.is_empty()
+        && !big.iter().any(|c| c.kind == "Unit")
+        && let Some(c) = big.first()
+    {
+        out.push(fail(
+            "curve",
+            format!(
+                "the 6+ slot must be a unit; {} is an {}",
+                c.name,
+                c.kind.to_lowercase()
+            ),
+        ));
+    }
     out
 }
 
@@ -1110,6 +1128,22 @@ mod tests {
         let mut p = pack(1, "Heroism", "Command");
         edit(&mut p, "C1-7", |c| c["cost"] = json!(4));
         assert!(rules(&p).contains(&"curve"), "no six-drop");
+    }
+
+    #[test]
+    fn the_6_plus_slot_must_be_a_unit() {
+        let mut p = pack(1, "Heroism", "Command");
+        edit(&mut p, "C1-7", |c| c["type"] = json!("Event"));
+        let msgs: Vec<String> = check_pack_value(&p)
+            .unwrap()
+            .into_iter()
+            .map(|f| f.message)
+            .collect();
+        assert!(
+            msgs.contains(&"the 6+ slot must be a unit; Card 1-7 is an event".to_string()),
+            "{msgs:?}"
+        );
+        assert!(!rules(&pack(1, "Heroism", "Command")).contains(&"curve"));
     }
 
     #[test]

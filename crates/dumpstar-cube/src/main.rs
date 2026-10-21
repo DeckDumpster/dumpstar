@@ -1,4 +1,4 @@
-//! `swu-cube-check pack|cube [--planned] [FILE]` — reads the document from FILE or stdin, prints one line
+//! `swu-cube-check pack|cube [--planned] [FILE...]` (several FILEs only for `cube`, one pack each) — reads the document from FILE or stdin, prints one line
 //! per failure, and exits 1 when any rule fails (2 when the input cannot be read).
 
 use std::io::Read;
@@ -8,27 +8,44 @@ fn main() -> ExitCode {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let planned = args.iter().any(|a| a == "--planned");
     args.retain(|a| a != "--planned");
-    let (mode, path) = match args.as_slice() {
-        [m] => (m.as_str(), "-"),
-        [m, p] => (m.as_str(), p.as_str()),
+    let (mode, paths) = match args.as_slice() {
+        [m] => (m.as_str(), vec!["-"]),
+        [m, p] => (m.as_str(), vec![p.as_str()]),
+        [m, ps @ ..] if m == "cube" => (m.as_str(), ps.iter().map(String::as_str).collect()),
         _ => return usage(),
     };
-    let mut text = String::new();
-    let read = if path == "-" {
-        std::io::stdin().read_to_string(&mut text).map(|_| ())
-    } else {
-        std::fs::read_to_string(path).map(|t| text = t)
-    };
-    if let Err(e) = read {
-        eprintln!("cannot read {path}: {e}");
-        return ExitCode::from(2);
-    }
-    let mut value: serde_json::Value = match serde_json::from_str(&text) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("not JSON: {e}");
+    let mut docs = Vec::new();
+    for path in &paths {
+        let mut text = String::new();
+        let read = if *path == "-" {
+            std::io::stdin().read_to_string(&mut text).map(|_| ())
+        } else {
+            std::fs::read_to_string(path).map(|t| text = t)
+        };
+        if let Err(e) = read {
+            eprintln!("cannot read {path}: {e}");
             return ExitCode::from(2);
         }
+        match serde_json::from_str::<serde_json::Value>(&text) {
+            Ok(v) => docs.push(v),
+            Err(e) => {
+                eprintln!("not JSON: {path}: {e}");
+                return ExitCode::from(2);
+            }
+        }
+    }
+    // Several files to `cube` are pack documents (or arrays of them), joined into one cube.
+    let mut value = if paths.len() > 1 {
+        let mut packs = Vec::new();
+        for d in docs {
+            match d {
+                serde_json::Value::Array(a) => packs.extend(a),
+                other => packs.push(other),
+            }
+        }
+        serde_json::Value::Array(packs)
+    } else {
+        docs.remove(0)
     };
     if planned {
         dumpstar_cube::strip_reservations(&mut value);
@@ -58,7 +75,7 @@ fn main() -> ExitCode {
 
 fn usage() -> ExitCode {
     eprintln!(
-        "usage: swu-cube-check pack|cube [--planned] [FILE]   (FILE or stdin: the deck JSON, see SKILL.md)"
+        "usage: swu-cube-check pack [--planned] [FILE] | cube [--planned] [FILE...]   (FILE or stdin: the deck JSON, see SKILL.md; cube takes one pack file per deck)"
     );
     ExitCode::from(2)
 }

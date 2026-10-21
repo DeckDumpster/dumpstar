@@ -3608,6 +3608,7 @@ mod tests {
             assert_eq!(first["total"], 6);
             assert_eq!(first["total_copies_owned"], 10);
             assert_eq!(first["total_copies_available"], 9);
+            assert_eq!(first["total_copies_reserved"], 1);
             let second = site
                 .tool(
                     &t,
@@ -3618,6 +3619,28 @@ mod tests {
                 .unwrap();
             assert_eq!(second["total_copies_owned"], 10);
             assert_eq!(second["total_copies_available"], 9);
+            assert_eq!(second["total_copies_reserved"], 1);
+
+            // sp-23v6q1: color: is a: over the four colors, and query_help says so.
+            let by_a = site
+                .tool(&t, "search_cards", json!({"q": "a:command", "owned_only": true}))
+                .await
+                .unwrap();
+            let by_color = site
+                .tool(&t, "search_cards", json!({"q": "color:command", "owned_only": true}))
+                .await
+                .unwrap();
+            assert_eq!(by_a["results"], by_color["results"]);
+            assert!(by_a["total"].as_i64().unwrap() > 0);
+            let help = site.tool(&t, "query_help", json!({})).await.unwrap().to_string();
+            for want in [
+                "Common=0 < Uncommon=1 < Rare=2",
+                "Legendary=3 < Special=4",
+                "Vigilance, Command, Aggression and Cunning",
+                "Heroism and Villainy are alignments, not colors",
+            ] {
+                assert!(help.contains(want), "query_help lacks {want:?}");
+            }
         }
 
         /// sp-orq075: leaders counted per color x alignment; a two-aspect Neutral leader counts

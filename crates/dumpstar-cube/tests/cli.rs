@@ -149,8 +149,8 @@ fn allocate_reserves_shared_cards_across_packs_and_names_a_shortfall() {
     let mut doc = json!({
         "owned": {"Longbeam Cruiser": 1, "Command Unit": 1},
         "packs": [
-            {"name": "Pack 1", "slots": 1, "eligible": ["Longbeam Cruiser", "Command Unit"]},
-            {"name": "Pack 2", "slots": 1, "eligible": ["Longbeam Cruiser"]},
+            {"name": "Pack 1", "slots": 1, "eligible": ["Longbeam Cruiser", "Command Unit"], "picks": ["Longbeam Cruiser", "Command Unit"]},
+            {"name": "Pack 2", "slots": 1, "eligible": ["Longbeam Cruiser"], "picks": ["Longbeam Cruiser"]},
         ]
     });
     let (code, out) = run("allocate", &doc.to_string());
@@ -160,7 +160,7 @@ fn allocate_reserves_shared_cards_across_packs_and_names_a_shortfall() {
         "{out}"
     );
     assert!(!out.contains("reserve Command Unit"), "{out}");
-    let one = json!({"owned": {"A": 1}, "packs": [{"name": "P", "slots": 1, "eligible": ["A"]}]});
+    let one = json!({"owned": {"A": 1}, "packs": [{"name": "P", "slots": 1, "eligible": ["A"], "picks": ["A"]}]});
     let (code, out) = run("allocate", &one.to_string());
     assert_eq!(code, 0, "{out}");
     assert!(out.contains("no contested cards"), "{out}");

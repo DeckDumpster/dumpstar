@@ -8,6 +8,12 @@
 //! Input: `{"owned": {"<card id>": copies}, "packs": [{"name": "Pack 1", "slots": 15,
 //! "eligible": ["<card id>", ...]}]}`. A pack takes at most one copy of a card.
 //!
+//! Eligibility says what a pack could take; it never reserves. A pack may also carry `"picks"`
+//! (its planned cards) and `"candidates"` (cards it may still choose from), card ids or rows. Only
+//! a card in one of those, owned in fewer copies than packs hold it there, is contested and
+//! reserved; a pack with neither wants nothing reserved. Packs that both want a scarce card are
+//! resolved in pack order.
+//!
 //! An eligible entry may also be a `search_cards` row (`id`, `type`, `cost`, `game.arenas`). A pack
 //! with any such row, and 15 slots, is a draw-card pack: it gets 15 cards that satisfy the pack
 //! skeleton (8 ground units, 3-4 space units, 3-4 events/upgrades, and the cost curve), or a named
@@ -49,6 +55,7 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
     let mut slots = Vec::new();
     let mut eligible: Vec<Vec<&str>> = Vec::new();
     let mut skel: Vec<Option<Vec<(&str, Meta)>>> = Vec::new();
+    let mut wants: Vec<BTreeSet<&str>> = Vec::new();
     for (i, p) in packs.iter().enumerate() {
         names.push(
             p.get("name")
@@ -65,6 +72,19 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
             .get("eligible")
             .and_then(Value::as_array)
             .ok_or("allocate: a pack lacks `eligible`")?;
+        let mut want = BTreeSet::new();
+        for key in ["picks", "candidates"] {
+            for c in p.get(key).and_then(Value::as_array).into_iter().flatten() {
+                let id = c
+                    .as_str()
+                    .or_else(|| c.get("id").or_else(|| c.get("card_id"))?.as_str())
+                    .ok_or(format!(
+                        "allocate: `{key}` entries are card ids or card rows with an `id`"
+                    ))?;
+                want.insert(id);
+            }
+        }
+        wants.push(want);
         let mut ids = BTreeSet::new();
         let mut rows: BTreeMap<&str, Option<Meta>> = BTreeMap::new();
         for c in e {
@@ -97,15 +117,14 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
         });
     }
 
-    // A card is contested when more packs want it than there are copies.
+    // A card is contested when more packs pick or consider it than there are copies; eligibility
+    // alone never counts.
     let mut demand: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
-    for p in 0..packs.len() {
-        let wanted: Vec<&str> = match &skel[p] {
-            Some(pool) => pool.iter().map(|(id, _)| *id).collect(),
-            None => eligible[p].clone(),
-        };
-        for c in wanted {
-            demand.entry(c).or_default().push(p);
+    for (p, want) in wants.iter().enumerate() {
+        for &c in want {
+            if copies.contains_key(c) {
+                demand.entry(c).or_default().push(p);
+            }
         }
     }
     demand.retain(|c, ps| ps.len() > copies[c]);
@@ -199,6 +218,7 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
     let mut reservations = BTreeMap::new();
     for (c, wanting) in &demand {
         let mut ps = users.remove(c).unwrap_or_default();
+        ps.retain(|p| wanting.contains(p));
         for &p in wanting {
             if ps.len() >= copies_owned[c] {
                 break;
@@ -619,6 +639,10 @@ mod tests {
     fn a_greedy_build_starves_the_last_pack_and_the_plan_does_not() {
         let doc = starving();
         assert_eq!(greedy(&doc), vec!["Pack 2 (Vigilance)"]);
+        let doc = with_picks(
+            doc,
+            [&["Longbeam Cruiser", "Command Unit"], &["Longbeam Cruiser"]],
+        );
         let plan = allocate_value(&doc).unwrap();
         assert!(plan.failures.is_empty(), "{:?}", plan.failures);
         assert_eq!(
@@ -667,8 +691,10 @@ mod tests {
                 row(format!("Z{n}-{i:02}"), kind, arena, *cost);
             }
         }
-        let pack =
-            |n: usize| json!({"name": format!("Pack {}", n + 1), "slots": 15, "eligible": rows});
+        let pack = |n: usize| {
+            json!({"name": format!("Pack {}", n + 1), "slots": 15, "eligible": rows,
+                "candidates": rows.iter().map(|r| r["id"].clone()).collect::<Vec<_>>()})
+        };
         json!({"owned": owned, "packs": (0..packs).map(pack).collect::<Vec<_>>()})
     }
 
@@ -702,6 +728,37 @@ mod tests {
         assert!(m.contains("Pack 1") && m.contains("space"), "{m}");
     }
 
+    fn with_picks(mut doc: Value, picks: [&[&str]; 2]) -> Value {
+        for (i, p) in picks.iter().enumerate() {
+            doc["packs"][i]["picks"] = json!(p);
+        }
+        doc
+    }
+
+    #[test]
+    fn a_card_eligible_for_two_packs_but_picked_by_neither_is_reserved_to_neither() {
+        let doc = with_picks(starving(), [&["Command Unit"], &[]]);
+        let plan = allocate_value(&doc).unwrap();
+        assert!(plan.failures.is_empty(), "{:?}", plan.failures);
+        assert!(plan.reservations.is_empty(), "{:?}", plan.reservations);
+        assert!(plan.contested.is_empty());
+    }
+
+    #[test]
+    fn a_card_picked_by_both_with_one_copy_goes_to_one_and_the_other_is_named() {
+        let mut doc = starving();
+        doc["owned"]["Command Unit"] = json!(0);
+        let doc = with_picks(doc, [&["Longbeam Cruiser"], &["Longbeam Cruiser"]]);
+        let plan = allocate_value(&doc).unwrap();
+        assert_eq!(plan.reservations["Longbeam Cruiser"].len(), 1);
+        assert_eq!(plan.failures.len(), 1);
+        assert!(
+            plan.failures[0]
+                .message
+                .contains("Longbeam Cruiser (1 owned)")
+        );
+    }
+
     #[test]
     fn a_card_only_one_pack_wants_is_left_to_the_skill() {
         let mut doc = skeleton_doc(2);
@@ -712,6 +769,8 @@ mod tests {
             .filter(|r| !r["id"].as_str().unwrap().starts_with("Z1"))
             .cloned()
             .collect();
+        doc["packs"][0]["candidates"] =
+            json!(own.iter().map(|r| r["id"].clone()).collect::<Vec<_>>());
         doc["packs"][0]["eligible"] = json!(own);
         let plan = allocate_value(&doc).unwrap();
         assert!(plan.failures.is_empty(), "{:?}", plan.failures);

@@ -46,10 +46,12 @@ const BASE = {
 
 test('hovering a base on the home page keeps it turned and inside its tile', async ({ page }) => {
 	await stabilize(page);
+	// The page's other reads (value history, sets, unresolved) are all lists.
+	await page.route('**/api/**', (route) => route.fulfill({ json: [] }));
 	await page.route('https://cards.example/**', (route) =>
 		route.fulfill({ status: 200, contentType: 'image/svg+xml', body: LANDSCAPE })
 	);
-	await page.route('**/api/batches*', (route) => {
+	await page.route('**/api/batches**', (route) => {
 		const path = new URL(route.request().url()).pathname;
 		if (path.endsWith('/api/batches')) {
 			return route.fulfill({

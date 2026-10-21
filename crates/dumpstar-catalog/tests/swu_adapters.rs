@@ -1920,6 +1920,30 @@ fn a_keyword_the_card_has_under_a_condition_is_own_and_conditional() {
 }
 
 #[test]
+fn a_unit_that_gains_each_listed_keyword_has_them_as_its_own() {
+    // Moff Gideon (ASH-8), sp-eu0o9a.
+    for (text, conditional) in [
+        (
+            "While you control another Imperial unit, this unit gains each of the following keywords: Ambush, Sentinel.",
+            true,
+        ),
+        (
+            "This unit gains each of the following keywords:\n*Ambush*\n*Sentinel*",
+            false,
+        ),
+    ] {
+        assert_eq!(
+            classified(&["Ambush", "Sentinel"], text),
+            [
+                ("Ambush".to_string(), false, conditional),
+                ("Sentinel".to_string(), false, conditional)
+            ],
+            "{text}"
+        );
+    }
+}
+
+#[test]
 fn a_keyword_given_to_another_unit_is_granted() {
     // Vigilant Honor Guards (SOR-48) gains Sentinel only on a condition: own.
     assert_eq!(

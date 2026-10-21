@@ -374,7 +374,8 @@ fn structured_for(
 /// Mirrors the ranking `CompiledSearch::set_one_per_card` picks a row by.
 const CANONICAL_PRINTING: &str = "ORDER BY variant <> 'Standard', finish <> 'Normal', \
     (SELECT COALESCE(release_date, '9999') FROM shared.sets WHERE set_code = printings.set_code), \
-    (SELECT sort_order FROM shared.sets WHERE set_code = printings.set_code), printing_id LIMIT 1";
+    (SELECT sort_order FROM shared.sets WHERE set_code = printings.set_code), \
+    CAST(number AS INTEGER), printing_id LIMIT 1";
 
 fn display_id(conn: &Connection, card_id: &str) -> Result<String, ToolError> {
     let sql = format!(

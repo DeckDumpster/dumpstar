@@ -184,20 +184,27 @@ test('the tile renders no F badge row', () => {
 	assert.doesNotMatch(src, /tilebadges|VariantBadges|slotBadgeVariants/);
 });
 
-test('tilePrice: nothing until a pip is selected', () => {
+test('tilePrice: unowned, no selection shows nothing', () => {
 	const ps = [P(1, 'Normal', 0, 1), P(2, 'Foil', 0, 5)];
 	assert.equal(tilePrice({ printings: ps }, null), null);
 });
 
-test('tilePrice: the selected finish\'s price', () => {
-	const ps = [P(1, 'Normal', 0, 1), P(2, 'Foil', 0, 5)];
-	assert.equal(tilePrice({ printings: ps }, 1), 1);
-	assert.equal(tilePrice({ printings: ps }, 2), 5);
+test('tilePrice: owned, no selection shows the dearest owned price', () => {
+	const ps = [P(1, 'Normal', 2, 1), P(2, 'Foil', 1, 5), P(3, 'Rainbow Foil', 0, 50)];
+	assert.equal(tilePrice({ printings: ps }, null), 5);
 });
 
-test('tilePrice: several owned finishes show the most valuable owned', () => {
-	const ps = [P(1, 'Normal', 2, 1), P(2, 'Foil', 1, 5), P(3, 'Rainbow Foil', 0, 50)];
-	assert.equal(tilePrice({ printings: ps }, 1), 5);
+test('tilePrice: owned but unpriced shows nothing', () => {
+	const ps = [P(1, 'Normal', 1, null), P(2, 'Foil', 0, 5)];
+	assert.equal(tilePrice({ printings: ps }, null), null);
+});
+
+test('tilePrice: a selection shows that printing\'s price, owned or not', () => {
+	const ps = [P(1, 'Normal', 2, 1), P(2, 'Foil', 0, 5)];
+	assert.equal(tilePrice({ printings: ps }, 1), 1);
+	assert.equal(tilePrice({ printings: ps }, 2), 5);
+	const un = [P(1, 'Normal', 0, 1), P(2, 'Foil', 0, 5)];
+	assert.equal(tilePrice({ printings: un }, 2), 5);
 });
 
 test('hovered pips have room: the clipping tile footer is padded in the grid', () => {

@@ -643,6 +643,46 @@ pub fn totals(conn: &Connection, compiled: &CompiledSearch) -> Result<(i64, Opti
     Ok(row)
 }
 
+/// Owned and available copies across the whole result, ignoring any paging: `(owned, available)`.
+///
+/// `per_card` counts each distinct card in the result once with every printing's copies (the
+/// one-row-per-card view); otherwise only copies of the printings the query matches. Available
+/// copies are owned copies not placed in a deck, as `decks::card_counts` reckons them.
+pub fn copy_totals(
+    conn: &Connection,
+    compiled: &CompiledSearch,
+    per_card: bool,
+) -> Result<(i64, i64)> {
+    let sql = if per_card {
+        format!(
+            "SELECT COALESCE(SUM(o), 0), COALESCE(SUM(o - r), 0) FROM (\
+               SELECT (SELECT count(*) FROM collection c \
+                         JOIN shared.printings p2 ON p2.printing_id = c.printing_id \
+                        WHERE p2.card_id = k.card_id AND c.status = 'owned') AS o, \
+                      (SELECT count(c.deck_id) FROM collection c \
+                         JOIN shared.printings p2 ON p2.printing_id = c.printing_id \
+                        WHERE p2.card_id = k.card_id AND c.status = 'owned') AS r \
+                 FROM (SELECT DISTINCT p.card_id AS card_id {FROM_CLAUSE} WHERE {}) k)",
+            where_clause(compiled)
+        )
+    } else {
+        format!(
+            "SELECT COALESCE(SUM(o), 0), COALESCE(SUM(o - r), 0) FROM (\
+               SELECT (SELECT count(*) FROM collection c \
+                        WHERE c.printing_id = p.printing_id AND c.status = 'owned') AS o, \
+                      (SELECT count(c.deck_id) FROM collection c \
+                        WHERE c.printing_id = p.printing_id AND c.status = 'owned') AS r \
+                 {FROM_CLAUSE} WHERE {})",
+            where_clause(compiled)
+        )
+    };
+    Ok(
+        conn.query_row(&sql, params_from_iter(compiled.params.iter()), |r| {
+            Ok((r.get(0)?, r.get(1)?))
+        })?,
+    )
+}
+
 /// Run the row query, optionally bounded to one `(limit, offset)` page.
 fn run(
     conn: &Connection,

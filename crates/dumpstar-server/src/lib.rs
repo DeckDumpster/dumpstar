@@ -3455,6 +3455,14 @@ mod tests {
                 json!({"ability": oa(1, 1), "epic": oa(2, 2), "vanilla": oa(1, 1)})
             );
             assert_eq!(
+                b["bases"]["by_kind_aspect"],
+                json!({
+                    "ability": {"Command": oa(1, 1)},
+                    "epic": {"Command": oa(2, 2)},
+                    "vanilla": {"Vigilance": oa(1, 1)},
+                })
+            );
+            assert_eq!(
                 b["leaders"]["by_aspect"],
                 json!({
                     "Aggression": oa(2, 2), "Heroism": oa(1, 1),
@@ -3465,6 +3473,31 @@ mod tests {
                 b["leaders"]["by_alignment"],
                 json!({"Heroism": oa(1, 1), "Villainy": oa(2, 2)})
             );
+
+            // sp-l7yh3y: the copy totals describe the whole result, not the page: six cards,
+            // ten owned copies, nine not in a deck, however small the page.
+            let first = site
+                .tool(
+                    &t,
+                    "search_cards",
+                    json!({"q": "", "owned_only": true, "limit": 2}),
+                )
+                .await
+                .unwrap();
+            assert_eq!(first["results"].as_array().unwrap().len(), 2);
+            assert_eq!(first["total"], 6);
+            assert_eq!(first["total_copies_owned"], 10);
+            assert_eq!(first["total_copies_available"], 9);
+            let second = site
+                .tool(
+                    &t,
+                    "search_cards",
+                    json!({"q": "", "owned_only": true, "limit": 2, "cursor": first["next_cursor"]}),
+                )
+                .await
+                .unwrap();
+            assert_eq!(second["total_copies_owned"], 10);
+            assert_eq!(second["total_copies_available"], 9);
         }
 
         /// sp-fn5iwc: one canonical form across the tools: ids as the catalog numbers them

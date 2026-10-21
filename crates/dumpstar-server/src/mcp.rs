@@ -222,6 +222,7 @@ fn breakdown(conn: &Connection) -> Result<Value, ToolError> {
     let (mut by_type, mut by_aspect, mut by_set) =
         (Tally::default(), Tally::default(), Tally::default());
     let (mut base_hp, mut base_kind) = (Tally::default(), Tally::default());
+    let mut base_kind_aspect: std::collections::BTreeMap<&str, Tally> = Default::default();
     let (mut leader_aspect, mut leader_align) = (Tally::default(), Tally::default());
     for row in rows {
         let (kind, aspects, hp, epic, rules, set, available) = row.map_err(|e| db_err(e.into()))?;
@@ -244,6 +245,13 @@ fn breakdown(conn: &Connection) -> Result<Value, ToolError> {
                     "vanilla"
                 };
                 base_kind.add(kind, available);
+                let by_aspect = base_kind_aspect.entry(kind).or_default();
+                if aspects.is_empty() {
+                    by_aspect.add("none", available);
+                }
+                for a in &aspects {
+                    by_aspect.add(a, available);
+                }
             }
             "Leader" => {
                 for a in &aspects {
@@ -258,7 +266,13 @@ fn breakdown(conn: &Connection) -> Result<Value, ToolError> {
         "by_type": by_type.json(),
         "by_aspect": by_aspect.json(),
         "by_set": by_set.json(),
-        "bases": {"by_hp": base_hp.json(), "by_kind": base_kind.json()},
+        "bases": {
+            "by_hp": base_hp.json(),
+            "by_kind": base_kind.json(),
+            "by_kind_aspect": Value::Object(
+                base_kind_aspect.iter().map(|(k, t)| (k.to_string(), t.json())).collect()
+            ),
+        },
         "leaders": {"by_aspect": leader_aspect.json(), "by_alignment": leader_align.json()},
     }))
 }
@@ -578,9 +592,13 @@ impl DumpstarTools {
             let ids: Vec<String> = page.rows.iter().map(|r| r.card_id.clone()).collect();
             let counts = counts_for(c, &ids)?;
             let structured = structured_for(c, &ids)?;
+            let (copies_owned, copies_available) =
+                search::copy_totals(c, &compiled, !expand).map_err(db_err)?;
             Ok(json!({
                 "results": page.rows.iter().map(|r| row_object(c, r, &counts, &structured, expand)).collect::<Result<Vec<_>, _>>()?,
                 "total": page.total,
+                "total_copies_owned": copies_owned,
+                "total_copies_available": copies_available,
                 "next_cursor": page.next_cursor,
             }))
         })

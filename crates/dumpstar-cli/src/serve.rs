@@ -44,6 +44,12 @@ pub fn run(args: ServeArgs) -> anyhow::Result<()> {
             })?;
         (None, Some(access))
     };
+    let drain_timeout = std::env::var("DUMPSTAR_DRAIN_TIMEOUT_SECS")
+        .map_err(|_| anyhow::anyhow!("refusing to start: DUMPSTAR_DRAIN_TIMEOUT_SECS is not set"))?
+        .trim()
+        .parse::<u64>()
+        .map(std::time::Duration::from_secs)
+        .map_err(|e| anyhow::anyhow!("DUMPSTAR_DRAIN_TIMEOUT_SECS must be whole seconds: {e}"))?;
     let cfg = ServeConfig {
         tenants_dir: dumpstar_db::tenants_dir()?,
         registry_db: dumpstar_db::registry_db_path()?,
@@ -61,7 +67,11 @@ pub fn run(args: ServeArgs) -> anyhow::Result<()> {
         mcp_resource: std::env::var("DUMPSTAR_MCP_RESOURCE")
             .ok()
             .filter(|v| !v.trim().is_empty()),
+        drain_timeout,
     };
     let runtime = tokio::runtime::Runtime::new()?;
-    runtime.block_on(dumpstar_server::serve(cfg))
+    let result = runtime.block_on(dumpstar_server::serve(cfg));
+    // A request cut at the drain timeout may be parked in a blocking task; do not wait for it.
+    runtime.shutdown_background();
+    result
 }

@@ -16,6 +16,10 @@ OnFailure=dumpstar-alert@%n.service
 [Container]
 Image=localhost/dumpstar:{{INSTANCE}}
 Environment=DUMPSTAR_HOME=/data
+# How long the server, once told to stop, keeps answering requests in flight while refusing new
+# ones with 503 (sp-4kt4e8). No fallback: the server refuses to start without it. The stop timeouts
+# below must stay greater (the deploy tier holds them together).
+Environment=DUMPSTAR_DRAIN_TIMEOUT_SECS=30
 # The agent-tool endpoint (/mcp): its own URL, the `aud` its tokens carry. It needs the Pocket ID
 # sign-in below, so units_install keeps this line for prod only and deletes it elsewhere.
 Environment=DUMPSTAR_MCP_RESOURCE=https://star.dumpster.cards/mcp
@@ -44,11 +48,15 @@ Network=slirp4netns:allow_host_loopback=true
 PublishPort=127.0.0.1:{{PORT}}:8080
 Volume=dumpstar-{{INSTANCE}}-data:/data:Z
 AutoUpdate=local
+# podman's grace before SIGKILL: longer than the drain, so the drain is never cut short.
+StopTimeout=40
 
 [Service]
 Restart=on-failure
 RestartSec=10
 TimeoutStartSec=120
+# systemd's own bound on a stop, above StopTimeout so podman's SIGKILL comes first and cleanly.
+TimeoutStopSec=45
 
 [Install]
 WantedBy=default.target

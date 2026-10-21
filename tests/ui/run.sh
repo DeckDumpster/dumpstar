@@ -79,6 +79,7 @@ export DUMPSTAR_USER=collection
 export DUMPSTAR_ACCESS_TEAM_DOMAIN="$(meta issuer)"
 export DUMPSTAR_ACCESS_AUD="$(meta aud)"
 export DUMPSTAR_ACCESS_JWKS_URL="http://127.0.0.1:$(meta port)/cdn-cgi/access/certs"
+export DUMPSTAR_DRAIN_TIMEOUT_SECS=30
 export DUMPSTAR_STATIC_DIR="$root/frontend/build"
 "$bin" serve --host 127.0.0.1 --port "$port" >"$work/server.log" 2>&1 &
 pids+=("$!")

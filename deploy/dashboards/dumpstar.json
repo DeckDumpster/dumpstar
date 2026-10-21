@@ -218,6 +218,49 @@
           "legendFormat": "p95 {{paged}}"
         }
       ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Deploy drain: seconds, completed, refused",
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoriametrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "dumpstar_drain_seconds_sum{site=\"star.dumpster.cards\"}",
+          "legendFormat": "drain seconds"
+        },
+        {
+          "refId": "B",
+          "expr": "dumpstar_drain_completed_total{site=\"star.dumpster.cards\"}",
+          "legendFormat": "completed"
+        },
+        {
+          "refId": "C",
+          "expr": "dumpstar_drain_refused_total{site=\"star.dumpster.cards\"}",
+          "legendFormat": "refused"
+        },
+        {
+          "refId": "D",
+          "expr": "dumpstar_drain_inflight_at_start_sum{site=\"star.dumpster.cards\"}",
+          "legendFormat": "in flight at start"
+        }
+      ]
     }
   ]
 }

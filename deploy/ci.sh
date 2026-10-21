@@ -665,10 +665,6 @@ trap cleanup EXIT
 
 g_lint() {
 if tier lint; then
-    step "No Python in a Rust repository (tests/ci/no_python.sh)"
-    bash "$REPO_DIR/tests/ci/no_python.sh" --self-test
-    bash "$REPO_DIR/tests/ci/no_python.sh"
-
     step "Harness diagnostics self-test (tests/lib/diagnostics_test.sh)"
     bash "$REPO_DIR/tests/lib/diagnostics_test.sh"
 

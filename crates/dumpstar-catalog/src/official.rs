@@ -251,6 +251,9 @@ pub(crate) fn has_itself(rules: &str, name: &str) -> bool {
     }
     let lower = rules.to_ascii_lowercase();
     let name = name.to_ascii_lowercase();
+    if gains_each_listed(&lower, &name) {
+        return true;
+    }
     ["this unit", "this leader"].iter().any(|who| {
         ["gains", "gain", "has", "have"].iter().any(|verb| {
             let needle = format!("{who} {verb} {name}");
@@ -262,6 +265,26 @@ pub(crate) fn has_itself(rules: &str, name: &str) -> bool {
                 let after_ok =
                     !lower[at + needle.len()..].starts_with(|c: char| c.is_alphanumeric());
                 before_ok && after_ok
+            })
+        })
+    })
+}
+
+/// "This unit gains each of the following keywords: A, B, C": `name` is in the
+/// list the card gives itself (sp-eu0o9a). `lower` and `name` are lowercase.
+fn gains_each_listed(lower: &str, name: &str) -> bool {
+    ["this unit", "this leader"].iter().any(|who| {
+        ["gains", "gain", "has", "have"].iter().any(|verb| {
+            let needle = format!("{who} {verb} each of the following keywords");
+            lower.match_indices(&needle).any(|(at, _)| {
+                let list = &lower[at + needle.len()..];
+                list.match_indices(name).any(|(i, _)| {
+                    list[..i]
+                        .chars()
+                        .next_back()
+                        .is_none_or(|c| !c.is_alphanumeric())
+                        && !list[i + name.len()..].starts_with(|c: char| c.is_alphanumeric())
+                })
             })
         })
     })

@@ -125,7 +125,9 @@ const DERIVATIONS: &[(&str, u32)] = &[
     // 11: one keyword rule for every card: own (conditional when under a
     // condition), granted to another unit, or removed and so not recorded
     // (sp-gww4nf).
-    (swu::SRC_OFFICIAL, 11),
+    // 12: "this unit gains each of the following keywords" lists the card's own
+    // (sp-eu0o9a).
+    (swu::SRC_OFFICIAL, 12),
 ];
 
 pub fn derivation_version(source: &str) -> u32 {

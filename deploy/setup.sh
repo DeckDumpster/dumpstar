@@ -130,30 +130,21 @@ dumpstar_scaffold_config "$INSTANCE"
 # server checks a JWT on every /api request and has no bypass, so the instance
 # is started WITH Access configured and the UI tests present a token signed by
 # the key in ${LS_CONF_DIR}/test-jwks (UI_TEST_JWKS_DIR). The JWKS server is a
-# transient user unit so it outlives this script, and is stopped by
-# `systemctl --user stop dumpstar-test-jwks-${INSTANCE}`.
+# transient user unit so it outlives this script; its unique name is recorded in
+# ${LS_CONF_DIR}/test-jwks.unit and stopped by access_unit_stop.
 if [ "$TEST" = true ]; then
     # shellcheck source=tests/lib/access.sh
     . "$REPO_DIR/tests/lib/access.sh"
-    TEST_JWKS_UNIT="dumpstar-test-jwks-${INSTANCE}"
     TEST_JWKS_DIR="${LS_CONF_DIR}/test-jwks"
-    systemctl --user stop "$TEST_JWKS_UNIT" 2>/dev/null || true
     rm -rf "$TEST_JWKS_DIR"
     mkdir -p "$TEST_JWKS_DIR"
     # Build the issuer here, in the foreground: a cold cargo build inside the
-    # transient unit outlasts the wait below and no jwks.json would appear.
+    # transient unit outlasts the wait and no jwks.json would appear.
     TEST_JWKS_BIN="$(bash "$REPO_DIR/tests/lib/test-jwks.sh" build)"
-    systemd-run --user --quiet --unit "$TEST_JWKS_UNIT" \
-        --setenv=DUMPSTAR_TEST_JWKS_BIN="$TEST_JWKS_BIN" \
-        bash "$REPO_DIR/tests/lib/test-jwks.sh" serve "$TEST_JWKS_DIR"
-    for _ in $(seq 1 100); do
-        [ -f "$TEST_JWKS_DIR/jwks.json" ] && break
-        sleep 0.1
-    done
-    if [ ! -f "$TEST_JWKS_DIR/jwks.json" ]; then
-        echo "ERROR: the test JWKS server wrote no jwks.json (cargo must build dumpstar-test-jwks)."
-        exit 1
-    fi
+    # The unit name is unique per run (concurrent lanes never collide) and recorded
+    # in ${LS_CONF_DIR}/test-jwks.unit, where the next setup and access_unit_stop find it.
+    access_unit_start "$TEST_JWKS_DIR" "dumpstar-test-jwks-${INSTANCE}" "$TEST_JWKS_BIN" || exit 1
+    TEST_JWKS_UNIT="$ACCESS_UNIT"
     access_env_file "$TEST_JWKS_DIR" "${LS_CONF_DIR}/access.env"
     echo "    Test Access config written to ${LS_CONF_DIR}/access.env (JWKS unit ${TEST_JWKS_UNIT})."
 fi

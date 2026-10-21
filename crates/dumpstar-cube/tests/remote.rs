@@ -245,7 +245,7 @@ fn allocate_group_runs_the_pack_searches_itself() {
     let cfg = signed_in(dir.path(), &f, "tok-fresh", far_future());
     let (code, out, err) = run(&cfg, &["allocate", "--group", "swu-jumpstart-cube"]);
     assert_eq!(code, 0, "{out}{err}");
-    assert!(out.contains("Pack 1: reserved"), "{out}");
+    assert!(out.contains("Pack 1: 15 of 15 picks"), "{out}");
     // 20 packs x 4 pool searches, and no file read.
     let searches = f
         .seen

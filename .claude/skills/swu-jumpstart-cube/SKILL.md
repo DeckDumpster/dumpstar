@@ -15,10 +15,10 @@ copies and that no copy is in two decks. `swu-cube-check` (below) is what tells 
 
 - **Cube:** 20 half-decks, 10 Heroism and 10 Villainy.
 - **Pack:** 18 cards.
-- **Singleton:** across all 20 packs each Leader and each draw card is in at most one pack (by
-  card, so two printings count as one). **Bases are exempt**: a cube needs 5 epic bases per color
-  and the collection repeats them (Security Complex ×7), so bases may repeat across packs.
-  `swu-cube-check cube` fails `cube-singleton`, naming the card and its packs; `pack` mode does not.
+- **Singleton Leaders:** across the 20 packs each Leader leads at most one pack (by card, so two
+  printings count as one). Bases and draw cards may repeat across packs; the collection's copies
+  are the only limit, and the deck reservations already enforce that. `swu-cube-check cube` fails
+  `cube-singleton`, naming the Leader and its packs; `pack` mode does not.
 - **Match:** two random packs make one 30-card draw deck.
 
 ### 2. The 18-card pack
@@ -106,9 +106,8 @@ Mind the rate limit: `/mcp` allows about 120 tool calls a minute per sign-in. Se
 and choose from the results yourself; do not search once per card.
 
 1. **`collection_summary`.** Learn what is owned and what is still available. A cube needs about
-   20 Leaders, 40 bases (5 epic and 5 vanilla per color) and 300 draw cards. The cube is singleton,
-   so count **distinct** Leaders and draw cards, not copies (two copies of a card serve one pack);
-   bases may repeat, so copies count for them.
+   20 Leaders, 40 bases (5 epic and 5 vanilla per color) and 300 draw cards. Leaders are singleton,
+   so count **distinct** Leaders per color; draw cards and bases may repeat, so copies count for them.
 2. **Allocate leaders and base pairs.** Pick 20 Leaders: 10 Heroism, 10 Villainy, 5 of each color
    (for example Command 3+2, Vigilance 2+3, Aggression 3+2, Cunning 2+3). Apply the universality
    rule. Each pack takes an epic and a vanilla base of its Leader's color; if the collection lacks them, say so and build what is possible.
@@ -133,7 +132,7 @@ and choose from the results yourself; do not search once per card.
 
    One more for the color's bases: `t:base a:<color>`. Then pick from the combined results the 15
    cards that meet section 4, the 25-HP and 30-HP bases, and the Leader. A card already chosen for
-   an earlier pack is off the table (singleton, except bases); re-search per pack so `available_count` is current. Prefer
+   an earlier pack still serves a later pack if copies remain; re-search per pack so `available_count` is current. Prefer
    cards of the Leader's own alignment and color; same-color cards with no alignment, cards of the Leader's
    alignment with no color, and cards with no aspects are also allowed.
 4. **Check the planned pack, then save it.** Before any write, assemble the pack document (below)

@@ -55,10 +55,10 @@ fn check_cube_passes_and_fails_by_exit_status() {
 }
 
 #[test]
-fn a_card_in_two_packs_fails_the_cube_and_names_both() {
+fn a_leader_in_two_packs_fails_the_cube_and_names_both() {
     let mut c = cube();
-    let dup = c[0]["cards"]["C1-2"].clone();
-    c[1]["cards"]["C2-2"] = dup;
+    let dup = c[0]["cards"]["L1"].clone();
+    c[1]["cards"]["L2"] = dup;
     let (code, out) = run("cube", &json!(c).to_string());
     assert_eq!(code, 1);
     assert!(

@@ -536,16 +536,16 @@ pub fn check_cube(packs: &[Pack]) -> Vec<Failure> {
     out
 }
 
-/// The cube is singleton: a Leader or draw card (anything but a Base) is in at most one pack,
-/// by name, so two printings of one card count as one. Bases are exempt.
+/// Leaders are singleton: a Leader leads at most one pack, by name, so two printings of one card
+/// count as one. Bases and draw cards may repeat; the collection's copies are the only limit.
 fn singleton_failures(packs: &[Pack]) -> Vec<Failure> {
-    let mut seen: BTreeMap<(String, String), Vec<&str>> = BTreeMap::new();
+    let mut seen: BTreeMap<String, Vec<&str>> = BTreeMap::new();
     for p in packs {
         for l in &p.lines {
-            let Some(c) = p.cards.get(&l.card_id).filter(|c| c.kind != "Base") else {
+            let Some(c) = p.cards.get(&l.card_id).filter(|c| c.kind == "Leader") else {
                 continue;
             };
-            let in_packs = seen.entry((c.kind.clone(), c.name.clone())).or_default();
+            let in_packs = seen.entry(c.name.clone()).or_default();
             if !in_packs.contains(&p.name.as_str()) {
                 in_packs.push(&p.name);
             }
@@ -553,16 +553,11 @@ fn singleton_failures(packs: &[Pack]) -> Vec<Failure> {
     }
     seen.into_iter()
         .filter(|(_, in_packs)| in_packs.len() > 1)
-        .map(|((kind, name), in_packs)| {
-            let which = if kind == "Leader" {
-                "Leader"
-            } else {
-                "draw card"
-            };
+        .map(|(name, in_packs)| {
             fail(
                 "cube-singleton",
                 format!(
-                    "{which} '{name}' is in {} packs ({}); a cube card is in at most one pack",
+                    "Leader '{name}' leads {} packs ({}); a Leader leads at most one pack",
                     in_packs.len(),
                     in_packs.join(", ")
                 ),
@@ -1088,12 +1083,10 @@ mod tests {
     }
 
     #[test]
-    fn a_draw_card_in_two_packs_fails_naming_both() {
+    fn a_draw_card_in_two_packs_is_ok() {
         let mut c = cube();
         rename(&mut c[3], "C4-5", "Card 1-5");
-        let f = check_cube_value(&Value::Array(c)).unwrap();
-        let m = f.iter().find(|f| f.rule == "cube-singleton").unwrap();
-        assert!(m.message.contains("draw card 'Card 1-5'") && m.message.contains("Pack 1, Pack 4"));
+        assert!(!cube_rules(c).contains(&"cube-singleton"));
     }
 
     #[test]

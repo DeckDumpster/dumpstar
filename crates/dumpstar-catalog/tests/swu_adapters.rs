@@ -1818,3 +1818,38 @@ fn devotions_granted_restore_has_its_number() {
     assert_eq!(page.payload.cards[0].keywords[0].value, Some(2));
     assert!(page.payload.alarms.is_empty(), "{:?}", page.payload.alarms);
 }
+
+#[test]
+fn an_arena_less_unit_that_attaches_is_an_upgrade() {
+    let page = official::parse_page(&keyword_page(
+        &[],
+        "Attach to a VEHICLE unit.",
+        json!({"title": "Hardpoint Heavy Blaster", "cardId": "SOR_121",
+               "arenas": {"data": []}}),
+    ))
+    .unwrap();
+    assert_eq!(page.payload.cards[0].card_type.as_deref(), Some("Upgrade"));
+    let page = official::parse_page(&keyword_page(
+        &[],
+        "Raid 2",
+        json!({"arenas": {"data": [{"attributes": {"name": "Space"}}]}}),
+    ))
+    .unwrap();
+    assert_eq!(page.payload.cards[0].card_type.as_deref(), Some("Unit"));
+}
+
+#[test]
+fn the_unique_mark_in_rules_text_reads_as_the_word() {
+    let page = official::parse_page(&keyword_page(
+        &["Ambush"],
+        "While you control another non-<uq> unit, this unit gains Ambush.",
+        json!({"title": "AT-ST Raider", "cardId": "ASH_98"}),
+    ))
+    .unwrap();
+    assert_eq!(
+        page.payload.cards[0].rules_text.as_deref(),
+        Some("While you control another non-Unique unit, this unit gains Ambush.")
+    );
+    assert!(!official::has_markup("2 < 3 and 5 > 4"));
+    assert!(official::has_markup("<b>x</b>"));
+}

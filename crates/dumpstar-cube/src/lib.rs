@@ -372,7 +372,14 @@ pub fn check_pack(pack: &Pack) -> Vec<Failure> {
     for (c, q) in &draw {
         match c.kind.as_str() {
             "Unit" if c.arenas.contains("Space") => space += q,
-            "Unit" => ground += q,
+            "Unit" if c.arenas.contains("Ground") => ground += q,
+            "Unit" => out.push(fail(
+                "arena",
+                format!(
+                    "'{}' is a unit with no arena, so it is neither ground nor space",
+                    c.name
+                ),
+            )),
             _ => spells += q,
         }
     }
@@ -877,6 +884,18 @@ mod tests {
             });
         }
         assert!(rules(&p).contains(&"arena"));
+    }
+
+    #[test]
+    fn a_unit_with_no_arena_is_rejected_not_counted_as_ground() {
+        let mut p = pack(1, "Heroism", "Command");
+        edit(&mut p, "C1-8", |c| c["game"]["arenas"] = json!([]));
+        let msgs: Vec<String> = check_pack_value(&p)
+            .unwrap()
+            .into_iter()
+            .map(|f| f.message)
+            .collect();
+        assert!(msgs.iter().any(|m| m.contains("no arena")), "{msgs:?}");
     }
 
     #[test]

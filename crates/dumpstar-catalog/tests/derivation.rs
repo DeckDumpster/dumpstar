@@ -96,6 +96,11 @@ fn repeated_or_missing_rules_text_is_flagged() {
         ("OK", "Upgrade", Some("Plot\nAttached unit gets +0/+2.")),
         ("V", "Unit", Some("Sentinel")),
         ("T", "Token Upgrade", None),
+        (
+            "M",
+            "Unit",
+            Some("While you control another non-<uq> unit, this unit gains Ambush."),
+        ),
     ] {
         c.conn()
             .execute(
@@ -114,6 +119,7 @@ fn repeated_or_missing_rules_text_is_flagged() {
         vec![
             ("rules_text_sparse", "A"),
             ("rules_text_repeated", "K"),
+            ("rules_text_markup", "M"),
             ("rules_text_sparse", "R"),
         ]
     );

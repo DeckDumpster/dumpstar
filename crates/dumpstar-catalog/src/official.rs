@@ -237,7 +237,7 @@ fn rules_text_of(attrs: &Value) -> Option<String> {
         let Some(t) = text(attrs, key) else { continue };
         let mut opened = false;
         for line in t.lines().map(str::trim).filter(|l| !l.is_empty()) {
-            let line = tidy_icon_spaces(line);
+            let line = tidy_icon_spaces(&strip_markup(line));
             if !lines.contains(&line) {
                 if leader && *key == "deployBox" && !opened && !lines.is_empty() {
                     lines.push(DEPLOYED_SIDE.to_string());
@@ -266,6 +266,57 @@ fn rules_text_of(attrs: &Value) -> Option<String> {
     } else {
         Some(lines.join("\n"))
     }
+}
+
+/// The card's type. The feed files Hardpoint Heavy Blaster (SOR-121) as a Unit
+/// with no arena although it reads "Attach to a Vehicle unit": a unit is always
+/// in an arena, so an arena-less "Unit" whose text opens "Attach to" is an upgrade.
+fn card_type_of(attrs: &Value) -> Option<String> {
+    let ty = rel_name(attrs, "type");
+    if ty.as_deref() == Some("Unit")
+        && rel_names(attrs, "arenas").is_empty()
+        && text(attrs, "text").is_some_and(|t| t.trim_start().starts_with("Attach to"))
+    {
+        return Some("Upgrade".to_string());
+    }
+    ty
+}
+
+/// Rules text arrives with inline markup the printed card draws as an icon:
+/// `<uq>` is the Unique mark (AT-ST Raider, ASH-98: "non-<uq> unit"). It reads
+/// as the word, and any other tag is dropped.
+pub fn strip_markup(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut rest = line;
+    while let Some(open) = rest.find('<') {
+        let tail = &rest[open..];
+        let tag_end = tail.find('>').filter(|_| {
+            tail[1..]
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic() || c == '/')
+        });
+        out.push_str(&rest[..open]);
+        match tag_end {
+            Some(end) => {
+                if tail[..=end].eq_ignore_ascii_case("<uq>") {
+                    out.push_str("Unique");
+                }
+                rest = &tail[end + 1..];
+            }
+            None => {
+                out.push('<');
+                rest = &tail[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// True when `text` still holds a `<tag>` or `</tag>`.
+pub fn has_markup(text: &str) -> bool {
+    strip_markup(text) != text
 }
 
 /// The line that opens a leader's deployed side in `rules_text`.
@@ -515,7 +566,7 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
                 card_id: card_id.clone(),
                 name: text(a, "title").unwrap_or_default(),
                 subtitle: text(a, "subtitle"),
-                card_type: rel_name(a, "type"),
+                card_type: card_type_of(a),
                 cost: a.get("cost").and_then(Value::as_i64),
                 power: a.get("power").and_then(Value::as_i64),
                 hp: a.get("hp").and_then(Value::as_i64),

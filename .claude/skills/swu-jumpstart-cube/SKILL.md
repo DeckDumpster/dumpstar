@@ -119,7 +119,12 @@ of searches per pack (step 3) and choose from the results yourself; never search
 2. **Allocate leaders and base pairs.** Pick 20 Leaders: 10 Heroism, 10 Villainy, 5 of each color
    (for example Command 3+2, Vigilance 2+3, Aggression 3+2, Cunning 2+3). Apply the universality
    rule. Each pack takes an epic and a vanilla base of its Leader's color; if the collection lacks them, say so and build what is possible.
-3. **Plan copies across the whole cube.** Before building any pack, run `swu-cube-check allocate`.
+3. **Plan copies across the whole cube.** Whenever two or more packs are planned together (a
+   full cube or any multi-pack build), run `swu-cube-check allocate` before building any pack. A
+   single pack cannot compete with itself for copies, so it needs only `swu-cube-check pack
+   --planned` (step 5) and `pack` on the saved deck; skip `allocate`. If you run it on one pack
+   anyway it does not refuse: it prints `no contested cards` and exits 0 (or `FAIL allocation:` if
+   that pack's pool cannot meet the skeleton).
    Heroism-only, Villainy-only and no-aspect cards (Longbeam Cruiser) fit packs of any color, so an
    early pack's picks can use up copies a later color depends on, and the per-pack checker cannot
    see it. Run the four searches below for every pack first, then write

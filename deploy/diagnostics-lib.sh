@@ -13,3 +13,9 @@ dump_unit_diagnostics() {
     echo "--- journalctl --user -u ${unit} (last 40 lines) ---"
     journalctl --user -u "$unit" --no-pager -n 40 2>&1 || true
 }
+
+# unit_log_since <unit> <since>: the unit's journal lines since a time, bare
+# (no pager, no timestamps); prints nothing, and succeeds, on an empty journal.
+unit_log_since() {
+    journalctl --user -u "$1" --since "$2" --no-pager -o cat 2>/dev/null || true
+}

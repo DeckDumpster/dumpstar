@@ -140,7 +140,7 @@ if systemctl --user is-active --quiet "dumpstar-litestream-${INSTANCE}.service";
 fi
 
 # The outgoing server drained before it stopped (sp-4kt4e8): report the window it refused requests.
-DRAIN_LINE="$(journalctl --user -u "$SERVICE_NAME" --since "$DRAIN_SINCE" --no-pager -o cat 2>/dev/null \
+DRAIN_LINE="$(unit_log_since "$SERVICE_NAME" "$DRAIN_SINCE" \
     | sed -n 's/^drained in \([0-9.]*\)s (\([0-9]*\) completed, \([0-9]*\) refused.*/refused \3 requests over \1s (\2 in-flight completed)/p' | tail -1)"
 echo "==> Drain: ${DRAIN_LINE:-no drain line in the journal}"
 echo "==> ${SERVICE_NAME} restarted. Port: podman port systemd-${SERVICE_NAME}"

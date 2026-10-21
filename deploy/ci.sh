@@ -307,6 +307,50 @@ step() {
     echo "==> $*"
 }
 
+# Concurrent lanes (sp-mjxxli). lane_start <name> <function> runs the function in
+# a background subshell with its output in its own log; lanes_wait collects every
+# lane, prints each log whole under its name with the lane's wall time, and
+# returns non-zero if any lane failed. A subshell does not inherit the EXIT trap,
+# so a lane that fails exits alone and the failure is read here, from its status.
+LANE_NAMES=()
+LANE_PIDS=()
+LANE_SECS=()
+lane_start() {
+    local name="$1"
+    shift
+    (
+        _l0=$SECONDS
+        # Not `"$@" || rc=$?`: a command in an || list runs with set -e off, and
+        # the lane would carry on past its first failed step.
+        trap 'echo "$((SECONDS - _l0))" > "$LANE_DIR/$name.secs"' EXIT
+        "$@"
+    ) > "$LANE_DIR/$name.log" 2>&1 &
+    LANE_NAMES+=("$name")
+    LANE_PIDS+=("$!")
+}
+lanes_wait() {
+    local i rc bad=0 name
+    for i in "${!LANE_PIDS[@]}"; do
+        name="${LANE_NAMES[$i]}"
+        rc=0
+        wait "${LANE_PIDS[$i]}" || rc=$?
+        echo ""
+        echo "==> lane ${name}: exit ${rc}, $(cat "$LANE_DIR/$name.secs" 2>/dev/null || echo '?')s"
+        cat "$LANE_DIR/$name.log"
+        [ "$rc" -eq 0 ] || { bad=1; LANE_FAILED="${LANE_FAILED:-} ${name}"; }
+    done
+    LANE_PIDS=()
+    LANE_NAMES=()
+    return "$bad"
+}
+# Run on the way out of an aborted run: stop the lanes still running and print
+# what they said, so a failure on this thread does not swallow theirs.
+lanes_abort() {
+    [ "${#LANE_PIDS[@]}" -gt 0 ] || return 0
+    kill "${LANE_PIDS[@]}" 2>/dev/null || true
+    lanes_wait >&2 || true
+}
+
 # Capture the unit journal before a teardown destroys it. Shared with
 # deploy/deploy.sh — one definition in one place (db-g6ku).
 # shellcheck source=deploy/diagnostics-lib.sh
@@ -583,6 +627,7 @@ cleanup() {
     # each gate's own EXIT trap gets to remove the containers it created. A
     # cancelled run would otherwise leave a MinIO and a Nessie behind per gate.
     dumpstar_par_kill_all
+    lanes_abort
     bash "$SCRIPT_DIR/teardown.sh" "$INSTANCE" --purge 2>/dev/null || true
     # The one name this run added purely to hand the image to the gates. Every
     # tier tagged the same image under its own name, and untagging one name of a
@@ -618,6 +663,7 @@ trap cleanup EXIT
 # run capable of going red. Everything in it reads the tree and compiles
 # nothing, which is what makes it affordable unconditionally.
 
+g_lint() {
 if tier lint; then
     step "Harness diagnostics self-test (tests/lib/diagnostics_test.sh)"
     bash "$REPO_DIR/tests/lib/diagnostics_test.sh"
@@ -815,6 +861,7 @@ if tier lint; then
     step "cargo fmt --check"
     ( cd "$REPO_DIR" && cargo fmt --check )
 fi
+}
 
 # --- 2. Rust gates ----------------------------------------------------------
 
@@ -831,6 +878,7 @@ fi
 # builds (its own tier because that build does not belong in the seconds-long lint
 # tier). The orphan check needs the base ref; a checkout without it keeps the gap
 # check, which fails on the same deletion for every T0-T3 use case.
+g_plan() {
 if tier plan; then
     step "Use-case coverage seen to fail (tests/ci/plan_test.sh)"
     bash "$REPO_DIR/tests/ci/plan_test.sh"
@@ -843,6 +891,7 @@ if tier plan; then
         echo "==> (orphans skipped: no ${DUMPSTAR_PLAN_BASE:-origin/main} in this checkout; the gap check above still ran)"
     fi
 fi
+}
 
 if tier -q rust || tier -q isolation || tier -q container; then
     dumpstar_rust_cache_enable
@@ -854,14 +903,17 @@ fi
 # build what `cargo test` then REUSES (a plain clippy uses the dev profile and
 # recompiles every crate for the lint alone). The frontend's type check follows,
 # then the tests. `set -e` stops the run at the first failure.
+g_clippy() {
 if tier rust; then
     step "cargo clippy --all-targets"
     ( cd "$REPO_DIR" && cargo clippy --all-targets --profile test -- -D warnings )
     dumpstar_rust_cache_report "clippy"
 fi
+}
 
 # --- 2. Frontend gate (before cargo test) -------------------------------------------------------
 
+g_frontend() {
 if tier frontend; then
     step "Frontend: npm ci && npm test && npm run check && npm run build"
     (
@@ -876,8 +928,10 @@ if tier frontend; then
         npm run build
     )
 fi
+}
 
 # --- 2. Rust tests ---
+g_nextest() {
 if tier rust; then
     # cargo-nextest schedules every test of every binary across the vCPUs at
     # once; `cargo test` ran the binaries one after another (~11 of CI's 40
@@ -897,15 +951,18 @@ if tier rust; then
     ( cd "$REPO_DIR" && cargo test --doc --workspace )
     dumpstar_rust_cache_report "cargo test"
 fi
+}
 
 # --- 2-ui. UI tier (sp-howojk) -----------------------------------------------
 # Every tests/ui replay implementation against the app built from this tree. A UI
 # fix whose own replay is red or never ran cannot pass: sp-mxm9dw landed a change
 # that did not fix the grid because this never ran. See tests/ui/run.sh.
+g_ui() {
 if tier ui; then
     step "UI: tests/ui replay implementations (tests/ui/run.sh)"
     bash "$REPO_DIR/tests/ui/run.sh"
 fi
+}
 
 # --- 2a. Cross-tenant isolation gate (sp-c3fq3p) ------------------------------
 # Its own tier so a red names the property that broke, and so a caller can ask
@@ -916,6 +973,7 @@ fi
 # data dir: no production instance, no network. The tests live in
 # `tests::isolation` in crates/dumpstar-server/src/lib.rs; the tier is
 # selected by that module path, so a test added there is in the gate.
+g_isolation() {
 if tier isolation; then
     step "Cross-tenant isolation gate (cargo test -p dumpstar-server tests::isolation)"
     # A filter that matches nothing passes. Refuse that: renaming the module
@@ -927,6 +985,31 @@ if tier isolation; then
     fi
     ( cd "$REPO_DIR" && cargo test -p dumpstar-server --lib -- tests::isolation:: )
 fi
+}
+
+# --- Lanes (sp-mjxxli) --------------------------------------------------------
+# The steps above are independent of one another, so they run as three lanes
+# beside the container half of the run (the store gates, the image build, the
+# production unit, the queued gates), which stays on this thread. Lanes share
+# the cargo target dir, whose build lock serialises compiles but not test runs.
+# Within a lane the order is the old serial order; npm ci runs in frontend/
+# twice (frontend gate, ui replay) so those two share a lane. Each lane writes
+# its own log, printed whole with its wall time when it finishes, and nothing
+# is dropped: a lane's failure fails the run (lanes_wait, or the EXIT trap).
+g_deploy_scripts() {
+if tier deploy; then
+    step "Deploy scripts: unit install + store resolution + low-disk guard + scheduling"
+    bash "$REPO_DIR/tests/deploy/run.sh"
+fi
+}
+lane_rust() { g_clippy; g_nextest; g_isolation; }
+lane_web() { g_frontend; g_ui; }
+lane_shell() { g_lint; g_plan; g_deploy_scripts; }
+LANE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/dumpstar-lanes.XXXXXX")"
+lane_start rust lane_rust
+lane_start web lane_web
+lane_start shell lane_shell
+
 
 # --- 2b. Deploy-script gates ------------------------------------------------
 # The low-disk guard, the store-root resolution and the unit-file install are
@@ -935,8 +1018,6 @@ fi
 # every one comes back matching the shipped template (pd-2t6u).
 
 if tier deploy; then
-    step "Deploy scripts: unit install + store resolution + low-disk guard + scheduling"
-    bash "$REPO_DIR/tests/deploy/run.sh"
 
     # The one store gate that is not hermetic, and it has to be: that a non-prod
     # store's rootless-netns scaffolding is its OWN is a fact about podman 4.9.3
@@ -1100,6 +1181,17 @@ if [ "$PAR_RC" -ne 0 ]; then
 fi
 
 
+
+# --- 17. Collect the lanes --------------------------------------------------
+CONTAINER_SECS=$(( $(date +%s) - START_TIME ))
+step "Collecting the concurrent lanes (rust, web, shell)"
+LANES_RC=0
+lanes_wait || LANES_RC=$?
+if [ "$LANES_RC" -ne 0 ]; then
+    CURRENT_STEP="lanes:${LANE_FAILED:-}"
+    exit "$LANES_RC"
+fi
+
 # --- Done -------------------------------------------------------------------
 
 ELAPSED=$(( $(date +%s) - START_TIME ))
@@ -1111,4 +1203,5 @@ echo "==> Disk holding \$HOME (prod's):"
 echo "    before: ${DF_BEFORE}"
 echo "    after:  $(df -h "$HOME" | tail -n1)"
 echo ""
+echo "==> Wall time: container half ${CONTAINER_SECS}s (lane times above); total ${ELAPSED}s."
 echo "==> CI passed in ${ELAPSED}s."

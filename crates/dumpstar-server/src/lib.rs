@@ -3623,16 +3623,28 @@ mod tests {
 
             // sp-23v6q1: color: is a: over the four colors, and query_help says so.
             let by_a = site
-                .tool(&t, "search_cards", json!({"q": "a:command", "owned_only": true}))
+                .tool(
+                    &t,
+                    "search_cards",
+                    json!({"q": "a:command", "owned_only": true}),
+                )
                 .await
                 .unwrap();
             let by_color = site
-                .tool(&t, "search_cards", json!({"q": "color:command", "owned_only": true}))
+                .tool(
+                    &t,
+                    "search_cards",
+                    json!({"q": "color:command", "owned_only": true}),
+                )
                 .await
                 .unwrap();
             assert_eq!(by_a["results"], by_color["results"]);
             assert!(by_a["total"].as_i64().unwrap() > 0);
-            let help = site.tool(&t, "query_help", json!({})).await.unwrap().to_string();
+            let help = site
+                .tool(&t, "query_help", json!({}))
+                .await
+                .unwrap()
+                .to_string();
             for want in [
                 "Common=0 < Uncommon=1 < Rare=2",
                 "Legendary=3 < Special=4",

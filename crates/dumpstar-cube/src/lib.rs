@@ -20,6 +20,8 @@
 //! `cards` supplies any card a pack's own `cards` lacks.
 
 pub mod allocate;
+pub mod fetch;
+pub mod site;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;

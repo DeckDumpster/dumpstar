@@ -1,5 +1,6 @@
 //! HTTP route modules. One module per API resource (PLAN.md §5.2).
 
+pub mod agent;
 pub mod backup;
 pub mod batches;
 pub mod binders;
@@ -35,6 +36,7 @@ pub fn authenticated_api_router() -> Router<AppState> {
         .merge(sets::routes())
         .merge(binders::routes())
         .merge(decks::routes())
+        .merge(agent::routes())
         .merge(sealed::routes())
         .merge(conditions::routes())
         .merge(orders::routes())

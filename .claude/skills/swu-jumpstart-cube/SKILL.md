@@ -100,6 +100,16 @@ Smuggle, Raid) that improve whatever pack they meet.
 
 The archetypes and the leader guidance are advice. `swu-cube-check` does not test them.
 
+## Never save tool output to files
+
+The checker reads the site itself. **Never copy a `get_deck` or `search_cards` result into a file**
+(retyping 15 KB per pack, or 140 KB of search rows, is how a walk once failed): name a deck id or a
+group and `swu-cube-check` fetches, checks each deck's `lines_digest`, and runs the searches. It
+signs in once (a human or the Concierge runs `swu-cube-check login --client-id <id>` in a browser;
+the refresh token is cached `0600` and never printed; `swu-cube-check login --status` says whose
+tenant it is). If a fetch mode exits 2 naming `login`, the sign-in expired: stop and ask for
+`login`; do not fall back to copying output into files. `--site <url>` overrides the site.
+
 ## Method
 
 **Group name.** Ask the user which group the packs go in; default `swu-jumpstart-cube`. A partial
@@ -127,7 +137,14 @@ of searches per pack (step 3) and choose from the results yourself; never search
    that pack's pool cannot meet the skeleton).
    Heroism-only, Villainy-only and no-aspect cards (Longbeam Cruiser) fit packs of any color, so an
    early pack's picks can use up copies a later color depends on, and the per-pack checker cannot
-   see it. Run the four searches below for every pack first, then write
+   see it. Give each pack a `queries` list (the four searches of step 4, as strings) and run
+`swu-cube-check allocate --plan plan.json`: the checker runs the searches and builds `owned` and
+`eligible` itself. For packs already saved as decks, `swu-cube-check allocate --group <group>`
+derives each Leader's four searches from the saved deck, takes its draw cards as `picks`, and runs
+them. The plan file holds only what you decide, `{"packs": [{"name": "Pack 1", "queries": ["...", ...],
+"picks": ["SOR-5"], "candidates": ["SOR-9"]}]}` (a pack may name `"deck": <id>` instead of
+queries), never search rows. The by-hand form that follows (rows in `eligible`, `owned`) still
+works for a plan file that carries them; do not produce it from tool output. Write
    `{"owned": {"<card id>": <available copies>}, "packs": [{"name": "Pack 1", "slots": 15,
    "eligible": [<search_cards row>, ...]}]}` (eligible = the rows that pack's searches returned, as
    they came back: `allocate` reads each row's `id`, `name`, `subtitle`, `rarity`, `type`, `cost` and `game.arenas`), plus the pack's
@@ -179,21 +196,20 @@ of searches per pack (step 3) and choose from the results yourself; never search
    `SWU Jumpstart Cube`, `group`: the group name (the same for all 20 packs), `name`: `Pack <n>`) and
    `set_deck_lines` with the 18 `{card_id, qty: 1}` lines. A refusal says which lines are short and
    changes nothing: swap those cards and retry.
-6. **Check the whole group.** `list_decks` with that group, `get_deck` for each of the 20, save
-   each result to its own file and run `swu-cube-check cube pack1.json pack2.json ...` (no combine
-   script needed). `cube` sums each card's `qty` over the packs and fails `cube-copies`, naming
+6. **Check the whole group.** Run `swu-cube-check cube --group <group>`: it lists the group's
+   decks, fetches each, and checks them (no `get_deck` calls, no files). `cube` sums each card's `qty` over the packs and fails `cube-copies`, naming
    the card and the packs, when the sum exceeds the `owned_count` in the files. `reserved` must equal `qty` on every line. The cube-level check applies to a
    complete 20-pack cube only; a partial or test build checks each saved deck with
-   `swu-cube-check pack <file>` instead (`cube-size`, `cube-alignment` and `cube-bases` would fail),
-   and checks copies across them with `swu-cube-check copies pack1.json pack2.json ...`, which sums
+   `swu-cube-check pack --deck <id>` instead (`cube-size`, `cube-alignment` and `cube-bases` would fail),
+   and checks copies across them with `swu-cube-check copies --group <group>`, which sums
    each card's `qty` against `owned_count` and prints only `cube-copies` failures (or `ok`).
    `get_deck` carries a `lines_digest` and the checker recomputes it from the file's `lines` and the card objects under `cards`. If it
-   refuses with "this is not the saved deck: digest mismatch", your copy drifted: copy the
-   `get_deck` result again. Never edit the file (or the digest) to make it pass.
+   refuses with "this is not the saved deck: digest mismatch", the deck changed
+   while it was read: run it again. Never edit anything (or the digest) to make it pass.
 
 ## The checker
 
-`swu-cube-check pack [--planned] [FILE]`, `swu-cube-check cube [--planned] [FILE...]`, `swu-cube-check copies [--planned] [FILE...]` and `swu-cube-check allocate [FILE]` (FILE or stdin; `cube` also takes one pack file per deck; `--help` prints the usage) print `ok`, or one
+`swu-cube-check pack --deck <id>`, `cube --group <name>`, `copies --group <name>`, `allocate --group <name>` and `allocate --plan <file>` fetch from the site (above). The file forms: `swu-cube-check pack [--planned] [FILE]`, `swu-cube-check cube [--planned] [FILE...]`, `swu-cube-check copies [--planned] [FILE...]` and `swu-cube-check allocate [FILE]` (FILE or stdin; `cube` also takes one pack file per deck; `--help` prints the usage) print `ok`, or one
 `FAIL <rule>: <what is wrong>` line per broken rule, and exit 1 on any failure. Build it with
 `cargo build -p dumpstar-cube --release` (binary `target/release/swu-cube-check`).
 

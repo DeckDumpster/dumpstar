@@ -855,6 +855,9 @@ if tier lint; then
     step "deploy runs the data jobs a change affects (tests/deploy/data_jobs_test.sh)"
     bash "$REPO_DIR/tests/deploy/data_jobs_test.sh"
 
+    step "a deploy fails no requests: the hold proxy (tests/deploy/hold_proxy_test.sh)"
+    bash "$REPO_DIR/tests/deploy/hold_proxy_test.sh"
+
     # A formatter check, not a compile — `cargo fmt` parses and never builds,
     # so it costs a second and belongs with the lint tier rather than behind
     # `cargo test`.

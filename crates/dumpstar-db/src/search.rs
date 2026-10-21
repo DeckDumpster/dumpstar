@@ -272,7 +272,8 @@ impl CompiledSearch {
             "({inner}) AND p.printing_id IN (SELECT printing_id FROM (\
                SELECT p.printing_id AS printing_id, ROW_NUMBER() OVER (PARTITION BY cd.card_id \
                  ORDER BY (p.variant <> 'Standard'), (p.finish <> 'Normal'), \
-                          COALESCE(s.release_date, '9999'), s.sort_order, p.printing_id) AS rn \
+                          COALESCE(s.release_date, '9999'), s.sort_order, \
+                          CAST(p.number AS INTEGER), p.printing_id) AS rn \
                {FROM_CLAUSE} WHERE {inner}) WHERE rn = 1)"
         );
         let doubled = [self.params.clone(), self.params.clone()].concat();
@@ -1731,6 +1732,28 @@ mod tests {
             ids.sort();
             ids
         }
+    }
+
+    #[test]
+    fn one_per_card_takes_the_lowest_number_among_standard_printings() {
+        // Serialized printings carry no variant type and read as Standard (SEC-1143).
+        let f = fixture();
+        {
+            let c = open_shared(&f.shared).unwrap();
+            testkit::set_on(&c, "SEC", "Secrets of Power", "2026-10-01");
+            testkit::card(&c, "jj", "Jar Jar Binks");
+            testkit::printing(&c, "a-serial", "jj", "SEC", "1143", "Standard", "Normal");
+            testkit::printing(&c, "z-base", "jj", "SEC", "11", "Standard", "Normal");
+        }
+        let mut q = f.compile("jar");
+        q.set_catalog_wide(true);
+        q.set_one_per_card();
+        let rows = search(&f.conn, &q).unwrap();
+        let got: Vec<(&str, &str)> = rows
+            .iter()
+            .map(|r| (r.card_id.as_str(), r.number.as_str()))
+            .collect();
+        assert_eq!(got, vec![("jj", "11")]);
     }
 
     // --- reservation terms (sp-t78nrb) --------------------------------------

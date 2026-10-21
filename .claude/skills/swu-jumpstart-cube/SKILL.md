@@ -183,6 +183,8 @@ only `.card`). To check a pack before saving it, build the same document by hand
                         "game": {"aspects": ["Vigilance", "Heroism"], "arenas": ["Ground"], "hp": 6}}}}
 ```
 
+Card fields the checker reads and the digest covers (generated from `DIGEST_CARD_FIELDS` in `crates/dumpstar-cube/src/lib.rs`; a test asserts this line matches it): `/name`, `/type`, `/rarity`, `/cost`, `/game/hp`, `/game/epic_action`, `/game/aspects`, `/game/arenas`. The example above shows the minimum shape; copy every one of these from the `search_cards` row.
+
 The `reserved` rule is meaningful only on the post-save `get_deck` document, where the server
 reports reservations. A planned (pre-save) document has none, so check it with `--planned`, which
 ignores `reserved`; never fill `reserved` in by hand. A planned `ok` makes no claim about copies

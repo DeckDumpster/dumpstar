@@ -793,6 +793,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_skill_lists_exactly_the_digest_card_fields() {
+        let skill = include_str!("../../../.claude/skills/swu-jumpstart-cube/SKILL.md");
+        let line = skill
+            .lines()
+            .find(|l| l.starts_with("Card fields the checker reads"))
+            .expect("SKILL.md lacks the card-field line");
+        let listed: Vec<&str> = line
+            .split('`')
+            .skip(1)
+            .step_by(2)
+            .filter(|t| t.starts_with('/') && !t.contains(".rs"))
+            .collect();
+        assert_eq!(listed, DIGEST_CARD_FIELDS.to_vec());
+    }
+
+    #[test]
     fn the_shared_vector_digests_to_its_pinned_value() {
         let lines: Value = serde_json::from_str(VECTOR_LINES).unwrap();
         let cards: Value = serde_json::from_str(VECTOR_CARDS).unwrap();

@@ -3718,6 +3718,8 @@ mod tests {
                 "Legendary=3 < Special=4",
                 "Vigilance, Command, Aggression and Cunning",
                 "Heroism and Villainy are alignments, not colors",
+                "t:unit excludes leaders",
+                "(t:unit or t:leader)",
             ] {
                 assert!(help.contains(want), "query_help lacks {want:?}");
             }

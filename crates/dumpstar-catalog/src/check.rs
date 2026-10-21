@@ -544,6 +544,65 @@ pub fn numbering(conn: &Connection) -> Result<Vec<AlarmRecord>> {
     Ok(out)
 }
 
+/// Data-lint over what the sources recorded, not what the join did.
+///
+/// `number_out_of_range`: a main expansion's Standard printing numbered above
+/// twice the set's median Standard number, which no printed card count of the
+/// set reaches (the rest of the set is numbered 1..N; see [`numbering`]).
+/// `truncated_subtitle`: a card whose subtitle ends in an ellipsis, which the
+/// source cut short (the official record of Jar Jar Binks carries
+/// "Mesa Propose…" on every one of its printings).
+pub fn datalint(conn: &Connection) -> Result<Vec<AlarmRecord>> {
+    let mut out = Vec::new();
+    let mut stmt = conn.prepare(
+        "SELECT p.set_code, p.number, CAST(p.number AS INTEGER) FROM printings p
+           JOIN sets s ON s.set_code = p.set_code
+          WHERE s.category = 'Main Expansions' AND p.variant = 'Standard'
+            AND p.number NOT GLOB '*[^0-9]*' AND p.number <> ''
+          ORDER BY p.set_code, 3",
+    )?;
+    let mut by_set: std::collections::BTreeMap<String, Vec<(String, i64)>> = Default::default();
+    for row in stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, i64>(2)?,
+        ))
+    })? {
+        let (set, text, n) = row?;
+        by_set.entry(set).or_default().push((text, n));
+    }
+    for (set, mut nums) in by_set {
+        nums.dedup_by_key(|(_, n)| *n);
+        let median = nums[nums.len() / 2].1;
+        for (text, n) in nums.iter().filter(|(_, n)| *n > 2 * median) {
+            out.push(AlarmRecord::alarm(
+                "number_out_of_range",
+                format!("{set}/{text}"),
+                format!("{set} Standard number {n} is more than twice the set's median {median}"),
+            ));
+        }
+    }
+    let mut stmt = conn.prepare(
+        "SELECT card_id, name, subtitle FROM cards WHERE subtitle LIKE '%…' ORDER BY card_id",
+    )?;
+    for row in stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+        ))
+    })? {
+        let (id, name, subtitle) = row?;
+        out.push(AlarmRecord::alarm(
+            "truncated_subtitle",
+            id,
+            format!("{name}: subtitle {subtitle:?} ends in an ellipsis"),
+        ));
+    }
+    Ok(out)
+}
+
 /// A printing linked to a TCGplayer product of a group that is not its set's
 /// (`wrong_group`): the set's code was taken by a printing the group files
 /// elsewhere. A promo group (`*`) carries any set; a Weekly Play group `XYZP`
@@ -703,6 +762,7 @@ pub fn run(conn: &Connection, now: DateTime<Utc>) -> Result<Vec<AlarmRecord>> {
     out.extend(coverage_drops(conn)?);
     out.extend(missing_sealed_images(conn)?);
     out.extend(numbering(conn)?);
+    out.extend(datalint(conn)?);
     out.extend(missing_structured_text(conn)?);
     out.extend(suspect_rules_text(conn)?);
     out.extend(keyword_number_missing(conn)?);

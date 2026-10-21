@@ -76,7 +76,7 @@ that are possible; never fail silently.
 **Leaders: the universality rule.** Prefer Common Leaders with universal, unconditional abilities
 (damage, shielding, resource readying). Avoid Rare, parasitic Leaders whose abilities need
 specific traits (Hera Syndulla, Grand Inquisitor) unless the other half-deck will support them.
-Top-tier universal examples: Sabine Wren, Boba Fett, Darth Vader, Leia.
+Top-tier universal examples: Sabine Wren (SOR-14), Boba Fett (SOR-15), Darth Vader. Leia Organa, Alliance General (SOR-9) is not one: her ability needs Rebel units.
 
 ### 6. Archetype blueprints
 
@@ -123,7 +123,7 @@ and choose from the results yourself; do not search once per card.
    cards of the Leader's own alignment and color; same-color cards with no alignment and cards with
    no aspects are also allowed.
 4. **Check the planned pack, then save it.** Before any write, assemble the pack document (below)
-   and run `swu-cube-check pack`. Fix every `FAIL` line, then `create_deck` (`format`:
+   and run `swu-cube-check pack --planned`. Fix every `FAIL` line, then `create_deck` (`format`:
    `SWU Jumpstart Cube`, `group`: the group name (the same for all 20 packs), `name`: `Pack <n>`) and
    `set_deck_lines` with the 18 `{card_id, qty: 1}` lines. A refusal says which lines are short and
    changes nothing: swap those cards and retry.
@@ -132,7 +132,7 @@ and choose from the results yourself; do not search once per card.
 
 ## The checker
 
-`swu-cube-check pack [FILE]` and `swu-cube-check cube [FILE]` (FILE or stdin) print `ok`, or one
+`swu-cube-check pack [--planned] [FILE]` and `swu-cube-check cube [--planned] [FILE]` (FILE or stdin) print `ok`, or one
 `FAIL <rule>: <what is wrong>` line per broken rule, and exit 1 on any failure. Build it with
 `cargo build -p dumpstar-cube --release` (binary `target/release/swu-cube-check`).
 
@@ -143,10 +143,14 @@ only `.card`). To check a pack before saving it, build the same document by hand
 
 ```json
 {"deck": {"name": "Pack 1", "group": "swu-jumpstart-cube"},
- "lines": [{"card_id": "SOR-5", "qty": 1, "zone": "main", "reserved": 1}],
+ "lines": [{"card_id": "SOR-5", "qty": 1, "zone": "main"}],
  "cards": {"SOR-5": {"name": "...", "type": "Leader", "cost": 5,
                         "game": {"aspects": ["Vigilance", "Heroism"], "arenas": ["Ground"], "hp": 6}}}}
 ```
+
+The `reserved` rule is meaningful only on the post-save `get_deck` document, where the server
+reports reservations. A planned (pre-save) document has none, so check it with `--planned`, which
+ignores `reserved`; never fill `reserved` in by hand.
 
 A **cube document** is an array of pack documents, or `{"packs": [...], "cards": {...}}` with the
 cards shared. Rules reported: `shape`, `leader`, `base-hp`, `base-aspect`, `base-name`,

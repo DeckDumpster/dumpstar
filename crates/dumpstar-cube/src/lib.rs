@@ -416,6 +416,27 @@ pub fn check_pack(pack: &Pack) -> Vec<Failure> {
 }
 
 /// Reads a pack document and checks it.
+/// Drops every `reserved` member: a planned (pre-save) document has no reservations to check,
+/// so the `reserved` rule is meaningful only on the post-save `get_deck` document.
+pub fn strip_reservations(doc: &mut Value) {
+    match doc {
+        Value::Array(items) => items.iter_mut().for_each(strip_reservations),
+        Value::Object(o) => {
+            if let Some(Value::Array(lines)) = o.get_mut("lines") {
+                for l in lines {
+                    if let Some(m) = l.as_object_mut() {
+                        m.remove("reserved");
+                    }
+                }
+            }
+            if let Some(packs) = o.get_mut("packs") {
+                strip_reservations(packs);
+            }
+        }
+        _ => {}
+    }
+}
+
 pub fn check_pack_value(doc: &Value) -> Result<Vec<Failure>, String> {
     Ok(check_pack(&Pack::from_value(doc, &Value::Null)?))
 }

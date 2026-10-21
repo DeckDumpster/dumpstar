@@ -1132,6 +1132,8 @@ if tier container; then
     # killed (design row S5). It builds its own throwaway instance through
     # setup.sh --test, which serves the Rust test JWKS the server needs to start
     # (no Python), so it runs here, serially, before the queued gates.
+    step "Test JWKS unit: survives a failed fixed-name unit and concurrent starts (tests/deploy/jwks_unit_test.sh)"
+    bash "$REPO_DIR/tests/deploy/jwks_unit_test.sh"
     step "Production unit: starts, loopback-only, serving check (tests/deploy/prod_unit.sh)"
     bash "$REPO_DIR/tests/deploy/prod_unit.sh" "$INSTANCE"
     # The shipper against a real MinIO under the real tenant credential policy

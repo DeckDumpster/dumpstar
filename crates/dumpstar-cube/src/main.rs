@@ -146,7 +146,7 @@ const USAGE: &str = "usage: swu-cube-check pack [--planned] [FILE] | cube [--pla
   cube      check a 20-pack cube: a cube document, or one pack file per deck
   copies    only the copy-count check (cube-copies) over any number of pack files, for a partial build
   allocate  plan copies across the cube: {\"owned\": {id: copies}, \"packs\": [{\"name\", \"slots\": 15,
-            \"eligible\": [search_cards rows or card ids]}]}; rows carry type, cost and arenas, so a
+            \"eligible\": [search_cards rows or card ids], \"picks\": [...], \"candidates\": [...]}]}; only picks and candidates reserve; rows carry type, cost and arenas, so a
             15-slot pack is reserved cards that meet the pack skeleton, or a named shortfall
   FILE is read in place of stdin (`-` is stdin); exit 0 ok, 1 a rule failed, 2 unreadable input";
 

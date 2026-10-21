@@ -416,7 +416,7 @@
 		if (n === 'legendary') return 'ultra' as const;
 		return RARITY_TIERS.find((t) => t === n) ?? ('unranked' as const);
 	}
-	/** The pip each slot last had clicked; the tile shows no price until one is. */
+	/** The pip each slot last had clicked; an owned card's tile shows its dearest owned price until one is, an unowned card's none. */
 	let selectedPip = $state<Record<string, string>>({});
 	function tilePips(slot: BinderSlot) {
 		return orderedPips(slot.printings).map((p) => ({

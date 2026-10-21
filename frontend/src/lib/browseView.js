@@ -111,16 +111,18 @@ export function orderedPips(printings) {
 		.map(({ p }) => ({ ...p, color: finishColor(p.finish) }));
 }
 
-/** The price on a tile: null until a pip is selected; then the selected
- *  printing's price, or the dearest owned one when several are owned.
+/** The price on a tile. With a pip selected, that printing's price. With none,
+ *  the dearest owned printing's price, so an owned card always shows one; null
+ *  for a card with nothing owned (or nothing owned that is priced).
  *  @param {{ printings: { printing_id: string | number, owned_count: number, market_price: number | null }[] }} slot
  *  @param {string | number | null} selectedId */
 export function tilePrice(slot, selectedId) {
-	if (selectedId == null) return null;
-	const owned = slot.printings.filter((p) => p.owned_count > 0);
-	if (owned.length > 1) {
-		const v = owned.map((p) => p.market_price).filter((n) => n != null);
-		if (v.length) return Math.max(.../** @type {number[]} */ (v));
+	if (selectedId != null) {
+		return slot.printings.find((p) => p.printing_id === selectedId)?.market_price ?? null;
 	}
-	return slot.printings.find((p) => p.printing_id === selectedId)?.market_price ?? null;
+	const v = slot.printings
+		.filter((p) => p.owned_count > 0)
+		.map((p) => p.market_price)
+		.filter((n) => n != null);
+	return v.length ? Math.max(.../** @type {number[]} */ (v)) : null;
 }

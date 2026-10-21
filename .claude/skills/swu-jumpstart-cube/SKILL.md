@@ -143,7 +143,7 @@ of searches per pack (step 3) and choose from the results yourself; never search
    The alignment-only set is cards such as Alliance X-Wing and Wing Leader (Heroism, no color); a
    Villainy leader's pool has AT-ST there. The checker accepts exactly these four sets.
 
-   One more for the color's bases: `t:base a:<color>`. Then pick from the combined results the 15
+   One more for the color's bases: `t:base a:<color> -t:leader avail>=1`. Then pick from the combined results the 15
    cards that meet section 4, the 25-HP and 30-HP bases, and the Leader. A card reserved to another pack in step 3 is not yours to pick. Prefer
    cards of the Leader's own alignment and color; same-color cards with no alignment, cards of the Leader's
    alignment with no color, and cards with no aspects are also allowed.

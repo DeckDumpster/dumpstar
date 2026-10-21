@@ -313,6 +313,13 @@ pub fn suspect_rules_text(conn: &Connection) -> Result<Vec<AlarmRecord>> {
                 format!("{dup:?} appears twice in the rules text"),
             ));
         }
+        if crate::official::has_markup(&rules) {
+            out.push(AlarmRecord::alarm(
+                "rules_text_markup",
+                id.clone(),
+                format!("{rules:?} still holds a <tag>"),
+            ));
+        }
         let always_texted = matches!(ty.as_deref(), Some("Event" | "Upgrade" | "Leader" | "Base"));
         if always_texted && rules.split_whitespace().count() <= 1 {
             out.push(AlarmRecord::info(

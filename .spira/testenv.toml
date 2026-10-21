@@ -18,7 +18,7 @@
 # import .ts directly, which needs 22.18+ type stripping), because a
 # tier cannot name its own image (sp-os47b4); the build and the podman UI stay
 # in the CI-only frontend tier.
-image = "docker.io/library/rust:1.94-slim-bookworm"
+image = "docker.io/library/rust:1.99.1-slim-bookworm"
 workdir = "/work"
 timeout = 1800
 # ci_entry is the command a queue.local round runs on a round VM (read by the

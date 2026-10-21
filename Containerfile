@@ -4,7 +4,7 @@
 # The image runs `dumpstar serve`; populate the catalog with deploy/seed.sh.
 
 # --- Stage 1: Rust build ----------------------------------------------------
-# The Debian release is pinned, not inherited. `rust:1.94-slim` is a MOVING
+# The Debian release is pinned, not inherited. `rust:1.99.1-slim` is a MOVING
 # tag: upstream retagged it from bookworm to trixie, the builder started
 # linking against glibc 2.39, and every image built after that shipped a
 # binary the bookworm runtime stage below cannot exec (pd-pejn). The invariant
@@ -19,7 +19,7 @@ FROM scratch AS sccache-bin
 COPY --from=sccache-default /out/ /
 LABEL dumpstar.build="1"
 
-FROM docker.io/library/rust:1.94-slim-bookworm AS builder
+FROM docker.io/library/rust:1.99.1-slim-bookworm AS builder
 
 WORKDIR /app
 

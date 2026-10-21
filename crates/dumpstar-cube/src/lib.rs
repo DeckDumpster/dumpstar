@@ -100,7 +100,9 @@ impl Card {
                 .map(|e| e.as_str().is_some_and(|t| !t.is_empty())),
             aspects: strings(&game["aspects"]),
             arenas: strings(&game["arenas"]),
-            owned: v["owned_count"].as_u64().and_then(|o| u32::try_from(o).ok()),
+            owned: v["owned_count"]
+                .as_u64()
+                .and_then(|o| u32::try_from(o).ok()),
         }
     }
 

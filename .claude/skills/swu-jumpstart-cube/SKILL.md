@@ -116,10 +116,14 @@ of searches per pack (step 3) and choose from the results yourself; never search
    early pack's picks can use up copies a later color depends on, and the per-pack checker cannot
    see it. Run the four searches below for every pack first, then write
    `{"owned": {"<card id>": <available copies>}, "packs": [{"name": "Pack 1", "slots": 15,
-   "eligible": ["<card id>", ...]}]}` (eligible = the card ids that pack's searches returned) and pipe it to
-   `swu-cube-check allocate`. It reserves each card's copies to specific packs (`reserve <card>: Pack 2`)
+   "eligible": [<search_cards row>, ...]}]}` (eligible = the rows that pack's searches returned, as
+   they came back: `allocate` reads each row's `id`, `type`, `cost` and `game.arenas`) and run
+   `swu-cube-check allocate plan.json`, or pipe it on stdin. It reserves each card's copies to specific packs (`reserve <card>: Pack 2`)
    and prints `ok`, or `FAIL allocation:` naming the card and the packs competing for it, which you
-   report to the user. Build each pack only from the cards reserved to it; a pack takes one copy of a card.
+   report to the user. Build each pack only from the cards reserved to it; a pack takes one copy of a card. With rows, the
+   15 reserved cards already meet the pack skeleton (8 ground, 3-4 space, 3-4 events or upgrades, the
+   cost curve), so a pack built from them passes `pack`; when no such 15 exist `FAIL allocation:` says
+   what the pack's pool lacks. Bare card ids carry no type and are never chosen for a 15-slot pack.
 4. **Fill each pack to the skeleton.** Four `search_cards` per pack cover the Leader's whole pool,
    because section 2 allows four sets and no one query returns them all: color and alignment, color
    only, alignment only, and no aspect at all. None returns Leaders or bases, which are chosen
@@ -160,7 +164,7 @@ of searches per pack (step 3) and choose from the results yourself; never search
 
 ## The checker
 
-`swu-cube-check pack [--planned] [FILE]` and `swu-cube-check cube [--planned] [FILE...]` (FILE or stdin; `cube` also takes one pack file per deck) print `ok`, or one
+`swu-cube-check pack [--planned] [FILE]`, `swu-cube-check cube [--planned] [FILE...]` and `swu-cube-check allocate [FILE]` (FILE or stdin; `cube` also takes one pack file per deck; `--help` prints the usage) print `ok`, or one
 `FAIL <rule>: <what is wrong>` line per broken rule, and exit 1 on any failure. Build it with
 `cargo build -p dumpstar-cube --release` (binary `target/release/swu-cube-check`).
 

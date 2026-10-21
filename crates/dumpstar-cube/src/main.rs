@@ -9,6 +9,10 @@ fn main() -> ExitCode {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let planned = args.iter().any(|a| a == "--planned");
     args.retain(|a| a != "--planned");
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        println!("{USAGE}");
+        return ExitCode::SUCCESS;
+    }
     let (mode, paths) = match args.as_slice() {
         [m] => (m.as_str(), vec!["-"]),
         [m, p] => (m.as_str(), vec![p.as_str()]),
@@ -124,9 +128,15 @@ fn allocate(path: &str) -> ExitCode {
     }
 }
 
+const USAGE: &str = "usage: swu-cube-check pack [--planned] [FILE] | cube [--planned] [FILE...] | allocate [FILE]
+  pack      check one pack document (get_deck's result) against the pack rules
+  cube      check a 20-pack cube: a cube document, or one pack file per deck
+  allocate  plan copies across the cube: {\"owned\": {id: copies}, \"packs\": [{\"name\", \"slots\": 15,
+            \"eligible\": [search_cards rows or card ids]}]}; rows carry type, cost and arenas, so a
+            15-slot pack is reserved cards that meet the pack skeleton, or a named shortfall
+  FILE is read in place of stdin (`-` is stdin); exit 0 ok, 1 a rule failed, 2 unreadable input";
+
 fn usage() -> ExitCode {
-    eprintln!(
-        "usage: swu-cube-check pack [--planned] [FILE] | cube [--planned] [FILE...] | allocate [FILE]   (FILE or stdin: the deck JSON, see SKILL.md; cube takes one pack file per deck)"
-    );
+    eprintln!("{USAGE}");
     ExitCode::from(2)
 }

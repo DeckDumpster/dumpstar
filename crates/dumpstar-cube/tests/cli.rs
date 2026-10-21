@@ -164,3 +164,26 @@ fn allocate_reserves_shared_cards_across_packs_and_names_a_shortfall() {
         "{out}"
     );
 }
+
+#[test]
+fn help_prints_the_usage_for_every_subcommand_and_exits_zero() {
+    for args in [
+        &["--help"][..],
+        &["-h"],
+        &["pack", "--help"],
+        &["cube", "-h"],
+        &["allocate", "--help"],
+    ] {
+        let out = Command::new(env!("CARGO_BIN_EXE_swu-cube-check"))
+            .args(args)
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(0), "{args:?}");
+        let text = String::from_utf8(out.stdout).unwrap();
+        assert!(text.contains("usage: swu-cube-check"), "{args:?}: {text}");
+        if args[0] != "--help" && args[0] != "-h" {
+            assert!(text.contains(args[0]), "{args:?}: {text}");
+        }
+    }
+}

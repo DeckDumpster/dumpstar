@@ -68,6 +68,23 @@ fn a_leader_in_two_packs_fails_the_cube_and_names_both() {
 }
 
 #[test]
+fn two_packs_sharing_a_single_owned_card_fail_the_cube_and_name_both() {
+    let mut c = cube();
+    c[0]["cards"]["C1-0"]["owned_count"] = json!(1);
+    // Pack 2 takes the same card id as pack 1's C1-0, in place of its own C2-0.
+    c[1]["cards"]["C1-0"] = c[0]["cards"]["C1-0"].clone();
+    c[1]["lines"][3]["card_id"] = json!("C1-0");
+    let (code, out) = run("cube", &json!(c).to_string());
+    assert_eq!(code, 1, "{out}");
+    assert!(
+        out.contains("FAIL cube-copies:")
+            && out.contains("'C1-0'")
+            && out.contains("Pack 1, Pack 2"),
+        "{out}"
+    );
+}
+
+#[test]
 fn cube_takes_one_file_per_pack_and_a_lone_pack_passes_pack_mode() {
     let dir = std::env::temp_dir().join(format!("swu-cube-check-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();

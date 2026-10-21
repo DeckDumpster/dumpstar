@@ -150,7 +150,8 @@ of searches per pack (step 3) and choose from the results yourself; never search
    changes nothing: swap those cards and retry.
 6. **Check the whole group.** `list_decks` with that group, `get_deck` for each of the 20, save
    each result to its own file and run `swu-cube-check cube pack1.json pack2.json ...` (no combine
-   script needed). `reserved` must equal `qty` on every line. The cube-level check applies to a
+   script needed). `cube` sums each card's `qty` over the packs and fails `cube-copies`, naming
+   the card and the packs, when the sum exceeds the `owned_count` in the files. `reserved` must equal `qty` on every line. The cube-level check applies to a
    complete 20-pack cube only; a partial or test build checks each saved deck with
    `swu-cube-check pack <file>` instead (`cube-size`, `cube-alignment` and `cube-bases` would fail).
    `get_deck` carries a `lines_digest` and the checker recomputes it from the file's `lines` and the card objects under `cards`. If it
@@ -177,12 +178,14 @@ only `.card`). To check a pack before saving it, build the same document by hand
 
 The `reserved` rule is meaningful only on the post-save `get_deck` document, where the server
 reports reservations. A planned (pre-save) document has none, so check it with `--planned`, which
-ignores `reserved`; never fill `reserved` in by hand.
+ignores `reserved`; never fill `reserved` in by hand. A planned `ok` makes no claim about copies
+across packs, and `pack` never checks them: only `swu-cube-check cube` over the saved decks (or
+`set_deck_lines` refusing) has run that sum.
 
 A **cube document** is an array of pack documents, or `{"packs": [...], "cards": {...}}` with the
 cards shared. Rules reported: `shape`, `leader`, `base-hp`, `base-aspect`, `base-name`,
 `draw-aspect`, `arena`, `curve`, `reserved`, `unknown-card`, and for the cube `cube-size`,
-`cube-alignment`, `cube-bases`, `cube-singleton`. `draw-aspect` rejects a draw card with any color other than the Leader's or any
+`cube-alignment`, `cube-bases`, `cube-singleton`, `cube-copies`. `draw-aspect` rejects a draw card with any color other than the Leader's or any
 alignment other than the Leader's. A card with no alignment (of the Leader's color) or with no
 aspects at all passes.
 

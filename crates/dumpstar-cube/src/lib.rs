@@ -75,6 +75,8 @@ struct Card {
     epic_action: Option<bool>,
     aspects: BTreeSet<String>,
     arenas: BTreeSet<String>,
+    /// The card object's `owned_count`, when the file carries one.
+    owned: Option<u32>,
 }
 
 impl Card {
@@ -98,6 +100,7 @@ impl Card {
                 .map(|e| e.as_str().is_some_and(|t| !t.is_empty())),
             aspects: strings(&game["aspects"]),
             arenas: strings(&game["arenas"]),
+            owned: v["owned_count"].as_u64().and_then(|o| u32::try_from(o).ok()),
         }
     }
 
@@ -562,7 +565,39 @@ pub fn check_cube(packs: &[Pack]) -> Vec<Failure> {
         }
     }
     out.extend(singleton_failures(packs));
+    out.extend(copies_failures(packs));
     out
+}
+
+/// The packs together may not use more copies of a card than the files say are owned: each
+/// card's qty is summed over the packs and compared with its `owned_count` (the smallest one any
+/// file reports). A card with no `owned_count` in any file is not checked.
+fn copies_failures(packs: &[Pack]) -> Vec<Failure> {
+    let mut used: BTreeMap<&str, (u32, Option<u32>, Vec<&str>)> = BTreeMap::new();
+    for p in packs {
+        for l in &p.lines {
+            let e = used.entry(&l.card_id).or_default();
+            e.0 += l.qty;
+            if let Some(o) = p.cards.get(&l.card_id).and_then(|c| c.owned) {
+                e.1 = Some(e.1.map_or(o, |m| m.min(o)));
+            }
+            if !e.2.contains(&p.name.as_str()) {
+                e.2.push(&p.name);
+            }
+        }
+    }
+    used.into_iter()
+        .filter_map(|(id, (qty, owned, in_packs))| {
+            let owned = owned.filter(|o| qty > *o)?;
+            Some(fail(
+                "cube-copies",
+                format!(
+                    "'{id}' is used {qty} times across the packs ({}) but {owned} owned",
+                    in_packs.join(", ")
+                ),
+            ))
+        })
+        .collect()
 }
 
 /// Leaders are singleton: a Leader leads at most one pack, by name, so two printings of one card

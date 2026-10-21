@@ -175,6 +175,34 @@ struct Structured {
 #[derive(Default)]
 struct Tally(std::collections::BTreeMap<String, (u64, u64)>);
 
+/// A `Tally` that also counts distinct cards: leaders are singleton, so a pack planner needs
+/// how many different leaders it owns, not how many copies.
+#[derive(Default)]
+struct CardTally(std::collections::BTreeMap<String, (u64, u64, std::collections::HashSet<String>)>);
+
+impl CardTally {
+    fn add(&mut self, key: &str, card_id: &str, available: bool) {
+        let e = self.0.entry(key.to_string()).or_default();
+        e.0 += 1;
+        e.1 += u64::from(available);
+        e.2.insert(card_id.to_string());
+    }
+
+    fn json(&self) -> Value {
+        Value::Object(
+            self.0
+                .iter()
+                .map(|(k, (o, a, d))| {
+                    (
+                        k.clone(),
+                        json!({"distinct": d.len(), "owned": o, "available": a}),
+                    )
+                })
+                .collect(),
+        )
+    }
+}
+
 impl Tally {
     fn add(&mut self, key: &str, available: bool) {
         let e = self.0.entry(key.to_string()).or_default();
@@ -198,7 +226,7 @@ impl Tally {
 fn breakdown(conn: &Connection) -> Result<Value, ToolError> {
     let mut stmt = conn
         .prepare(&format!(
-            "SELECT cd.card_type, cd.aspects, cd.hp, cd.epic_action, cd.rules_text, \
+            "SELECT cd.card_id, cd.card_type, cd.aspects, cd.hp, cd.epic_action, cd.rules_text, \
                     (SELECT set_code FROM shared.printings WHERE card_id = cd.card_id \
                       {CANONICAL_PRINTING}), c.deck_id IS NULL \
                FROM collection c \
@@ -210,13 +238,14 @@ fn breakdown(conn: &Connection) -> Result<Value, ToolError> {
     let rows = stmt
         .query_map([], |r| {
             Ok((
-                r.get::<_, Option<String>>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, Option<i64>>(2)?,
-                r.get::<_, Option<String>>(3)?,
+                r.get::<_, String>(0)?,
+                r.get::<_, Option<String>>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, Option<i64>>(3)?,
                 r.get::<_, Option<String>>(4)?,
-                r.get::<_, String>(5)?,
-                r.get::<_, bool>(6)?,
+                r.get::<_, Option<String>>(5)?,
+                r.get::<_, String>(6)?,
+                r.get::<_, bool>(7)?,
             ))
         })
         .map_err(|e| db_err(e.into()))?;
@@ -224,10 +253,11 @@ fn breakdown(conn: &Connection) -> Result<Value, ToolError> {
         (Tally::default(), Tally::default(), Tally::default());
     let (mut base_hp, mut base_kind) = (Tally::default(), Tally::default());
     let mut base_kind_aspect: std::collections::BTreeMap<&str, Tally> = Default::default();
-    let (mut leader_aspect, mut leader_align) = (Tally::default(), Tally::default());
-    let mut leader_color_align: std::collections::BTreeMap<String, Tally> = Default::default();
+    let (mut leader_aspect, mut leader_align) = (CardTally::default(), CardTally::default());
+    let mut leader_color_align: std::collections::BTreeMap<String, CardTally> = Default::default();
     for row in rows {
-        let (kind, aspects, hp, epic, rules, set, available) = row.map_err(|e| db_err(e.into()))?;
+        let (card_id, kind, aspects, hp, epic, rules, set, available) =
+            row.map_err(|e| db_err(e.into()))?;
         let kind = kind.unwrap_or_else(|| "Unknown".into());
         let aspects: Vec<String> = serde_json::from_str(&aspects).unwrap_or_default();
         by_type.add(&kind, available);
@@ -257,10 +287,10 @@ fn breakdown(conn: &Connection) -> Result<Value, ToolError> {
             }
             "Leader" => {
                 for a in &aspects {
-                    leader_aspect.add(a, available);
+                    leader_aspect.add(a, &card_id, available);
                 }
                 let align = alignment(&aspects);
-                leader_align.add(align, available);
+                leader_align.add(align, &card_id, available);
                 let colors: Vec<&String> = aspects
                     .iter()
                     .filter(|a| !matches!(a.as_str(), "Heroism" | "Villainy"))
@@ -269,13 +299,13 @@ fn breakdown(conn: &Connection) -> Result<Value, ToolError> {
                     leader_color_align
                         .entry("none".into())
                         .or_default()
-                        .add(align, available);
+                        .add(align, &card_id, available);
                 }
                 for c in colors {
                     leader_color_align
                         .entry(c.clone())
                         .or_default()
-                        .add(align, available);
+                        .add(align, &card_id, available);
                 }
             }
             _ => {}

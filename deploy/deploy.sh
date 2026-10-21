@@ -116,6 +116,7 @@ dumpstar_unit_serves() {
     done
     return 1
 }
+DRAIN_SINCE="$(date '+%Y-%m-%d %H:%M:%S')"
 if ! { systemctl --user restart "$SERVICE_NAME" && dumpstar_unit_serves; }; then
     dump_unit_diagnostics "$SERVICE_NAME"
     if [ -n "${PREVIOUS_UNIT:-}" ] && [ -s "$PREVIOUS_UNIT" ]; then
@@ -138,6 +139,10 @@ if systemctl --user is-active --quiet "dumpstar-litestream-${INSTANCE}.service";
     systemctl --user restart "dumpstar-litestream-${INSTANCE}.service"
 fi
 
+# The outgoing server drained before it stopped (sp-4kt4e8): report the window it refused requests.
+DRAIN_LINE="$(journalctl --user -u "$SERVICE_NAME" --since "$DRAIN_SINCE" --no-pager -o cat 2>/dev/null \
+    | sed -n 's/^drained in \([0-9.]*\)s (\([0-9]*\) completed, \([0-9]*\) refused.*/refused \3 requests over \1s (\2 in-flight completed)/p' | tail -1)"
+echo "==> Drain: ${DRAIN_LINE:-no drain line in the journal}"
 echo "==> ${SERVICE_NAME} restarted. Port: podman port systemd-${SERVICE_NAME}"
 
 # /mcp is on only if the unit carried DUMPSTAR_MCP_RESOURCE (sp-tfkp9o): probe the public URL.

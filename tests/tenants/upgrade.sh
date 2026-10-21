@@ -128,7 +128,7 @@ start_app() {
 	# An EMPTY host port in the mapping is how Podman is asked to choose one —
 	# the same `:8080` deploy/setup.sh writes into the Quadlet unit for PORT=0.
 	podman run -d --name "$APP_CTR" -p "127.0.0.1:${PDUP_PORT:-}:8080" \
-		-v "${DATA}:/data:Z" "${ACCESS_ARGS[@]}" "$IMAGE" >/dev/null
+		-v "${DATA}:/data:Z" -e DUMPSTAR_DRAIN_TIMEOUT_SECS=30 "${ACCESS_ARGS[@]}" "$IMAGE" >/dev/null
 	# Read back off the container rather than from `podman port`: the mapping is
 	# fixed at create time and inspect still reports it after the process has
 	# exited, which is exactly the case §7 asserts on.

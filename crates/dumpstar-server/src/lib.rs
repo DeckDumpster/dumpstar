@@ -26,6 +26,7 @@ use dumpstar_core::query::KeywordRegistry;
 use dumpstar_db::DbError;
 use dumpstar_db::search_meta::SearchFlag;
 
+pub mod drain;
 mod mcp;
 mod metrics;
 mod routes;
@@ -422,6 +423,8 @@ pub struct ServeConfig {
     /// The agent-tool endpoint's own URL (`DUMPSTAR_MCP_RESOURCE`, e.g. `https://star.dumpster.cards/mcp`),
     /// the `aud` its access tokens must carry. `None` serves no `/mcp`. Requires `oidc`.
     pub mcp_resource: Option<String>,
+    /// How long a drain waits for requests in flight (`DUMPSTAR_DRAIN_TIMEOUT_SECS`).
+    pub drain_timeout: std::time::Duration,
 }
 
 /// Paths the browser sign-in gate lets through when `/mcp` is served: the endpoint itself
@@ -534,12 +537,18 @@ pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
     let addr = SocketAddr::new(cfg.host, cfg.port);
     let listener = tokio::net::TcpListener::bind(addr).await?;
     println!("dumpstar serving on http://{addr}");
-    // SIGTERM (what `systemctl restart` sends) finishes the requests in flight before the
-    // process exits.
-    axum::serve(listener, app(state, cfg.static_dir, cfg.data_dir))
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
-    Ok(())
+    // SIGTERM (what `systemctl stop` and `podman stop` send) starts a drain: new requests get 503,
+    // requests in flight finish, and the server exits when they have or the timeout passes.
+    let telemetry = state.metrics.telemetry().clone();
+    drain::serve_draining(
+        listener,
+        app(state, cfg.static_dir, cfg.data_dir),
+        drain::Drain::new(),
+        &telemetry,
+        cfg.drain_timeout,
+        shutdown_signal(),
+    )
+    .await
 }
 
 async fn shutdown_signal() {

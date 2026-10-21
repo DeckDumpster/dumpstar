@@ -7,12 +7,17 @@
 //!
 //! Input: `{"owned": {"<card id>": copies}, "packs": [{"name": "Pack 1", "slots": 15,
 //! "eligible": ["<card id>", ...]}]}`. A pack takes at most one copy of a card.
+//!
+//! An eligible entry may also be a `search_cards` row (`id`, `type`, `cost`, `game.arenas`). A pack
+//! with any such row, and 15 slots, is a draw-card pack: it gets 15 cards that satisfy the pack
+//! skeleton (8 ground units, 3-4 space units, 3-4 events/upgrades, and the cost curve), or a named
+//! shortfall. Bare card ids in such a pack carry no type, so they are never chosen for it.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use serde_json::Value;
 
-use crate::{Failure, fail};
+use crate::{CURVE, DRAW_CARDS, Failure, GROUND_UNITS, fail};
 
 pub struct Plan {
     /// card id -> the packs it is reserved to, in pack order.
@@ -39,6 +44,7 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
     let mut names = Vec::new();
     let mut slots = Vec::new();
     let mut eligible: Vec<Vec<&str>> = Vec::new();
+    let mut skel: Vec<Option<Vec<(&str, Meta)>>> = Vec::new();
     for (i, p) in packs.iter().enumerate() {
         names.push(
             p.get("name")
@@ -56,17 +62,56 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
             .and_then(Value::as_array)
             .ok_or("allocate: a pack lacks `eligible`")?;
         let mut ids = BTreeSet::new();
+        let mut rows: BTreeMap<&str, Option<Meta>> = BTreeMap::new();
         for c in e {
-            ids.insert(
-                c.as_str()
-                    .ok_or("allocate: eligible entries are card ids")?,
-            );
+            if let Some(id) = c.as_str() {
+                ids.insert(id);
+                rows.entry(id).or_insert(None);
+                continue;
+            }
+            let id = c
+                .get("id")
+                .or_else(|| c.get("card_id"))
+                .and_then(Value::as_str)
+                .ok_or("allocate: eligible entries are card ids or card rows with an `id`")?;
+            ids.insert(id);
+            rows.insert(id, Meta::from_row(c));
         }
-        eligible.push(
+        let skeleton = slots[i] == DRAW_CARDS as usize && e.iter().any(Value::is_object);
+        skel.push(skeleton.then(|| {
+            rows.iter()
+                .filter_map(|(id, m)| m.map(|m| (*id, m)))
+                .filter(|(id, _)| copies.get(id).copied().unwrap_or(0) > 0)
+                .collect()
+        }));
+        eligible.push(if skeleton {
+            Vec::new()
+        } else {
             ids.into_iter()
                 .filter(|c| copies.get(c).copied().unwrap_or(0) > 0)
-                .collect(),
-        );
+                .collect()
+        });
+    }
+
+    let mut failures = Vec::new();
+    let mut fixed: BTreeMap<&str, BTreeSet<usize>> = BTreeMap::new();
+    let skeleton_packs: Vec<usize> = (0..packs.len()).filter(|&p| skel[p].is_some()).collect();
+    if !skeleton_packs.is_empty() {
+        let pools: Vec<&[(&str, Meta)]> =
+            skel.iter().map(|s| s.as_deref().unwrap_or(&[])).collect();
+        let (picks, unsolved) = plan_skeletons(&skeleton_packs, &pools, &copies);
+        for (p, cards) in picks {
+            for c in cards {
+                *copies.get_mut(c).unwrap() -= 1;
+                fixed.entry(c).or_default().insert(p);
+            }
+        }
+        for p in unsolved {
+            failures.push(fail(
+                "allocation",
+                skeleton_shortfall(&names[p], pools[p], skeleton_packs.len() > 1),
+            ));
+        }
     }
 
     // held[p] = cards assigned to pack p; users[c] = packs holding c.
@@ -80,8 +125,10 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
         }
     }
 
-    let mut failures = Vec::new();
     for p in 0..packs.len() {
+        if skel[p].is_some() {
+            continue;
+        }
         let short = slots[p] - held[p].len();
         if short == 0 {
             continue;
@@ -123,8 +170,12 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
             ),
         ));
     }
+    for (c, ps) in fixed {
+        users.entry(c).or_default().extend(ps);
+    }
     let reservations = users
         .into_iter()
+        .filter(|(_, ps)| !ps.is_empty())
         .map(|(c, ps)| {
             (
                 c.to_string(),
@@ -136,6 +187,314 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
         reservations,
         failures,
     })
+}
+
+/// What the skeleton needs to know of a card: its arena/type class and its cost bucket.
+#[derive(Clone, Copy)]
+struct Meta {
+    /// 0 ground unit, 1 space unit, 2 event or upgrade.
+    class: usize,
+    /// Cost 1..6+ as 0..5.
+    bucket: usize,
+}
+
+impl Meta {
+    fn from_row(v: &Value) -> Option<Meta> {
+        let arenas: Vec<&str> = v["game"]["arenas"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .collect();
+        let class = match v["type"].as_str()? {
+            "Unit" if arenas.contains(&"Space") => 1,
+            "Unit" if arenas.contains(&"Ground") => 0,
+            "Unit" | "Leader" | "Base" => return None,
+            _ => 2,
+        };
+        let cost = u32::try_from(v["cost"].as_u64()?).ok()?;
+        Some(Meta {
+            class,
+            bucket: (cost.clamp(1, 6) - 1) as usize,
+        })
+    }
+}
+
+const CLASS_NAMES: [&str; 3] = ["ground units", "space units", "events or upgrades"];
+const CLASS_PROFILES: [[usize; 3]; 2] =
+    [[GROUND_UNITS as usize, 3, 4], [GROUND_UNITS as usize, 4, 3]];
+
+/// Every cost-curve profile summing to a draw pack.
+fn bucket_profiles() -> Vec<[usize; 6]> {
+    fn go(i: usize, left: usize, cur: &mut [usize; 6], out: &mut Vec<[usize; 6]>) {
+        if i == 6 {
+            if left == 0 {
+                out.push(*cur);
+            }
+            return;
+        }
+        for n in CURVE[i].0 as usize..=CURVE[i].1 as usize {
+            if n <= left {
+                cur[i] = n;
+                go(i + 1, left - n, cur, out);
+            }
+        }
+    }
+    let mut out = Vec::new();
+    go(0, DRAW_CARDS as usize, &mut [0; 6], &mut out);
+    out
+}
+
+/// Max flow over source -> class -> bucket -> sink; returns the cards per (class, bucket) cell
+/// when every target is met.
+fn cell_flow(
+    cells: &[[usize; 6]; 3],
+    classes: [usize; 3],
+    buckets: [usize; 6],
+) -> Option<[[usize; 6]; 3]> {
+    const N: usize = 11;
+    let mut cap = [[0i64; N]; N];
+    for c in 0..3 {
+        cap[0][1 + c] = classes[c] as i64;
+        for b in 0..6 {
+            cap[1 + c][4 + b] = cells[c][b] as i64;
+        }
+    }
+    for b in 0..6 {
+        cap[4 + b][10] = buckets[b] as i64;
+    }
+    let want: usize = classes.iter().sum();
+    let mut flow = 0;
+    loop {
+        let mut prev = [usize::MAX; N];
+        prev[0] = 0;
+        let mut queue = VecDeque::from([0]);
+        while let Some(u) = queue.pop_front() {
+            for v in 0..N {
+                if prev[v] == usize::MAX && cap[u][v] > 0 {
+                    prev[v] = u;
+                    queue.push_back(v);
+                }
+            }
+        }
+        if prev[10] == usize::MAX {
+            break;
+        }
+        let (mut v, mut room) = (10, i64::MAX);
+        while v != 0 {
+            room = room.min(cap[prev[v]][v]);
+            v = prev[v];
+        }
+        v = 10;
+        while v != 0 {
+            cap[prev[v]][v] -= room;
+            cap[v][prev[v]] += room;
+            v = prev[v];
+        }
+        flow += room as usize;
+    }
+    if flow != want {
+        return None;
+    }
+    let mut out = [[0; 6]; 3];
+    for c in 0..3 {
+        for b in 0..6 {
+            out[c][b] = cap[4 + b][1 + c] as usize;
+        }
+    }
+    Some(out)
+}
+
+/// Up to `CANDIDATES` distinct 15-card selections meeting the skeleton from `pool`, taking only
+/// cards with a copy left, the ones using the least contested cards (`weight`: lower is freer) first.
+fn solve_pack<'a>(
+    pool: &[(&'a str, Meta)],
+    copies: &BTreeMap<&str, usize>,
+    weight: &BTreeMap<&str, f64>,
+) -> Vec<Vec<&'a str>> {
+    let mut cells: Vec<Vec<Vec<&'a str>>> = vec![vec![Vec::new(); 6]; 3];
+    for (id, m) in pool {
+        if copies.get(id).copied().unwrap_or(0) > 0 {
+            cells[m.class][m.bucket].push(id);
+        }
+    }
+    for row in &mut cells {
+        for cell in row {
+            cell.sort_by(|a, b| weight[a].total_cmp(&weight[b]).then(a.cmp(b)));
+        }
+    }
+    let mut sizes = [[0; 6]; 3];
+    for c in 0..3 {
+        for b in 0..6 {
+            sizes[c][b] = cells[c][b].len();
+        }
+    }
+    let mut found: Vec<(f64, Vec<&'a str>)> = Vec::new();
+    for classes in CLASS_PROFILES {
+        for buckets in bucket_profiles() {
+            let Some(take) = cell_flow(&sizes, classes, buckets) else {
+                continue;
+            };
+            let mut picked = Vec::new();
+            let mut cost = 0.0;
+            for c in 0..3 {
+                for b in 0..6 {
+                    for id in &cells[c][b][..take[c][b]] {
+                        cost += weight[id];
+                        picked.push(*id);
+                    }
+                }
+            }
+            picked.sort();
+            if !found.iter().any(|(_, f)| *f == picked) {
+                found.push((cost, picked));
+            }
+        }
+    }
+    found.sort_by(|a, b| a.0.total_cmp(&b.0));
+    found.truncate(CANDIDATES);
+    found.into_iter().map(|(_, p)| p).collect()
+}
+
+const CANDIDATES: usize = 8;
+const SEARCH_NODES: usize = 4000;
+
+struct Search<'a, 'b> {
+    pools: &'b [&'b [(&'a str, Meta)]],
+    weight: &'b BTreeMap<&'a str, f64>,
+    nodes: usize,
+}
+
+impl<'a> Search<'a, '_> {
+    /// Depth-first over each pack's candidate selections, within a node budget.
+    fn place(
+        &mut self,
+        order: &[usize],
+        left: &mut BTreeMap<&'a str, usize>,
+        picks: &mut BTreeMap<usize, Vec<&'a str>>,
+    ) -> bool {
+        let Some((&p, rest)) = order.split_first() else {
+            return true;
+        };
+        for cards in solve_pack(self.pools[p], left, self.weight) {
+            if self.nodes == 0 {
+                return false;
+            }
+            self.nodes -= 1;
+            for c in &cards {
+                *left.get_mut(c).unwrap() -= 1;
+            }
+            picks.insert(p, cards.clone());
+            if self.place(rest, left, picks) {
+                return true;
+            }
+            picks.remove(&p);
+            for c in &cards {
+                *left.get_mut(c).unwrap() += 1;
+            }
+        }
+        false
+    }
+}
+
+/// Assigns every skeleton pack its 15 cards. Packs are placed tightest pool first, each taking its
+/// least contested selection; when that strands a pack the search backs up and tries the packs'
+/// other selections. Returns the picks and the packs no search could place.
+fn plan_skeletons<'a>(
+    order_of: &[usize],
+    pools: &[&[(&'a str, Meta)]],
+    copies: &BTreeMap<&'a str, usize>,
+) -> (BTreeMap<usize, Vec<&'a str>>, Vec<usize>) {
+    // Contested cards are those many skeleton packs want relative to the copies owned.
+    let mut weight: BTreeMap<&str, f64> = BTreeMap::new();
+    for &p in order_of {
+        for (id, _) in pools[p] {
+            *weight.entry(id).or_default() += 1.0;
+        }
+    }
+    for (id, w) in weight.iter_mut() {
+        *w /= copies[id] as f64;
+    }
+    let mut tight = order_of.to_vec();
+    tight.sort_by_key(|&p| pools[p].len());
+
+    let mut search = Search {
+        pools,
+        weight: &weight,
+        nodes: SEARCH_NODES,
+    };
+    let mut picks = BTreeMap::new();
+    if search.place(&tight, &mut copies.clone(), &mut picks) {
+        return (picks, Vec::new());
+    }
+    // No complete placement: report the packs a plain greedy pass cannot place.
+    let mut left = copies.clone();
+    let mut picks = BTreeMap::new();
+    let mut unsolved = Vec::new();
+    for &p in &tight {
+        match solve_pack(pools[p], &left, &weight).into_iter().next() {
+            Some(cards) => {
+                for c in &cards {
+                    *left.get_mut(c).unwrap() -= 1;
+                }
+                picks.insert(p, cards);
+            }
+            None => unsolved.push(p),
+        }
+    }
+    unsolved.sort();
+    (picks, unsolved)
+}
+
+/// Why a pack gets no skeleton: first against its own pool, then against the other packs.
+fn skeleton_shortfall(name: &str, pool: &[(&str, Meta)], shared: bool) -> String {
+    let mut by_class = [0; 3];
+    let mut by_bucket = [0; 6];
+    for (_, m) in pool {
+        by_class[m.class] += 1;
+        by_bucket[m.bucket] += 1;
+    }
+    let weight = pool.iter().map(|(id, _)| (*id, 0.0)).collect();
+    let alone = pool.iter().map(|(id, _)| (*id, 1)).collect();
+    let pool_counts = format!(
+        "{} {}, {} {}, {} {}; by cost 1..6+: {:?}",
+        by_class[0],
+        CLASS_NAMES[0],
+        by_class[1],
+        CLASS_NAMES[1],
+        by_class[2],
+        CLASS_NAMES[2],
+        by_bucket
+    );
+    if solve_pack(pool, &alone, &weight).is_empty() {
+        let mut gaps = Vec::new();
+        if by_class[0] < GROUND_UNITS as usize {
+            gaps.push(format!("needs {GROUND_UNITS} {}", CLASS_NAMES[0]));
+        }
+        if by_class[1] < 3 {
+            gaps.push(format!("needs 3-4 {}", CLASS_NAMES[1]));
+        }
+        if by_class[2] < 3 {
+            gaps.push(format!("needs 3-4 {}", CLASS_NAMES[2]));
+        }
+        for (i, (lo, _)) in CURVE.iter().enumerate() {
+            if by_bucket[i] < *lo as usize {
+                gaps.push(format!("needs at least {lo} at cost {}", i + 1));
+            }
+        }
+        return format!(
+            "{name} cannot meet the pack skeleton from the cards it is eligible for ({pool_counts}); {}",
+            if gaps.is_empty() {
+                "no combination meets the curve and arena counts together".to_string()
+            } else {
+                gaps.join(", ")
+            }
+        );
+    }
+    format!(
+        "{name} can meet the pack skeleton alone ({pool_counts}) but not with the copies{} left once the other packs are placed",
+        if shared { " each" } else { "" }
+    )
 }
 
 /// Give pack `start` one more card, moving other packs' picks to alternatives where needed.
@@ -257,5 +616,113 @@ mod tests {
         let doc =
             json!({"owned": {"A": 2}, "packs": [{"name": "P", "slots": 2, "eligible": ["A"]}]});
         assert_eq!(allocate_value(&doc).unwrap().failures.len(), 1);
+    }
+
+    /// An eligible pool whose card-id order breaks the skeleton: ten cost-2 events sort first, so
+    /// taking 15 in id order gives 10 events and no space units. Each of `packs` packs can use it all.
+    fn skeleton_doc(packs: usize) -> Value {
+        use crate::fixture::SKELETON;
+        let mut owned = serde_json::Map::new();
+        let mut rows = Vec::new();
+        let mut row = |id: String, kind: &str, arena: &str, cost: u32| {
+            owned.insert(id.clone(), json!(1));
+            rows.push(json!({"id": id, "type": kind, "cost": cost,
+                "game": {"arenas": if arena.is_empty() { vec![] } else { vec![arena] }}}));
+        };
+        for i in 0..10 {
+            row(format!("A-{i:03}"), "Event", "", 2);
+        }
+        for n in 0..packs {
+            for (i, (kind, arena, cost)) in SKELETON.iter().enumerate() {
+                row(format!("Z{n}-{i:02}"), kind, arena, *cost);
+            }
+        }
+        let pack =
+            |n: usize| json!({"name": format!("Pack {}", n + 1), "slots": 15, "eligible": rows});
+        json!({"owned": owned, "packs": (0..packs).map(pack).collect::<Vec<_>>()})
+    }
+
+    /// The pack documents the allocation implies, run through the real pack checker.
+    fn check_allocation(doc: &Value, plan: &Plan) -> Vec<String> {
+        use crate::fixture::{card, pack};
+        let mut bad = Vec::new();
+        for (n, p) in doc["packs"].as_array().unwrap().iter().enumerate() {
+            let name = p["name"].as_str().unwrap();
+            let mut d = pack(1, "Heroism", "Command");
+            let mut cards = d["cards"].clone();
+            let mut lines: Vec<Value> = d["lines"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|l| !l["card_id"].as_str().unwrap().starts_with('C'))
+                .cloned()
+                .collect();
+            for (id, packs) in &plan.reservations {
+                if !packs.iter().any(|q| q == name) {
+                    continue;
+                }
+                let row = p["eligible"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|r| r["id"] == json!(id))
+                    .unwrap();
+                let arena = row["game"]["arenas"][0].as_str().unwrap_or("");
+                cards[id] = card(
+                    id,
+                    row["type"].as_str().unwrap(),
+                    row["cost"].as_u64().unwrap() as u32,
+                    arena,
+                    None,
+                    &["Heroism", "Command"],
+                );
+                lines.push(json!({"card_id": id, "qty": 1, "zone": "main", "reserved": 1}));
+            }
+            d["cards"] = cards;
+            d["lines"] = json!(lines);
+            let failures = crate::check_pack_value(&d).unwrap();
+            if !failures.is_empty() {
+                bad.push(format!("{} (pack {n}): {failures:?}", name));
+            }
+        }
+        bad
+    }
+
+    #[test]
+    fn card_id_order_would_break_the_skeleton_and_the_plan_keeps_it() {
+        let doc = skeleton_doc(2);
+        let plan = allocate_value(&doc).unwrap();
+        assert!(plan.failures.is_empty(), "{:?}", plan.failures);
+        assert_eq!(check_allocation(&doc, &plan), Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_pool_that_cannot_form_the_skeleton_is_a_named_shortfall() {
+        let mut doc = skeleton_doc(1);
+        let eligible = doc["packs"][0]["eligible"].as_array_mut().unwrap();
+        eligible.retain(|r| r["game"]["arenas"][0] != "Space");
+        let plan = allocate_value(&doc).unwrap();
+        assert_eq!(plan.failures.len(), 1);
+        let m = &plan.failures[0].message;
+        assert!(m.contains("Pack 1") && m.contains("space"), "{m}");
+    }
+
+    #[test]
+    fn packs_sharing_scarce_copies_still_each_pass() {
+        // One skeleton's worth of cards for two packs plus a second set only for pack 2.
+        let mut doc = skeleton_doc(2);
+        let shared: Vec<Value> = doc["packs"][0]["eligible"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| {
+                r["id"].as_str().unwrap() != "A-000" && !r["id"].as_str().unwrap().starts_with("Z1")
+            })
+            .cloned()
+            .collect();
+        doc["packs"][0]["eligible"] = json!(shared);
+        let plan = allocate_value(&doc).unwrap();
+        assert!(plan.failures.is_empty(), "{:?}", plan.failures);
+        assert_eq!(check_allocation(&doc, &plan), Vec::<String>::new());
     }
 }

@@ -28,7 +28,7 @@ pub struct Metrics {
 
 /// The page index a request lands on, bucketed: `0`, `1`, `2-4`, `5-19`, `20+`.
 pub fn depth_bucket(limit: u32, offset: u32) -> &'static str {
-    bucket_of(if limit == 0 { 0 } else { offset / limit })
+    bucket_of(offset.checked_div(limit).unwrap_or(0))
 }
 
 /// How a search was sliced.

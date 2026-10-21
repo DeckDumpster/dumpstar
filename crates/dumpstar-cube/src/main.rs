@@ -9,6 +9,8 @@ fn main() -> ExitCode {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let planned = args.iter().any(|a| a == "--planned");
     args.retain(|a| a != "--planned");
+    let verbose = args.iter().any(|a| a == "--verbose");
+    args.retain(|a| a != "--verbose");
     if args.iter().any(|a| a == "--help" || a == "-h") {
         println!("{USAGE}");
         return ExitCode::SUCCESS;
@@ -22,7 +24,7 @@ fn main() -> ExitCode {
         _ => return usage(),
     };
     if mode == "allocate" {
-        return allocate(paths[0]);
+        return allocate(paths[0], verbose);
     }
     let mut docs = Vec::new();
     for path in &paths {
@@ -98,7 +100,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn allocate(path: &str) -> ExitCode {
+fn allocate(path: &str, verbose: bool) -> ExitCode {
     let mut text = String::new();
     let read = if path == "-" {
         std::io::stdin().read_to_string(&mut text).map(|_| ())
@@ -117,35 +119,71 @@ fn allocate(path: &str) -> ExitCode {
             eprintln!("{e}");
             ExitCode::from(2)
         }
-        Ok(plan) if plan.failures.is_empty() => {
+        Ok(plan) => {
             if plan.reservations.is_empty() {
                 println!("no contested cards");
             }
-            for (card, packs) in &plan.reservations {
-                let (copies, wanting) = plan.contested[card];
+            for s in &plan.summary {
+                let lost: Vec<String> = s
+                    .lost
+                    .iter()
+                    .take(LOST_SHOWN)
+                    .map(|(c, to)| format!("{c} to {}", to.join("+")))
+                    .collect();
+                let more = s.lost.len().saturating_sub(LOST_SHOWN);
                 println!(
-                    "reserve {card}: {} (contested: {copies} cop{}, {wanting} packs)",
-                    packs.join(", "),
-                    if copies == 1 { "y" } else { "ies" }
+                    "{}: reserved {}, short {}, lost {}{}",
+                    s.name,
+                    s.reserved,
+                    s.short,
+                    s.lost.len(),
+                    if lost.is_empty() {
+                        String::new()
+                    } else {
+                        format!(
+                            " ({}{})",
+                            lost.join(", "),
+                            if more > 0 {
+                                format!(", +{more} more")
+                            } else {
+                                String::new()
+                            }
+                        )
+                    }
                 );
             }
-            println!("ok");
-            ExitCode::SUCCESS
-        }
-        Ok(plan) => {
+            if verbose {
+                for (card, packs) in &plan.reservations {
+                    let (copies, wanting) = plan.contested[card];
+                    println!(
+                        "reserve {card}: {} (contested: {copies} cop{}, {wanting} packs)",
+                        packs.join(", "),
+                        if copies == 1 { "y" } else { "ies" }
+                    );
+                }
+            }
             for f in &plan.failures {
                 println!("FAIL {f}");
             }
-            ExitCode::from(1)
+            if plan.failures.is_empty() {
+                println!("ok");
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(1)
+            }
         }
     }
 }
 
-const USAGE: &str = "usage: swu-cube-check pack [--planned] [FILE] | cube [--planned] [FILE...] | copies [--planned] [FILE...] | allocate [FILE]
+/// Cards named per pack in the default summary; `--verbose` has the full reserve lines.
+const LOST_SHOWN: usize = 2;
+
+const USAGE: &str = "usage: swu-cube-check pack [--planned] [FILE] | cube [--planned] [FILE...] | copies [--planned] [FILE...] | allocate [--verbose] [FILE]
   pack      check one pack document (get_deck's result) against the pack rules
   cube      check a 20-pack cube: a cube document, or one pack file per deck
   copies    only the copy-count check (cube-copies) over any number of pack files, for a partial build
-  allocate  plan copies across the cube: {\"owned\": {id: copies}, \"packs\": [{\"name\", \"slots\": 15,
+  allocate  plan copies across the cube (one line per pack: reserved, short, lost; --verbose adds every
+            reserve line; a Leader or non-base Rare/Legendary goes to at most one pack): {\"owned\": {id: copies}, \"packs\": [{\"name\", \"slots\": 15,
             \"eligible\": [search_cards rows or card ids], \"picks\": [...], \"candidates\": [...]}]}; only picks and candidates reserve; rows carry type, cost and arenas, so a
             15-slot pack is reserved cards that meet the pack skeleton, or a named shortfall
   FILE is read in place of stdin (`-` is stdin); exit 0 ok, 1 a rule failed, 2 unreadable input";

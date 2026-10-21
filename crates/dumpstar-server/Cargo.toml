@@ -23,6 +23,8 @@ anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 ts-rs.workspace = true
+# Reads a bearer token's unverified `aud` to pick the verifier for it.
+base64 = "0.22"
 
 [dev-dependencies]
 dumpster-kit-tenancy = { workspace = true, features = ["testing"] }
@@ -39,5 +41,4 @@ brotli.workspace = true
 # RSA key generation and PEM export for the in-process JWKS test server.
 rsa = { version = "0.9", features = ["pem"] }
 # Base64url encoding for JWK construction.
-base64 = "0.22"
 url = "2"

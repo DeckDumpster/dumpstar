@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::extract::State;
-use axum::http::StatusCode;
+use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::{Router, middleware, routing::get};
 use rusqlite::Connection;
@@ -90,6 +90,9 @@ pub(crate) struct McpMount {
     tools: Arc<mcp::DumpstarTools>,
     resolver: Arc<mcp::Resolver>,
     telemetry: Telemetry,
+    /// A second verifier for `/api`, for tokens whose `aud` is `DUMPSTAR_API_RESOURCE`. The
+    /// `/mcp` verifier also serves `/api`, so a token minted for the MCP resource works there.
+    api_auth: Option<(String, Arc<McpAuth>)>,
 }
 
 impl AppState {
@@ -292,6 +295,66 @@ async fn session_tenant(
     Ok(SESSION_TENANT.scope(id, next.run(req)).await)
 }
 
+/// The `aud` values of a bearer JWT, read without verifying it: only to choose which verifier
+/// checks it. The chosen verifier does the signature, issuer, audience and expiry checks.
+fn unverified_audiences(authorization: &str) -> Vec<String> {
+    use base64::Engine;
+    let Some(token) = authorization
+        .strip_prefix("Bearer ")
+        .or_else(|| authorization.strip_prefix("bearer "))
+    else {
+        return vec![];
+    };
+    let Some(payload) = token.split('.').nth(1) else {
+        return vec![];
+    };
+    let Ok(bytes) =
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(payload.trim_end_matches('='))
+    else {
+        return vec![];
+    };
+    match serde_json::from_slice::<serde_json::Value>(&bytes)
+        .ok()
+        .and_then(|v| v.get("aud").cloned())
+    {
+        Some(serde_json::Value::String(s)) => vec![s],
+        Some(serde_json::Value::Array(a)) => a
+            .into_iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect(),
+        _ => vec![],
+    }
+}
+
+/// Bearer access tokens on `/api`, beside the browser cookie. A request with no `Authorization`
+/// header is untouched. A token whose `aud` is the API audience is verified by that instance;
+/// every other token by the `/mcp` instance, so its audience (the MCP resource) is accepted too
+/// and anything else is a 401. Outside `/api` nothing changes.
+async fn api_bearer(
+    State(mcp): State<Option<McpMount>>,
+    req: axum::extract::Request,
+    next: middleware::Next,
+) -> Response {
+    let Some(m) = mcp else {
+        return next.run(req).await;
+    };
+    if !(req.uri().path() == "/api" || req.uri().path().starts_with("/api/")) {
+        return next.run(req).await;
+    }
+    let auth = match (&m.api_auth, req.headers().get(header::AUTHORIZATION)) {
+        (Some((resource, api)), Some(h)) => {
+            let auds = unverified_audiences(h.to_str().unwrap_or(""));
+            if auds.iter().any(|a| a == resource) {
+                api.clone()
+            } else {
+                m.auth.clone()
+            }
+        }
+        _ => m.auth.clone(),
+    };
+    McpAuth::api_layer(State(auth), req, next).await
+}
+
 /// Build the Axum router. `/health` and `/api/*` are handled by Rust; the
 /// SvelteKit bundle under `/_app` and `/robots.txt` are served as files;
 /// every other path returns the SPA's `index.html` so SvelteKit handles
@@ -395,6 +458,11 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
         .merge(mcp_routes.unwrap_or_default())
         .fallback(get(spa))
         .layer(middleware::from_fn_with_state(state_for_gate, sign_in_gate))
+        // Outside the gate: a verified bearer puts the `SessionUser` the gate then lets through.
+        .layer(middleware::from_fn_with_state(
+            state.mcp.clone(),
+            api_bearer,
+        ))
         .layer(middleware::from_fn(api_responses_are_private))
         .layer(dumpster_kit_telemetry::RouteMetricsLayer::new(
             state.metrics.telemetry(),
@@ -423,6 +491,10 @@ pub struct ServeConfig {
     /// The agent-tool endpoint's own URL (`DUMPSTAR_MCP_RESOURCE`, e.g. `https://star.dumpster.cards/mcp`),
     /// the `aud` its access tokens must carry. `None` serves no `/mcp`. Requires `oidc`.
     pub mcp_resource: Option<String>,
+    /// The audience `/api` accepts bearer tokens for (`DUMPSTAR_API_RESOURCE`, e.g.
+    /// `https://star.dumpster.cards/api`), beside the MCP resource, whose tokens `/api` also
+    /// accepts. `None` accepts the MCP audience alone. Requires `mcp_resource`.
+    pub api_resource: Option<String>,
     /// How long a drain waits for requests in flight (`DUMPSTAR_DRAIN_TIMEOUT_SECS`).
     pub drain_timeout: std::time::Duration,
 }
@@ -468,6 +540,19 @@ pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
             "refusing to start: DUMPSTAR_MCP_RESOURCE needs Pocket ID sign-in (DUMPSTAR_OIDC_*), which is the /mcp authorization server"
         );
     }
+    if cfg.api_resource.is_some() && cfg.mcp_resource.is_none() {
+        anyhow::bail!("refusing to start: DUMPSTAR_API_RESOURCE needs DUMPSTAR_MCP_RESOURCE");
+    }
+    let api_cfg = match (&cfg.api_resource, &cfg.mcp_resource, &cfg.oidc) {
+        (Some(api), Some(_), Some(o)) => Some(McpAuthConfig {
+            issuer: o.issuer.clone(),
+            resource: api.clone(),
+            required_group: o.required_group.clone(),
+            clock_skew: o.clock_skew,
+            jwks_refetch_min: o.jwks_refetch_min,
+        }),
+        _ => None,
+    };
     let mcp_cfg = match (&cfg.mcp_resource, &cfg.oidc) {
         (Some(resource), Some(o)) => Some(McpAuthConfig {
             issuer: o.issuer.clone(),
@@ -513,6 +598,16 @@ pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
                 env!("CARGO_PKG_VERSION"),
             ));
             let auth = McpAuth::discover(c, tenants.clone(), &telemetry).await?;
+            let api_auth = match api_cfg {
+                Some(a) => {
+                    let resource = a.resource.clone();
+                    Some((
+                        resource,
+                        McpAuth::discover(a, tenants.clone(), &telemetry).await?,
+                    ))
+                }
+                None => None,
+            };
             let (tools, resolver) = mcp::tools(tenants.clone(), registry.clone(), flags.clone())
                 .map_err(anyhow::Error::msg)?;
             Some(McpMount {
@@ -520,6 +615,7 @@ pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
                 tools,
                 resolver,
                 telemetry,
+                api_auth,
             })
         }
         None => None,
@@ -1572,6 +1668,15 @@ mod tests {
 
             /// As [`Site::new`], with `extra_sql` run against the seeded catalog first.
             async fn with_catalog(handles: &[&str], extra_sql: &str) -> Self {
+                Self::build(handles, extra_sql, None).await
+            }
+
+            /// As [`Site::new`], with a second `/api` audience configured.
+            async fn with_api_audience(handles: &[&str], api_resource: &str) -> Self {
+                Self::build(handles, "", Some(api_resource)).await
+            }
+
+            async fn build(handles: &[&str], extra_sql: &str, api_resource: Option<&str>) -> Self {
                 let dir = tempfile::tempdir().unwrap();
                 let shared = seed(dir.path());
                 if !extra_sql.is_empty() {
@@ -1607,6 +1712,7 @@ mod tests {
                     .extend(MCP_BYPASS_PATHS.iter().map(|p| p.to_string()));
                 let (issuer, group) = (cfg.issuer.clone(), cfg.required_group.clone());
                 let oidc = Oidc::discover(cfg).await.unwrap();
+                let (api_issuer, api_group) = (issuer.clone(), group.clone());
                 let c = dumpstar_db::open_shared(&shared).unwrap();
                 let tenants = Arc::new(test_tenants(
                     tenants_dir.clone(),
@@ -1629,6 +1735,25 @@ mod tests {
                 )
                 .await
                 .unwrap();
+                let api_auth = match api_resource {
+                    Some(r) => Some((
+                        r.to_string(),
+                        McpAuth::discover(
+                            McpAuthConfig {
+                                issuer: api_issuer,
+                                resource: r.into(),
+                                required_group: api_group,
+                                clock_skew: std::time::Duration::from_secs(5),
+                                jwks_refetch_min: std::time::Duration::ZERO,
+                            },
+                            tenants.clone(),
+                            &telemetry,
+                        )
+                        .await
+                        .unwrap(),
+                    )),
+                    None => None,
+                };
                 let (tools, resolver) =
                     mcp::tools(tenants.clone(), registry.clone(), flags.clone()).unwrap();
                 let state = AppState {
@@ -1643,6 +1768,7 @@ mod tests {
                         tools,
                         resolver,
                         telemetry,
+                        api_auth,
                     }),
                     metrics: metrics::Metrics::disabled(),
                 };
@@ -2762,9 +2888,119 @@ mod tests {
             assert!(shell.headers().get(header::CACHE_CONTROL).is_none());
         }
 
+        // ---- Bearer tokens on /api (sp-t5m86j) -----------------------------
+
+        const API_RESOURCE: &str = "https://star.test/api";
+
+        /// A token minted for the MCP resource (what Claude Code's sign-in yields) reads and
+        /// writes `/api` as the tenant its email is bound to, with no cookie.
+        #[tokio::test]
+        async fn an_mcp_audience_token_is_accepted_on_api() {
+            let site = Site::new(&["alice", "bob"]).await;
+            let alice = site.token_aud("alice@example.com", MCP_RESOURCE);
+            let bob = site.token_aud("bob@example.com", MCP_RESOURCE);
+
+            let (s, _) = site
+                .api(
+                    Some(&alice),
+                    "POST",
+                    "/api/decks",
+                    Some(r#"{"name":"alice-deck"}"#),
+                )
+                .await;
+            assert!(s.is_success(), "create deck: {s}");
+            for uri in ["/api/sets", "/api/decks", "/api/collection"] {
+                let (s, _) = site.api(Some(&alice), "GET", uri, None).await;
+                assert_eq!(s, StatusCode::OK, "{uri}");
+            }
+            let (_, mine) = site.api(Some(&alice), "GET", "/api/decks", None).await;
+            assert!(mine.contains("alice-deck"));
+            let (s, theirs) = site.api(Some(&bob), "GET", "/api/decks", None).await;
+            assert_eq!(s, StatusCode::OK);
+            assert!(
+                !theirs.contains("alice-deck"),
+                "bob saw alice's deck: {theirs}"
+            );
+        }
+
+        /// The configured API audience is accepted too; the cookie keeps working beside it,
+        /// and the bearer resolves to the same tenant the browser session does.
+        #[tokio::test]
+        async fn an_api_audience_token_is_accepted_and_matches_the_cookie_tenant() {
+            let mut site = Site::with_api_audience(&["alice"], API_RESOURCE).await;
+            let cb = site.sign_in(member("alice@example.com")).await;
+            assert_eq!(cb.status(), StatusCode::SEE_OTHER);
+            let created = site.send("POST", "/api/collection", Some(ADD_CARD)).await;
+            assert_eq!(created.status(), StatusCode::CREATED);
+
+            for aud in [API_RESOURCE, MCP_RESOURCE] {
+                let t = site.token_aud("alice@example.com", aud);
+                let (s, body) = site.api(Some(&t), "GET", "/api/collection", None).await;
+                assert_eq!(s, StatusCode::OK, "{aud}");
+                assert!(body.contains("SOR-1-normal"), "{aud}: {body}");
+            }
+            let (s, _) = site.api(None, "GET", "/api/collection", None).await;
+            assert_ne!(s, StatusCode::OK, "no cookie, no token");
+            let again = site.get("/api/collection").await;
+            assert_eq!(again.status(), StatusCode::OK, "cookie still works");
+        }
+
+        /// A bad token is a 401 — never a redirect and never a fall-back to the cookie path.
+        #[tokio::test]
+        async fn a_wrong_audience_or_garbage_token_is_401_on_api() {
+            let site = Site::with_api_audience(&["alice"], API_RESOURCE).await;
+            let wrong = site.token_aud("alice@example.com", "https://elsewhere.test/api");
+            for t in [wrong.as_str(), "not-a-jwt"] {
+                let (s, _) = site.api(Some(t), "GET", "/api/collection", None).await;
+                assert_eq!(s, StatusCode::UNAUTHORIZED);
+            }
+            let (s, _) = site
+                .api(Some(&wrong), "GET", "/api/backup-status", None)
+                .await;
+            assert_eq!(
+                s,
+                StatusCode::UNAUTHORIZED,
+                "public route too: a bad token is not ignored"
+            );
+        }
+
         // ---- Agent tools at /mcp (sp-cuhb3r) -------------------------------
 
         impl Site {
+            fn token_aud(&self, email: &str, aud: &str) -> String {
+                self.provider.mint_jwt(
+                    json!({
+                        "iss": self.provider.issuer, "aud": aud,
+                        "sub": format!("sub-{email}"), "email": email, "groups": [GROUP],
+                        "client_id": "swu-cube-check", "exp": unix_now() + 3600,
+                    }),
+                    None,
+                )
+            }
+
+            async fn api(
+                &self,
+                token: Option<&str>,
+                method: &str,
+                uri: &str,
+                body: Option<&str>,
+            ) -> (StatusCode, String) {
+                let mut b = Request::builder().method(method).uri(uri);
+                if let Some(t) = token {
+                    b = b.header(header::AUTHORIZATION, format!("Bearer {t}"));
+                }
+                let req = match body {
+                    Some(j) => b
+                        .header("content-type", "application/json")
+                        .body(Body::from(j.to_string()))
+                        .unwrap(),
+                    None => b.body(Body::empty()).unwrap(),
+                };
+                let resp = self.router.clone().oneshot(req).await.unwrap();
+                let status = resp.status();
+                (status, body_string(resp).await)
+            }
+
             fn token_for(&self, email: &str) -> String {
                 self.provider.mint_jwt(
                     json!({
@@ -2958,18 +3194,15 @@ mod tests {
             assert!(err.contains("SOR-12"), "{err}");
         }
 
-        /// A bearer token opens nothing under `/api`.
+        /// A bearer token opens `/api` (sp-t5m86j) but nothing else the browser gate guards.
         #[tokio::test]
-        async fn a_bearer_token_does_not_open_the_api() {
+        async fn a_bearer_token_opens_the_api_and_not_the_pages() {
             let site = Site::new(&["alice"]).await;
             let token = site.token_for("alice@example.com");
-            let req = Request::builder()
-                .uri("/api/collection")
-                .header(header::AUTHORIZATION, format!("Bearer {token}"))
-                .body(Body::empty())
-                .unwrap();
-            let resp = site.router.clone().oneshot(req).await.unwrap();
-            assert_ne!(resp.status(), StatusCode::OK);
+            let (s, _) = site.api(Some(&token), "GET", "/api/collection", None).await;
+            assert_eq!(s, StatusCode::OK);
+            let (s, _) = site.api(Some(&token), "GET", "/", None).await;
+            assert_eq!(s, StatusCode::SEE_OTHER, "pages stay cookie-only");
         }
 
         /// The whole v1 contract as one tenant, and a second tenant sees none of it.

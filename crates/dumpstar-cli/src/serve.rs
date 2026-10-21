@@ -67,6 +67,9 @@ pub fn run(args: ServeArgs) -> anyhow::Result<()> {
         mcp_resource: std::env::var("DUMPSTAR_MCP_RESOURCE")
             .ok()
             .filter(|v| !v.trim().is_empty()),
+        api_resource: std::env::var("DUMPSTAR_API_RESOURCE")
+            .ok()
+            .filter(|v| !v.trim().is_empty()),
         drain_timeout,
     };
     let runtime = tokio::runtime::Runtime::new()?;

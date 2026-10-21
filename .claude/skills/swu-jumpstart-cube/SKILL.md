@@ -67,8 +67,9 @@ Leader's aspect without an epic action, and the epic base is any 25-HP base of t
 | Aggression (Red) | Tarkintown |
 | Cunning (Yellow) | Jedha City |
 
-Other real epic bases (Mystic Monastery, Vergence Temple, Shadow Collective Camp, Temple of
-Destruction, Tomb of Eilram) are accepted. A collection may not own enough epic bases for 5 per
+One rule decides: an epic base is a 25-HP base whose card object has a non-null `epic_action`. A
+base is not epic by name; Mystic Monastery and similar bases whose `epic_action` is null are
+rejected as the epic base. A collection may not own enough epic bases for 5 per
 color (Ryan's owns only Security Complex): report the shortfall to the user and build the packs
 that are possible; never fail silently.
 

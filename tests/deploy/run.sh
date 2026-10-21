@@ -3046,7 +3046,7 @@ mkdir -p "$PORT20"
 	dumpstar_units_install prod >/dev/null
 	dumpstar_units_install other >/dev/null
 )
-check "a fresh prod publishes the backend port (origin port + 10000, behind the hold proxy) on loopback" "1" \
+check "a fresh prod publishes the backend port (behind the hold proxy) on loopback" "1" \
 	"$(grep -c '^PublishPort=127\.0\.0\.1:18091:8080$' "${PORT20}/.config/containers/systemd/dumpstar-prod.container" || true)"
 check "the recorded port is in the README" "yes" \
 	"$(grep -q '127\.0\.0\.1:8091' "${REPO_DIR}/deploy/README.md" && echo yes || echo no)"

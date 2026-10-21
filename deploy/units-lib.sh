@@ -44,7 +44,7 @@ DUMPSTAR_UNITS_CHANGED=()
 DUMPSTAR_PROD_PORT="$(tr -d '[:space:]' <"$(dirname "${BASH_SOURCE[0]}")/prod-origin-port")"
 # Prod's container publishes here, not on the origin port: dumpstar-front@prod (hold-proxy.py)
 # owns the origin port and holds requests while a deploy restarts the container (sp-slm2ib).
-DUMPSTAR_PROD_BACKEND_PORT=$((DUMPSTAR_PROD_PORT + 10000))
+DUMPSTAR_PROD_BACKEND_PORT="$(tr -d '[:space:]' <"$(dirname "${BASH_SOURCE[0]}")/prod-backend-port")"
 
 # The origin health URL an installed instance serves on, read from its Quadlet unit;
 # fails if there is no unit or it does not publish on loopback.

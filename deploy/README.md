@@ -599,7 +599,7 @@ way to hand the script a liveness set or to switch the check off.
 
 - **Origin port: `127.0.0.1:8091`** (`deploy/prod-origin-port`, read into `DUMPSTAR_PROD_PORT` by `units-lib.sh`; 8090 is
   the other site's). It is owned by `dumpstar-front@prod` (`deploy/hold-proxy.py`), which pipes to the container on
-  the backend port 18091 (origin + 10000). A deploy restarts only the container; requests arriving meanwhile are
+  the backend port 18091 (`deploy/prod-backend-port`). A deploy restarts only the container; requests arriving meanwhile are
   held (up to 90s), not refused, and the server drains in-flight requests on SIGTERM, so a routine deploy fails none
   (sp-slm2ib). `deploy.sh` logs how long the backend was unavailable. The first deploy after this change moves the
   container off 8091 and starts the proxy: one brief gap, once. The Quadlet publishes loopback only, so the only path in is the

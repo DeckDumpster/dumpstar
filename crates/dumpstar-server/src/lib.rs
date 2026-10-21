@@ -543,7 +543,7 @@ pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
 }
 
 async fn shutdown_signal() {
-    use tokio::signal::unix::{signal, SignalKind};
+    use tokio::signal::unix::{SignalKind, signal};
     match signal(SignalKind::terminate()) {
         Ok(mut term) => {
             tokio::select! {

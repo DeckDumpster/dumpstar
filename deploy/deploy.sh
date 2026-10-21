@@ -54,6 +54,13 @@ else
         exit 1
     fi
 
+    # Keep the image that is serving, to put back with the unit (sp-h5nmbc): the
+    # previous unit run against the new image crash-looped on a key it lacked.
+    PREVIOUS_IMAGE_ID="$(podman image inspect --format '{{.Id}}' "dumpstar:${INSTANCE}" 2>/dev/null || true)"
+    if [ -n "$PREVIOUS_IMAGE_ID" ]; then
+        podman tag "$PREVIOUS_IMAGE_ID" "dumpstar:${INSTANCE}-prev"
+    fi
+
     echo "==> Rebuilding image dumpstar:${INSTANCE}..."
     # Through the helper, not a bare `podman build` (pd-h3wy). Two things came
     # free with it that this line had been missing for as long as it existed:
@@ -120,11 +127,20 @@ DRAIN_SINCE="$(date '+%Y-%m-%d %H:%M:%S')"
 if ! { systemctl --user restart "$SERVICE_NAME" && dumpstar_unit_serves; }; then
     dump_unit_diagnostics "$SERVICE_NAME"
     if [ -n "${PREVIOUS_UNIT:-}" ] && [ -s "$PREVIOUS_UNIT" ]; then
-        echo "ERROR: ${SERVICE_NAME} did not come up healthy; restoring the previous unit." >&2
+        echo "ERROR: ${SERVICE_NAME} did not come up healthy; restoring the previous unit and image." >&2
         cp "$PREVIOUS_UNIT" "$QUADLET_FILE"
+        if [ -n "${PREVIOUS_IMAGE_ID:-}" ]; then
+            podman tag "dumpstar:${INSTANCE}-prev" "dumpstar:${INSTANCE}" || true
+            podman tag "dumpstar:${INSTANCE}-prev" dumpstar:latest || true
+        fi
         systemctl --user daemon-reload
         systemctl --user reset-failed "$SERVICE_NAME" 2>/dev/null || true
-        systemctl --user restart "$SERVICE_NAME" || true
+        if systemctl --user restart "$SERVICE_NAME" && dumpstar_unit_serves; then
+            echo "ERROR: deploy failed; rolled back to ${PREVIOUS_IMAGE_ID:-the previous unit (no previous image recorded)}; ${SERVICE_NAME} is serving." >&2
+        else
+            dump_unit_diagnostics "$SERVICE_NAME"
+            echo "ROLLBACK FAILED: site down (${SERVICE_NAME} does not serve after restoring the previous unit and image)" >&2
+        fi
     fi
     exit 1
 fi

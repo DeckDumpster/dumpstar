@@ -3132,36 +3132,53 @@ mod tests {
                 let q = line.split('`').nth(1).unwrap().to_string();
                 q.replace(" avail>=1", "")
             };
-            let aligned = template("- aligned:")
-                .replace("<color>", "vigilance")
-                .replace("<alignment>", "heroism")
-                .replace(
-                    "-a:<each other color>",
-                    "-a:command -a:aggression -a:cunning",
-                );
-            let unaligned = template("- unaligned:")
-                .replace("<color>", "vigilance")
-                .replace(
-                    "-a:<each other color>",
-                    "-a:command -a:aggression -a:cunning",
-                );
-            assert!(!aligned.contains('<') && !unaligned.contains('<'));
+            let fill = |q: String| -> String {
+                q.replace("<color>", "vigilance")
+                    .replace("<alignment>", "heroism")
+                    .replace(
+                        "-a:<each other color>",
+                        "-a:command -a:aggression -a:cunning",
+                    )
+                    .replace(
+                        "-a:<every color>",
+                        "-a:command -a:vigilance -a:aggression -a:cunning",
+                    )
+            };
+            let aligned = fill(template("- color+alignment:"));
+            let unaligned = fill(template("- color only:"));
+            let alignment_only = fill(template("- alignment only:"));
+            let no_aspect = fill(template("- no aspect:"));
+            for q in [&aligned, &unaligned, &alignment_only, &no_aspect] {
+                assert!(!q.contains('<'), "{q}");
+            }
 
             let sql = "INSERT INTO cards (card_id, name, card_type, cost, arenas, aspects) VALUES \
                  ('P1', 'Pool Unit', 'Unit', 2, '[]', '[\"Vigilance\",\"Heroism\"]'), \
                  ('P2', 'Pool Leader', 'Leader', 5, '[]', '[\"Vigilance\",\"Heroism\"]'), \
                  ('P3', 'Pool Base', 'Base', 0, '[]', '[\"Vigilance\"]'), \
                  ('P4', 'Unaligned Leader', 'Leader', 5, '[]', '[\"Vigilance\"]'), \
-                 ('P5', 'Vanquish', 'Event', 5, '[]', '[\"Vigilance\"]'); \
+                 ('P5', 'Vanquish', 'Event', 5, '[]', '[\"Vigilance\"]'), \
+                 ('P6', 'Alliance X-Wing', 'Unit', 3, '[]', '[\"Heroism\"]'), \
+                 ('P7', 'AT-ST', 'Unit', 6, '[]', '[\"Villainy\"]'), \
+                 ('P8', 'Blank Event', 'Event', 2, '[]', '[]'), \
+                 ('P9', 'Off Color Heroism', 'Unit', 3, '[]', '[\"Command\",\"Heroism\"]'), \
+                 ('P10', 'No Aspect Leader', 'Leader', 5, '[]', '[]'); \
                  INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) VALUES \
                  ('P1-p', 'P1', 'SOR', 'P1', 'Standard', 'Normal'), \
                  ('P2-p', 'P2', 'SOR', 'P2', 'Standard', 'Normal'), \
                  ('P3-p', 'P3', 'SOR', 'P3', 'Standard', 'Normal'), \
                  ('P4-p', 'P4', 'SOR', 'P4', 'Standard', 'Normal'), \
-                 ('P5-p', 'P5', 'SOR', 'P5', 'Standard', 'Normal');";
+                 ('P5-p', 'P5', 'SOR', 'P5', 'Standard', 'Normal'), \
+                 ('P6-p', 'P6', 'SOR', 'P6', 'Standard', 'Normal'), \
+                 ('P7-p', 'P7', 'SOR', 'P7', 'Standard', 'Normal'), \
+                 ('P8-p', 'P8', 'SOR', 'P8', 'Standard', 'Normal'), \
+                 ('P9-p', 'P9', 'SOR', 'P9', 'Standard', 'Normal'), \
+                 ('P10-p', 'P10', 'SOR', 'P10', 'Standard', 'Normal');";
             let mut site = Site::with_catalog(&["alice"], sql).await;
             site.sign_in(member("alice@example.com")).await;
-            for p in ["P1-p", "P2-p", "P3-p", "P4-p", "P5-p"] {
+            for p in [
+                "P1-p", "P2-p", "P3-p", "P4-p", "P5-p", "P6-p", "P7-p", "P8-p", "P9-p", "P10-p",
+            ] {
                 let body = json!({"printing_id": p, "source": "manual_id"}).to_string();
                 let r = site.send("POST", "/api/collection", Some(&body)).await;
                 assert_eq!(r.status(), StatusCode::CREATED);
@@ -3193,6 +3210,17 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(ids(&u), vec!["SOR-P5"]);
+            for (q, want) in [(alignment_only, "SOR-P6"), (no_aspect, "SOR-P8")] {
+                let r = site
+                    .tool(
+                        &t,
+                        "search_cards",
+                        json!({"q": q, "owned_only": true, "limit": 100}),
+                    )
+                    .await
+                    .unwrap();
+                assert_eq!(ids(&r), vec![want], "{q}");
+            }
         }
 
         /// Acceptance (sp-kk6hn8): the swu-jumpstart-cube skill's method, scripted with no model,

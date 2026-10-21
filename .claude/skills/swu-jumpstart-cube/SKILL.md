@@ -106,22 +106,30 @@ and choose from the results yourself; do not search once per card.
 2. **Allocate leaders and base pairs.** Pick 20 Leaders: 10 Heroism, 10 Villainy, 5 of each color
    (for example Command 3+2, Vigilance 2+3, Aggression 3+2, Cunning 2+3). Apply the universality
    rule. Each pack takes an epic and a vanilla base of its Leader's color; if the collection lacks them, say so and build what is possible.
-3. **Fill each pack to the skeleton.** Two `search_cards` per pack cover the Leader's whole pool,
-   because section 2 allows same-color cards with no alignment and one `a:<color> a:<alignment>`
-   query misses them. Neither query returns Leaders or bases, which are chosen separately. Both pass `avail>=1` in the query (when `query_help` lists `avail`; otherwise
-   pass `owned_only: true` and keep results whose `available_count` is at least 1), `limit: 100`:
-   - aligned: `a:<color> a:<alignment> -a:<each other color> -t:leader -t:base avail>=1`
-   - unaligned: `a:<color> -a:heroism -a:villainy -a:<each other color> -t:leader -t:base avail>=1`
+3. **Fill each pack to the skeleton.** Four `search_cards` per pack cover the Leader's whole pool,
+   because section 2 allows four sets and no one query returns them all: color and alignment, color
+   only, alignment only, and no aspect at all. None returns Leaders or bases, which are chosen
+   separately. All pass `avail>=1` in the query (when `query_help` lists `avail`; otherwise
+   pass `owned_only: true` and keep results whose `available_count` is at least 1), `limit: 100`.
+   `<other colors>` is each color but the Leader's (`-a:<other color>` once per color), and `<other
+   alignment>` is the opposite of the Leader's:
+   - color+alignment: `a:<color> a:<alignment> -a:<each other color> -t:leader -t:base avail>=1`
+   - color only: `a:<color> -a:heroism -a:villainy -a:<each other color> -t:leader -t:base avail>=1`
+   - alignment only: `a:<alignment> -a:<every color> -t:leader -t:base avail>=1`
+   - no aspect: `-a:heroism -a:villainy -a:<every color> -t:leader -t:base avail>=1`
 
-   Each `-a:<other color>` drops the cards that carry a second color (a Vigilance + Cunning unit, a
-   three-aspect IG-88): they fail the pack's aspect rule. For Vigilance and Heroism the aligned query
-   is `a:vigilance a:heroism -a:command -a:aggression -a:cunning -t:leader -t:base avail>=1`.
+   `<every color>` is all four colors (`-a:command -a:vigilance -a:aggression -a:cunning`). Each
+   `-a:<other color>` drops the cards that carry a second color (a Vigilance + Cunning unit, a
+   three-aspect IG-88): they fail the pack's aspect rule. For Vigilance and Heroism the color+alignment
+   query is `a:vigilance a:heroism -a:command -a:aggression -a:cunning -t:leader -t:base avail>=1`.
+   The alignment-only set is cards such as Alliance X-Wing and Wing Leader (Heroism, no color); a
+   Villainy leader's pool has AT-ST there. The checker accepts exactly these four sets.
 
    One more for the color's bases: `t:base a:<color>`. Then pick from the combined results the 15
    cards that meet section 4, the 25-HP and 30-HP bases, and the Leader. A card already chosen for
    an earlier pack has less available; re-search per pack so `available_count` is current. Prefer
-   cards of the Leader's own alignment and color; same-color cards with no alignment and cards with
-   no aspects are also allowed.
+   cards of the Leader's own alignment and color; same-color cards with no alignment, cards of the Leader's
+   alignment with no color, and cards with no aspects are also allowed.
 4. **Check the planned pack, then save it.** Before any write, assemble the pack document (below)
    and run `swu-cube-check pack --planned`. Fix every `FAIL` line, then `create_deck` (`format`:
    `SWU Jumpstart Cube`, `group`: the group name (the same for all 20 packs), `name`: `Pack <n>`) and

@@ -96,7 +96,7 @@ check "PATH untouched" "$ORIG_PATH" "$PATH"
 check "no store flags" "" "${DUMPSTAR_STORE_GLOBAL_ARGS:-}"
 
 # The unit a no-store setup.sh would generate, byte for byte.
-sed -e 's|{{INSTANCE}}|prod|g' -e 's|{{PORT}}:8080|18091:8080|' \
+sed -e 's|{{INSTANCE}}|prod|g' -e 's|{{PORT}}:8080|8090:8080|' \
 	"${REPO_DIR}/deploy/dumpstar.container" > "${WORK}/prod.container"
 cp "${WORK}/prod.container" "${WORK}/prod.expected"
 dumpstar_store_stamp_unit "${WORK}/prod.container"
@@ -623,7 +623,7 @@ sed -e 's|{{INSTANCE}}|prod|g' -e "s|{{REPO_DIR}}|${REPO_DIR}|g" \
 check "sidecar unit matches the template" "same" \
 	"$(cmp -s "${QUADLET}/dumpstar-litestream-prod.container" "${WORK}/ls.expected" && echo same || echo differs)"
 
-sed -e 's|{{INSTANCE}}|prod|g' -e 's|{{PORT}}:8080|18091:8080|' \
+sed -e 's|{{INSTANCE}}|prod|g' -e 's|{{PORT}}:8080|8090:8080|' \
 	"${REPO_DIR}/deploy/dumpstar.container" > "${WORK}/app.expected"
 check "app unit matches the template" "same" \
 	"$(cmp -s "${QUADLET}/dumpstar-prod.container" "${WORK}/app.expected" && echo same || echo differs)"
@@ -660,7 +660,7 @@ check "app unit gets its restart bounds" "2" \
 # An outage caused by fixing the units is not a fix. Refreshing must never move
 # an instance off the address everything reaches it on.
 check "the published port survives the refresh" "1" \
-	"$(grep -c '^PublishPort=127\.0\.0\.1:18091:8080$' "${QUADLET}/dumpstar-prod.container" || true)"
+	"$(grep -c '^PublishPort=127\.0\.0\.1:8090:8080$' "${QUADLET}/dumpstar-prod.container" || true)"
 check "the published port is loopback-bound" "1" \
 	"$(grep -c '^PublishPort=127\.0\.0\.1:' "${QUADLET}/dumpstar-prod.container" || true)"
 
@@ -3046,8 +3046,8 @@ mkdir -p "$PORT20"
 	dumpstar_units_install prod >/dev/null
 	dumpstar_units_install other >/dev/null
 )
-check "a fresh prod publishes the backend port (behind the hold proxy) on loopback" "1" \
-	"$(grep -c '^PublishPort=127\.0\.0\.1:18091:8080$' "${PORT20}/.config/containers/systemd/dumpstar-prod.container" || true)"
+check "a fresh prod publishes the recorded port on loopback" "1" \
+	"$(grep -c '^PublishPort=127\.0\.0\.1:8091:8080$' "${PORT20}/.config/containers/systemd/dumpstar-prod.container" || true)"
 check "the recorded port is in the README" "yes" \
 	"$(grep -q '127\.0\.0\.1:8091' "${REPO_DIR}/deploy/README.md" && echo yes || echo no)"
 check "another instance is not pinned to prod's port" "0" \

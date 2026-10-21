@@ -1293,10 +1293,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dumpstar-hold-proxy"
-version = "0.1.0"
-
-[[package]]
 name = "dumpstar-ingest"
 version = "0.1.0"
 dependencies = [

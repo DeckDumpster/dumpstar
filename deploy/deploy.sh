@@ -116,7 +116,6 @@ dumpstar_unit_serves() {
     done
     return 1
 }
-DEPLOY_T0=$SECONDS
 if ! { systemctl --user restart "$SERVICE_NAME" && dumpstar_unit_serves; }; then
     dump_unit_diagnostics "$SERVICE_NAME"
     if [ -n "${PREVIOUS_UNIT:-}" ] && [ -s "$PREVIOUS_UNIT" ]; then
@@ -127,17 +126,6 @@ if ! { systemctl --user restart "$SERVICE_NAME" && dumpstar_unit_serves; }; then
         systemctl --user restart "$SERVICE_NAME" || true
     fi
     exit 1
-fi
-
-# Prod's origin port belongs to the hold proxy, which holds requests while the container
-# restarts instead of refusing them (sp-slm2ib). Started once and left running: a deploy
-# never restarts it, so there is no window in which nothing listens on the origin port.
-if [ "$INSTANCE" = prod ]; then
-    echo "==> Backend unavailable for $((SECONDS - DEPLOY_T0))s; the hold proxy queued requests (none refused) until it served."
-    if ! systemctl --user is-active --quiet "dumpstar-front@${INSTANCE}.service"; then
-        echo "==> Starting the hold proxy dumpstar-front@${INSTANCE} on the origin port..."
-        systemctl --user enable --now "dumpstar-front@${INSTANCE}.service"
-    fi
 fi
 
 # The sidecar is a separate unit with its own container: daemon-reload makes

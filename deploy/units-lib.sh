@@ -42,9 +42,6 @@ DUMPSTAR_UNITS_CHANGED=()
 # Cloudflare tunnel route (a dashboard step) targets it. The number lives in
 # deploy/prod-origin-port, configuration rather than a literal in a script.
 DUMPSTAR_PROD_PORT="$(tr -d '[:space:]' <"$(dirname "${BASH_SOURCE[0]}")/prod-origin-port")"
-# Prod's container publishes here, not on the origin port: dumpstar-front@prod (dumpstar-hold-proxy)
-# owns the origin port and holds requests while a deploy restarts the container (sp-slm2ib).
-DUMPSTAR_PROD_BACKEND_PORT="$(tr -d '[:space:]' <"$(dirname "${BASH_SOURCE[0]}")/prod-backend-port")"
 
 # The origin health URL an installed instance serves on, read from its Quadlet unit;
 # fails if there is no unit or it does not publish on loopback.
@@ -55,8 +52,6 @@ dumpstar_origin_url() {
     [ -f "$f" ] || return 1
     port="$(sed -n 's|^PublishPort=127\.0\.0\.1:\([0-9]\{1,\}\):8080$|\1|p' "$f" | head -1)"
     [ -n "$port" ] || return 1
-    # Prod's container publishes behind the hold proxy; the origin is the proxy's port.
-    [ "$1" = prod ] && port="$DUMPSTAR_PROD_PORT"
     printf 'http://127.0.0.1:%s/health\n' "$port"
 }
 
@@ -139,7 +134,6 @@ DUMPSTAR_HOST_WIDE_UNIT_FILES=(
     dumpstar-diskcheck.service         dumpstar-diskcheck.timer
     dumpstar-tmpreap.service           dumpstar-tmpreap.timer
     dumpstar-heartbeat@.service        dumpstar-heartbeat@.timer
-    dumpstar-front@.service
 )
 
 # dumpstar_units_host_owners — every checkout the INSTALLED host-wide units
@@ -292,11 +286,6 @@ _dumpstar_units_install_host_wide() {
             "$repo_dir/deploy/dumpstar-derive.${ext}" \
             -e "s|{{REPO_DIR}}|${repo_dir}|g"
     done
-
-    # --- The hold proxy in front of prod (sp-slm2ib) — host-wide, one copy ------------------------
-    _dumpstar_units_render "${systemd_user_dir}/dumpstar-front@.service" nostamp \
-        "$repo_dir/deploy/dumpstar-front.service" \
-        -e "s|{{REPO_DIR}}|${repo_dir}|g"
 
     # --- The SWU catalog sync and its alarm check (dumpstar 7) --------------
     # Installed for every instance, enabled for none: arming a timer that
@@ -454,7 +443,7 @@ dumpstar_units_install() {
     mkdir -p "$quadlet_dir" "$systemd_user_dir"
 
     local existing_port port_mapping
-    if [ "$port" = "0" ] && [ "$instance" != prod ] && [ -f "${quadlet_dir}/${service_name}.container" ]; then
+    if [ "$port" = "0" ] && [ -f "${quadlet_dir}/${service_name}.container" ]; then
         existing_port="$(sed -n \
             -e 's|^PublishPort=\([0-9]\{1,\}\):8080$|\1|p' \
             -e 's|^PublishPort=127\.0\.0\.1:\([0-9]\{1,\}\):8080$|\1|p' \
@@ -468,7 +457,7 @@ dumpstar_units_install() {
     # prod's origin port is fixed (sp-kaj3xv): the tunnel route points at it, so it
     # must be the same on every box and every re-creation. 8090 is the other site's.
     if [ "$port" = "0" ] && [ "$instance" = prod ]; then
-        port="$DUMPSTAR_PROD_BACKEND_PORT"
+        port="$DUMPSTAR_PROD_PORT"
     fi
     if [ "$port" = "0" ]; then
         port_mapping=":8080"

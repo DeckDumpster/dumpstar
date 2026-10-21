@@ -535,7 +535,7 @@ pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
     println!("dumpstar serving on http://{addr}");
     // SIGTERM (what `systemctl restart` sends) finishes the requests in flight before the
-    // process exits; the deploy's hold proxy queues the ones that arrive meanwhile (sp-slm2ib).
+    // process exits.
     axum::serve(listener, app(state, cfg.static_dir, cfg.data_dir))
         .with_graceful_shutdown(shutdown_signal())
         .await?;

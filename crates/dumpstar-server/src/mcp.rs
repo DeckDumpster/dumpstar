@@ -420,6 +420,47 @@ fn resolve_card_id(conn: &Connection, given: &str) -> Result<String, ToolError> 
     )))
 }
 
+/// The `get_deck` response for deck `id`; `update_deck` echoes the same shape.
+fn deck_response(c: &Connection, id: i64) -> Result<Value, ToolError> {
+    let deck = decks::get(c, id)
+        .map_err(db_err)?
+        .ok_or_else(|| failed(format!("not found: deck {id}")))?;
+    let lines = decks::line_states(c, id).map_err(db_err)?;
+    let mut cards = serde_json::Map::new();
+    for l in &lines {
+        if cards.contains_key(&display_id(c, &l.card_id)?) {
+            continue;
+        }
+        let found: Option<(String, String, String)> = c
+            .query_row(
+                &format!("SELECT set_code, number, variant FROM shared.printings WHERE card_id = ?1 {CANONICAL_PRINTING}"),
+                [&l.card_id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .optional()
+            .map_err(|e| db_err(e.into()))?;
+        let Some((set, number, variant)) = found else {
+            continue;
+        };
+        if let Some(d) =
+            cards::get_card_detail_variant(c, &set, &number, Some(&variant)).map_err(db_err)?
+        {
+            let mut card = detail_card_object(c, &d.card)?;
+            card["in_decks"] = json!(
+                holders_for(c, std::slice::from_ref(&d.card.card_id))?
+                    .get(&d.card.card_id)
+                    .cloned()
+                    .unwrap_or_default()
+            );
+            cards.insert(display_id(c, &l.card_id)?, card);
+        }
+    }
+    let lines = display_lines(c, lines)?;
+    let cards = Value::Object(cards);
+    let lines_digest = dumpstar_cube::lines_digest(&lines, &cards);
+    Ok(json!({ "deck": deck, "lines": lines, "lines_digest": lines_digest, "cards": cards }))
+}
+
 /// Rewrites every `card_id` in a serialized list of deck lines to the documented form.
 fn display_lines(conn: &Connection, lines: impl serde::Serialize) -> Result<Value, ToolError> {
     let mut v = json!(lines);
@@ -758,43 +799,7 @@ impl DumpstarTools {
 
     fn get_deck(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
         let id = arg_id(args, "id")?;
-        self.with_conn(ctx, |c| {
-            let deck = decks::get(c, id)
-                .map_err(db_err)?
-                .ok_or_else(|| failed(format!("not found: deck {id}")))?;
-            let lines = decks::line_states(c, id).map_err(db_err)?;
-            let mut cards = serde_json::Map::new();
-            for l in &lines {
-                if cards.contains_key(&display_id(c, &l.card_id)?) {
-                    continue;
-                }
-                let found: Option<(String, String, String)> = c
-                    .query_row(
-                        &format!("SELECT set_code, number, variant FROM shared.printings WHERE card_id = ?1 {CANONICAL_PRINTING}"),
-                        [&l.card_id],
-                        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-                    )
-                    .optional()
-                    .map_err(|e| db_err(e.into()))?;
-                let Some((set, number, variant)) = found else {
-                    continue;
-                };
-                if let Some(d) = cards::get_card_detail_variant(c, &set, &number, Some(&variant))
-                    .map_err(db_err)?
-                {
-                    let mut card = detail_card_object(c, &d.card)?;
-                    card["in_decks"] = json!(holders_for(c, std::slice::from_ref(&d.card.card_id))?
-                        .get(&d.card.card_id)
-                        .cloned()
-                        .unwrap_or_default());
-                    cards.insert(display_id(c, &l.card_id)?, card);
-                }
-            }
-            let lines = display_lines(c, lines)?;
-            let cards = Value::Object(cards);
-            let lines_digest = dumpstar_cube::lines_digest(&lines, &cards);
-            Ok(json!({ "deck": deck, "lines": lines, "lines_digest": lines_digest, "cards": cards }))
-        })
+        self.with_conn(ctx, |c| deck_response(c, id))
     }
 
     fn create_deck(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
@@ -851,8 +856,7 @@ impl DumpstarTools {
             if !decks::patch(c, id, &patch).map_err(db_err)? {
                 return Err(failed(format!("not found: deck {id}")));
             }
-            let deck = decks::get(c, id).map_err(db_err)?;
-            Ok(json!({ "deck": deck }))
+            deck_response(c, id)
         })
     }
 
@@ -1022,7 +1026,7 @@ impl ToolProvider for DumpstarTools {
             ),
             def(
                 "update_deck",
-                "Change a deck's own fields, keeping its id and lines: rename it, move it to another group, relabel its format, edit description or notes. Partial: an absent key is left unchanged, and null (or an empty string) clears an optional field; name cannot be cleared. Returns {deck} like get_deck. Rename or regroup with this, never delete and recreate.".into(),
+                "Change a deck's own fields, keeping its id and lines: rename it, move it to another group, relabel its format, edit description or notes. Partial: an absent key is left unchanged, and null (or an empty string) clears an optional field; name cannot be cleared. Returns exactly what get_deck returns for the updated deck ({deck, lines, lines_digest, cards}). Rename or regroup with this, never delete and recreate.".into(),
                 schema(
                     json!({
                         "id": id,

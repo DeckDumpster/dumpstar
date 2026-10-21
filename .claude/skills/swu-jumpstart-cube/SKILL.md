@@ -111,7 +111,16 @@ and choose from the results yourself; do not search once per card.
 2. **Allocate leaders and base pairs.** Pick 20 Leaders: 10 Heroism, 10 Villainy, 5 of each color
    (for example Command 3+2, Vigilance 2+3, Aggression 3+2, Cunning 2+3). Apply the universality
    rule. Each pack takes an epic and a vanilla base of its Leader's color; if the collection lacks them, say so and build what is possible.
-3. **Fill each pack to the skeleton.** Four `search_cards` per pack cover the Leader's whole pool,
+3. **Plan copies across the whole cube.** Before building any pack, run `swu-cube-check allocate`.
+   Heroism-only, Villainy-only and no-aspect cards (Longbeam Cruiser) fit packs of any color, so an
+   early pack's picks can use up copies a later color depends on, and the per-pack checker cannot
+   see it. Run the four searches below for every pack first, then write
+   `{"owned": {"<card id>": <available copies>}, "packs": [{"name": "Pack 1", "slots": 15,
+   "eligible": ["<card id>", ...]}]}` (eligible = the card ids that pack's searches returned) and pipe it to
+   `swu-cube-check allocate`. It reserves each card's copies to specific packs (`reserve <card>: Pack 2`)
+   and prints `ok`, or `FAIL allocation:` naming the card and the packs competing for it, which you
+   report to the user. Build each pack only from the cards reserved to it; a pack takes one copy of a card.
+4. **Fill each pack to the skeleton.** Four `search_cards` per pack cover the Leader's whole pool,
    because section 2 allows four sets and no one query returns them all: color and alignment, color
    only, alignment only, and no aspect at all. None returns Leaders or bases, which are chosen
    separately. All pass `avail>=1` in the query (when `query_help` lists `avail`; otherwise
@@ -131,16 +140,15 @@ and choose from the results yourself; do not search once per card.
    Villainy leader's pool has AT-ST there. The checker accepts exactly these four sets.
 
    One more for the color's bases: `t:base a:<color>`. Then pick from the combined results the 15
-   cards that meet section 4, the 25-HP and 30-HP bases, and the Leader. A card already chosen for
-   an earlier pack still serves a later pack if copies remain; re-search per pack so `available_count` is current. Prefer
+   cards that meet section 4, the 25-HP and 30-HP bases, and the Leader. A card reserved to another pack in step 3 is not yours to pick. Prefer
    cards of the Leader's own alignment and color; same-color cards with no alignment, cards of the Leader's
    alignment with no color, and cards with no aspects are also allowed.
-4. **Check the planned pack, then save it.** Before any write, assemble the pack document (below)
+5. **Check the planned pack, then save it.** Before any write, assemble the pack document (below)
    and run `swu-cube-check pack --planned`. Fix every `FAIL` line, then `create_deck` (`format`:
    `SWU Jumpstart Cube`, `group`: the group name (the same for all 20 packs), `name`: `Pack <n>`) and
    `set_deck_lines` with the 18 `{card_id, qty: 1}` lines. A refusal says which lines are short and
    changes nothing: swap those cards and retry.
-5. **Check the whole group.** `list_decks` with that group, `get_deck` for each of the 20, save
+6. **Check the whole group.** `list_decks` with that group, `get_deck` for each of the 20, save
    each result to its own file and run `swu-cube-check cube pack1.json pack2.json ...` (no combine
    script needed). `reserved` must equal `qty` on every line. The cube-level check applies to a
    complete 20-pack cube only; a partial or test build checks each saved deck with

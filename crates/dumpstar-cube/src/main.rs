@@ -1,3 +1,4 @@
+//! `swu-cube-check allocate [FILE]` plans copy allocation across the whole cube.
 //! `swu-cube-check pack|cube [--planned] [FILE...]` (several FILEs only for `cube`, one pack each) — reads the document from FILE or stdin, prints one line
 //! per failure, and exits 1 when any rule fails (2 when the input cannot be read).
 
@@ -14,6 +15,9 @@ fn main() -> ExitCode {
         [m, ps @ ..] if m == "cube" => (m.as_str(), ps.iter().map(String::as_str).collect()),
         _ => return usage(),
     };
+    if mode == "allocate" {
+        return allocate(paths[0]);
+    }
     let mut docs = Vec::new();
     for path in &paths {
         let mut text = String::new();
@@ -85,9 +89,44 @@ fn main() -> ExitCode {
     }
 }
 
+fn allocate(path: &str) -> ExitCode {
+    let mut text = String::new();
+    let read = if path == "-" {
+        std::io::stdin().read_to_string(&mut text).map(|_| ())
+    } else {
+        std::fs::read_to_string(path).map(|t| text = t)
+    };
+    if let Err(e) = read {
+        eprintln!("cannot read {path}: {e}");
+        return ExitCode::from(2);
+    }
+    let plan = serde_json::from_str::<serde_json::Value>(&text)
+        .map_err(|e| format!("not JSON: {path}: {e}"))
+        .and_then(|v| dumpstar_cube::allocate::allocate_value(&v));
+    match plan {
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::from(2)
+        }
+        Ok(plan) if plan.failures.is_empty() => {
+            for (card, packs) in &plan.reservations {
+                println!("reserve {card}: {}", packs.join(", "));
+            }
+            println!("ok");
+            ExitCode::SUCCESS
+        }
+        Ok(plan) => {
+            for f in &plan.failures {
+                println!("FAIL {f}");
+            }
+            ExitCode::from(1)
+        }
+    }
+}
+
 fn usage() -> ExitCode {
     eprintln!(
-        "usage: swu-cube-check pack [--planned] [FILE] | cube [--planned] [FILE...]   (FILE or stdin: the deck JSON, see SKILL.md; cube takes one pack file per deck)"
+        "usage: swu-cube-check pack [--planned] [FILE] | cube [--planned] [FILE...] | allocate [FILE]   (FILE or stdin: the deck JSON, see SKILL.md; cube takes one pack file per deck)"
     );
     ExitCode::from(2)
 }

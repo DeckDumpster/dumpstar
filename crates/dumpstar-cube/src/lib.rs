@@ -19,6 +19,8 @@
 //! A *cube document* is an array of pack documents, or `{"packs": [...], "cards": {...}}` where
 //! `cards` supplies any card a pack's own `cards` lacks.
 
+pub mod allocate;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 

@@ -193,7 +193,8 @@ impl Tally {
 }
 
 /// Owned and available copies by type, aspect and set; bases by HP and epic, ability or vanilla;
-/// leaders by aspect and alignment. A card with two aspects counts under each.
+/// leaders by aspect, alignment and color x alignment (`none` for a leader with no color; Neutral
+/// is its own alignment). A card with two aspects counts under each.
 fn breakdown(conn: &Connection) -> Result<Value, ToolError> {
     let mut stmt = conn
         .prepare(&format!(
@@ -224,6 +225,7 @@ fn breakdown(conn: &Connection) -> Result<Value, ToolError> {
     let (mut base_hp, mut base_kind) = (Tally::default(), Tally::default());
     let mut base_kind_aspect: std::collections::BTreeMap<&str, Tally> = Default::default();
     let (mut leader_aspect, mut leader_align) = (Tally::default(), Tally::default());
+    let mut leader_color_align: std::collections::BTreeMap<String, Tally> = Default::default();
     for row in rows {
         let (kind, aspects, hp, epic, rules, set, available) = row.map_err(|e| db_err(e.into()))?;
         let kind = kind.unwrap_or_else(|| "Unknown".into());
@@ -257,7 +259,24 @@ fn breakdown(conn: &Connection) -> Result<Value, ToolError> {
                 for a in &aspects {
                     leader_aspect.add(a, available);
                 }
-                leader_align.add(alignment(&aspects), available);
+                let align = alignment(&aspects);
+                leader_align.add(align, available);
+                let colors: Vec<&String> = aspects
+                    .iter()
+                    .filter(|a| !matches!(a.as_str(), "Heroism" | "Villainy"))
+                    .collect();
+                if colors.is_empty() {
+                    leader_color_align
+                        .entry("none".into())
+                        .or_default()
+                        .add(align, available);
+                }
+                for c in colors {
+                    leader_color_align
+                        .entry(c.clone())
+                        .or_default()
+                        .add(align, available);
+                }
             }
             _ => {}
         }
@@ -273,7 +292,13 @@ fn breakdown(conn: &Connection) -> Result<Value, ToolError> {
                 base_kind_aspect.iter().map(|(k, t)| (k.to_string(), t.json())).collect()
             ),
         },
-        "leaders": {"by_aspect": leader_aspect.json(), "by_alignment": leader_align.json()},
+        "leaders": {
+            "by_aspect": leader_aspect.json(),
+            "by_alignment": leader_align.json(),
+            "by_aspect_alignment": Value::Object(
+                leader_color_align.iter().map(|(k, t)| (k.clone(), t.json())).collect()
+            ),
+        },
     }))
 }
 

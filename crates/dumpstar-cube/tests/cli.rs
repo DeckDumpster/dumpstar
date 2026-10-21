@@ -153,7 +153,7 @@ fn allocate_reserves_shared_cards_across_packs_and_names_a_shortfall() {
             {"name": "Pack 2", "slots": 1, "eligible": ["Longbeam Cruiser"], "picks": ["Longbeam Cruiser"]},
         ]
     });
-    let (code, out) = run("allocate", &doc.to_string());
+    let (code, out) = run_args(&["allocate", "--verbose"], &doc.to_string());
     assert_eq!(code, 0, "{out}");
     assert!(
         out.contains("reserve Longbeam Cruiser: Pack 2 (contested: 1 copy, 2 packs)"),
@@ -171,6 +171,36 @@ fn allocate_reserves_shared_cards_across_packs_and_names_a_shortfall() {
         out.contains("FAIL allocation:") && out.contains("Longbeam Cruiser"),
         "{out}"
     );
+}
+
+#[test]
+fn a_twenty_pack_allocation_prints_one_short_line_per_pack() {
+    let mut owned = serde_json::Map::new();
+    let mut rows = Vec::new();
+    for i in 0..60 {
+        let id = format!("X-{i:03}");
+        owned.insert(id.clone(), json!(2));
+        let rarity = if i % 2 == 0 { "Rare" } else { "Common" };
+        rows.push(
+            json!({"id": id, "name": format!("Card {i}"), "subtitle": null,
+            "rarity": rarity, "type": "Unit", "cost": 2, "game": {"arenas": ["Ground"]}}),
+        );
+    }
+    let packs: Vec<_> = (0..20)
+        .map(|n| json!({"name": format!("Aggression H{n:02}"), "slots": 3, "eligible": rows, "candidates": rows}))
+        .collect();
+    let doc = json!({"owned": owned, "packs": packs});
+    let (code, out) = run("allocate", &doc.to_string());
+    assert_eq!(code, 0, "{out}");
+    assert!(out.len() < 4096, "{} bytes", out.len());
+    for n in 0..20 {
+        assert_eq!(
+            out.matches(&format!("Aggression H{n:02}:")).count(),
+            1,
+            "{out}"
+        );
+    }
+    assert!(!out.contains("reserve "), "{out}");
 }
 
 #[test]

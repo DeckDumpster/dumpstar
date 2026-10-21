@@ -32,9 +32,21 @@ pub struct Plan {
     /// card id -> (copies owned, packs wanting it), for every contested card.
     pub contested: BTreeMap<String, (usize, usize)>,
     pub failures: Vec<Failure>,
+    /// One entry per pack, by pack name.
+    pub summary: Vec<PackSummary>,
 }
 
-pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
+pub struct PackSummary {
+    pub name: String,
+    /// Cards reserved to this pack.
+    pub reserved: usize,
+    /// Slots the plan could not fill.
+    pub short: usize,
+    /// Contested cards the pack could use that are reserved to other packs: (card, those packs).
+    pub lost: Vec<(String, Vec<String>)>,
+}
+
+pub fn allocate_value<'a>(doc: &'a Value) -> Result<Plan, String> {
     let owned = doc
         .get("owned")
         .and_then(Value::as_object)
@@ -50,19 +62,71 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
             .ok_or(format!("allocate: copies of {id} is not a number"))?;
         copies.insert(id, n as usize);
     }
+    // Packs are taken in name order, so the result does not depend on their order in the input.
+    let mut named: Vec<(String, &Value)> = packs
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            let name = p
+                .get("name")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .unwrap_or(format!("Pack {}", i + 1));
+            (name, p)
+        })
+        .collect();
+    named.sort_by(|a, b| a.0.cmp(&b.0));
+    if let Some(w) = named.windows(2).find(|w| w[0].0 == w[1].0) {
+        return Err(format!("allocate: two packs are named {}", w[0].0));
+    }
+
+    // The cube's singleton set (Leaders; non-base Rares and Legendaries) is one card per identity,
+    // wherever it is owned more than once: it is held by one pack at most.
+    let mut identities: BTreeMap<String, BTreeSet<&str>> = BTreeMap::new();
+    for (_, p) in &named {
+        for c in p
+            .get("eligible")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let Some(id) = c
+                .get("id")
+                .or_else(|| c.get("card_id"))
+                .and_then(Value::as_str)
+            else {
+                continue;
+            };
+            if is_singleton_row(c) {
+                let name = c["name"].as_str().unwrap_or(id);
+                let key = match c["subtitle"].as_str() {
+                    Some(s) if !s.is_empty() => format!("{name} — {s}"),
+                    _ => name.to_string(),
+                };
+                identities.entry(key).or_default().insert(id);
+            }
+        }
+    }
+    let mut canon: BTreeMap<&str, &str> = BTreeMap::new();
+    for ids in identities.values() {
+        let first = *ids.iter().next().unwrap();
+        let owned_any = ids.iter().any(|i| copies.get(i).copied().unwrap_or(0) > 0);
+        for &i in ids {
+            canon.insert(i, first);
+            copies.remove(i);
+        }
+        copies.insert(first, usize::from(owned_any));
+    }
+    let canon_id = |id: &'a str| canon.get(id).copied().unwrap_or(id);
     let copies_owned = copies.clone();
+    let packs = &named;
     let mut names = Vec::new();
     let mut slots = Vec::new();
     let mut eligible: Vec<Vec<&str>> = Vec::new();
     let mut skel: Vec<Option<Vec<(&str, Meta)>>> = Vec::new();
     let mut wants: Vec<BTreeSet<&str>> = Vec::new();
-    for (i, p) in packs.iter().enumerate() {
-        names.push(
-            p.get("name")
-                .and_then(Value::as_str)
-                .map(str::to_string)
-                .unwrap_or(format!("Pack {}", i + 1)),
-        );
+    for (i, (name, p)) in packs.iter().enumerate() {
+        names.push(name.clone());
         slots.push(
             p.get("slots")
                 .and_then(Value::as_u64)
@@ -81,7 +145,7 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
                     .ok_or(format!(
                         "allocate: `{key}` entries are card ids or card rows with an `id`"
                     ))?;
-                want.insert(id);
+                want.insert(canon_id(id));
             }
         }
         wants.push(want);
@@ -89,6 +153,7 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
         let mut rows: BTreeMap<&str, Option<Meta>> = BTreeMap::new();
         for c in e {
             if let Some(id) = c.as_str() {
+                let id = canon_id(id);
                 ids.insert(id);
                 rows.entry(id).or_insert(None);
                 continue;
@@ -98,6 +163,7 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
                 .or_else(|| c.get("card_id"))
                 .and_then(Value::as_str)
                 .ok_or("allocate: eligible entries are card ids or card rows with an `id`")?;
+            let id = canon_id(id);
             ids.insert(id);
             rows.insert(id, Meta::from_row(c));
         }
@@ -134,6 +200,7 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
         .collect();
 
     let mut failures = Vec::new();
+    let mut unsolved_packs: BTreeSet<usize> = BTreeSet::new();
     let mut fixed: BTreeMap<&str, BTreeSet<usize>> = BTreeMap::new();
     let skeleton_packs: Vec<usize> = (0..packs.len()).filter(|&p| skel[p].is_some()).collect();
     if !skeleton_packs.is_empty() {
@@ -147,6 +214,7 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
             }
         }
         for p in unsolved {
+            unsolved_packs.insert(p);
             failures.push(fail(
                 "allocation",
                 skeleton_shortfall(&names[p], pools[p], skeleton_packs.len() > 1),
@@ -157,7 +225,10 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
     // held[p] = cards assigned to pack p; users[c] = packs holding c.
     let mut held: Vec<BTreeSet<&str>> = vec![BTreeSet::new(); packs.len()];
     let mut users: BTreeMap<&str, BTreeSet<usize>> = BTreeMap::new();
-    for p in 0..packs.len() {
+    // Scarcest pool first; ties by name (the pack index is its name's rank).
+    let mut scarcest: Vec<usize> = (0..packs.len()).collect();
+    scarcest.sort_by_key(|&p| (eligible[p].len(), p));
+    for p in scarcest {
         while held[p].len() < slots[p] {
             if !augment(p, &eligible, &copies, &mut held, &mut users) {
                 break;
@@ -213,28 +284,78 @@ pub fn allocate_value(doc: &Value) -> Result<Plan, String> {
     for (c, ps) in fixed {
         users.entry(c).or_default().extend(ps);
     }
-    // Reserve contested copies only. A copy the plan left unheld goes to the next pack that wants
-    // it, so no pack outside the assignment can take a copy another pack was promised.
-    let mut reservations = BTreeMap::new();
-    for (c, wanting) in &demand {
+    // Reserve contested copies only. A copy the plan left unheld goes to the wanting pack with the
+    // fewest reservations so far, then by name, so no pack is favoured by where it sits.
+    let mut reservations: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut count = vec![0usize; packs.len()];
+    let mut reserved_to: BTreeMap<&str, BTreeSet<usize>> = BTreeMap::new();
+    for c in demand.keys() {
         let mut ps = users.remove(c).unwrap_or_default();
-        ps.retain(|p| wanting.contains(p));
-        for &p in wanting {
-            if ps.len() >= copies_owned[c] {
+        ps.retain(|p| demand[c].contains(p));
+        for &p in &ps {
+            count[p] += 1;
+        }
+        reserved_to.insert(c, ps);
+    }
+    for (c, wanting) in &demand {
+        let ps = reserved_to.get_mut(c).unwrap();
+        while ps.len() < copies_owned[c] {
+            let Some(&p) = wanting
+                .iter()
+                .filter(|p| !ps.contains(p))
+                .min_by_key(|&&p| (count[p], p))
+            else {
                 break;
-            }
+            };
+            count[p] += 1;
             ps.insert(p);
         }
+    }
+    let mut summary: Vec<PackSummary> = (0..packs.len())
+        .map(|p| PackSummary {
+            name: names[p].clone(),
+            reserved: count[p],
+            short: if unsolved_packs.contains(&p) {
+                slots[p]
+            } else if skel[p].is_some() {
+                0
+            } else {
+                slots[p] - held[p].len()
+            },
+            lost: Vec::new(),
+        })
+        .collect();
+    for (c, wanting) in &demand {
+        let holders = &reserved_to[c];
+        for &p in wanting.iter().filter(|p| !holders.contains(p)) {
+            summary[p].lost.push((
+                c.to_string(),
+                holders.iter().map(|&q| names[q].clone()).collect(),
+            ));
+        }
+    }
+    for (c, ps) in &reserved_to {
         reservations.insert(
             c.to_string(),
-            ps.into_iter().map(|p| names[p].clone()).collect(),
+            ps.iter().map(|&p| names[p].clone()).collect(),
         );
     }
     Ok(Plan {
         reservations,
         contested,
         failures,
+        summary,
     })
+}
+
+/// Whether the cube's singleton rule binds this search_cards row: every Leader, and every non-base
+/// Rare or Legendary (the rule `swu-cube-check cube` enforces as cube-singleton).
+fn is_singleton_row(c: &Value) -> bool {
+    match c["type"].as_str() {
+        Some("Leader") => true,
+        Some("Base") | None => false,
+        Some(_) => matches!(c["rarity"].as_str(), Some("Rare" | "Legendary")),
+    }
 }
 
 /// What the skeleton needs to know of a card: its arena/type class and its cost bucket.
@@ -776,5 +897,54 @@ mod tests {
         assert!(plan.failures.is_empty(), "{:?}", plan.failures);
         assert!(!plan.reservations.contains_key("Z1-00"));
         assert_eq!(plan.reservations["A-000"].len(), 1);
+    }
+
+    /// Two packs of one slot each, both able to use either Rare; the Rare is owned twice.
+    fn rares(order: [&str; 2]) -> Value {
+        let row = |id: &str, rarity: &str| {
+            json!({"id": id, "name": id, "subtitle": null, "rarity": rarity, "type": "Unit",
+                "cost": 2, "game": {"arenas": ["Ground"]}})
+        };
+        let packs: Vec<Value> = order
+            .iter()
+            .map(|n| json!({"name": n, "slots": 1, "eligible": [row("R-1", "Rare"), row("C-1", "Common")], "picks": ["R-1"]}))
+            .collect();
+        json!({"owned": {"R-1": 2, "C-1": 2}, "packs": packs})
+    }
+
+    #[test]
+    fn a_rare_owned_twice_wanted_by_two_packs_is_reserved_to_one() {
+        let plan = allocate_value(&rares(["A", "B"])).unwrap();
+        assert!(plan.failures.is_empty(), "{:?}", plan.failures);
+        assert_eq!(plan.reservations["R-1"].len(), 1);
+        assert!(!plan.reservations.contains_key("C-1"));
+    }
+
+    #[test]
+    fn reversing_the_packs_gives_the_same_reservations() {
+        let a = allocate_value(&rares(["A", "B"])).unwrap();
+        let b = allocate_value(&rares(["B", "A"])).unwrap();
+        assert_eq!(a.reservations, b.reservations);
+        let lost = |p: &Plan| {
+            p.summary
+                .iter()
+                .map(|s| (s.name.clone(), s.reserved, s.short, s.lost.clone()))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(lost(&a), lost(&b));
+    }
+
+    #[test]
+    fn a_skeleton_plan_does_not_depend_on_pack_order() {
+        let mut doc = skeleton_doc(3);
+        let mut rev = doc.clone();
+        for d in [&mut doc, &mut rev] {
+            for p in d["packs"].as_array_mut().unwrap() {
+                p["candidates"] = p["eligible"].clone();
+            }
+        }
+        rev["packs"].as_array_mut().unwrap().reverse();
+        let (a, b) = (allocate_value(&doc).unwrap(), allocate_value(&rev).unwrap());
+        assert_eq!(a.reservations, b.reservations);
     }
 }

@@ -320,6 +320,14 @@ pub fn suspect_rules_text(conn: &Connection) -> Result<Vec<AlarmRecord>> {
                 format!("{rules:?} still holds a <tag>"),
             ));
         }
+        if let Some(why) = crate::official::icon_defect(&rules).filter(|w| *w != "raw icon markup")
+        {
+            out.push(AlarmRecord::alarm(
+                "rules_text_icon",
+                id.clone(),
+                format!("{rules:?}: {why}"),
+            ));
+        }
         let always_texted = matches!(ty.as_deref(), Some("Event" | "Upgrade" | "Leader" | "Base"));
         if always_texted && rules.split_whitespace().count() <= 1 {
             out.push(AlarmRecord::info(

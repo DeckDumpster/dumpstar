@@ -413,8 +413,11 @@ pub fn strip_markup(line: &str) -> String {
         out.push_str(&rest[..open]);
         match tag_end {
             Some(end) => {
+                let tag = tail[1..end].trim_matches('/');
                 if tail[..=end].eq_ignore_ascii_case("<uq>") {
                     out.push_str("Unique");
+                } else if let Some(a) = ASPECTS.iter().find(|a| a.eq_ignore_ascii_case(tag)) {
+                    out.push_str(&format!("[{a}]"));
                 }
                 rest = &tail[end + 1..];
             }
@@ -436,21 +439,69 @@ pub fn has_markup(text: &str) -> bool {
 /// The line that opens a leader's deployed side in `rules_text`.
 pub const DEPLOYED_SIDE: &str = "Deployed:";
 
+/// The aspect icons. Printed as an icon, the feed carries each one as its bare
+/// name, so two in a row arrive glued: "disclose HeroismHeroism".
+pub const ASPECTS: [&str; 6] = [
+    "Aggression",
+    "Command",
+    "Cunning",
+    "Heroism",
+    "Vigilance",
+    "Villainy",
+];
+
+/// `word` split into aspect names, if it is nothing else.
+fn aspect_run(word: &str) -> Option<Vec<&'static str>> {
+    let mut rest = word;
+    let mut out = Vec::new();
+    'next: while !rest.is_empty() {
+        for a in ASPECTS {
+            if let Some(tail) = rest.strip_prefix(a) {
+                out.push(a);
+                rest = tail;
+                continue 'next;
+            }
+        }
+        return None;
+    }
+    Some(out)
+}
+
 /// The official text drops an inline icon and keeps the spaces around it:
-/// "use the Force . If you do". Close the gap before punctuation and collapse
-/// doubled spaces.
+/// "use the Force . If you do", "[Exhaust, use the Force ]". Close the gap
+/// before punctuation and a closing bracket, collapse doubled spaces, and write
+/// a run of aspect icons ("HeroismHeroism") as "[Heroism] [Heroism]".
 fn tidy_icon_spaces(line: &str) -> String {
     let mut out = String::with_capacity(line.len());
     for word in line.split_whitespace() {
-        let punct = word
-            .chars()
-            .all(|c| matches!(c, '.' | ',' | ';' | ':' | '!' | '?' | ')'));
-        if !out.is_empty() && !punct {
+        let core = word.trim_end_matches(|c: char| ".,;:!?)]".contains(c));
+        if !out.is_empty() && !core.is_empty() {
             out.push(' ');
         }
-        out.push_str(word);
+        match aspect_run(core) {
+            Some(run) if run.len() > 1 => {
+                let parts: Vec<String> = run.iter().map(|a| format!("[{a}]")).collect();
+                out.push_str(&parts.join(" "));
+                out.push_str(&word[core.len()..]);
+            }
+            _ => out.push_str(word),
+        }
     }
     out
+}
+
+/// Why `text` still shows an icon as text, if it does: a repeated or glued
+/// aspect name ("HeroismHeroism"), a space before "]", or raw icon markup.
+pub fn icon_defect(text: &str) -> Option<&'static str> {
+    if has_markup(text) {
+        return Some("raw icon markup");
+    }
+    if text.contains(" ]") {
+        return Some("space before ]");
+    }
+    text.split(|c: char| !c.is_alphanumeric())
+        .any(|w| aspect_run(w).is_some_and(|r| r.len() > 1))
+        .then_some("repeated aspect name")
 }
 
 fn text(attrs: &Value, key: &str) -> Option<String> {

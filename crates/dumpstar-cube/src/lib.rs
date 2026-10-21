@@ -532,7 +532,43 @@ pub fn check_cube(packs: &[Pack]) -> Vec<Failure> {
             ));
         }
     }
+    out.extend(singleton_failures(packs));
     out
+}
+
+/// The cube is singleton: a Leader or draw card (anything but a Base) is in at most one pack,
+/// by name, so two printings of one card count as one. Bases are exempt.
+fn singleton_failures(packs: &[Pack]) -> Vec<Failure> {
+    let mut seen: BTreeMap<(String, String), Vec<&str>> = BTreeMap::new();
+    for p in packs {
+        for l in &p.lines {
+            let Some(c) = p.cards.get(&l.card_id).filter(|c| c.kind != "Base") else {
+                continue;
+            };
+            let in_packs = seen.entry((c.kind.clone(), c.name.clone())).or_default();
+            if !in_packs.contains(&p.name.as_str()) {
+                in_packs.push(&p.name);
+            }
+        }
+    }
+    seen.into_iter()
+        .filter(|(_, in_packs)| in_packs.len() > 1)
+        .map(|((kind, name), in_packs)| {
+            let which = if kind == "Leader" {
+                "Leader"
+            } else {
+                "draw card"
+            };
+            fail(
+                "cube-singleton",
+                format!(
+                    "{which} '{name}' is in {} packs ({}); a cube card is in at most one pack",
+                    in_packs.len(),
+                    in_packs.join(", ")
+                ),
+            )
+        })
+        .collect()
 }
 
 /// Reads a cube document (see the crate docs) and checks it.
@@ -1029,6 +1065,52 @@ mod tests {
         let mut c = cube();
         c[0] = pack(1, "Heroism", "Cunning");
         assert!(cube_rules(c).contains(&"cube-bases"));
+    }
+
+    fn rename(doc: &mut Value, id: &str, name: &str) {
+        let key = doc["cards"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .find(|k| k.starts_with(id))
+            .unwrap()
+            .clone();
+        doc["cards"][key]["name"] = json!(name);
+    }
+
+    #[test]
+    fn a_leader_in_two_packs_fails_naming_both() {
+        let mut c = cube();
+        rename(&mut c[1], "L", "Leader 1");
+        let f = check_cube_value(&Value::Array(c)).unwrap();
+        let m = f.iter().find(|f| f.rule == "cube-singleton").unwrap();
+        assert!(m.message.contains("Leader 'Leader 1'") && m.message.contains("Pack 1, Pack 2"));
+    }
+
+    #[test]
+    fn a_draw_card_in_two_packs_fails_naming_both() {
+        let mut c = cube();
+        rename(&mut c[3], "C4-5", "Card 1-5");
+        let f = check_cube_value(&Value::Array(c)).unwrap();
+        let m = f.iter().find(|f| f.rule == "cube-singleton").unwrap();
+        assert!(m.message.contains("draw card 'Card 1-5'") && m.message.contains("Pack 1, Pack 4"));
+    }
+
+    #[test]
+    fn a_base_repeated_across_packs_is_exempt() {
+        // the fixture already repeats each color's bases in five packs
+        assert!(!cube_rules(cube()).contains(&"cube-singleton"));
+    }
+
+    #[test]
+    fn pack_mode_ignores_singleton() {
+        let p = pack(1, "Heroism", "Command");
+        assert!(
+            check_pack_value(&p)
+                .unwrap()
+                .iter()
+                .all(|f| f.rule != "cube-singleton")
+        );
     }
 
     #[test]

@@ -55,6 +55,19 @@ fn check_cube_passes_and_fails_by_exit_status() {
 }
 
 #[test]
+fn a_card_in_two_packs_fails_the_cube_and_names_both() {
+    let mut c = cube();
+    let dup = c[0]["cards"]["C1-2"].clone();
+    c[1]["cards"]["C2-2"] = dup;
+    let (code, out) = run("cube", &json!(c).to_string());
+    assert_eq!(code, 1);
+    assert!(
+        out.contains("FAIL cube-singleton:") && out.contains("Pack 1, Pack 2"),
+        "{out}"
+    );
+}
+
+#[test]
 fn cube_takes_one_file_per_pack_and_a_lone_pack_passes_pack_mode() {
     let dir = std::env::temp_dir().join(format!("swu-cube-check-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();

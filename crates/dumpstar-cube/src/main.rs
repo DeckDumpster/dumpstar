@@ -132,8 +132,15 @@ fn allocate(path: &str, verbose: bool) -> ExitCode {
                     .collect();
                 let more = s.lost.len().saturating_sub(LOST_SHOWN);
                 println!(
-                    "{}: reserved {}, short {}, lost {}{}",
+                    "{}: {} of {} picks, skeleton {}, contested reserved {}, short {}, lost {}{}",
                     s.name,
+                    s.placed,
+                    s.slots,
+                    match s.skeleton {
+                        Some(true) => "ok",
+                        Some(false) => "unmet",
+                        None => "not checked",
+                    },
                     s.reserved,
                     s.short,
                     s.lost.len(),
@@ -182,10 +189,10 @@ const USAGE: &str = "usage: swu-cube-check pack [--planned] [FILE] | cube [--pla
   pack      check one pack document (get_deck's result) against the pack rules
   cube      check a 20-pack cube: a cube document, or one pack file per deck
   copies    only the copy-count check (cube-copies) over any number of pack files, for a partial build
-  allocate  plan copies across the cube (one line per pack: reserved, short, lost; --verbose adds every
+  allocate  plan copies across the cube (one line per pack: picks placed of slots, skeleton ok/unmet/not checked, contested reserved, short, lost; --verbose adds every
             reserve line; a Leader or non-base Rare/Legendary goes to at most one pack): {\"owned\": {id: copies}, \"packs\": [{\"name\", \"slots\": 15,
             \"eligible\": [search_cards rows or card ids], \"picks\": [...], \"candidates\": [...]}]}; only picks and candidates reserve; rows carry type, cost and arenas, so a
-            15-slot pack is reserved cards that meet the pack skeleton, or a named shortfall
+            15-slot pack is placed cards that meet the pack skeleton, or a named shortfall; `contested reserved` counts only copies more packs want than are owned, so 0 is normal
   FILE is read in place of stdin (`-` is stdin); exit 0 ok, 1 a rule failed, 2 unreadable input";
 
 fn usage() -> ExitCode {

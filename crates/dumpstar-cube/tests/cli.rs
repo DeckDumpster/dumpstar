@@ -248,3 +248,58 @@ fn copies_reports_only_the_shared_card_over_two_packs() {
     let (code, out) = run_args(&["copies", &files[0]], "");
     assert_eq!((code, out.trim()), (0, "ok"));
 }
+
+fn skeleton_pool(owned: &mut serde_json::Map<String, serde_json::Value>) -> Vec<serde_json::Value> {
+    dumpstar_cube::fixture::SKELETON
+        .iter()
+        .enumerate()
+        .map(|(i, (kind, arena, cost))| {
+            let id = format!("S-{i:02}");
+            owned.insert(id.clone(), json!(1));
+            json!({"id": id, "type": kind, "cost": cost,
+                "game": {"arenas": if arena.is_empty() { vec![] } else { vec![*arena] }}})
+        })
+        .collect()
+}
+
+#[test]
+fn the_pack_line_says_what_each_number_counts_for_an_uncontested_pack() {
+    let mut owned = serde_json::Map::new();
+    let rows = skeleton_pool(&mut owned);
+    let doc = json!({"owned": owned, "packs": [{"name": "Plan 1", "slots": 15, "eligible": rows, "candidates": rows}]});
+    let (code, out) = run("allocate", &doc.to_string());
+    assert_eq!(code, 0, "{out}");
+    assert!(
+        out.contains(
+            "Plan 1: 15 of 15 picks, skeleton ok, contested reserved 0, short 0, lost 0\n"
+        ),
+        "{out}"
+    );
+}
+
+#[test]
+fn the_pack_line_names_an_unmet_skeleton_and_a_short_pack() {
+    let mut owned = serde_json::Map::new();
+    let mut rows = skeleton_pool(&mut owned);
+    rows.pop();
+    let doc = json!({"owned": owned, "packs": [
+        {"name": "Plan 1", "slots": 15, "eligible": rows, "candidates": rows},
+        {"name": "Plan 2", "slots": 2, "eligible": ["A"], "picks": ["A"]},
+    ]});
+    let mut with_a = doc.clone();
+    with_a["owned"]["A"] = json!(1);
+    let (code, out) = run("allocate", &with_a.to_string());
+    assert_eq!(code, 1, "{out}");
+    assert!(
+        out.contains(
+            "Plan 1: 0 of 15 picks, skeleton unmet, contested reserved 0, short 15, lost 0"
+        ),
+        "{out}"
+    );
+    assert!(
+        out.contains(
+            "Plan 2: 1 of 2 picks, skeleton not checked, contested reserved 0, short 1, lost 0"
+        ),
+        "{out}"
+    );
+}

@@ -38,7 +38,14 @@ pub struct Plan {
 
 pub struct PackSummary {
     pub name: String,
-    /// Cards reserved to this pack.
+    /// Slots the pack has.
+    pub slots: usize,
+    /// Cards the plan holds for the pack: the skeleton selection, or the copies it could assign.
+    pub placed: usize,
+    /// Whether the pack skeleton was checked: `Some(true)` met, `Some(false)` unmet, `None` not
+    /// checked (not a 15-slot pack, or only bare card ids that carry no type).
+    pub skeleton: Option<bool>,
+    /// Contested cards reserved to this pack.
     pub reserved: usize,
     /// Slots the plan could not fill.
     pub short: usize,
@@ -314,6 +321,15 @@ pub fn allocate_value<'a>(doc: &'a Value) -> Result<Plan, String> {
     let mut summary: Vec<PackSummary> = (0..packs.len())
         .map(|p| PackSummary {
             name: names[p].clone(),
+            slots: slots[p],
+            placed: if unsolved_packs.contains(&p) {
+                0
+            } else if skel[p].is_some() {
+                slots[p]
+            } else {
+                held[p].len()
+            },
+            skeleton: skel[p].as_ref().map(|_| !unsolved_packs.contains(&p)),
             reserved: count[p],
             short: if unsolved_packs.contains(&p) {
                 slots[p]

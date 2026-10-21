@@ -136,9 +136,11 @@ of searches per pack (step 3) and choose from the results yourself; never search
    a pack with neither reserves nothing. Run
    `swu-cube-check allocate plan.json`, or pipe it on stdin. It reserves only the **contested** copies: cards more packs pick or
    consider than there are copies of ; with none it prints
-   `no contested cards`. By default it prints one line per pack (`Pack 2: reserved 12, short 0,
-   lost 40 (SOR-160 to Pack 5, ...)`: cards reserved, slots it could not fill, contested cards that
-   went to other packs); `--verbose` adds every `reserve <card>: Pack 2 (contested: 1 copy, 2 packs)`
+   `no contested cards`. By default it prints one line per pack (`Pack 2: 15 of 15 picks, skeleton ok,
+   contested reserved 12, short 0, lost 40 (SOR-160 to Pack 5, ...)`: cards placed of slots,
+   whether the pack skeleton was met (`ok`, `unmet`, or `not checked` for bare ids or a non-15 slot
+   pack), contested copies reserved to it (0 is normal for a pack nobody competes with), slots it
+   could not fill, contested cards that went to other packs); `--verbose` adds every `reserve <card>: Pack 2 (contested: 1 copy, 2 packs)`
    line. A Leader or non-base Rare or Legendary (the singleton set of `cube-singleton`, by title and
    subtitle) is reserved to at most one pack whatever the copies owned. The result does not depend
    on the packs' order in the file: packs are taken in name order, and a copy nobody holds goes to

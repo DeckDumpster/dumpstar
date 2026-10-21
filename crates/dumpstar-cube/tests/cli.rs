@@ -113,11 +113,17 @@ fn a_planned_document_without_reservations_is_not_failed_on_reserved() {
 #[test]
 fn a_digest_that_does_not_match_the_lines_is_refused_before_any_rule() {
     let mut saved = pack(1, "Heroism", "Command");
-    saved["lines_digest"] = json!(dumpstar_cube::lines_digest(&saved["lines"]).unwrap());
+    saved["lines_digest"] =
+        json!(dumpstar_cube::lines_digest(&saved["lines"], &saved["cards"]).unwrap());
     let (code, out) = run("pack", &saved.to_string());
     assert_eq!((code, out.trim()), (0, "ok"));
-    saved["lines"][0]["qty"] = json!(2);
-    let (code, out) = run("pack", &saved.to_string());
+    let mut altered = saved.clone();
+    altered["lines"][0]["qty"] = json!(2);
+    let (code, out) = run("pack", &altered.to_string());
+    assert_eq!((code, out.trim()), (2, ""));
+    altered = saved.clone();
+    altered["cards"]["L1"]["game"]["aspects"] = json!(["Heroism", "Cunning"]);
+    let (code, out) = run("pack", &altered.to_string());
     assert_eq!((code, out.trim()), (2, ""));
 }
 

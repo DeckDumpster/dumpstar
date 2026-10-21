@@ -195,3 +195,26 @@ fn help_prints_the_usage_for_every_subcommand_and_exits_zero() {
         }
     }
 }
+
+#[test]
+fn copies_reports_only_the_shared_card_over_two_packs() {
+    let mut c = cube();
+    c[0]["cards"]["C1-0"]["owned_count"] = json!(1);
+    c[1]["cards"]["C1-0"] = c[0]["cards"]["C1-0"].clone();
+    c[1]["lines"][3]["card_id"] = json!("C1-0");
+    let dir = std::env::temp_dir().join(format!("copies-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let files: Vec<String> = (0..2)
+        .map(|i| {
+            let f = dir.join(format!("p{i}.json"));
+            std::fs::write(&f, c[i].to_string()).unwrap();
+            f.to_string_lossy().into_owned()
+        })
+        .collect();
+    let (code, out) = run_args(&["copies", &files[0], &files[1]], "");
+    assert_eq!(code, 1, "{out}");
+    assert_eq!(out.lines().count(), 1, "{out}");
+    assert!(out.starts_with("FAIL cube-copies:"), "{out}");
+    let (code, out) = run_args(&["copies", &files[0]], "");
+    assert_eq!((code, out.trim()), (0, "ok"));
+}

@@ -373,6 +373,44 @@ pub fn keyword_number_missing(conn: &Connection) -> Result<Vec<AlarmRecord>> {
     Ok(out)
 }
 
+/// A known keyword that stands at the start of a line or list item of the rules
+/// text but is absent from the card's keywords (Support and Plot were, sp-pljdpa).
+/// A keyword found only mid-sentence is one the card grants (sp-wxj6lr).
+pub fn keyword_missing_from_keywords(conn: &Connection) -> Result<Vec<AlarmRecord>> {
+    let mut out = Vec::new();
+    let mut stmt = conn.prepare(
+        "SELECT card_id, keywords, rules_text FROM cards
+         WHERE rules_text IS NOT NULL ORDER BY card_id",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+        ))
+    })?;
+    for row in rows {
+        let (id, keywords, rules) = row?;
+        let have: Vec<String> = match serde_json::from_str(&keywords) {
+            Ok(serde_json::Value::Array(kws)) => kws
+                .iter()
+                .filter_map(|k| k.get("name")?.as_str().map(str::to_string))
+                .collect(),
+            _ => Vec::new(),
+        };
+        for name in crate::official::KNOWN_KEYWORDS {
+            if crate::official::stands_alone(&rules, name) && !have.iter().any(|h| h == name) {
+                out.push(AlarmRecord::alarm(
+                    "keyword_missing",
+                    id.clone(),
+                    format!("{name} stands in the rules text but is not among the keywords"),
+                ));
+            }
+        }
+    }
+    Ok(out)
+}
+
 /// A sentence or line of at least ten characters that occurs twice.
 fn repeated_sentence(rules: &str) -> Option<String> {
     let mut seen: Vec<&str> = Vec::new();
@@ -614,6 +652,7 @@ pub fn run(conn: &Connection, now: DateTime<Utc>) -> Result<Vec<AlarmRecord>> {
     out.extend(missing_structured_text(conn)?);
     out.extend(suspect_rules_text(conn)?);
     out.extend(keyword_number_missing(conn)?);
+    out.extend(keyword_missing_from_keywords(conn)?);
     out.extend(wrong_group(conn)?);
     out.extend(image_wrong_card(conn)?);
     out.extend(variant_image_shared(conn)?);

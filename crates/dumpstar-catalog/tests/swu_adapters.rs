@@ -82,6 +82,26 @@ fn every_known_keyword_parses_with_its_number() {
 }
 
 #[test]
+fn support_and_plot_are_derived_as_keywords() {
+    for (kw, title) in [
+        ("Support", "Honorable Nite Owl"),
+        ("Plot", "Lurking Snub Fighter"),
+    ] {
+        let page = official::parse_page(&keyword_page(
+            &[kw],
+            &format!("{kw}\nWhen Played: draw a card."),
+            json!({"title": title}),
+        ))
+        .unwrap();
+        assert!(page.payload.alarms.is_empty(), "{:?}", page.payload.alarms);
+        let c = &page.payload.cards[0];
+        assert_eq!(c.keywords.len(), 1, "{kw}");
+        assert_eq!(c.keywords[0].name, kw);
+        assert!(!c.keywords[0].granted);
+    }
+}
+
+#[test]
 fn a_base_with_its_epic_action_in_text_has_epic_action_populated() {
     let text = "Epic Action: Give a Shield token to a non-leader unit.";
     let page = official::parse_page(&keyword_page(

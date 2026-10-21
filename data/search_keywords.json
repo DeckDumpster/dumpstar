@@ -4,7 +4,7 @@
   {"canonical":"aspect","aliases":["a","aspect"],"operators":[":","=","!="],"kind":"json_array","target":"cards.aspects","value_enum":"aspect","help":"Aspect: Vigilance, Command, Aggression, Cunning, Heroism, Villainy"},
   {"canonical":"arena","aliases":["arena"],"operators":[":","=","!="],"kind":"json_array","target":"cards.arenas","value_enum":"arena","help":"Arena: Ground or Space"},
   {"canonical":"trait","aliases":["trait"],"operators":[":","=","!="],"kind":"json_array","target":"cards.traits","help":"Trait: Rebel, Force, Vehicle, Trooper…"},
-  {"canonical":"keyword","aliases":["k","keyword"],"operators":[":","=","!="],"kind":"json_array","target":"cards.keywords","help":"Keyword: Sentinel, Raid, Restore, Saboteur, Shielded, Smuggle, Overwhelm, Ambush, Grit, Bounty, Coordinate, Exploit, Piloting, Hidden; k:\"raid 2\" matches its number"},
+  {"canonical":"keyword","aliases":["k","keyword"],"operators":[":","=","!="],"kind":"json_array","target":"cards.keywords","help":"Keyword: {{KEYWORDS}}; k:\"raid 2\" matches its number"},
   {"canonical":"grants","aliases":["grants","gives"],"operators":[":","=","!="],"kind":"json_array","target":"cards.keywords","help":"Keyword the card gives to another unit (an upgrade's 'Attached unit gains Sentinel'); k: matches only keywords the card has itself"},
   {"canonical":"epic","aliases":["epic"],"operators":[":","=","!="],"kind":"text","target":"cards.epic_action","help":"Epic action text of a leader or base (e.g. epic:shield; has:epic for any)"},
   {"canonical":"cost","aliases":["c","cost"],"operators":[":","=","!=","<",">","<=",">="],"kind":"numeric","target":"cards.cost","help":"Resource cost"},

@@ -108,12 +108,14 @@ pub const KNOWN_KEYWORDS: &[&str] = &[
     "Hidden",
     "Overwhelm",
     "Piloting",
+    "Plot",
     "Raid",
     "Restore",
     "Saboteur",
     "Sentinel",
     "Shielded",
     "Smuggle",
+    "Support",
 ];
 
 /// The keywords whose rules text always carries a number: `Raid 2`.
@@ -163,7 +165,7 @@ fn keywords_of(attrs: &Value, card_id: &str, alarms: &mut Vec<AlarmRecord>) -> V
 /// Whether the card has `name` itself: it begins a line or a comma-separated
 /// list item of the rules text. A keyword found only mid-sentence ("Attached
 /// unit gains Sentinel") is one the card grants (sp-wxj6lr).
-fn stands_alone(rules: &str, name: &str) -> bool {
+pub(crate) fn stands_alone(rules: &str, name: &str) -> bool {
     rules
         .lines()
         .flat_map(|l| l.split(','))

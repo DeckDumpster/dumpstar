@@ -918,9 +918,13 @@ mod tests {
     #[test]
     fn an_alignment_only_card_is_accepted_and_the_other_alignment_rejected() {
         let mut p = fixture::pack(1, "Villainy", "Command");
-        edit(&mut p, "C1-3", |c| c["game"]["aspects"] = json!(["Villainy"]));
+        edit(&mut p, "C1-3", |c| {
+            c["game"]["aspects"] = json!(["Villainy"])
+        });
         assert!(rules(&p).is_empty(), "Villainy with no color, as AT-ST");
-        edit(&mut p, "C1-3", |c| c["game"]["aspects"] = json!(["Heroism"]));
+        edit(&mut p, "C1-3", |c| {
+            c["game"]["aspects"] = json!(["Heroism"])
+        });
         assert!(rules(&p).contains(&"draw-aspect"));
     }
 

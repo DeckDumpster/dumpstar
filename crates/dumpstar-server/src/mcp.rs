@@ -422,7 +422,7 @@ fn resolve_card_id(conn: &Connection, given: &str) -> Result<String, ToolError> 
 }
 
 /// The `get_deck` response for deck `id`; `update_deck` echoes the same shape.
-fn deck_response(c: &Connection, id: i64) -> Result<Value, ToolError> {
+pub(crate) fn deck_response(c: &Connection, id: i64) -> Result<Value, ToolError> {
     let deck = decks::get(c, id)
         .map_err(db_err)?
         .ok_or_else(|| failed(format!("not found: deck {id}")))?;
@@ -645,6 +645,57 @@ fn detail_card_object(c: &Connection, card: &Card) -> Result<Value, ToolError> {
     ))
 }
 
+/// The `search_cards` result for `args`; `/mcp` and `/api/agent/search` both serve it.
+pub(crate) fn search_cards_value(
+    c: &mut Connection,
+    registry: &KeywordRegistry,
+    flags: &[SearchFlag],
+    keywords: &Keywords,
+    args: &Value,
+) -> Result<Value, ToolError> {
+    let q = args.get("q").and_then(Value::as_str).unwrap_or("").trim();
+    let limit = match args.get("limit").and_then(Value::as_u64) {
+        None => DEFAULT_PAGE,
+        Some(n) if (1..=MAX_PAGE as u64).contains(&n) => n as u32,
+        Some(_) => return Err(failed(format!("limit must be between 1 and {MAX_PAGE}"))),
+    };
+    let mut compiled = if q.is_empty() {
+        search::compile_all()
+    } else {
+        let ast = parse(q, registry).map_err(|e| {
+            failed(format!(
+                "{} (at position {})",
+                teach(keywords, &e.message),
+                e.position
+            ))
+        })?;
+        search::compile(&ast, flags)
+    };
+    let owned_only = args.get("owned_only").and_then(Value::as_bool) == Some(true);
+    compiled.set_catalog_wide(!owned_only);
+    let expand = args.get("expand_printings").and_then(Value::as_bool) == Some(true);
+    if !expand {
+        compiled.set_one_per_card();
+    }
+    let cursor = arg_str(args, "cursor").map(String::from);
+    let page =
+        search::search_page(c, &compiled, Slice::Cursor { limit, cursor }).map_err(db_err)?;
+    let ids: Vec<String> = page.rows.iter().map(|r| r.card_id.clone()).collect();
+    let counts = counts_for(c, &ids)?;
+    let structured = structured_for(c, &ids)?;
+    let holds = holders_for(c, &ids)?;
+    let (copies_owned, copies_available, copies_reserved) =
+        search::copy_totals(c, &compiled, !expand).map_err(db_err)?;
+    Ok(json!({
+        "results": page.rows.iter().map(|r| row_object(c, r, &counts, &structured, &holds, expand)).collect::<Result<Vec<_>, _>>()?,
+        "total": page.total,
+        "total_copies_owned": copies_owned,
+        "total_copies_available": copies_available,
+        "total_copies_reserved": copies_reserved,
+        "next_cursor": page.next_cursor,
+    }))
+}
+
 impl DumpstarTools {
     fn with_conn<T>(
         &self,
@@ -668,48 +719,8 @@ impl DumpstarTools {
     }
 
     fn search_cards(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
-        let q = args.get("q").and_then(Value::as_str).unwrap_or("").trim();
-        let limit = match args.get("limit").and_then(Value::as_u64) {
-            None => DEFAULT_PAGE,
-            Some(n) if (1..=MAX_PAGE as u64).contains(&n) => n as u32,
-            Some(_) => return Err(failed(format!("limit must be between 1 and {MAX_PAGE}"))),
-        };
-        let mut compiled = if q.is_empty() {
-            search::compile_all()
-        } else {
-            let ast = parse(q, &self.registry).map_err(|e| {
-                failed(format!(
-                    "{} (at position {})",
-                    teach(&self.keywords, &e.message),
-                    e.position
-                ))
-            })?;
-            search::compile(&ast, &self.flags)
-        };
-        let owned_only = args.get("owned_only").and_then(Value::as_bool) == Some(true);
-        compiled.set_catalog_wide(!owned_only);
-        let expand = args.get("expand_printings").and_then(Value::as_bool) == Some(true);
-        if !expand {
-            compiled.set_one_per_card();
-        }
-        let cursor = arg_str(args, "cursor").map(String::from);
         self.with_conn(ctx, |c| {
-            let page = search::search_page(c, &compiled, Slice::Cursor { limit, cursor })
-                .map_err(db_err)?;
-            let ids: Vec<String> = page.rows.iter().map(|r| r.card_id.clone()).collect();
-            let counts = counts_for(c, &ids)?;
-            let structured = structured_for(c, &ids)?;
-            let holds = holders_for(c, &ids)?;
-            let (copies_owned, copies_available, copies_reserved) =
-                search::copy_totals(c, &compiled, !expand).map_err(db_err)?;
-            Ok(json!({
-                "results": page.rows.iter().map(|r| row_object(c, r, &counts, &structured, &holds, expand)).collect::<Result<Vec<_>, _>>()?,
-                "total": page.total,
-                "total_copies_owned": copies_owned,
-                "total_copies_available": copies_available,
-                "total_copies_reserved": copies_reserved,
-                "next_cursor": page.next_cursor,
-            }))
+            search_cards_value(c, &self.registry, &self.flags, &self.keywords, args)
         })
     }
 

@@ -1,3 +1,5 @@
+//! `swu-cube-check login [--status]` signs in once; `pack --deck ID`, `cube|copies --group NAME` and
+//! `allocate --group NAME | --plan FILE` then read the site's REST surface themselves.
 //! `swu-cube-check allocate [FILE]` plans copy allocation across the whole cube.
 //! `swu-cube-check pack|cube|copies [--planned] [FILE...]` (several FILEs only for `cube` and `copies`, one pack each) — reads the document from FILE or stdin, prints one line
 //! per failure, and exits 1 when any rule fails (2 when the input cannot be read).
@@ -5,15 +7,53 @@
 use std::io::Read;
 use std::process::ExitCode;
 
+/// Removes `--name VALUE` from `args` and returns VALUE.
+fn take_value(args: &mut Vec<String>, name: &str) -> Result<Option<String>, String> {
+    let Some(i) = args.iter().position(|a| a == name) else {
+        return Ok(None);
+    };
+    if i + 1 >= args.len() {
+        return Err(format!("{name} needs a value"));
+    }
+    let v = args.remove(i + 1);
+    args.remove(i);
+    Ok(Some(v))
+}
+
 fn main() -> ExitCode {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let planned = args.iter().any(|a| a == "--planned");
     args.retain(|a| a != "--planned");
     let verbose = args.iter().any(|a| a == "--verbose");
     args.retain(|a| a != "--verbose");
+    let status = args.iter().any(|a| a == "--status");
+    args.retain(|a| a != "--status");
     if args.iter().any(|a| a == "--help" || a == "-h") {
         println!("{USAGE}");
         return ExitCode::SUCCESS;
+    }
+    let mut take = |n: &str| take_value(&mut args, n);
+    let flags = (|| {
+        Ok::<_, String>(Remote {
+            site: take("--site")?,
+            client_id: take("--client-id")?,
+            deck: take("--deck")?,
+            group: take("--group")?,
+            plan: take("--plan")?,
+        })
+    })();
+    let remote = match flags {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::from(2);
+        }
+    };
+    if args.first().map(String::as_str) == Some("login") {
+        return login(&remote, status);
+    }
+    if remote.any() {
+        return fetched(&args, &remote, planned, verbose);
     }
     let (mode, paths) = match args.as_slice() {
         [m] => (m.as_str(), vec!["-"]),
@@ -82,22 +122,7 @@ fn main() -> ExitCode {
         "copies" => dumpstar_cube::check_copies_value(&value),
         _ => return usage(),
     };
-    match result {
-        Err(e) => {
-            eprintln!("{e}");
-            ExitCode::from(2)
-        }
-        Ok(failures) if failures.is_empty() => {
-            println!("ok");
-            ExitCode::SUCCESS
-        }
-        Ok(failures) => {
-            for f in &failures {
-                println!("FAIL {f}");
-            }
-            ExitCode::from(1)
-        }
-    }
+    report(result)
 }
 
 fn allocate(path: &str, verbose: bool) -> ExitCode {
@@ -111,10 +136,14 @@ fn allocate(path: &str, verbose: bool) -> ExitCode {
         eprintln!("cannot read {path}: {e}");
         return ExitCode::from(2);
     }
-    let plan = serde_json::from_str::<serde_json::Value>(&text)
-        .map_err(|e| format!("not JSON: {path}: {e}"))
-        .and_then(|v| dumpstar_cube::allocate::allocate_value(&v));
-    match plan {
+    match serde_json::from_str::<serde_json::Value>(&text) {
+        Ok(v) => allocate_value(&v, verbose),
+        Err(e) => fail(format!("not JSON: {path}: {e}")),
+    }
+}
+
+fn allocate_value(doc: &serde_json::Value, verbose: bool) -> ExitCode {
+    match dumpstar_cube::allocate::allocate_value(doc) {
         Err(e) => {
             eprintln!("{e}");
             ExitCode::from(2)
@@ -185,7 +214,14 @@ fn allocate(path: &str, verbose: bool) -> ExitCode {
 /// Cards named per pack in the default summary; `--verbose` has the full reserve lines.
 const LOST_SHOWN: usize = 2;
 
-const USAGE: &str = "usage: swu-cube-check pack [--planned] [FILE] | cube [--planned] [FILE...] | copies [--planned] [FILE...] | allocate [--verbose] [FILE]
+const USAGE: &str = "usage: swu-cube-check login [--site URL] [--client-id ID] | login --status
+       swu-cube-check pack --deck ID | cube --group NAME | copies --group NAME | allocate --group NAME | allocate --plan FILE   [--site URL]
+  login     sign in once in a browser (authorization code + PKCE); the refresh token is cached at
+            ~/.config/dumpstar/swu-cube-check.json (0600) and never printed; --status says whose tenant it is
+  --deck/--group/--plan  fetch decks and run searches over the site's /api yourself; every deck's lines_digest is checked.
+            An expired or rejected sign-in exits 2 naming `login`; there is no fallback. allocate --plan FILE is
+            {\"packs\": [{\"name\", \"queries\": [search strings], \"deck\": ID?, \"picks\": [...]}]} with the rows fetched for you
+       swu-cube-check pack [--planned] [FILE] | cube [--planned] [FILE...] | copies [--planned] [FILE...] | allocate [--verbose] [FILE]
   pack      check one pack document (get_deck's result) against the pack rules
   cube      check a 20-pack cube: a cube document, or one pack file per deck
   copies    only the copy-count check (cube-copies) over any number of pack files, for a partial build
@@ -198,4 +234,141 @@ const USAGE: &str = "usage: swu-cube-check pack [--planned] [FILE] | cube [--pla
 fn usage() -> ExitCode {
     eprintln!("{USAGE}");
     ExitCode::from(2)
+}
+
+struct Remote {
+    site: Option<String>,
+    client_id: Option<String>,
+    deck: Option<String>,
+    group: Option<String>,
+    plan: Option<String>,
+}
+
+impl Remote {
+    fn any(&self) -> bool {
+        self.deck.is_some() || self.group.is_some() || self.plan.is_some()
+    }
+}
+
+fn fail(m: impl std::fmt::Display) -> ExitCode {
+    eprintln!("{m}");
+    ExitCode::from(2)
+}
+
+fn login(r: &Remote, status: bool) -> ExitCode {
+    use dumpstar_cube::site;
+    let path = site::config_path();
+    if status {
+        return match site::load(&path) {
+            Ok(Some(c)) => {
+                println!(
+                    "signed in to {} as {}",
+                    c.site,
+                    if c.who.is_empty() {
+                        "(unnamed)"
+                    } else {
+                        &c.who
+                    }
+                );
+                ExitCode::SUCCESS
+            }
+            Ok(None) => fail("not signed in: run `swu-cube-check login`"),
+            Err(e) => fail(e),
+        };
+    }
+    let old = site::load(&path).ok().flatten();
+    let site_url = r
+        .site
+        .clone()
+        .or_else(|| old.as_ref().map(|c| c.site.clone()))
+        .or_else(|| std::env::var("DUMPSTAR_SITE").ok())
+        .unwrap_or_else(|| site::DEFAULT_SITE.to_string());
+    let Some(client_id) = r
+        .client_id
+        .clone()
+        .or_else(|| old.map(|c| c.client_id))
+        .or_else(|| std::env::var("SWU_CUBE_CHECK_CLIENT_ID").ok())
+    else {
+        return fail(
+            "login needs the issuer's client id: --client-id ID (or SWU_CUBE_CHECK_CLIENT_ID); it is cached afterwards",
+        );
+    };
+    let announce = |url: &str| eprintln!("Open this address in a browser and sign in:\n{url}");
+    match site::login(&path, &site_url, &client_id, &announce) {
+        Ok(c) => {
+            println!("signed in to {} as {}", c.site, c.who);
+            ExitCode::SUCCESS
+        }
+        Err(e) => fail(e),
+    }
+}
+
+fn fetched(args: &[String], r: &Remote, planned: bool, verbose: bool) -> ExitCode {
+    use dumpstar_cube::{fetch, site};
+    let [mode] = args else { return usage() };
+    let src = match site::Site::open(&site::config_path(), r.site.as_deref()) {
+        Ok(s) => s,
+        Err(e) => return fail(e),
+    };
+    let load = || -> Result<serde_json::Value, String> {
+        match (mode.as_str(), &r.deck, &r.group, &r.plan) {
+            ("pack", Some(id), None, None) => {
+                let id: i64 = id
+                    .parse()
+                    .map_err(|_| format!("--deck wants a deck id, not '{id}'"))?;
+                dumpstar_cube::fetch::Source::deck(&src, id)
+            }
+            ("cube" | "copies", None, Some(g), None) => {
+                Ok(serde_json::Value::Array(fetch::group_decks(&src, g)?))
+            }
+            ("allocate", None, g, p) if g.is_some() || p.is_some() => {
+                let plan = match p {
+                    Some(p) => Some(
+                        std::fs::read_to_string(p)
+                            .map_err(|e| format!("cannot read {p}: {e}"))
+                            .and_then(|t| {
+                                serde_json::from_str(&t).map_err(|e| format!("not JSON: {p}: {e}"))
+                            })?,
+                    ),
+                    None => None,
+                };
+                fetch::allocation(&src, g.as_deref(), plan.as_ref())
+            }
+            _ => Err(USAGE.to_string()),
+        }
+    };
+    let mut value = match load() {
+        Ok(v) => v,
+        Err(e) => return fail(e),
+    };
+    if mode == "allocate" {
+        return allocate_value(&value, verbose);
+    }
+    if planned {
+        dumpstar_cube::strip_reservations(&mut value);
+    }
+    report(match mode.as_str() {
+        "pack" => dumpstar_cube::check_pack_value(&value),
+        "cube" => dumpstar_cube::check_cube_value(&value),
+        _ => dumpstar_cube::check_copies_value(&value),
+    })
+}
+
+fn report(result: Result<Vec<dumpstar_cube::Failure>, String>) -> ExitCode {
+    match result {
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::from(2)
+        }
+        Ok(failures) if failures.is_empty() => {
+            println!("ok");
+            ExitCode::SUCCESS
+        }
+        Ok(failures) => {
+            for f in &failures {
+                println!("FAIL {f}");
+            }
+            ExitCode::from(1)
+        }
+    }
 }

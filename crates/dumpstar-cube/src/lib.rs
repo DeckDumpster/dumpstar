@@ -446,24 +446,48 @@ pub fn strip_reservations(doc: &mut Value) {
     }
 }
 
-/// The digest `get_deck` returns as `lines_digest`: SHA-256 (lowercase hex) over the deck's lines,
-/// each `card_id TAB qty TAB reserved LF`, sorted by card id (then qty, reserved). `zone` is not
-/// part of it. `None` when `lines` is not an array of lines with a card id and a qty.
-pub fn lines_digest(lines: &Value) -> Option<String> {
+/// The card fields the digest covers, per line: the ones the checker reads (name, type, cost, HP,
+/// epic action, aspects, arenas) and rarity. Each is a JSON pointer into the card object; arrays
+/// are sorted. This list is the single source for the server (which computes the digest) and the
+/// checker (which recomputes it), so they cannot drift.
+pub const DIGEST_CARD_FIELDS: [&str; 8] = [
+    "/name",
+    "/type",
+    "/rarity",
+    "/cost",
+    "/game/hp",
+    "/game/epic_action",
+    "/game/aspects",
+    "/game/arenas",
+];
+
+/// The digest `get_deck` returns as `lines_digest`: SHA-256 (lowercase hex) over the canonical form
+/// of the deck's lines: per line one `LF`-terminated row of `TAB`-separated cells, sorted as
+/// rows: `card_id`, `qty`, `reserved`, then the line's card object's [`DIGEST_CARD_FIELDS`], each
+/// as compact JSON (`null` when absent; arrays sorted). `zone` is not part of it. `None` when
+/// `lines` is not an array of lines with a card id and a qty.
+pub fn lines_digest(lines: &Value, cards: &Value) -> Option<String> {
     use sha2::{Digest, Sha256};
     let mut rows = Vec::new();
     for l in lines.as_array()? {
-        rows.push((
-            l["card_id"].as_str()?,
-            l["qty"].as_u64()?,
-            l["reserved"].as_u64().unwrap_or(0),
-        ));
+        let id = l["card_id"].as_str()?;
+        let mut row = vec![
+            id.to_string(),
+            l["qty"].as_u64()?.to_string(),
+            l["reserved"].as_u64().unwrap_or(0).to_string(),
+        ];
+        let card = cards.get(id).unwrap_or(&Value::Null);
+        for ptr in DIGEST_CARD_FIELDS {
+            let mut v = card.pointer(ptr).cloned().unwrap_or(Value::Null);
+            if let Value::Array(a) = &mut v {
+                a.sort_by_key(|x| x.to_string());
+            }
+            row.push(v.to_string());
+        }
+        rows.push(row.join("\t"));
     }
     rows.sort();
-    let mut canon = String::new();
-    for (id, qty, reserved) in rows {
-        canon.push_str(&format!("{id}\t{qty}\t{reserved}\n"));
-    }
+    let canon: String = rows.iter().map(|r| format!("{r}\n")).collect();
     Some(
         Sha256::digest(canon.as_bytes())
             .iter()
@@ -472,13 +496,15 @@ pub fn lines_digest(lines: &Value) -> Option<String> {
     )
 }
 
-/// Refuses a document whose `lines_digest` does not match its own `lines`: it is not the saved
-/// deck `get_deck` returned. A document with no `lines_digest` (a planned one) passes.
+/// Refuses a document whose `lines_digest` does not match its own `lines` and `cards`: it is not
+/// the saved deck `get_deck` returned. A document with no `lines_digest` (a planned one) passes.
 pub fn verify_digest(doc: &Value) -> Result<(), String> {
     let Some(claimed) = doc.get("lines_digest") else {
         return Ok(());
     };
-    let actual = doc.get("lines").and_then(lines_digest);
+    let actual = doc
+        .get("lines")
+        .and_then(|l| lines_digest(l, &doc["cards"]));
     if actual.as_deref() == claimed.as_str() {
         Ok(())
     } else {
@@ -488,7 +514,8 @@ pub fn verify_digest(doc: &Value) -> Result<(), String> {
 
 /// The shared test vector: the server and the checker both compute this digest of these lines.
 pub const VECTOR_LINES: &str = r#"[{"card_id":"SOR-5","qty":1,"zone":"main","reserved":1},{"card_id":"C1-3","qty":2,"zone":"main","reserved":2},{"card_id":"JTL-10","qty":1,"zone":"sideboard","reserved":0}]"#;
-pub const VECTOR_DIGEST: &str = "4ade3f964e00ad8e659473845cb435bdbf51297c840ef3349d0cff4465f7959f";
+pub const VECTOR_CARDS: &str = r#"{"SOR-5":{"name":"Leader","type":"Leader","rarity":"Rare","cost":5,"game":{"aspects":["Villainy","Command"],"arenas":["Ground"],"hp":6,"epic_action":null}},"C1-3":{"name":"Base","type":"Base","rarity":"Common","cost":null,"game":{"aspects":["Vigilance"],"arenas":[],"hp":25,"epic_action":"Epic Action: Draw a card."}}}"#;
+pub const VECTOR_DIGEST: &str = "6e69ce1d7cc2d3687a8df1bc2c08a8cfaf1314b4deae52012cba72c5bb2f2942";
 
 pub fn check_pack_value(doc: &Value) -> Result<Vec<Failure>, String> {
     Ok(check_pack(&Pack::from_value(doc, &Value::Null)?))
@@ -713,13 +740,45 @@ mod tests {
     #[test]
     fn the_shared_vector_digests_to_its_pinned_value() {
         let lines: Value = serde_json::from_str(VECTOR_LINES).unwrap();
-        assert_eq!(lines_digest(&lines).as_deref(), Some(VECTOR_DIGEST));
+        let cards: Value = serde_json::from_str(VECTOR_CARDS).unwrap();
+        assert_eq!(lines_digest(&lines, &cards).as_deref(), Some(VECTOR_DIGEST));
+    }
+
+    fn saved_pack() -> Value {
+        let mut p = pack(1, "Heroism", "Command");
+        p["lines_digest"] = json!(lines_digest(&p["lines"], &p["cards"]).unwrap());
+        p
+    }
+
+    #[test]
+    fn a_changed_card_field_is_refused() {
+        assert!(verify_digest(&saved_pack()).is_ok());
+        for (ptr, v) in [
+            ("/L1/game/aspects", json!(["Heroism", "Cunning"])),
+            ("/L1/cost", json!(4)),
+            ("/L1/game/hp", json!(7)),
+            ("/L1/game/arenas", json!(["Space"])),
+            ("/L1/type", json!("Unit")),
+            ("/B25-1/game/epic_action", Value::Null),
+        ] {
+            let mut p = saved_pack();
+            *p["cards"].pointer_mut(ptr).unwrap() = v;
+            assert!(
+                verify_digest(&p).unwrap_err().contains("digest mismatch"),
+                "{ptr}"
+            );
+        }
+        let mut p = saved_pack();
+        p["cards"]["L1"]["game"]["aspects"]
+            .as_array_mut()
+            .unwrap()
+            .reverse();
+        assert!(verify_digest(&p).is_ok(), "aspect order is not content");
     }
 
     #[test]
     fn a_digest_is_order_independent_and_a_changed_qty_is_refused() {
-        let mut p = pack(1, "Heroism", "Command");
-        p["lines_digest"] = json!(lines_digest(&p["lines"]).unwrap());
+        let mut p = saved_pack();
         assert!(verify_digest(&p).is_ok());
         p["lines"].as_array_mut().unwrap().reverse();
         assert!(verify_digest(&p).is_ok());

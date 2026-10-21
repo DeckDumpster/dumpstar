@@ -957,7 +957,7 @@ impl ToolProvider for DumpstarTools {
                      Each result is one card (its original printing); owned_count and available_count \
                      are across all its printings (copies owned, and owned copies in no deck). \
                      Pass expand_printings for one row per printing instead. Page with next_cursor. Every result's id is a card id of the form <SET>-<number>, e.g. SOR-5; every tool takes and returns that form.",
-                    10,
+                    self.keywords.0.len(),
                     &EXAMPLES,
                 ),
                 schema(

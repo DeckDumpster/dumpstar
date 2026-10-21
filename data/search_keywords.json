@@ -1,7 +1,7 @@
 [
   {"canonical":"name","aliases":["n"],"operators":[":","=","!="],"kind":"name","target":"cards.name","help":"Card name (bare words search this too)"},
   {"canonical":"card_type","aliases":["t","type"],"operators":[":","=","!="],"kind":"enum","target":"cards.card_type","value_enum":"card_type","help":"Card type: Leader, Unit, Event, Upgrade, Base, Token"},
-  {"canonical":"aspect","aliases":["a","aspect"],"operators":[":","=","!="],"kind":"json_array","target":"cards.aspects","value_enum":"aspect","help":"Aspect: Vigilance, Command, Aggression, Cunning, Heroism, Villainy"},
+  {"canonical":"aspect","aliases":["a","aspect","color"],"operators":[":","=","!="],"kind":"json_array","target":"cards.aspects","value_enum":"aspect","help":"Aspect. The four colors are Vigilance, Command, Aggression and Cunning (color: is an alias of a:); Heroism and Villainy are alignments, not colors, and are matched with a: too"},
   {"canonical":"arena","aliases":["arena"],"operators":[":","=","!="],"kind":"json_array","target":"cards.arenas","value_enum":"arena","help":"Arena: Ground or Space"},
   {"canonical":"trait","aliases":["trait"],"operators":[":","=","!="],"kind":"json_array","target":"cards.traits","help":"Trait: Rebel, Force, Vehicle, Trooper…"},
   {"canonical":"keyword","aliases":["k","keyword"],"operators":[":","=","!="],"kind":"json_array","target":"cards.keywords","help":"Keyword: {{KEYWORDS}}; k:\"raid 2\" matches its number"},
@@ -10,7 +10,7 @@
   {"canonical":"cost","aliases":["c","cost"],"operators":[":","=","!=","<",">","<=",">="],"kind":"numeric","target":"cards.cost","help":"Resource cost"},
   {"canonical":"power","aliases":["p","power"],"operators":[":","=","!=","<",">","<=",">="],"kind":"numeric","target":"cards.power","help":"Power"},
   {"canonical":"hp","aliases":["hp"],"operators":[":","=","!=","<",">","<=",">="],"kind":"numeric","target":"cards.hp","help":"Hit points"},
-  {"canonical":"rarity","aliases":["r","rarity"],"operators":[":","=","!=","<",">","<=",">="],"kind":"rarity","target":"printings.rarity","value_enum":"rarity","semantics":"rank","help":"Rarity; ordinal compares use the rarities rank table"},
+  {"canonical":"rarity","aliases":["r","rarity"],"operators":[":","=","!=","<",">","<=",">="],"kind":"rarity","target":"printings.rarity","value_enum":"rarity","semantics":"rank","help":"Rarity; ordinal compares use the rarities rank table, lowest to highest: Common=0 < Uncommon=1 < Rare=2 (Promo=2, ties with Rare) < Legendary=3 < Special=4"},
   {"canonical":"set","aliases":["s","set","e"],"operators":[":","=","!="],"kind":"set","target":"sets","help":"Set by code or name (e.g. s:sor)"},
   {"canonical":"artist","aliases":["artist"],"operators":[":","=","!="],"kind":"text","target":"printings.artist","help":"Illustrator"},
   {"canonical":"oracle","aliases":["o","text"],"operators":[":","=","!="],"kind":"text","target":"cards.rules_text","help":"Rules text"},

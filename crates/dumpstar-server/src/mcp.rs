@@ -617,13 +617,14 @@ impl DumpstarTools {
             let ids: Vec<String> = page.rows.iter().map(|r| r.card_id.clone()).collect();
             let counts = counts_for(c, &ids)?;
             let structured = structured_for(c, &ids)?;
-            let (copies_owned, copies_available) =
+            let (copies_owned, copies_available, copies_reserved) =
                 search::copy_totals(c, &compiled, !expand).map_err(db_err)?;
             Ok(json!({
                 "results": page.rows.iter().map(|r| row_object(c, r, &counts, &structured, expand)).collect::<Result<Vec<_>, _>>()?,
                 "total": page.total,
                 "total_copies_owned": copies_owned,
                 "total_copies_available": copies_available,
+                "total_copies_reserved": copies_reserved,
                 "next_cursor": page.next_cursor,
             }))
         })

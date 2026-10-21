@@ -652,10 +652,10 @@ pub fn copy_totals(
     conn: &Connection,
     compiled: &CompiledSearch,
     per_card: bool,
-) -> Result<(i64, i64)> {
+) -> Result<(i64, i64, i64)> {
     let sql = if per_card {
         format!(
-            "SELECT COALESCE(SUM(o), 0), COALESCE(SUM(o - r), 0) FROM (\
+            "SELECT COALESCE(SUM(o), 0), COALESCE(SUM(o - r), 0), COALESCE(SUM(r), 0) FROM (\
                SELECT (SELECT count(*) FROM collection c \
                          JOIN shared.printings p2 ON p2.printing_id = c.printing_id \
                         WHERE p2.card_id = k.card_id AND c.status = 'owned') AS o, \
@@ -667,7 +667,7 @@ pub fn copy_totals(
         )
     } else {
         format!(
-            "SELECT COALESCE(SUM(o), 0), COALESCE(SUM(o - r), 0) FROM (\
+            "SELECT COALESCE(SUM(o), 0), COALESCE(SUM(o - r), 0), COALESCE(SUM(r), 0) FROM (\
                SELECT (SELECT count(*) FROM collection c \
                         WHERE c.printing_id = p.printing_id AND c.status = 'owned') AS o, \
                       (SELECT count(c.deck_id) FROM collection c \
@@ -678,7 +678,7 @@ pub fn copy_totals(
     };
     Ok(
         conn.query_row(&sql, params_from_iter(compiled.params.iter()), |r| {
-            Ok((r.get(0)?, r.get(1)?))
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?))
         })?,
     )
 }

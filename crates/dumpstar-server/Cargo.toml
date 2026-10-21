@@ -8,6 +8,7 @@ authors.workspace = true
 [dependencies]
 dumpstar-core.workspace = true
 dumpstar-db.workspace = true
+dumpstar-cube.workspace = true
 dumpster-kit-tenancy.workspace = true
 dumpster-kit-oidc.workspace = true
 dumpster-kit-mcp.workspace = true
@@ -28,7 +29,6 @@ dumpster-kit-tenancy = { workspace = true, features = ["testing"] }
 dumpster-kit-conformance.workspace = true
 dumpster-kit-oidc = { workspace = true, features = ["testing"] }
 dumpstar-catalog.workspace = true
-dumpstar-cube.workspace = true
 chrono.workspace = true
 tempfile.workspace = true
 serde_json.workspace = true

@@ -444,6 +444,50 @@ pub fn strip_reservations(doc: &mut Value) {
     }
 }
 
+/// The digest `get_deck` returns as `lines_digest`: SHA-256 (lowercase hex) over the deck's lines,
+/// each `card_id TAB qty TAB reserved LF`, sorted by card id (then qty, reserved). `zone` is not
+/// part of it. `None` when `lines` is not an array of lines with a card id and a qty.
+pub fn lines_digest(lines: &Value) -> Option<String> {
+    use sha2::{Digest, Sha256};
+    let mut rows = Vec::new();
+    for l in lines.as_array()? {
+        rows.push((
+            l["card_id"].as_str()?,
+            l["qty"].as_u64()?,
+            l["reserved"].as_u64().unwrap_or(0),
+        ));
+    }
+    rows.sort();
+    let mut canon = String::new();
+    for (id, qty, reserved) in rows {
+        canon.push_str(&format!("{id}\t{qty}\t{reserved}\n"));
+    }
+    Some(
+        Sha256::digest(canon.as_bytes())
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect(),
+    )
+}
+
+/// Refuses a document whose `lines_digest` does not match its own `lines`: it is not the saved
+/// deck `get_deck` returned. A document with no `lines_digest` (a planned one) passes.
+pub fn verify_digest(doc: &Value) -> Result<(), String> {
+    let Some(claimed) = doc.get("lines_digest") else {
+        return Ok(());
+    };
+    let actual = doc.get("lines").and_then(lines_digest);
+    if actual.as_deref() == claimed.as_str() {
+        Ok(())
+    } else {
+        Err("this is not the saved deck: digest mismatch; copy the get_deck result again".into())
+    }
+}
+
+/// The shared test vector: the server and the checker both compute this digest of these lines.
+pub const VECTOR_LINES: &str = r#"[{"card_id":"SOR-5","qty":1,"zone":"main","reserved":1},{"card_id":"C1-3","qty":2,"zone":"main","reserved":2},{"card_id":"JTL-10","qty":1,"zone":"sideboard","reserved":0}]"#;
+pub const VECTOR_DIGEST: &str = "4ade3f964e00ad8e659473845cb435bdbf51297c840ef3349d0cff4465f7959f";
+
 pub fn check_pack_value(doc: &Value) -> Result<Vec<Failure>, String> {
     Ok(check_pack(&Pack::from_value(doc, &Value::Null)?))
 }
@@ -632,6 +676,23 @@ mod tests {
 
     use super::fixture::{cube, pack};
     use super::*;
+
+    #[test]
+    fn the_shared_vector_digests_to_its_pinned_value() {
+        let lines: Value = serde_json::from_str(VECTOR_LINES).unwrap();
+        assert_eq!(lines_digest(&lines).as_deref(), Some(VECTOR_DIGEST));
+    }
+
+    #[test]
+    fn a_digest_is_order_independent_and_a_changed_qty_is_refused() {
+        let mut p = pack(1, "Heroism", "Command");
+        p["lines_digest"] = json!(lines_digest(&p["lines"]).unwrap());
+        assert!(verify_digest(&p).is_ok());
+        p["lines"].as_array_mut().unwrap().reverse();
+        assert!(verify_digest(&p).is_ok());
+        p["lines"][0]["qty"] = json!(2);
+        assert!(verify_digest(&p).unwrap_err().contains("digest mismatch"));
+    }
 
     fn rules(doc: &Value) -> Vec<&'static str> {
         check_pack_value(doc)

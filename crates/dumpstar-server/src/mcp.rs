@@ -715,7 +715,9 @@ impl DumpstarTools {
                     cards.insert(display_id(c, &l.card_id)?, detail_card_object(c, &d.card)?);
                 }
             }
-            Ok(json!({ "deck": deck, "lines": display_lines(c, lines)?, "cards": cards }))
+            let lines = display_lines(c, lines)?;
+            let lines_digest = dumpstar_cube::lines_digest(&lines);
+            Ok(json!({ "deck": deck, "lines": lines, "lines_digest": lines_digest, "cards": cards }))
         })
     }
 
@@ -883,7 +885,7 @@ impl ToolProvider for DumpstarTools {
             ),
             def(
                 "get_deck",
-                "One deck and its lines, each with the copies it reserves, and under cards the full card object of every line keyed by card id (as get_card returns it), so the result is a self-contained pack document.".into(),
+                "One deck and its lines, each with the copies it reserves, and under cards the full card object of every line keyed by card id (as get_card returns it), so the result is a self-contained pack document. `lines_digest` is the SHA-256 (lowercase hex) of the lines in canonical form: one `card_id<TAB>qty<TAB>reserved<LF>` per line, sorted by card_id (zone is not included); swu-cube-check recomputes it and refuses a file whose lines were altered in copying.".into(),
                 schema(json!({"id": id}), &["id"]),
             ),
             def(

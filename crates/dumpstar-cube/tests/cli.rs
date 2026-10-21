@@ -120,3 +120,24 @@ fn a_digest_that_does_not_match_the_lines_is_refused_before_any_rule() {
     let (code, out) = run("pack", &saved.to_string());
     assert_eq!((code, out.trim()), (2, ""));
 }
+
+#[test]
+fn allocate_reserves_shared_cards_across_packs_and_names_a_shortfall() {
+    let mut doc = json!({
+        "owned": {"Longbeam Cruiser": 1, "Command Unit": 1},
+        "packs": [
+            {"name": "Pack 1", "slots": 1, "eligible": ["Longbeam Cruiser", "Command Unit"]},
+            {"name": "Pack 2", "slots": 1, "eligible": ["Longbeam Cruiser"]},
+        ]
+    });
+    let (code, out) = run("allocate", &doc.to_string());
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("reserve Longbeam Cruiser: Pack 2"), "{out}");
+    doc["owned"]["Command Unit"] = json!(0);
+    let (code, out) = run("allocate", &doc.to_string());
+    assert_eq!(code, 1);
+    assert!(
+        out.contains("FAIL allocation:") && out.contains("Longbeam Cruiser"),
+        "{out}"
+    );
+}

@@ -102,6 +102,14 @@ impl KeywordRegistry {
     /// letters with it (`aspec` -> `aspect`).
     pub fn nearest(&self, raw: &str) -> Vec<String> {
         let raw = raw.to_ascii_lowercase();
+        // Edit distance would offer 'c:' (cost) for color; the player means the aspect.
+        if matches!(raw.as_str(), "color" | "colour") {
+            for alias in ["a", "aspect"] {
+                if self.alias_to_canonical.contains_key(alias) {
+                    return vec![alias.to_string()];
+                }
+            }
+        }
         let limit = if raw.len() <= 2 { 1 } else { 2 };
         let mut scored: Vec<(usize, String)> = self
             .alias_to_canonical

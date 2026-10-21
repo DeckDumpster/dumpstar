@@ -489,6 +489,7 @@ fn row_object(
     r: &SearchRow,
     counts: &HashMap<String, CardCount>,
     structured: &HashMap<String, Structured>,
+    holds: &HashMap<String, Vec<decks::DeckHold>>,
     expand: bool,
 ) -> Result<Value, ToolError> {
     let mut v = card_object(
@@ -512,6 +513,7 @@ fn row_object(
         counts,
         structured,
     );
+    v["in_decks"] = json!(holds.get(&r.card_id).cloned().unwrap_or_default());
     if expand {
         v["printing_id"] = json!(r.printing_id);
         v["printing_set"] = json!(r.set_code);
@@ -521,6 +523,14 @@ fn row_object(
         v["owned_printing_count"] = json!(r.owned_count);
     }
     Ok(v)
+}
+
+/// `in_decks: [{id, name, qty}]` for each card, set on the card objects.
+fn holders_for(
+    conn: &Connection,
+    ids: &[String],
+) -> Result<HashMap<String, Vec<decks::DeckHold>>, ToolError> {
+    decks::holders(conn, ids).map_err(db_err)
 }
 
 fn counts_for(conn: &Connection, ids: &[String]) -> Result<HashMap<String, CardCount>, ToolError> {
@@ -647,10 +657,11 @@ impl DumpstarTools {
             let ids: Vec<String> = page.rows.iter().map(|r| r.card_id.clone()).collect();
             let counts = counts_for(c, &ids)?;
             let structured = structured_for(c, &ids)?;
+            let holds = holders_for(c, &ids)?;
             let (copies_owned, copies_available, copies_reserved) =
                 search::copy_totals(c, &compiled, !expand).map_err(db_err)?;
             Ok(json!({
-                "results": page.rows.iter().map(|r| row_object(c, r, &counts, &structured, expand)).collect::<Result<Vec<_>, _>>()?,
+                "results": page.rows.iter().map(|r| row_object(c, r, &counts, &structured, &holds, expand)).collect::<Result<Vec<_>, _>>()?,
                 "total": page.total,
                 "total_copies_owned": copies_owned,
                 "total_copies_available": copies_available,
@@ -693,7 +704,10 @@ impl DumpstarTools {
             let detail = cards::get_card_detail_variant(c, &set, &number, variant.as_deref())
                 .map_err(db_err)?
                 .ok_or_else(|| failed(format!("no card printed as {set}/{number}")))?;
-            let card = detail_card_object(c, &detail.card)?;
+            let mut card = detail_card_object(c, &detail.card)?;
+            card["in_decks"] = json!(holders_for(c, std::slice::from_ref(&detail.card.card_id))?
+                .remove(&detail.card.card_id)
+                .unwrap_or_default());
             Ok(json!({
                 "card": card,
                 "printings": detail.printings.iter().map(|p| json!({

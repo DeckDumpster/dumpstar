@@ -239,6 +239,43 @@ pub struct ShortLine {
     pub owned: u32,
     pub reserved_elsewhere: u32,
     pub available: u32,
+    /// The other decks holding the owned copies, with how many each holds.
+    pub held_by: Vec<DeckHold>,
+    /// The next step, naming the decks to free the card from.
+    pub hint: String,
+}
+
+/// A deck and how many copies of one card it holds.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct DeckHold {
+    pub id: i64,
+    pub name: String,
+    pub qty: u32,
+}
+
+/// The decks holding owned copies of each card in `card_ids`, by card.
+pub fn holders(conn: &Connection, card_ids: &[String]) -> Result<HashMap<String, Vec<DeckHold>>> {
+    let mut stmt = conn.prepare(
+        "SELECT d.id, d.name, count(*) FROM collection c \
+           JOIN shared.printings p ON p.printing_id = c.printing_id \
+           JOIN decks d ON d.id = c.deck_id \
+          WHERE p.card_id = ?1 AND c.status = 'owned' \
+          GROUP BY d.id ORDER BY d.name, d.id",
+    )?;
+    let mut out = HashMap::new();
+    for id in card_ids {
+        let holds: Vec<DeckHold> = stmt
+            .query_map([id], |r| {
+                Ok(DeckHold {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    qty: r.get(2)?,
+                })
+            })?
+            .collect::<rusqlite::Result<_>>()?;
+        out.insert(id.clone(), holds);
+    }
+    Ok(out)
 }
 
 /// A deck line with what backs it.
@@ -360,12 +397,32 @@ pub fn set_lines(conn: &Connection, deck_id: i64, lines: &[Line]) -> Result<SetL
                 .filter(|r| r.1.is_none() || r.1 == Some(deck_id))
                 .collect();
             if (usable.len() as u32) < *need {
+                let held_by: Vec<DeckHold> = holders(conn, &[(*card).to_string()])?
+                    .remove(*card)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|h| h.id != deck_id)
+                    .collect();
+                let hint = if held_by.is_empty() {
+                    format!(
+                        "own {} more or lower the quantity",
+                        need - usable.len() as u32
+                    )
+                } else {
+                    let names: Vec<String> = held_by
+                        .iter()
+                        .map(|h| format!("'{}' (deck {}, {})", h.name, h.id, h.qty))
+                        .collect();
+                    format!("swap the card or free it from {}", names.join(", "))
+                };
                 short.push(ShortLine {
                     card_id: (*card).to_string(),
                     needed: *need,
                     owned,
                     reserved_elsewhere: elsewhere,
                     available: usable.len() as u32,
+                    held_by,
+                    hint,
                 });
             } else {
                 keep.extend(usable.into_iter().take(*need as usize));
@@ -793,8 +850,22 @@ mod tests {
                 needed: 2,
                 owned: 3,
                 reserved_elsewhere: 2,
-                available: 1
+                available: 1,
+                held_by: vec![DeckHold {
+                    id: a,
+                    name: "A".into(),
+                    qty: 2
+                }],
+                hint: format!("swap the card or free it from 'A' (deck {a}, 2)"),
             }
+        );
+        assert_eq!(
+            holders(&conn, &["C1".to_string()]).unwrap()["C1"],
+            vec![DeckHold {
+                id: a,
+                name: "A".into(),
+                qty: 2
+            }]
         );
         assert_eq!(short[1].card_id, "GHOST");
         assert_eq!(counts(&conn).reserved, 2);

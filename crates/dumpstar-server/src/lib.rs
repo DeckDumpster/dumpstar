@@ -3020,7 +3020,38 @@ mod tests {
                     json!({"id": b, "lines": one["lines"]}),
                 )
                 .await;
-            assert!(again.unwrap_err().contains("not enough free copies"));
+            let refusal = again.unwrap_err();
+            assert!(refusal.contains("not enough free copies"));
+            assert!(
+                refusal.contains("Pack 1"),
+                "refusal names the holder: {refusal}"
+            );
+            assert!(
+                refusal.contains("free it from"),
+                "refusal gives a next step: {refusal}"
+            );
+            let found = site
+                .tool(&alice, "search_cards", json!({"q": "", "owned_only": true}))
+                .await
+                .unwrap();
+            let row = found["results"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["id"] == "SOR-1")
+                .expect("SOR-1 in results");
+            assert_eq!(
+                row["in_decks"],
+                json!([{"id": a, "name": "Pack 1", "qty": 2}])
+            );
+            let got = site
+                .tool(&alice, "get_card", json!({"id": "SOR-1"}))
+                .await
+                .unwrap();
+            assert_eq!(
+                got["card"]["in_decks"],
+                json!([{"id": a, "name": "Pack 1", "qty": 2}])
+            );
             let summary = site
                 .tool(&alice, "collection_summary", json!({}))
                 .await

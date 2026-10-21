@@ -1,5 +1,6 @@
 [
   {"canonical":"name","aliases":["n"],"operators":[":","=","!="],"kind":"name","target":"cards.name","help":"Card name (bare words search this too)"},
+  {"canonical":"id","aliases":["id"],"operators":[":","=","!="],"kind":"text","target":"printings.set_code","help":"Exact card id as search_cards returns it, <SET>-<number> (id:SOR-95), case-insensitive; combine with or to look up several cards at once (id:SOR-95 or id:ASH-251 avail>=0)"},
   {"canonical":"card_type","aliases":["t","type"],"operators":[":","=","!="],"kind":"enum","target":"cards.card_type","value_enum":"card_type","help":"Card type as printed: Leader, Unit, Event, Upgrade, Base, Token. A leader is type Leader, so t:unit excludes leaders; to search for a card that can be a unit use (t:unit or t:leader)"},
   {"canonical":"aspect","aliases":["a","aspect","color"],"operators":[":","=","!="],"kind":"json_array","target":"cards.aspects","value_enum":"aspect","help":"Aspect. The four colors are Vigilance, Command, Aggression and Cunning (color: is an alias of a:); Heroism and Villainy are alignments, not colors, and are matched with a: too"},
   {"canonical":"arena","aliases":["arena"],"operators":[":","=","!="],"kind":"json_array","target":"cards.arenas","value_enum":"arena","help":"Arena: Ground or Space"},

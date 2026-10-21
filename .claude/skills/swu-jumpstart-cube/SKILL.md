@@ -125,9 +125,12 @@ of searches per pack (step 3) and choose from the results yourself; never search
    see it. Run the four searches below for every pack first, then write
    `{"owned": {"<card id>": <available copies>}, "packs": [{"name": "Pack 1", "slots": 15,
    "eligible": [<search_cards row>, ...]}]}` (eligible = the rows that pack's searches returned, as
-   they came back: `allocate` reads each row's `id`, `type`, `cost` and `game.arenas`) and run
-   `swu-cube-check allocate plan.json`, or pipe it on stdin. It reserves only the **contested** copies: cards more packs want than
-   there are copies of (`reserve <card>: Pack 2 (contested: 1 copy, 2 packs)`); with none it prints
+   they came back: `allocate` reads each row's `id`, `type`, `cost` and `game.arenas`), plus the pack's
+   `"picks"` (cards planned for it) and, while undecided, `"candidates"` (cards it may still choose,
+   ids or rows). Eligibility alone never reserves a copy: only a pack's picks and candidates do, so
+   a pack with neither reserves nothing. Run
+   `swu-cube-check allocate plan.json`, or pipe it on stdin. It reserves only the **contested** copies: cards more packs pick or
+   consider than there are copies of (packs wanting the same scarce card are served in pack order) (`reserve <card>: Pack 2 (contested: 1 copy, 2 packs)`); with none it prints
    `no contested cards`. It does not pick any pack's draw list. It prints `ok`, or `FAIL allocation:`
    naming the card and the packs competing for it, which you report to the user; with rows, that
    also means no 15 cards meet the pack skeleton (8 ground, 3-4 space, 3-4 events or upgrades, the

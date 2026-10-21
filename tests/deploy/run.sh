@@ -3235,6 +3235,52 @@ check "…and puts the previous unit back" "same" \
 	"$(cmp -s "${Q23}/dumpstar-prod.container" "${WORK}/unit23.before" && echo same || echo differs)"
 check "…and restarts it" "2" "$(grep -c '^SYSTEMCTL: --user restart dumpstar-prod$' "$SYSCTL_LOG" || true)"
 
+# --- A rollback restores the image as well as the unit (sp-h5nmbc) ---
+# The fake host serves only while localhost/dumpstar:prod is the OLD image and the installed
+# unit carries no BadKey=; a deploy builds NEW, so only a rollback that puts the image back serves.
+HOME24="${WORK}/home24"
+Q24="${HOME24}/.config/containers/systemd"
+S24="${WORK}/state24"
+mkdir -p "$Q24" "${HOME24}/.config/dumpstar/prod" "${WORK}/bin24" "$S24"
+cp "${WORK}/bin23/systemctl" "${WORK}/bin24/systemctl"
+cat > "${WORK}/bin24/podman" <<'EOF'
+#!/usr/bin/env bash
+t() { echo "${1#localhost/}" | tr '/:' '__'; }
+case "$1 $2" in
+	"image inspect") cat "$P24_STATE/$(t "${@: -1}")" 2>/dev/null || exit 1 ;;
+	tag*) src="$P24_STATE/$(t "$2")"; if [ -f "$src" ]; then cp "$src" "$P24_STATE/$(t "$3")"; else printf '%s' "$2" > "$P24_STATE/$(t "$3")"; fi ;;
+esac
+[ "$1" = build ] && printf NEWIMAGE > "$P24_STATE/dumpstar_prod"
+exit 0
+EOF
+cat > "${WORK}/bin24/curl" <<'EOF'
+#!/usr/bin/env bash
+if [ "$(cat "$P24_STATE/dumpstar_prod")" = OLDIMAGE ] && ! grep -q '^BadKey=' "$P24_Q/dumpstar-prod.container"; then printf 200; else printf 502; fi
+EOF
+chmod +x "${WORK}/bin24/podman" "${WORK}/bin24/curl"
+printf 'DUMPSTAR_ACCESS_TEAM_DOMAIN=https://t.example\nDUMPSTAR_ACCESS_AUD=aud\nDUMPSTAR_ACCESS_JWKS_URL=https://t.example/certs\n' > "${HOME24}/.config/dumpstar/prod/access.env"
+deploy24() { # deploy24 <extra line for the previous unit>
+	printf '[Unit]\nDescription=running\n\n[Container]\nImage=localhost/dumpstar:prod\nPublishPort=127.0.0.1:8091:8080\n%s\n' "$1" > "${Q24}/dumpstar-prod.container"
+	cp "${Q24}/dumpstar-prod.container" "${WORK}/unit24.before"
+	printf OLDIMAGE > "${S24}/dumpstar_prod"
+	: > "$SYSCTL_LOG"
+	RC24=0
+	PATH="${WORK}/bin24:${ORIG_PATH}" HOME="$HOME24" P24_STATE="$S24" P24_Q="$Q24" \
+		DUMPSTAR_DEPLOY_HEALTH_TRIES=2 DUMPSTAR_DEPLOY_HEALTH_SLEEP=0 \
+		DUMPSTAR_TEST_SYSTEMCTL_LOG="$SYSCTL_LOG" DUMPSTAR_TEST_DEPLOY_PODMAN_LOG="$PODMAN_LOG" \
+		bash "${REPO_DIR}/deploy/deploy.sh" prod >"${WORK}/out24" 2>&1 || RC24=$?
+}
+deploy24 ""
+check "a failed deploy exits non-zero" "1" "$RC24"
+check "…and puts the previous image back" "OLDIMAGE" "$(cat "${S24}/dumpstar_prod")"
+check "…and the previous unit" "same" \
+	"$(cmp -s "${Q24}/dumpstar-prod.container" "${WORK}/unit24.before" && echo same || echo differs)"
+check "…and says what it rolled back to" "1" "$(grep -c 'rolled back to OLDIMAGE' "${WORK}/out24" || true)"
+check "…and does not call the rollback failed" "0" "$(grep -c 'ROLLBACK FAILED' "${WORK}/out24" || true)"
+deploy24 "BadKey=1"
+check "a broken rollback target exits non-zero" "1" "$RC24"
+check "…with the ROLLBACK FAILED line" "1" "$(grep -c '^ROLLBACK FAILED: site down' "${WORK}/out24" || true)"
+
 reset_store
 
 # ---------------------------------------------------------------------------

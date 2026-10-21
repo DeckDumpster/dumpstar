@@ -1983,3 +1983,20 @@ fn a_clause_tail_is_not_a_keyword_list() {
         [("Ambush".to_string(), true, false)]
     );
 }
+
+#[test]
+fn icons_are_written_in_one_canonical_form() {
+    let t = |s: &str| rules_of("Test", "Event", json!({"text": s})).unwrap();
+    assert_eq!(
+        t("When Defeated: You may disclose HeroismHeroism. If you do, draw."),
+        "When Defeated: You may disclose [Heroism] [Heroism]. If you do, draw."
+    );
+    assert_eq!(
+        t("Action [Exhaust, use the Force ]: Play a Villainy card."),
+        "Action [Exhaust, use the Force]: Play a Villainy card."
+    );
+    assert_eq!(t("Play a <Heroism> unit."), "Play a [Heroism] unit.");
+    assert!(official::icon_defect("disclose HeroismHeroism").is_some());
+    assert!(official::icon_defect("use the Force ]").is_some());
+    assert!(official::icon_defect("disclose [Heroism] [Heroism]").is_none());
+}

@@ -127,7 +127,9 @@ const DERIVATIONS: &[(&str, u32)] = &[
     // (sp-gww4nf).
     // 12: "this unit gains each of the following keywords" lists the card's own
     // (sp-eu0o9a).
-    (swu::SRC_OFFICIAL, 12),
+    // 13: aspect icons written "[Heroism] [Heroism]", no space before "]"
+    // (sp-td6hi1).
+    (swu::SRC_OFFICIAL, 13),
 ];
 
 pub fn derivation_version(source: &str) -> u32 {

@@ -3109,6 +3109,92 @@ mod tests {
             assert_eq!(ids(&unaligned), vec!["SOR-V2"]);
         }
 
+        /// sp-70k718: the skill carries no collection state, and its documented pool queries,
+        /// run over a fixture catalog, return neither Leaders nor bases.
+        #[tokio::test]
+        async fn the_skill_states_no_collection_fact_and_its_pool_queries_return_no_leaders() {
+            let skill = std::fs::read_to_string(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../.claude/skills/swu-jumpstart-cube/SKILL.md"
+            ))
+            .unwrap();
+            for claim in ["owns only", "owns just", "only owns", "you own only"] {
+                assert!(
+                    !skill.to_lowercase().contains(claim),
+                    "SKILL.md states an owned-count fact ({claim:?}); derive it from collection_summary"
+                );
+            }
+            let template = |label: &str| -> String {
+                let line = skill
+                    .lines()
+                    .find(|l| l.trim_start().starts_with(label))
+                    .unwrap_or_else(|| panic!("SKILL.md has no {label} query"));
+                let q = line.split('`').nth(1).unwrap().to_string();
+                q.replace(" avail>=1", "")
+            };
+            let aligned = template("- aligned:")
+                .replace("<color>", "vigilance")
+                .replace("<alignment>", "heroism")
+                .replace(
+                    "-a:<each other color>",
+                    "-a:command -a:aggression -a:cunning",
+                );
+            let unaligned = template("- unaligned:")
+                .replace("<color>", "vigilance")
+                .replace(
+                    "-a:<each other color>",
+                    "-a:command -a:aggression -a:cunning",
+                );
+            assert!(!aligned.contains('<') && !unaligned.contains('<'));
+
+            let sql = "INSERT INTO cards (card_id, name, card_type, cost, arenas, aspects) VALUES \
+                 ('P1', 'Pool Unit', 'Unit', 2, '[]', '[\"Vigilance\",\"Heroism\"]'), \
+                 ('P2', 'Pool Leader', 'Leader', 5, '[]', '[\"Vigilance\",\"Heroism\"]'), \
+                 ('P3', 'Pool Base', 'Base', 0, '[]', '[\"Vigilance\"]'), \
+                 ('P4', 'Unaligned Leader', 'Leader', 5, '[]', '[\"Vigilance\"]'), \
+                 ('P5', 'Vanquish', 'Event', 5, '[]', '[\"Vigilance\"]'); \
+                 INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) VALUES \
+                 ('P1-p', 'P1', 'SOR', 'P1', 'Standard', 'Normal'), \
+                 ('P2-p', 'P2', 'SOR', 'P2', 'Standard', 'Normal'), \
+                 ('P3-p', 'P3', 'SOR', 'P3', 'Standard', 'Normal'), \
+                 ('P4-p', 'P4', 'SOR', 'P4', 'Standard', 'Normal'), \
+                 ('P5-p', 'P5', 'SOR', 'P5', 'Standard', 'Normal');";
+            let mut site = Site::with_catalog(&["alice"], sql).await;
+            site.sign_in(member("alice@example.com")).await;
+            for p in ["P1-p", "P2-p", "P3-p", "P4-p", "P5-p"] {
+                let body = json!({"printing_id": p, "source": "manual_id"}).to_string();
+                let r = site.send("POST", "/api/collection", Some(&body)).await;
+                assert_eq!(r.status(), StatusCode::CREATED);
+            }
+            let t = site.token_for("alice@example.com");
+            let ids = |r: &serde_json::Value| -> Vec<String> {
+                r["results"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|c| c["id"].as_str().unwrap().to_string())
+                    .collect()
+            };
+            let a = site
+                .tool(
+                    &t,
+                    "search_cards",
+                    json!({"q": aligned, "owned_only": true, "limit": 100}),
+                )
+                .await
+                .unwrap();
+            assert_eq!(ids(&a), vec!["SOR-P1"]);
+            let u = site
+                .tool(
+                    &t,
+                    "search_cards",
+                    json!({"q": unaligned, "owned_only": true, "limit": 100}),
+                )
+                .await
+                .unwrap();
+            assert_eq!(ids(&u), vec!["SOR-P5"]);
+        }
+
         /// Acceptance (sp-kk6hn8): the swu-jumpstart-cube skill's method, scripted with no model,
         /// through the `/mcp` tools over a fixture collection saves 20 decks that pass `check_cube`.
         #[tokio::test]

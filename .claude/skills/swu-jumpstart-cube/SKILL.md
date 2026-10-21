@@ -70,7 +70,7 @@ Leader's aspect without an epic action, and the epic base is any 25-HP base of t
 One rule decides: an epic base is a 25-HP base whose card object has a non-null `epic_action`. A
 base is not epic by name; Mystic Monastery and similar bases whose `epic_action` is null are
 rejected as the epic base. A collection may not own enough epic bases for 5 per
-color (Ryan's owns only Security Complex): report the shortfall to the user and build the packs
+color (read the owned epic-base counts from `collection_summary` at run time): report the shortfall to the user and build the packs
 that are possible; never fail silently.
 
 **Leaders: the universality rule.** Prefer Common Leaders with universal, unconditional abilities
@@ -108,14 +108,14 @@ and choose from the results yourself; do not search once per card.
    rule. Each pack takes an epic and a vanilla base of its Leader's color; if the collection lacks them, say so and build what is possible.
 3. **Fill each pack to the skeleton.** Two `search_cards` per pack cover the Leader's whole pool,
    because section 2 allows same-color cards with no alignment and one `a:<color> a:<alignment>`
-   query misses them. Both pass `avail>=1` in the query (when `query_help` lists `avail`; otherwise
+   query misses them. Neither query returns Leaders or bases, which are chosen separately. Both pass `avail>=1` in the query (when `query_help` lists `avail`; otherwise
    pass `owned_only: true` and keep results whose `available_count` is at least 1), `limit: 100`:
-   - aligned: `a:<color> a:<alignment> -a:<each other color> avail>=1`
-   - unaligned: `a:<color> -a:heroism -a:villainy -a:<each other color> -t:base avail>=1`
+   - aligned: `a:<color> a:<alignment> -a:<each other color> -t:leader -t:base avail>=1`
+   - unaligned: `a:<color> -a:heroism -a:villainy -a:<each other color> -t:leader -t:base avail>=1`
 
    Each `-a:<other color>` drops the cards that carry a second color (a Vigilance + Cunning unit, a
    three-aspect IG-88): they fail the pack's aspect rule. For Vigilance and Heroism the aligned query
-   is `a:vigilance a:heroism -a:command -a:aggression -a:cunning avail>=1`.
+   is `a:vigilance a:heroism -a:command -a:aggression -a:cunning -t:leader -t:base avail>=1`.
 
    One more for the color's bases: `t:base a:<color>`. Then pick from the combined results the 15
    cards that meet section 4, the 25-HP and 30-HP bases, and the Leader. A card already chosen for

@@ -55,6 +55,8 @@ dumpstar_origin_url() {
     [ -f "$f" ] || return 1
     port="$(sed -n 's|^PublishPort=127\.0\.0\.1:\([0-9]\{1,\}\):8080$|\1|p' "$f" | head -1)"
     [ -n "$port" ] || return 1
+    # Prod's container publishes behind the hold proxy; the origin is the proxy's port.
+    [ "$1" = prod ] && port="$DUMPSTAR_PROD_PORT"
     printf 'http://127.0.0.1:%s/health\n' "$port"
 }
 
@@ -291,6 +293,11 @@ _dumpstar_units_install_host_wide() {
             -e "s|{{REPO_DIR}}|${repo_dir}|g"
     done
 
+    # --- The hold proxy in front of prod (sp-slm2ib) — host-wide, one copy ------------------------
+    _dumpstar_units_render "${systemd_user_dir}/dumpstar-front@.service" nostamp \
+        "$repo_dir/deploy/dumpstar-front.service" \
+        -e "s|{{REPO_DIR}}|${repo_dir}|g"
+
     # --- The SWU catalog sync and its alarm check (dumpstar 7) --------------
     # Installed for every instance, enabled for none: arming a timer that
     # fetches from two upstreams is an operator's act on an instance.
@@ -489,11 +496,6 @@ dumpstar_units_install() {
     else
         echo "    Host-wide units NOT rewritten — ${DUMPSTAR_UNITS_HOST_SKIP_REASON:-DUMPSTAR_INSTALL_HOST_UNITS=0}."
     fi
-
-    # --- The hold proxy in front of prod (sp-slm2ib) ------------------------
-    _dumpstar_units_render "${systemd_user_dir}/dumpstar-front@.service" nostamp \
-        "$repo_dir/deploy/dumpstar-front.service" \
-        -e "s|{{REPO_DIR}}|${repo_dir}|g"
 
     # --- The Litestream backup sidecar (dumpstar-8ch.3) -----------------
     _dumpstar_units_render "${quadlet_dir}/dumpstar-litestream-${instance}.container" stamp \

@@ -474,8 +474,7 @@ fn aspect_run(word: &str) -> Option<Vec<&'static str>> {
 fn tidy_icon_spaces(line: &str) -> String {
     let mut out = String::with_capacity(line.len());
     for word in line.split_whitespace() {
-        let core = word
-            .trim_end_matches(|c: char| matches!(c, '.' | ',' | ';' | ':' | '!' | '?' | ')' | ']'));
+        let core = word.trim_end_matches(|c: char| ".,;:!?)]".contains(c));
         if !out.is_empty() && !core.is_empty() {
             out.push(' ');
         }

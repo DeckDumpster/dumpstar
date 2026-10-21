@@ -1390,6 +1390,35 @@ fn the_numbering_alarm_names_a_collision_and_a_gap() {
 }
 
 #[test]
+fn datalint_flags_an_out_of_range_standard_number_and_a_truncated_subtitle() {
+    let (e, _) = loaded();
+    {
+        let w = Catalog::open_writer(&e.db).unwrap();
+        w.conn()
+            .execute_batch(
+                "PRAGMA foreign_keys=OFF;
+                 INSERT INTO cards (card_id, name, subtitle) VALUES ('jj','Jar Jar Binks','Mesa Propose…');
+                 INSERT INTO printings (printing_id, card_id, set_code, number, variant, variant_code, finish)
+                   VALUES ('jjp','jj','SOR','1143','Standard','99','Normal');",
+            )
+            .unwrap();
+    }
+    let c = Catalog::open_readonly(&e.db).unwrap();
+    let got: Vec<(String, String)> = check::datalint(c.conn())
+        .unwrap()
+        .into_iter()
+        .map(|a| (a.kind, a.key))
+        .collect();
+    assert_eq!(
+        got,
+        [
+            ("number_out_of_range".to_string(), "SOR/1143".to_string()),
+            ("truncated_subtitle".to_string(), "jj".to_string())
+        ]
+    );
+}
+
+#[test]
 fn a_foil_printing_never_keeps_its_foil_scan_where_a_normal_one_exists() {
     let (e, _) = loaded();
     let c = Catalog::open_readonly(&e.db).unwrap();

@@ -34,19 +34,6 @@ pub const EPIC_BASES: [(&str, &str); 4] = [
     ("Cunning", "Jedha City"),
 ];
 
-/// Real 25-HP epic bases, recognised by name when the card object carries no `epic_action`.
-pub const KNOWN_EPIC_BASES: [&str; 9] = [
-    "Energy Conversion Lab",
-    "Security Complex",
-    "Tarkintown",
-    "Jedha City",
-    "Mystic Monastery",
-    "Vergence Temple",
-    "Shadow Collective Camp",
-    "Temple of Destruction",
-    "Tomb of Eilram",
-];
-
 pub const PACK_SIZE: u32 = 18;
 pub const DRAW_CARDS: u32 = 15;
 pub const CUBE_PACKS: usize = 20;
@@ -82,7 +69,7 @@ struct Card {
     kind: String,
     cost: Option<u32>,
     hp: Option<i64>,
-    /// `Some` when the card object carries a non-null `epic_action`; a null is "not said".
+    /// `Some` when the card object carries a non-null `epic_action`; a null is no epic action.
     epic_action: Option<bool>,
     aspects: BTreeSet<String>,
     arenas: BTreeSet<String>,
@@ -112,10 +99,9 @@ impl Card {
         }
     }
 
-    /// Whether this base has an epic action: the card object's word, else the known names.
+    /// Whether this base has an epic action: the catalog's `epic_action`, and nothing else.
     fn is_epic(&self) -> bool {
-        self.epic_action
-            .unwrap_or_else(|| KNOWN_EPIC_BASES.contains(&self.name.as_str()))
+        self.epic_action == Some(true)
     }
 
     fn colors(&self) -> Vec<&str> {
@@ -390,22 +376,20 @@ pub fn check_pack(pack: &Pack) -> Vec<Failure> {
             _ => spells += q,
         }
     }
-    if draw_count == DRAW_CARDS {
-        if ground != GROUND_UNITS {
-            out.push(fail(
-                "arena",
-                format!("{ground} ground units, not {GROUND_UNITS}"),
-            ));
-        }
-        if !(3..=4).contains(&space) {
-            out.push(fail("arena", format!("{space} space units, not 3 or 4")));
-        }
-        if !(3..=4).contains(&spells) {
-            out.push(fail(
-                "arena",
-                format!("{spells} events and upgrades, not 3 or 4"),
-            ));
-        }
+    if ground != GROUND_UNITS {
+        out.push(fail(
+            "arena",
+            format!("{ground} ground units, not {GROUND_UNITS}"),
+        ));
+    }
+    if !(3..=4).contains(&space) {
+        out.push(fail("arena", format!("{space} space units, not 3 or 4")));
+    }
+    if !(3..=4).contains(&spells) {
+        out.push(fail(
+            "arena",
+            format!("{spells} events and upgrades, not 3 or 4"),
+        ));
     }
 
     let mut curve = [0u32; 6];
@@ -559,10 +543,11 @@ pub mod fixture {
                 &[alignment, color],
             ),
         );
-        put(
-            format!("B25-{n}"),
-            card(epic, "Base", 0, "", Some(25), &[color]),
-        );
+        put(format!("B25-{n}"), {
+            let mut b = card(epic, "Base", 0, "", Some(25), &[color]);
+            b["game"]["epic_action"] = json!("Epic Action: Draw a card.");
+            b
+        });
         put(
             format!("B30-{n}"),
             card(
@@ -750,37 +735,50 @@ mod tests {
     #[test]
     fn the_25_hp_base_must_be_an_epic_base() {
         let mut p = pack(1, "Heroism", "Command");
-        edit(&mut p, "B25", |c| c["name"] = json!("Plain Outpost"));
-        assert!(rules(&p).contains(&"base-name"));
-        let mut p = pack(1, "Heroism", "Command");
         edit(&mut p, "B25", |c| {
             c["name"] = json!("Plain Outpost");
             c["game"]["epic_action"] = json!(null);
         });
         assert!(rules(&p).contains(&"base-name"));
-    }
-
-    #[test]
-    fn a_null_epic_action_on_a_known_epic_base_falls_back_to_the_name() {
         let mut p = pack(1, "Heroism", "Command");
         edit(&mut p, "B25", |c| {
-            c["name"] = json!("Security Complex");
-            c["game"]["epic_action"] = json!(null);
+            c["name"] = json!("Plain Outpost");
+            c["game"].as_object_mut().unwrap().remove("epic_action");
         });
-        assert!(rules(&p).is_empty());
+        assert!(rules(&p).contains(&"base-name"));
     }
 
     #[test]
-    fn any_real_25_hp_epic_base_of_the_color_is_accepted() {
-        let mut p = pack(1, "Heroism", "Command");
-        edit(&mut p, "B25", |c| c["name"] = json!("Mystic Monastery"));
-        assert!(rules(&p).is_empty());
+    fn a_25_hp_base_without_an_epic_action_is_not_the_epic_base_even_by_name() {
+        for name in ["Security Complex", "Mystic Monastery"] {
+            let mut p = pack(1, "Heroism", "Command");
+            edit(&mut p, "B25", |c| {
+                c["name"] = json!(name);
+                c["game"]["epic_action"] = json!(null);
+            });
+            assert!(rules(&p).contains(&"base-name"), "{name}");
+        }
+    }
+
+    #[test]
+    fn any_25_hp_base_with_an_epic_action_is_accepted() {
         let mut p = pack(1, "Heroism", "Command");
         edit(&mut p, "B25", |c| {
             c["name"] = json!("Some Future Base");
             c["game"]["epic_action"] = json!("Epic Action: Draw a card.");
         });
         assert!(rules(&p).is_empty());
+    }
+
+    #[test]
+    fn a_stub_that_fails_every_rule_reports_every_rule() {
+        let mut p = pack(1, "Heroism", "Command");
+        p["lines"].as_array_mut().unwrap().truncate(3);
+        edit(&mut p, "B25", |c| c["game"]["epic_action"] = json!(null));
+        let r = rules(&p);
+        for want in ["shape", "base-name", "arena", "curve"] {
+            assert!(r.contains(&want), "{want} missing from {r:?}");
+        }
     }
 
     #[test]
@@ -800,7 +798,10 @@ mod tests {
     #[test]
     fn the_base_name_message_names_the_actual_base() {
         let mut p = pack(1, "Heroism", "Command");
-        edit(&mut p, "B25", |c| c["name"] = json!("Plain Outpost"));
+        edit(&mut p, "B25", |c| {
+            c["name"] = json!("Plain Outpost");
+            c["game"]["epic_action"] = json!(null);
+        });
         let f = check_pack_value(&p).unwrap();
         assert_eq!(
             f[0].message,

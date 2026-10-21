@@ -3620,6 +3620,47 @@ mod tests {
             assert_eq!(second["total_copies_available"], 9);
         }
 
+        /// sp-orq075: leaders counted per color x alignment; a two-aspect Neutral leader counts
+        /// under each color, a leader with no color under `none`, Neutral apart from Heroism.
+        #[tokio::test]
+        async fn collection_summary_leaders_by_color_and_alignment() {
+            let mut site = Site::with_catalog(
+                &["alice"],
+                "INSERT INTO cards (card_id, name, card_type, aspects) \
+                   VALUES ('l-hero', 'Hero', 'Leader', '[\"Vigilance\",\"Heroism\"]'), \
+                          ('l-neutral', 'Neutral', 'Leader', '[\"Command\",\"Vigilance\"]'), \
+                          ('l-bare', 'Bare', 'Leader', '[]'), \
+                          ('l-villain', 'Villain', 'Leader', '[\"Villainy\"]'); \
+                 INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
+                   VALUES ('p-hero', 'l-hero', 'SOR', '9001', 'Standard', 'Normal'), \
+                          ('p-neutral', 'l-neutral', 'SOR', '9002', 'Standard', 'Normal'), \
+                          ('p-bare', 'l-bare', 'SOR', '9003', 'Standard', 'Normal'), \
+                          ('p-villain', 'l-villain', 'SOR', '9004', 'Standard', 'Normal');",
+            )
+            .await;
+            site.sign_in(member("alice@example.com")).await;
+            for p in ["p-hero", "p-neutral", "p-bare", "p-villain"] {
+                let body = json!({"printing_id": p, "source": "manual_id"}).to_string();
+                let r = site.send("POST", "/api/collection", Some(&body)).await;
+                assert_eq!(r.status(), StatusCode::CREATED);
+            }
+            let t = site.token_for("alice@example.com");
+            let b = site
+                .tool(&t, "collection_summary", json!({}))
+                .await
+                .unwrap()["breakdown"]["leaders"]["by_aspect_alignment"]
+                .clone();
+            let oa = json!({"owned": 1, "available": 1});
+            assert_eq!(
+                b,
+                json!({
+                    "Vigilance": {"Heroism": oa, "Neutral": oa},
+                    "Command": {"Neutral": oa},
+                    "none": {"Neutral": oa, "Villainy": oa},
+                })
+            );
+        }
+
         /// sp-fn5iwc: one canonical form across the tools: ids as the catalog numbers them
         /// (`SOR-5`), the summary's set the card's own set (not a weekly-play `LAWP`), and the
         /// aspect names (Heroism, Villainy) for alignment.

@@ -493,6 +493,13 @@ mod tests {
     }
 
     #[test]
+    fn color_suggests_aspect_not_cost() {
+        let err = parse("color:villainy", &reg_with_ops()).unwrap_err();
+        assert!(err.message.contains("'a:'"), "{}", err.message);
+        assert!(!err.message.contains("'c:'"), "{}", err.message);
+    }
+
+    #[test]
     fn far_keyword_has_no_suggestion() {
         let err = parse("zzzzzz:1", &reg_with_ops()).unwrap_err();
         assert!(!err.message.contains("did you mean"), "{}", err.message);

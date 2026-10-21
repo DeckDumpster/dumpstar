@@ -102,8 +102,8 @@ The archetypes and the leader guidance are advice. `swu-cube-check` does not tes
 or test build names its own group so it never lands in the real cube's group. Use that one group
 for every `create_deck` and `list_decks` below.
 
-Mind the rate limit: `/mcp` allows about 120 tool calls a minute per sign-in. Search once per pack
-and choose from the results yourself; do not search once per card.
+Mind the rate limit: `/mcp` allows about 120 tool calls a minute per sign-in. Use a fixed handful
+of searches per pack (step 3) and choose from the results yourself; never search once per card.
 
 1. **`collection_summary`.** Learn what is owned and what is still available. A cube needs about
    20 Leaders, 40 bases (5 epic and 5 vanilla per color) and 300 draw cards. Leaders are singleton,

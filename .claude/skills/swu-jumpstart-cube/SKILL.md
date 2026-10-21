@@ -15,10 +15,14 @@ copies and that no copy is in two decks. `swu-cube-check` (below) is what tells 
 
 - **Cube:** 20 half-decks, 10 Heroism and 10 Villainy.
 - **Pack:** 18 cards.
-- **Singleton Leaders:** across the 20 packs each Leader leads at most one pack (by card, so two
-  printings count as one). Bases and draw cards may repeat across packs; the collection's copies
-  are the only limit, and the deck reservations already enforce that. `swu-cube-check cube` fails
-  `cube-singleton`, naming the Leader and its packs; `pack` mode does not.
+- **Singleton:** only Leaders, and non-base Rares and Legendaries, are singleton: each appears in
+  at most one of the 20 packs. A card is its title and subtitle, so different printings of the same
+  title and subtitle (set reprint, foil, Hyperspace or Showcase) are one card, and the same title
+  with a different subtitle is a different card (a Leader and a unit often share a title).
+  Bases are always exempt. Commons, Uncommons and Specials may repeat; the collection's copies are
+  the only limit, and the deck reservations already enforce that. `swu-cube-check cube` fails
+  `cube-singleton`, naming the card as "Title — Subtitle" and its packs; `pack` mode does not. A
+  card object with no rarity or no `subtitle` member makes `cube` refuse rather than guess.
 - **Match:** two random packs make one 30-card draw deck.
 
 ### 2. The 18-card pack
@@ -106,8 +110,8 @@ Mind the rate limit: `/mcp` allows about 120 tool calls a minute per sign-in. Us
 of searches per pack (step 3) and choose from the results yourself; never search once per card.
 
 1. **`collection_summary`.** Learn what is owned and what is still available. A cube needs about
-   20 Leaders, 40 bases (5 epic and 5 vanilla per color) and 300 draw cards. Leaders are singleton,
-   so count **distinct** Leaders per color; draw cards and bases may repeat, so copies count for them.
+   20 Leaders, 40 bases (5 epic and 5 vanilla per color) and 300 draw cards. Leaders and non-base Rares and Legendaries are singleton,
+   so count **distinct** ones (by title and subtitle); Commons, Uncommons and bases may repeat, so copies count for them.
 2. **Allocate leaders and base pairs.** Pick 20 Leaders: 10 Heroism, 10 Villainy, 5 of each color
    (for example Command 3+2, Vigilance 2+3, Aggression 3+2, Cunning 2+3). Apply the universality
    rule. Each pack takes an epic and a vanilla base of its Leader's color; if the collection lacks them, say so and build what is possible.
@@ -185,7 +189,7 @@ only `.card`). To check a pack before saving it, build the same document by hand
                         "game": {"aspects": ["Vigilance", "Heroism"], "arenas": ["Ground"], "hp": 6}}}}
 ```
 
-Card fields the checker reads and the digest covers (generated from `DIGEST_CARD_FIELDS` in `crates/dumpstar-cube/src/lib.rs`; a test asserts this line matches it): `/name`, `/type`, `/rarity`, `/cost`, `/game/hp`, `/game/epic_action`, `/game/aspects`, `/game/arenas`. The example above shows the minimum shape; copy every one of these from the `search_cards` row.
+Card fields the checker reads and the digest covers (generated from `DIGEST_CARD_FIELDS` in `crates/dumpstar-cube/src/lib.rs`; a test asserts this line matches it): `/name`, `/subtitle`, `/type`, `/rarity`, `/cost`, `/game/hp`, `/game/epic_action`, `/game/aspects`, `/game/arenas`. The example above shows the minimum shape; copy every one of these from the `search_cards` row.
 
 The `reserved` rule is meaningful only on the post-save `get_deck` document, where the server
 reports reservations. A planned (pre-save) document has none, so check it with `--planned`, which

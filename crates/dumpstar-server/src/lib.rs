@@ -3172,6 +3172,16 @@ mod tests {
                     "SKILL.md states an owned-count fact ({claim:?}); derive it from collection_summary"
                 );
             }
+            for line in skill.lines() {
+                for q in line.split('`').skip(1).step_by(2) {
+                    if ["t:", "a:"].iter().any(|p| q.starts_with(p)) {
+                        assert!(
+                            q.contains("avail>=1"),
+                            "documented query lacks avail>=1: {q}"
+                        );
+                    }
+                }
+            }
             let template = |label: &str| -> String {
                 let line = skill
                     .lines()
@@ -3417,7 +3427,7 @@ mod tests {
                     .tool(
                         &t,
                         "search_cards",
-                        json!({"q": format!("t:base a:{c}"), "owned_only": true}),
+                        json!({"q": format!("t:base a:{c} -t:leader avail>=1"), "owned_only": true}),
                     )
                     .await
                     .unwrap();

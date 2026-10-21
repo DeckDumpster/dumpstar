@@ -650,8 +650,7 @@ fn singleton_failures(packs: &[Pack]) -> Vec<Failure> {
         .collect()
 }
 
-/// Reads a cube document (see the crate docs) and checks it.
-pub fn check_cube_value(doc: &Value) -> Result<Vec<Failure>, String> {
+fn packs_of(doc: &Value) -> Result<Vec<Pack>, String> {
     let (list, shared) = match doc {
         Value::Array(a) => (a, &Value::Null),
         Value::Object(_) => (
@@ -662,11 +661,18 @@ pub fn check_cube_value(doc: &Value) -> Result<Vec<Failure>, String> {
         ),
         _ => return Err("a cube document is an array of packs or {\"packs\": [...]}".into()),
     };
-    let packs = list
-        .iter()
-        .map(|p| Pack::from_value(p, shared))
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(check_cube(&packs))
+    list.iter().map(|p| Pack::from_value(p, shared)).collect()
+}
+
+/// Reads a cube document (see the crate docs) and checks it.
+pub fn check_cube_value(doc: &Value) -> Result<Vec<Failure>, String> {
+    Ok(check_cube(&packs_of(doc)?))
+}
+
+/// Only the copy-count rule over any number of packs, for a partial or test build that the
+/// 20-pack cube rules would drown in unrelated failures.
+pub fn check_copies_value(doc: &Value) -> Result<Vec<Failure>, String> {
+    Ok(copies_failures(&packs_of(doc)?))
 }
 
 /// Builders for the passing cube and its broken variants, shared by this crate's tests and the

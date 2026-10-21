@@ -807,6 +807,22 @@ fn compile_comparison(
             _ => like_contains("cd.name", value),
         },
 
+        "id" => {
+            // <SET>-<number>, the form the tools speak; a zero-padded catalog number
+            // (005) matches its plain form (5), as `get_card` resolves it.
+            let (set, number) = value.split_once('-').unwrap_or((value, ""));
+            let frag = "(cd.card_id = ? COLLATE NOCASE OR EXISTS (SELECT 1 FROM printings ip \
+                 WHERE ip.card_id = cd.card_id AND ip.set_code = ? COLLATE NOCASE \
+                   AND (ip.number = ? OR ltrim(ip.number, '0') = ltrim(?, '0'))))"
+                .to_string();
+            let params = vec![text(value), text(set), text(number), text(number)];
+            if matches!(op, Op::Ne) {
+                (format!("NOT {frag}"), params)
+            } else {
+                (frag, params)
+            }
+        }
+
         // --- card type / aspects / arenas / traits ---
         "card_type" => enum_eq("cd.card_type", op, value),
         "aspect" => json_array(op, "cd.aspects", value),
@@ -1734,6 +1750,34 @@ mod tests {
         assert_eq!(f.ids("avail>=1 s:sor"), vec!["luke-foil"]);
         assert_eq!(f.ids("free=1 name:luke"), vec!["luke-foil"]);
         assert!(f.ids("qty>=2").contains(&"luke-foil".to_string()));
+    }
+
+    #[test]
+    fn id_term_matches_exact_card_ids_and_ors() {
+        let f = fixture();
+        let id_of = |pid: &str| -> String {
+            f.conn
+                .query_row(
+                    "SELECT set_code || '-' || number FROM printings WHERE printing_id = ?1",
+                    [pid],
+                    |r| r.get(0),
+                )
+                .unwrap()
+        };
+        let luke = id_of("luke-foil");
+        let falcon = id_of("falcon-std");
+        let one = f.ids(&format!("id:{}", luke.to_lowercase()));
+        assert!(one.contains(&"luke-foil".to_string()));
+        assert!(!one.contains(&"falcon-std".to_string()));
+        let both = f.ids(&format!("id:{luke} or id:{falcon} avail>=0"));
+        assert!(both.contains(&"luke-foil".to_string()));
+        assert!(both.contains(&"falcon-std".to_string()));
+        assert_eq!(f.ids("id:NOPE-1"), Vec::<String>::new());
+        assert!(f.ids("id:sor-5").contains(&"luke-foil".to_string()));
+        assert!(
+            !f.ids(&format!("-id:{luke}"))
+                .contains(&"luke-foil".to_string())
+        );
     }
 
     #[test]

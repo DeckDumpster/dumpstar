@@ -3554,6 +3554,7 @@ mod tests {
                 .unwrap()["breakdown"]
                 .clone();
             let oa = |o: u64, a: u64| json!({"owned": o, "available": a});
+            let od = |d: u64, o: u64, a: u64| json!({"distinct": d, "owned": o, "available": a});
             assert_eq!(
                 b["by_type"],
                 json!({"Base": oa(4, 4), "Leader": oa(3, 3), "Unit": oa(3, 2)})
@@ -3585,13 +3586,13 @@ mod tests {
             assert_eq!(
                 b["leaders"]["by_aspect"],
                 json!({
-                    "Aggression": oa(2, 2), "Heroism": oa(1, 1),
-                    "Vigilance": oa(1, 1), "Villainy": oa(2, 2),
+                    "Aggression": od(1, 2, 2), "Heroism": od(1, 1, 1),
+                    "Vigilance": od(1, 1, 1), "Villainy": od(1, 2, 2),
                 })
             );
             assert_eq!(
                 b["leaders"]["by_alignment"],
-                json!({"Heroism": oa(1, 1), "Villainy": oa(2, 2)})
+                json!({"Heroism": od(1, 1, 1), "Villainy": od(1, 2, 2)})
             );
 
             // sp-l7yh3y: the copy totals describe the whole result, not the page: six cards,
@@ -3685,7 +3686,7 @@ mod tests {
                 .await
                 .unwrap()["breakdown"]["leaders"]["by_aspect_alignment"]
                 .clone();
-            let oa = json!({"owned": 1, "available": 1});
+            let oa = json!({"distinct": 1, "owned": 1, "available": 1});
             assert_eq!(
                 b,
                 json!({
@@ -3694,6 +3695,38 @@ mod tests {
                     "none": {"Neutral": oa, "Villainy": oa},
                 })
             );
+        }
+
+        /// sp-akeb45: leaders report distinct cards beside copies: three copies of one leader
+        /// and one of another are distinct 2, owned 4.
+        #[tokio::test]
+        async fn collection_summary_leaders_report_distinct_cards() {
+            let mut site = Site::with_catalog(
+                &["alice"],
+                "INSERT INTO cards (card_id, name, card_type, aspects) \
+                   VALUES ('l-a', 'A', 'Leader', '[\"Vigilance\",\"Heroism\"]'), \
+                          ('l-b', 'B', 'Leader', '[\"Vigilance\",\"Heroism\"]'); \
+                 INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
+                   VALUES ('p-a', 'l-a', 'SOR', '9001', 'Standard', 'Normal'), \
+                          ('p-b', 'l-b', 'SOR', '9002', 'Standard', 'Normal');",
+            )
+            .await;
+            site.sign_in(member("alice@example.com")).await;
+            for p in ["p-a", "p-a", "p-a", "p-b"] {
+                let body = json!({"printing_id": p, "source": "manual_id"}).to_string();
+                let r = site.send("POST", "/api/collection", Some(&body)).await;
+                assert_eq!(r.status(), StatusCode::CREATED);
+            }
+            let t = site.token_for("alice@example.com");
+            let l = site
+                .tool(&t, "collection_summary", json!({}))
+                .await
+                .unwrap()["breakdown"]["leaders"]
+                .clone();
+            let want = json!({"distinct": 2, "owned": 4, "available": 4});
+            assert_eq!(l["by_alignment"]["Heroism"], want);
+            assert_eq!(l["by_aspect"]["Vigilance"], want);
+            assert_eq!(l["by_aspect_alignment"]["Vigilance"]["Heroism"], want);
         }
 
         /// sp-fn5iwc: one canonical form across the tools: ids as the catalog numbers them

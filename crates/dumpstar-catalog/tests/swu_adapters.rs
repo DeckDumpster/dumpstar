@@ -1853,3 +1853,80 @@ fn the_unique_mark_in_rules_text_reads_as_the_word() {
     assert!(!official::has_markup("2 < 3 and 5 > 4"));
     assert!(official::has_markup("<b>x</b>"));
 }
+
+/// The keyword rule (sp-gww4nf), one case per card the walk named: the text is
+/// what the card's rules say, the expectation is (granted, conditional).
+fn classified(keywords: &[&str], text: &str) -> Vec<(String, bool, bool)> {
+    let page = official::parse_page(&keyword_page(keywords, text, json!({}))).unwrap();
+    page.payload.cards[0]
+        .keywords
+        .iter()
+        .map(|k| (k.name.clone(), k.granted, k.conditional))
+        .collect()
+}
+
+#[test]
+fn a_keyword_the_card_has_under_a_condition_is_own_and_conditional() {
+    // Moff Gideon (ASH-8), Shin Hati (ASH-49), Mandalorian Flagship (ASH-113).
+    for (kw, text) in [
+        (
+            "Sentinel",
+            "While you control another Imperial unit, this unit gains Sentinel.",
+        ),
+        (
+            "Sentinel",
+            "While you control a Cunning unit, this unit gains Sentinel.",
+        ),
+        (
+            "Ambush",
+            "While you control a leader unit, this unit gains Ambush.",
+        ),
+    ] {
+        assert_eq!(
+            classified(&[kw], text),
+            [(kw.to_string(), false, true)],
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn a_keyword_given_to_another_unit_is_granted() {
+    // Vigilant Honor Guards (SOR-48) gains Sentinel only on a condition: own.
+    assert_eq!(
+        classified(
+            &["Sentinel"],
+            "While you control a Vigilance unit, this unit gains Sentinel."
+        ),
+        [("Sentinel".to_string(), false, true)]
+    );
+    assert_eq!(
+        classified(&["Ambush"], "Friendly Imperial units gain Ambush."),
+        [("Ambush".to_string(), true, false)]
+    );
+    assert_eq!(
+        classified(
+            &["Sentinel"],
+            "Attach to a unit. Attached unit gains Sentinel."
+        ),
+        [("Sentinel".to_string(), true, false)]
+    );
+}
+
+#[test]
+fn a_keyword_the_text_removes_is_neither() {
+    // Poe Dameron (ASH-40).
+    assert!(classified(&["Sentinel"], "All units lose Sentinel.").is_empty());
+    assert_eq!(
+        classified(&["Sentinel"], "Sentinel\nOther units lose Sentinel."),
+        [("Sentinel".to_string(), false, false)]
+    );
+}
+
+#[test]
+fn a_clause_tail_is_not_a_keyword_list() {
+    assert_eq!(
+        classified(&["Ambush"], "While you control a leader unit, Ambush."),
+        [("Ambush".to_string(), true, false)]
+    );
+}

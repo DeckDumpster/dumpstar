@@ -122,6 +122,8 @@ pub struct CardRecord {
 /// Restore 1, Exploit 3) and `None` for one that has none (Sentinel, Bounty).
 /// `granted` marks a keyword the card's text gives to another unit (an upgrade
 /// that says "Attached unit gains Sentinel") rather than one the card has.
+/// `conditional` marks one the card has only under a condition ("While …, this
+/// unit gains Sentinel"); a keyword the text only removes is not recorded.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct KeywordRecord {
     pub name: String,
@@ -129,6 +131,8 @@ pub struct KeywordRecord {
     pub value: Option<i64>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub granted: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub conditional: bool,
 }
 
 /// One official rarity: the mark (a one-letter character in a colour) and the

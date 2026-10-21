@@ -102,6 +102,10 @@ The archetypes and the leader guidance are advice. `swu-cube-check` does not tes
 or test build names its own group so it never lands in the real cube's group. Use that one group
 for every `create_deck` and `list_decks` below.
 
+To rename a pack or move it to another group, call `update_deck` (`{id, name?, group?, format?,
+description?, notes?}`; absent keys stay, null clears). Never delete and recreate a deck: that loses
+its id.
+
 Mind the rate limit: `/mcp` allows about 120 tool calls a minute per sign-in. Use a fixed handful
 of searches per pack (step 3) and choose from the results yourself; never search once per card.
 

@@ -814,6 +814,48 @@ impl DumpstarTools {
         })
     }
 
+    fn update_deck(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
+        const KEYS: [&str; 6] = ["id", "name", "format", "group", "description", "notes"];
+        let obj = args
+            .as_object()
+            .ok_or_else(|| failed("arguments must be an object"))?;
+        if let Some(k) = obj.keys().find(|k| !KEYS.contains(&k.as_str())) {
+            return Err(failed(format!(
+                "unknown key '{k}'; update_deck takes id, name, format, group, description, notes"
+            )));
+        }
+        let id = arg_id(args, "id")?;
+        // Absent leaves the field; null or "" clears it.
+        let field = |k: &str| -> Result<Option<Option<String>>, ToolError> {
+            match obj.get(k) {
+                None => Ok(None),
+                Some(Value::Null) => Ok(Some(None)),
+                Some(Value::String(s)) if s.is_empty() => Ok(Some(None)),
+                Some(Value::String(s)) => Ok(Some(Some(s.clone()))),
+                Some(_) => Err(failed(format!("'{k}' must be a string or null"))),
+            }
+        };
+        let name = match obj.get("name") {
+            None => None,
+            Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
+            Some(_) => return Err(failed("'name' must be a non-empty string")),
+        };
+        let patch = decks::DeckPatch {
+            name,
+            description: field("description")?,
+            format: field("format")?,
+            group: field("group")?,
+            notes: field("notes")?,
+        };
+        self.with_conn(ctx, |c| {
+            if !decks::patch(c, id, &patch).map_err(db_err)? {
+                return Err(failed(format!("not found: deck {id}")));
+            }
+            let deck = decks::get(c, id).map_err(db_err)?;
+            Ok(json!({ "deck": deck }))
+        })
+    }
+
     fn set_deck_lines(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
         let id = arg_id(args, "id")?;
         let raw = args
@@ -979,6 +1021,21 @@ impl ToolProvider for DumpstarTools {
                 ),
             ),
             def(
+                "update_deck",
+                "Change a deck's own fields, keeping its id and lines: rename it, move it to another group, relabel its format, edit description or notes. Partial: an absent key is left unchanged, and null (or an empty string) clears an optional field; name cannot be cleared. Returns {deck} like get_deck. Rename or regroup with this, never delete and recreate.".into(),
+                schema(
+                    json!({
+                        "id": id,
+                        "name": {"type": "string"},
+                        "format": {"type": ["string", "null"], "description": "Free-text format label"},
+                        "group": {"type": ["string", "null"], "description": "Group name"},
+                        "description": {"type": ["string", "null"]},
+                        "notes": {"type": ["string", "null"]},
+                    }),
+                    &["id"],
+                ),
+            ),
+            def(
                 "set_deck_lines",
                 "Replace the deck's lines in one transaction and reserve an owned copy for every card. A copy in another deck is never taken. If any card lacks enough free copies nothing changes and the short lines are returned.".into(),
                 schema(
@@ -1024,6 +1081,7 @@ impl ToolProvider for DumpstarTools {
             "list_decks" => self.list_decks(ctx, &args),
             "get_deck" => self.get_deck(ctx, &args),
             "create_deck" => self.create_deck(ctx, &args),
+            "update_deck" => self.update_deck(ctx, &args),
             "set_deck_lines" => self.set_deck_lines(ctx, &args),
             "release_deck" => self.release_deck(ctx, &args),
             "delete_deck" => self.delete_deck(ctx, &args),

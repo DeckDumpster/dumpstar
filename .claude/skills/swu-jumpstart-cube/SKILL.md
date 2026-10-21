@@ -127,12 +127,15 @@ and choose from the results yourself; do not search once per card.
    `SWU Jumpstart Cube`, `group`: the group name (the same for all 20 packs), `name`: `Pack <n>`) and
    `set_deck_lines` with the 18 `{card_id, qty: 1}` lines. A refusal says which lines are short and
    changes nothing: swap those cards and retry.
-5. **Check the whole group.** `list_decks` with that group, `get_deck` for each of the 20, build the
-   cube document, run `swu-cube-check cube`. `reserved` must equal `qty` on every line.
+5. **Check the whole group.** `list_decks` with that group, `get_deck` for each of the 20, save
+   each result to its own file and run `swu-cube-check cube pack1.json pack2.json ...` (no combine
+   script needed). `reserved` must equal `qty` on every line. The cube-level check applies to a
+   complete 20-pack cube only; a partial or test build checks each saved deck with
+   `swu-cube-check pack <file>` instead (`cube-size`, `cube-alignment` and `cube-bases` would fail).
 
 ## The checker
 
-`swu-cube-check pack [--planned] [FILE]` and `swu-cube-check cube [--planned] [FILE]` (FILE or stdin) print `ok`, or one
+`swu-cube-check pack [--planned] [FILE]` and `swu-cube-check cube [--planned] [FILE...]` (FILE or stdin; `cube` also takes one pack file per deck) print `ok`, or one
 `FAIL <rule>: <what is wrong>` line per broken rule, and exit 1 on any failure. Build it with
 `cargo build -p dumpstar-cube --release` (binary `target/release/swu-cube-check`).
 

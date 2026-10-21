@@ -55,6 +55,28 @@ fn check_cube_passes_and_fails_by_exit_status() {
 }
 
 #[test]
+fn cube_takes_one_file_per_pack_and_a_lone_pack_passes_pack_mode() {
+    let dir = std::env::temp_dir().join(format!("swu-cube-check-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let files: Vec<String> = cube()
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            let f = dir.join(format!("pack{i}.json"));
+            std::fs::write(&f, p.to_string()).unwrap();
+            f.to_str().unwrap().to_string()
+        })
+        .collect();
+    let mut args = vec!["cube"];
+    args.extend(files.iter().map(String::as_str));
+    let (code, out) = run_args(&args, "");
+    assert_eq!((code, out.trim()), (0, "ok"));
+    let (code, out) = run_args(&["pack", &files[0]], "");
+    assert_eq!((code, out.trim()), (0, "ok"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn input_that_is_not_json_exits_2() {
     assert_eq!(run("pack", "nope").0, 2);
 }

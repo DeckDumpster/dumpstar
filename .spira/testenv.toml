@@ -21,6 +21,11 @@
 image = "docker.io/library/rust:1.94-slim-bookworm"
 workdir = "/work"
 timeout = 1800
+# ci_entry is the command a queue.local round runs on a round VM (read by the
+# harness's gate::own::ci_entry): the whole of CI, every tier of
+# DUMPSTAR_CI_ALL_TIERS named explicitly. tests/ci/select_test.sh fails if it
+# names fewer. `default` below is only the subset testenv can run in a container.
+ci_entry = "DUMPSTAR_CI_TIERS='lint plan rust isolation deploy frontend ui container' bash deploy/ci.sh"
 default = ["lint", "plan", "rust", "frontend-check", "ui"]
 
 [tier.lint]

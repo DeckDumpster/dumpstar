@@ -160,14 +160,16 @@ of searches per pack (step 3) and choose from the results yourself; never search
    script needed). `cube` sums each card's `qty` over the packs and fails `cube-copies`, naming
    the card and the packs, when the sum exceeds the `owned_count` in the files. `reserved` must equal `qty` on every line. The cube-level check applies to a
    complete 20-pack cube only; a partial or test build checks each saved deck with
-   `swu-cube-check pack <file>` instead (`cube-size`, `cube-alignment` and `cube-bases` would fail).
+   `swu-cube-check pack <file>` instead (`cube-size`, `cube-alignment` and `cube-bases` would fail),
+   and checks copies across them with `swu-cube-check copies pack1.json pack2.json ...`, which sums
+   each card's `qty` against `owned_count` and prints only `cube-copies` failures (or `ok`).
    `get_deck` carries a `lines_digest` and the checker recomputes it from the file's `lines` and the card objects under `cards`. If it
    refuses with "this is not the saved deck: digest mismatch", your copy drifted: copy the
    `get_deck` result again. Never edit the file (or the digest) to make it pass.
 
 ## The checker
 
-`swu-cube-check pack [--planned] [FILE]`, `swu-cube-check cube [--planned] [FILE...]` and `swu-cube-check allocate [FILE]` (FILE or stdin; `cube` also takes one pack file per deck; `--help` prints the usage) print `ok`, or one
+`swu-cube-check pack [--planned] [FILE]`, `swu-cube-check cube [--planned] [FILE...]`, `swu-cube-check copies [--planned] [FILE...]` and `swu-cube-check allocate [FILE]` (FILE or stdin; `cube` also takes one pack file per deck; `--help` prints the usage) print `ok`, or one
 `FAIL <rule>: <what is wrong>` line per broken rule, and exit 1 on any failure. Build it with
 `cargo build -p dumpstar-cube --release` (binary `target/release/swu-cube-check`).
 

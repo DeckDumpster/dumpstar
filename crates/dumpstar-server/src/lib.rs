@@ -534,8 +534,25 @@ pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
     let addr = SocketAddr::new(cfg.host, cfg.port);
     let listener = tokio::net::TcpListener::bind(addr).await?;
     println!("dumpstar serving on http://{addr}");
-    axum::serve(listener, app(state, cfg.static_dir, cfg.data_dir)).await?;
+    // SIGTERM (what `systemctl restart` sends) finishes the requests in flight before the
+    // process exits; the deploy's hold proxy queues the ones that arrive meanwhile (sp-slm2ib).
+    axum::serve(listener, app(state, cfg.static_dir, cfg.data_dir))
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
     Ok(())
+}
+
+async fn shutdown_signal() {
+    use tokio::signal::unix::{SignalKind, signal};
+    match signal(SignalKind::terminate()) {
+        Ok(mut term) => {
+            tokio::select! {
+                _ = term.recv() => {}
+                _ = tokio::signal::ctrl_c() => {}
+            }
+        }
+        Err(_) => std::future::pending::<()>().await,
+    }
 }
 
 #[cfg(test)]

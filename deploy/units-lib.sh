@@ -42,6 +42,9 @@ DUMPSTAR_UNITS_CHANGED=()
 # Cloudflare tunnel route (a dashboard step) targets it. The number lives in
 # deploy/prod-origin-port, configuration rather than a literal in a script.
 DUMPSTAR_PROD_PORT="$(tr -d '[:space:]' <"$(dirname "${BASH_SOURCE[0]}")/prod-origin-port")"
+# Prod's container publishes here, not on the origin port: dumpstar-front@prod (hold-proxy.py)
+# owns the origin port and holds requests while a deploy restarts the container (sp-slm2ib).
+DUMPSTAR_PROD_BACKEND_PORT="$(tr -d '[:space:]' <"$(dirname "${BASH_SOURCE[0]}")/prod-backend-port")"
 
 # The origin health URL an installed instance serves on, read from its Quadlet unit;
 # fails if there is no unit or it does not publish on loopback.
@@ -134,6 +137,7 @@ DUMPSTAR_HOST_WIDE_UNIT_FILES=(
     dumpstar-diskcheck.service         dumpstar-diskcheck.timer
     dumpstar-tmpreap.service           dumpstar-tmpreap.timer
     dumpstar-heartbeat@.service        dumpstar-heartbeat@.timer
+    dumpstar-front@.service
 )
 
 # dumpstar_units_host_owners — every checkout the INSTALLED host-wide units
@@ -443,7 +447,7 @@ dumpstar_units_install() {
     mkdir -p "$quadlet_dir" "$systemd_user_dir"
 
     local existing_port port_mapping
-    if [ "$port" = "0" ] && [ -f "${quadlet_dir}/${service_name}.container" ]; then
+    if [ "$port" = "0" ] && [ "$instance" != prod ] && [ -f "${quadlet_dir}/${service_name}.container" ]; then
         existing_port="$(sed -n \
             -e 's|^PublishPort=\([0-9]\{1,\}\):8080$|\1|p' \
             -e 's|^PublishPort=127\.0\.0\.1:\([0-9]\{1,\}\):8080$|\1|p' \
@@ -457,7 +461,7 @@ dumpstar_units_install() {
     # prod's origin port is fixed (sp-kaj3xv): the tunnel route points at it, so it
     # must be the same on every box and every re-creation. 8090 is the other site's.
     if [ "$port" = "0" ] && [ "$instance" = prod ]; then
-        port="$DUMPSTAR_PROD_PORT"
+        port="$DUMPSTAR_PROD_BACKEND_PORT"
     fi
     if [ "$port" = "0" ]; then
         port_mapping=":8080"
@@ -485,6 +489,11 @@ dumpstar_units_install() {
     else
         echo "    Host-wide units NOT rewritten — ${DUMPSTAR_UNITS_HOST_SKIP_REASON:-DUMPSTAR_INSTALL_HOST_UNITS=0}."
     fi
+
+    # --- The hold proxy in front of prod (sp-slm2ib) ------------------------
+    _dumpstar_units_render "${systemd_user_dir}/dumpstar-front@.service" nostamp \
+        "$repo_dir/deploy/dumpstar-front.service" \
+        -e "s|{{REPO_DIR}}|${repo_dir}|g"
 
     # --- The Litestream backup sidecar (dumpstar-8ch.3) -----------------
     _dumpstar_units_render "${quadlet_dir}/dumpstar-litestream-${instance}.container" stamp \

@@ -3189,6 +3189,12 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(r["deck"]["id"], id);
+            let full = site
+                .tool(&alice, "get_deck", json!({"id": id}))
+                .await
+                .unwrap();
+            assert_eq!(r, full, "update_deck echoes get_deck's response");
+            assert!(r["lines"].is_array() && r["cards"].is_object());
             let d = get_deck(&site, &alice, id).await;
             assert_eq!(d["name"], "Pack One");
             assert_eq!(d["group"], "Cube A", "absent key unchanged");

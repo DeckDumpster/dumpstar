@@ -4088,6 +4088,58 @@ mod tests {
             assert!(e.contains("did you mean") && e.contains("'aspect:'"), "{e}");
         }
 
+        /// sp-5mb0l3: `k:` counts a conditional keyword; `ku:` leaves it out.
+        #[tokio::test]
+        async fn ku_excludes_a_conditional_keyword_that_k_includes() {
+            let site = Site::with_catalog(
+                &["alice"],
+                &format!("{SECOND_CARD} UPDATE cards SET keywords='[{{\"name\":\"Sentinel\",\"value\":null,\"conditional\":true}}]' WHERE card_id='SOR-2';"),
+            )
+            .await;
+            let t = site.token_for("alice@example.com");
+            let k = site
+                .tool(&t, "search_cards", json!({"q": "k:sentinel"}))
+                .await
+                .unwrap();
+            assert_eq!(k["total"], json!(1), "{k}");
+            assert_eq!(k["results"][0]["id"], "SOR-2");
+            let ku = site
+                .tool(&t, "search_cards", json!({"q": "ku:sentinel"}))
+                .await
+                .unwrap();
+            assert_eq!(ku["total"], json!(0), "{ku}");
+        }
+
+        /// sp-5mb0l3: every term query_help lists is in the search_cards description.
+        #[tokio::test]
+        async fn the_search_cards_description_names_every_query_help_term() {
+            let site = Site::new(&["alice"]).await;
+            let t = site.token_for("alice@example.com");
+            let help = site.tool(&t, "query_help", json!({})).await.unwrap();
+            let listed = site.rpc(&t, "tools/list", json!({})).await;
+            let desc = listed["result"]["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|d| d["name"] == "search_cards")
+                .unwrap()["description"]
+                .as_str()
+                .unwrap()
+                .to_string();
+            let terms = help["terms"].as_array().unwrap();
+            assert!(terms.len() > 10);
+            for term in terms {
+                let name = term["term"].as_str().unwrap();
+                assert!(
+                    desc.contains(&format!("- {name}")),
+                    "search_cards description lacks {name}"
+                );
+            }
+            for must in ["owned", "avail", "deck", "unconditional_keyword"] {
+                assert!(desc.contains(&format!("- {must}")), "lacks {must}");
+            }
+        }
+
         /// Acceptance: the kit's conformance suite passes against a running dumpstar.
         #[tokio::test]
         async fn the_kit_conformance_suite_passes_against_a_running_site() {

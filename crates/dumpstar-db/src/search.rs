@@ -828,8 +828,9 @@ fn compile_comparison(
         "aspect" => json_array(op, "cd.aspects", value),
         "arena" => json_array(op, "cd.arenas", value),
         "trait" => json_array(op, "cd.traits", value),
-        "keyword" => keyword_match(op, value, false),
-        "grants" => keyword_match(op, value, true),
+        "keyword" => keyword_match(op, value, false, false),
+        "unconditional_keyword" => keyword_match(op, value, false, true),
+        "grants" => keyword_match(op, value, true, false),
 
         // --- numeric ---
         "cost" => numeric("cd.cost", op, value, Some("cd.cost IS NOT NULL")),
@@ -1007,8 +1008,14 @@ fn json_array(op: Op, col: &str, val: &str) -> (String, Vec<Value>) {
 /// `!=` negates either.
 ///
 /// `keyword:` matches the keywords a card has itself; `grants:` those its text
-/// gives to another unit (an upgrade's "Attached unit gains Sentinel").
-fn keyword_match(op: Op, val: &str, granted: bool) -> (String, Vec<Value>) {
+/// gives to another unit (an upgrade's "Attached unit gains Sentinel"). Both count a
+/// keyword the card has only under a condition; `unconditional_only` (`ku:`) drops those.
+fn keyword_match(
+    op: Op,
+    val: &str,
+    granted: bool,
+    unconditional_only: bool,
+) -> (String, Vec<Value>) {
     let val = val.trim();
     let (name, number) = match val.rsplit_once(' ') {
         Some((n, v)) if v.parse::<i64>().is_ok() => (n.trim(), Some(v.parse::<i64>().unwrap())),
@@ -1019,6 +1026,9 @@ fn keyword_match(op: Op, val: &str, granted: bool) -> (String, Vec<Value>) {
                       AND COALESCE(json_extract(value, '$.granted'), 0) = "
         .to_string();
     sql.push_str(if granted { "1" } else { "0" });
+    if unconditional_only {
+        sql.push_str(" AND COALESCE(json_extract(value, '$.conditional'), 0) = 0");
+    }
     let mut params = vec![text(name)];
     if let Some(n) = number {
         sql.push_str(" AND json_extract(value, '$.value') = ?");
@@ -1813,6 +1823,21 @@ mod tests {
         }
         assert_eq!(f.ids("k:sentinel"), vec!["luke-foil"]);
         assert_eq!(f.ids("grants:sentinel"), vec!["falcon-std"]);
+    }
+
+    #[test]
+    fn unconditional_keyword_excludes_conditional_ones() {
+        let f = fixture();
+        {
+            let c = open_shared(&f.shared).unwrap();
+            c.execute_batch(
+                r#"UPDATE cards SET keywords='[{"name":"Sentinel","value":null,"conditional":true}]' WHERE card_id='luke';
+                   UPDATE cards SET keywords='[{"name":"Sentinel","value":null}]' WHERE card_id='falcon';"#,
+            )
+            .unwrap();
+        }
+        assert_eq!(f.ids("k:sentinel"), vec!["falcon-std", "luke-foil"]);
+        assert_eq!(f.ids("ku:sentinel"), vec!["falcon-std"]);
     }
 
     #[test]

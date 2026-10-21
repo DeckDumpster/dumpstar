@@ -155,7 +155,15 @@ fn allocate_reserves_shared_cards_across_packs_and_names_a_shortfall() {
     });
     let (code, out) = run("allocate", &doc.to_string());
     assert_eq!(code, 0, "{out}");
-    assert!(out.contains("reserve Longbeam Cruiser: Pack 2"), "{out}");
+    assert!(
+        out.contains("reserve Longbeam Cruiser: Pack 2 (contested: 1 copy, 2 packs)"),
+        "{out}"
+    );
+    assert!(!out.contains("reserve Command Unit"), "{out}");
+    let one = json!({"owned": {"A": 1}, "packs": [{"name": "P", "slots": 1, "eligible": ["A"]}]});
+    let (code, out) = run("allocate", &one.to_string());
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("no contested cards"), "{out}");
     doc["owned"]["Command Unit"] = json!(0);
     let (code, out) = run("allocate", &doc.to_string());
     assert_eq!(code, 1);

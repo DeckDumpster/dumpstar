@@ -3674,8 +3674,12 @@ mod tests {
             let addr = listener.local_addr().unwrap();
             let router = site.router.clone();
             tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-            let keywords = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../data/search_keywords.json");
+            // The served help has the keyword list filled in, so the check reads the same text.
+            let keywords = std::env::temp_dir().join(format!(
+                "dumpstar-conformance-keywords-{}.json",
+                std::process::id()
+            ));
+            std::fs::write(&keywords, dumpstar_db::search_meta::keywords_json()).unwrap();
             let report =
                 dumpster_kit_mcp::conformance::run(&dumpster_kit_mcp::conformance::Config {
                     url: format!("http://{addr}/mcp"),

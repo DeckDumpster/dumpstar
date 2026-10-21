@@ -360,7 +360,6 @@
 		border-radius: var(--radius-md);
 		background: var(--color-surface-sunken);
 		object-fit: cover;
-		transition: transform var(--dur-base) var(--ease-standard);
 	}
 	/* A landscape picture (base, leader front) turned upright inside the
 	   portrait box: its pre-turn width is the box's height. */
@@ -385,10 +384,6 @@
 		aspect-ratio: auto;
 		max-width: none;
 		transform: translate(-50%, -50%) rotate(-90deg);
-	}
-	.thumbs a:hover img,
-	.thumbs a:hover .noart {
-		transform: translateY(-2px);
 	}
 	.thumbs a:focus-visible {
 		outline: none;

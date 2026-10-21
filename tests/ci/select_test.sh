@@ -376,6 +376,29 @@ check "DUMPSTAR_CI_TIERS and DUMPSTAR_CI_CHANGED_FILES both set -> exit 1" "1" "
 DECLARED="$(sed -n 's/^\[tier\.\([a-z]*\)\]$/\1/p' "${REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}/.spira/testenv.toml" | tr '\n' ' ' | sed 's/ $//')"
 check ".spira/testenv.toml declares exactly the canonical tiers, in order" "$ALL" "$DECLARED"
 
+# ci_entry (what a queue.local round VM runs) must run every tier CI runs.
+# check_ci_entry <toml> -> the tiers it names, or "MISSING" when it is absent.
+ci_entry_tiers() {
+	local entry
+	entry="$(sed -n 's/^ci_entry = "\(.*\)"$/\1/p' "$1")"
+	[[ -n "$entry" ]] || { echo MISSING; return; }
+	case "$entry" in
+		*"bash deploy/ci.sh"*) ;;
+		*) echo "NOT-CI-SH"; return ;;
+	esac
+	local list
+	list="$(printf '%s' "$entry" | sed -n "s/.*DUMPSTAR_CI_TIERS='\([^']*\)'.*/\1/p")"
+	[[ -n "$list" ]] && echo "$list" || echo "ALL"
+}
+TOML="${REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}/.spira/testenv.toml"
+got="$(ci_entry_tiers "$TOML")"
+[[ "$got" == "ALL" ]] && got="$ALL"
+check "ci_entry runs every canonical tier" "$ALL" "$got"
+printf 'ci_entry = "DUMPSTAR_CI_TIERS='"'"'lint rust'"'"' bash deploy/ci.sh"\n' > "${WORK}/partial.toml"
+check "a partial ci_entry is detected" "lint rust" "$(ci_entry_tiers "${WORK}/partial.toml")"
+printf 'default = []\n' > "${WORK}/none.toml"
+check "an absent ci_entry is detected" "MISSING" "$(ci_entry_tiers "${WORK}/none.toml")"
+
 # ---------------------------------------------------------------------------
 printf '\n=== %d passed, %d failed ===\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -18,11 +18,14 @@ for want in 'Request rate' 'Request latency' 'Search page latency' 'Search total
 done
 jq -e '.panels[] | select(.title | startswith("Search page latency")) | .fieldConfig.defaults | (.thresholds.steps | any(.value == 200)) and (.custom.thresholdsStyle.mode | test("line"))' "$f" >/dev/null || bad "search page latency lacks the 200 ms threshold line"
 metrics="$(jq -r '.panels[].targets[].expr' "$f" | grep -oE '(dumpstar|http_server)_[a-z_]+' | sed -E 's/_(bucket|sum|count)$//' | sort -u)"
+# Metrics the server sends: every `pub const <NAME>_METRIC: &str = "<metric>"` in the server source.
+# The http_server_* names are not constants here: the HTTP layer's OTLP middleware exports them, so
+# they stay one explicit list.
+known="$(grep -rhoE 'pub const [A-Z0-9_]+_METRIC: &str = "[a-z0-9_]+"' crates/dumpstar-server/src | sed -E 's/.*"([a-z0-9_]+)"$/\1/')"
+[[ -n "$known" ]] || bad "no *_METRIC constants found in crates/dumpstar-server/src"
+known+=$'\nhttp_server_requests_total\nhttp_server_request_duration_seconds'
 for m in $metrics; do
-	case "$m" in
-	http_server_requests_total | http_server_request_duration_seconds | dumpstar_search_page_ms | dumpstar_search_totals_ms | dumpstar_search_rows) ;;
-	*) bad "dashboard queries unknown metric $m" ;;
-	esac
+	grep -qxF "$m" <<<"$known" || bad "dashboard queries unknown metric $m"
 done
 grep -qiE 'tenant|email|user' <<<"$(jq -r '.panels[].targets[] | .expr + " " + .legendFormat' "$f")" && bad "a query or legend names a tenant, email or user" || true
 ((fail)) || echo "ok: dashboard $f"

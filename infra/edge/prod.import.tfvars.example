@@ -1,0 +1,8 @@
+# Once, for the first prod plan/apply: -var-file=prod.import.tfvars. Remove after the apply.
+import_ids = {
+  tunnel          = ""
+  dns_record      = ""
+  access_policy   = ""
+  access_app      = ""
+  pocketid_client = ""
+}

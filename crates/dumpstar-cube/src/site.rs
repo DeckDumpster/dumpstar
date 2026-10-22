@@ -430,16 +430,27 @@ pub fn site_url(path: &PathBuf, site_override: Option<&str>) -> String {
         .to_string()
 }
 
+/// The credential in use.
+pub struct Credential {
+    /// The source, never the token.
+    pub label: String,
+    pub token: String,
+    pub base: String,
+    /// True when the token is Claude Code's, which refreshes it when it next uses the MCP server.
+    pub claude: bool,
+}
+
 /// The credential in use, in order: Claude Code's MCP sign-in, then the checker's own login.
-/// The first element names the source, never the token.
-pub fn credential(
-    path: &PathBuf,
-    site_override: Option<&str>,
-) -> Result<(String, String, String), String> {
+pub fn credential(path: &PathBuf, site_override: Option<&str>) -> Result<Credential, String> {
     let base = site_url(path, site_override);
     match claude_mcp(&base) {
         Mcp::Valid { server, token } => {
-            return Ok((format!("Claude Code MCP sign-in ({server})"), token, base));
+            return Ok(Credential {
+                label: format!("Claude Code MCP sign-in ({server})"),
+                token,
+                base,
+                claude: true,
+            });
         }
         Mcp::Expired(server) => {
             eprintln!("Claude Code's sign-in for {server} has expired: {RECONNECT}")
@@ -452,7 +463,12 @@ pub fn credential(
     } else {
         &cfg.who
     };
-    Ok((format!("swu-cube-check login ({who})"), token, cfg.site))
+    Ok(Credential {
+        label: format!("swu-cube-check login ({who})"),
+        token,
+        base: cfg.site,
+        claude: false,
+    })
 }
 
 /// The cached sign-in's access token, refreshed when it is near expiry. A missing cache or a
@@ -490,6 +506,7 @@ pub fn access_token(
 pub struct Site {
     base: String,
     token: String,
+    claude: bool,
     client: Client,
 }
 
@@ -510,12 +527,25 @@ fn forbidden_reason(body: &str) -> String {
 
 impl Site {
     pub fn open(path: &PathBuf, site_override: Option<&str>) -> Result<Site, String> {
-        let (_, token, base) = credential(path, site_override)?;
+        Site::with(credential(path, site_override)?)
+    }
+
+    pub fn with(c: Credential) -> Result<Site, String> {
         Ok(Site {
-            base,
-            token,
+            base: c.base,
+            token: c.token,
+            claude: c.claude,
             client: http()?,
         })
+    }
+
+    /// `GET /api/agent/me`: the tenant handle the token is served as.
+    pub fn tenant(&self) -> Result<String, String> {
+        let v = self.get("/api/agent/me", &[])?;
+        v["tenant"]
+            .as_str()
+            .map(String::from)
+            .ok_or_else(|| "/api/agent/me: no tenant in the reply".to_string())
     }
 
     fn get(&self, path: &str, query: &[(&str, String)]) -> Result<Value, String> {
@@ -529,9 +559,13 @@ impl Site {
             .map_err(|e| format!("{path}: {e}"))?;
         let status = r.status();
         if status == reqwest::StatusCode::UNAUTHORIZED {
-            return Err(format!(
-                "{path}: sign-in expired or invalid (HTTP {status}): {RELOGIN}"
-            ));
+            return Err(if self.claude {
+                format!(
+                    "{path}: Claude Code's dumpstar token has expired: make any dumpstar MCP call in Claude Code to refresh it, then rerun (or {RELOGIN})"
+                )
+            } else {
+                format!("{path}: sign-in expired or invalid (HTTP {status}): {RELOGIN}")
+            });
         }
         let text = r.text().unwrap_or_default();
         if status == reqwest::StatusCode::FORBIDDEN {

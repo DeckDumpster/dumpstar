@@ -18,3 +18,7 @@ output "lake_secret_name" {
 output "backup_secret_name" {
   value = aws_secretsmanager_secret.backup.name
 }
+
+output "tenant_secret_name" {
+  value = aws_secretsmanager_secret.tenant.name
+}

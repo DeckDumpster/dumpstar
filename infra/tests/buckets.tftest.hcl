@@ -116,3 +116,61 @@ run "credentials_are_scoped_to_their_own_bucket" {
     error_message = "both users must carry the deploy boundary and tag"
   }
 }
+
+run "tenant_user_reaches_only_tenant_and_lake_user_is_denied_it" {
+  command = plan
+
+  assert {
+    condition = alltrue(flatten([
+      for s in data.aws_iam_policy_document.tenant.statement :
+      [for r in s.resources : startswith(r, "arn:aws:s3:::dumpstar-lake-")]
+    ]))
+    error_message = "the tenant policy must name the lake bucket only"
+  }
+  assert {
+    condition = alltrue(flatten([
+      for s in data.aws_iam_policy_document.tenant.statement :
+      [for r in s.resources : endswith(r, "/tenant/*") || r == aws_s3_bucket.lake.arn]
+      if s.effect != "Deny"
+    ]))
+    error_message = "every tenant allow is on tenant/ objects or the bucket listing (prefix-conditioned)"
+  }
+  assert {
+    condition = alltrue([
+      for s in data.aws_iam_policy_document.tenant.statement :
+      length(s.condition) == 1 && anytrue([for c in s.condition : toset(c.values) == toset(["tenant/*"])])
+      if s.effect != "Deny" && contains(s.actions, "s3:ListBucket")
+    ])
+    error_message = "the tenant listing must be conditioned on the tenant/ prefix"
+  }
+  assert {
+    condition = toset(flatten([
+      for s in data.aws_iam_policy_document.tenant.statement : s.resources if s.effect == "Deny" && contains(s.actions, "s3:*")
+    ])) == toset(["arn:aws:s3:::dumpstar-lake-123456789012/raw/*", "arn:aws:s3:::dumpstar-lake-123456789012/lake/*"])
+    error_message = "the tenant user must be denied raw/ and lake/"
+  }
+  assert {
+    condition = toset(flatten([
+      for s in data.aws_iam_policy_document.tenant.statement : s.actions if s.effect != "Deny"
+    ])) == toset(["s3:ListBucket", "s3:GetObject", "s3:PutObject", "s3:DeleteObject"])
+    error_message = "the tenant user may not touch bucket configuration or delete versions"
+  }
+  assert {
+    condition = anytrue([
+      for s in data.aws_iam_policy_document.lake.statement :
+      s.effect == "Deny" && contains(s.actions, "s3:*") && contains(s.resources, "arn:aws:s3:::dumpstar-lake-123456789012/tenant/*")
+    ])
+    error_message = "the lake user must be denied tenant/ objects"
+  }
+  assert {
+    condition = anytrue([
+      for s in data.aws_iam_policy_document.lake.statement :
+      s.effect == "Deny" && contains(s.actions, "s3:ListBucket") && anytrue([for c in s.condition : toset(c.values) == toset(["tenant/*"])])
+    ])
+    error_message = "the lake user must be denied listing tenant/"
+  }
+  assert {
+    condition     = aws_iam_user.tenant.tags["terraform-deploy-boundary"] == "true" && aws_iam_user.tenant.permissions_boundary == var.permissions_boundary_arn
+    error_message = "the tenant user must carry the deploy boundary and tag"
+  }
+}

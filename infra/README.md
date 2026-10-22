@@ -4,8 +4,9 @@ Terraform for dumpstar's two S3 buckets, in the same account (backups move to th
 when Ryan settles the ask filed with sp-zcne5d; only `backups.tf` changes):
 
 - `dumpstar-lake-<account>`: private, SSE-S3, versioned, TLS-only. The one expiring prefix is
-  `tenant/` at 90 days; `raw/` and `lake/` have no rule. User `dumpstar-lake`, secret
-  `dumpstar/lake`.
+  `tenant/` at 90 days; `raw/` and `lake/` have no rule. User `dumpstar-lake` (denied `tenant/`),
+  secret `dumpstar/lake`. User `dumpstar-tenant` (put/get/list/delete under `tenant/` only; denied
+  `raw/` and `lake/`), secret `dumpstar/tenant`: the tenant-zone credential ship and erase use.
 - `dumpstar-backups-<account>`: the Litestream target. Private, SSE-S3, versioned, TLS-only,
   only noncurrent versions expire (400 days). User `dumpstar-backup` (put/get/list/delete on
   objects; no version delete, no bucket, versioning or lifecycle action), secret

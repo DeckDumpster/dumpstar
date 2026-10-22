@@ -122,6 +122,27 @@ data "aws_iam_policy_document" "lake" {
     actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
     resources = ["${aws_s3_bucket.lake.arn}/*"]
   }
+
+  # The tenant zone shares this bucket; only the tenant user reaches it (TENANT_ZONE.md).
+  statement {
+    sid       = "DenyTenantZoneObjects"
+    effect    = "Deny"
+    actions   = ["s3:*"]
+    resources = ["${aws_s3_bucket.lake.arn}/tenant/*"]
+  }
+
+  statement {
+    sid       = "DenyListingTenantZone"
+    effect    = "Deny"
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.lake.arn]
+
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["tenant/*"]
+    }
+  }
 }
 
 resource "aws_iam_user_policy" "lake" {
@@ -145,5 +166,77 @@ resource "aws_secretsmanager_secret_version" "lake" {
   secret_string = jsonencode({
     AWS_ACCESS_KEY_ID     = aws_iam_access_key.lake.id
     AWS_SECRET_ACCESS_KEY = aws_iam_access_key.lake.secret
+  })
+}
+
+resource "aws_iam_user" "tenant" {
+  name                 = "dumpstar-tenant"
+  permissions_boundary = var.permissions_boundary_arn
+  tags                 = { terraform-deploy-boundary = "true" }
+}
+
+# The tenant zone (deploy/TENANT_ZONE.md): put/get/list/delete under tenant/ of the lake
+# bucket and nothing else. raw/ and lake/ are denied outright, so no later allow can reach them.
+data "aws_iam_policy_document" "tenant" {
+  statement {
+    sid       = "TenantZoneObjects"
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+    resources = ["${aws_s3_bucket.lake.arn}/tenant/*"]
+  }
+
+  statement {
+    sid       = "TenantZoneListingIsPrefixScoped"
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.lake.arn]
+
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["tenant/*"]
+    }
+  }
+
+  statement {
+    sid       = "DenyCatalogZoneObjects"
+    effect    = "Deny"
+    actions   = ["s3:*"]
+    resources = ["${aws_s3_bucket.lake.arn}/raw/*", "${aws_s3_bucket.lake.arn}/lake/*"]
+  }
+
+  statement {
+    sid       = "DenyListingCatalogZone"
+    effect    = "Deny"
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.lake.arn]
+
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["raw/*", "lake/*"]
+    }
+  }
+}
+
+resource "aws_iam_user_policy" "tenant" {
+  name   = "dumpstar-tenant-rw"
+  user   = aws_iam_user.tenant.name
+  policy = data.aws_iam_policy_document.tenant.json
+}
+
+resource "aws_iam_access_key" "tenant" {
+  user = aws_iam_user.tenant.name
+}
+
+resource "aws_secretsmanager_secret" "tenant" {
+  name        = "dumpstar/tenant"
+  description = "S3 credential for the dumpstar tenant zone, tenant/ of the lake bucket (deploy/infra-config.sh reads it)"
+}
+
+resource "aws_secretsmanager_secret_version" "tenant" {
+  secret_id = aws_secretsmanager_secret.tenant.id
+
+  secret_string = jsonencode({
+    AWS_ACCESS_KEY_ID     = aws_iam_access_key.tenant.id
+    AWS_SECRET_ACCESS_KEY = aws_iam_access_key.tenant.secret
   })
 }

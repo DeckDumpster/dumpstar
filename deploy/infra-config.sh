@@ -95,7 +95,8 @@ if [ "$WITH_SECRETS" = 1 ]; then
             jq -r --arg p "$1" '"[\($p)]\naws_access_key_id=\(.AWS_ACCESS_KEY_ID)\naws_secret_access_key=\(.AWS_SECRET_ACCESS_KEY)"'
     }
     BOOTSTRAP="dumpstar-${INSTANCE}-s3-bootstrap"
-    if podman secret inspect --showsecret "$BOOTSTRAP" 2>/dev/null | grep -q '\[dumpstar-tenant\]'; then
+    EXISTING="$(podman secret inspect --showsecret "$BOOTSTRAP" 2>/dev/null || true)"
+    if grep -q '\[dumpstar-tenant\]' <<<"$EXISTING"; then
         echo "    podman secret ${BOOTSTRAP} exists, left alone"
     else
         if podman secret inspect "$BOOTSTRAP" >/dev/null 2>&1; then

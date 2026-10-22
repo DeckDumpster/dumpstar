@@ -91,6 +91,7 @@ fn handle(
         (_, p) if p.starts_with("/api/") && auth != "Bearer tok-fresh" => {
             respond(s, 401, &json!({}))
         }
+        ("GET", "/api/agent/me") => respond(s, 200, &json!({"tenant": "concierge"})),
         ("GET", "/api/agent/decks") => {
             let list: Vec<Value> = decks
                 .iter()
@@ -338,7 +339,9 @@ fn a_refresh_is_silent_cached_0600_and_prints_no_token() {
     let (code, out, _) = run(&cfg, &["login", "--status"]);
     assert_eq!(code, 0);
     assert!(
-        out.contains("ryan@example.com") && !out.contains("tok-"),
+        out.contains("ryan@example.com")
+            && out.contains("tenant concierge")
+            && !out.contains("tok-"),
         "{out}"
     );
 }
@@ -385,7 +388,10 @@ fn claude_codes_mcp_sign_in_is_used_without_login_and_left_untouched() {
         run_with_claude(&cfg, &claude, &["login", "--status", "--site", &f.base]);
     assert_eq!(
         (code, out.trim()),
-        (0, "Claude Code MCP sign-in (dumpstar)"),
+        (
+            0,
+            "Claude Code MCP sign-in (dumpstar) \u{2192} tenant concierge"
+        ),
         "{err}"
     );
     let (code, out, _) = run_with_claude(
@@ -408,6 +414,25 @@ fn an_expired_claude_sign_in_says_reconnect_and_falls_through_to_login() {
         run_with_claude(&cfg, &claude, &["cube", "--group", "swu-jumpstart-cube"]);
     assert_eq!((code, out.trim()), (0, "ok"), "{err}");
     assert!(err.contains("/mcp") && !err.contains("tok-"), "{err}");
+}
+
+#[test]
+fn a_401_on_claude_codes_token_names_the_mcp_call_that_refreshes_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = serve(cube(), true);
+    let claude = claude_store(dir.path(), &f, (far_future() + 3600) * 1000);
+    let text = std::fs::read_to_string(&claude)
+        .unwrap()
+        .replace("tok-fresh", "tok-stale");
+    std::fs::write(&claude, text).unwrap();
+    let cfg = dir.path().join("none.json");
+    let (code, _, err) = run_with_claude(
+        &cfg,
+        &claude,
+        &["cube", "--group", "swu-jumpstart-cube", "--site", &f.base],
+    );
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("MCP call") && err.contains("expired"), "{err}");
 }
 
 #[test]

@@ -316,28 +316,15 @@ fn login(r: &Remote, status: bool) -> ExitCode {
     use dumpstar_cube::site;
     let path = site::config_path();
     if status {
-        if let site::Mcp::Valid { server, .. } =
-            site::claude_mcp(&site::site_url(&path, r.site.as_deref()))
-        {
-            println!("Claude Code MCP sign-in ({server})");
-            return ExitCode::SUCCESS;
-        }
-        return match site::load(&path) {
-            Ok(Some(c)) => {
-                println!(
-                    "signed in to {} as {}",
-                    c.site,
-                    if c.who.is_empty() {
-                        "(unnamed)"
-                    } else {
-                        &c.who
-                    }
-                );
+        let shown = site::credential(&path, r.site.as_deref()).and_then(|c| {
+            let label = c.label.clone();
+            site::Site::with(c)?.tenant().map(|t| (label, t))
+        });
+        return match shown {
+            Ok((label, t)) => {
+                println!("{label} \u{2192} tenant {t}");
                 ExitCode::SUCCESS
             }
-            Ok(None) => fail(
-                "not signed in: connect dumpstar in Claude Code (/mcp) or run `swu-cube-check login`",
-            ),
             Err(e) => fail(e),
         };
     }

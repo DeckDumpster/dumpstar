@@ -18,6 +18,7 @@ use crate::{AppError, AppState, blocking, mcp};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
+        .route("/agent/me", get(me))
         .route("/agent/decks", get(list))
         .route("/agent/decks/{id}", get(deck))
         .route("/agent/search", get(search))
@@ -28,6 +29,13 @@ fn tool_error(e: ToolError) -> AppError {
         ToolError::Failed(m) => AppError::bad_request(json!({ "error": m }).to_string()),
         ToolError::Internal(m) => AppError(StatusCode::INTERNAL_SERVER_ERROR, m),
     }
+}
+
+/// Whose tenant the bearer token is served as: the cheap authenticated call `swu-cube-check
+/// login --status` makes.
+async fn me() -> Result<Json<Value>, AppError> {
+    let id = crate::current_tenant()?;
+    Ok(Json(json!({ "tenant": id.as_str() })))
 }
 
 #[derive(Deserialize)]

@@ -493,6 +493,21 @@ pub struct Site {
     client: Client,
 }
 
+/// The server's reason for a 403: the `error` and `detail` of its JSON body, else the body text.
+fn forbidden_reason(body: &str) -> String {
+    match serde_json::from_str::<Value>(body) {
+        Ok(v) => {
+            let part = |k: &str| v[k].as_str().filter(|s| !s.is_empty()).map(String::from);
+            match (part("error"), part("detail")) {
+                (Some(e), Some(d)) => format!("{e}: {d}"),
+                (Some(x), None) | (None, Some(x)) => x,
+                _ => body.trim().to_string(),
+            }
+        }
+        Err(_) => body.trim().to_string(),
+    }
+}
+
 impl Site {
     pub fn open(path: &PathBuf, site_override: Option<&str>) -> Result<Site, String> {
         let (_, token, base) = credential(path, site_override)?;
@@ -513,12 +528,18 @@ impl Site {
             .send()
             .map_err(|e| format!("{path}: {e}"))?;
         let status = r.status();
-        if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+        if status == reqwest::StatusCode::UNAUTHORIZED {
             return Err(format!(
-                "{path}: the site refused the sign-in (HTTP {status}): {RELOGIN}"
+                "{path}: sign-in expired or invalid (HTTP {status}): {RELOGIN}"
             ));
         }
         let text = r.text().unwrap_or_default();
+        if status == reqwest::StatusCode::FORBIDDEN {
+            return Err(format!(
+                "{path}: signed in, but not allowed (HTTP {status}): {}",
+                forbidden_reason(&text)
+            ));
+        }
         if !status.is_success() {
             return Err(format!("{path}: HTTP {status}: {text}"));
         }

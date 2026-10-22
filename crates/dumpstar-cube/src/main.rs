@@ -216,6 +216,8 @@ const LOST_SHOWN: usize = 2;
 
 const USAGE: &str = "usage: swu-cube-check login [--site URL] [--client-id ID] | login --status
        swu-cube-check pack --deck ID | cube --group NAME | copies --group NAME | allocate --group NAME | allocate --plan FILE   [--site URL]
+  credential order: Claude Code's own MCP sign-in for the site (read-only, from ~/.claude/.credentials.json or the macOS
+            Keychain; never written, its refresh token never used), then the login below
   login     sign in once in a browser (authorization code + PKCE); the refresh token is cached at
             ~/.config/dumpstar/swu-cube-check.json (0600) and never printed; --status says whose tenant it is
   --deck/--group/--plan  fetch decks and run searches over the site's /api yourself; every deck's lines_digest is checked.
@@ -259,6 +261,12 @@ fn login(r: &Remote, status: bool) -> ExitCode {
     use dumpstar_cube::site;
     let path = site::config_path();
     if status {
+        if let site::Mcp::Valid { server, .. } =
+            site::claude_mcp(&site::site_url(&path, r.site.as_deref()))
+        {
+            println!("Claude Code MCP sign-in ({server})");
+            return ExitCode::SUCCESS;
+        }
         return match site::load(&path) {
             Ok(Some(c)) => {
                 println!(
@@ -272,7 +280,9 @@ fn login(r: &Remote, status: bool) -> ExitCode {
                 );
                 ExitCode::SUCCESS
             }
-            Ok(None) => fail("not signed in: run `swu-cube-check login`"),
+            Ok(None) => fail(
+                "not signed in: connect dumpstar in Claude Code (/mcp) or run `swu-cube-check login`",
+            ),
             Err(e) => fail(e),
         };
     }

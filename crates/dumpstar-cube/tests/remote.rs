@@ -195,6 +195,10 @@ fn run(cfg: &std::path::Path, args: &[&str]) -> (i32, String, String) {
     let out = Command::new(env!("CARGO_BIN_EXE_swu-cube-check"))
         .args(args)
         .env("SWU_CUBE_CHECK_CONFIG", cfg)
+        .env(
+            "SWU_CUBE_CHECK_CLAUDE_CREDENTIALS",
+            cfg.with_file_name("no-claude.json"),
+        )
         .output()
         .unwrap();
     (
@@ -336,4 +340,71 @@ fn a_refresh_is_silent_cached_0600_and_prints_no_token() {
         out.contains("ryan@example.com") && !out.contains("tok-"),
         "{out}"
     );
+}
+
+fn run_with_claude(
+    cfg: &std::path::Path,
+    claude: &std::path::Path,
+    args: &[&str],
+) -> (i32, String, String) {
+    let out = Command::new(env!("CARGO_BIN_EXE_swu-cube-check"))
+        .args(args)
+        .env("SWU_CUBE_CHECK_CONFIG", cfg)
+        .env("SWU_CUBE_CHECK_CLAUDE_CREDENTIALS", claude)
+        .output()
+        .unwrap();
+    (
+        out.status.code().unwrap(),
+        String::from_utf8(out.stdout).unwrap(),
+        String::from_utf8(out.stderr).unwrap(),
+    )
+}
+
+fn claude_store(dir: &std::path::Path, f: &Fixture, expires_ms: u64) -> std::path::PathBuf {
+    let p = dir.join("claude.json");
+    std::fs::write(
+        &p,
+        json!({"mcpOAuth": {"dumpstar|h": {"serverName": "dumpstar", "serverUrl": format!("{}/mcp", f.base),
+               "accessToken": "tok-fresh", "refreshToken": "claude-refresh", "expiresAt": expires_ms}}})
+        .to_string(),
+    )
+    .unwrap();
+    p
+}
+
+#[test]
+fn claude_codes_mcp_sign_in_is_used_without_login_and_left_untouched() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = serve(cube(), true);
+    let ms = (far_future() + 3600) * 1000;
+    let claude = claude_store(dir.path(), &f, ms);
+    let before = std::fs::read_to_string(&claude).unwrap();
+    let cfg = dir.path().join("none.json");
+    let (code, out, err) =
+        run_with_claude(&cfg, &claude, &["login", "--status", "--site", &f.base]);
+    assert_eq!(
+        (code, out.trim()),
+        (0, "Claude Code MCP sign-in (dumpstar)"),
+        "{err}"
+    );
+    let (code, out, _) = run_with_claude(
+        &cfg,
+        &claude,
+        &["cube", "--group", "swu-jumpstart-cube", "--site", &f.base],
+    );
+    assert_eq!((code, out.trim()), (0, "ok"));
+    assert_eq!(std::fs::read_to_string(&claude).unwrap(), before);
+    assert!(!cfg.exists());
+}
+
+#[test]
+fn an_expired_claude_sign_in_says_reconnect_and_falls_through_to_login() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = serve(cube(), true);
+    let claude = claude_store(dir.path(), &f, 1);
+    let cfg = signed_in(dir.path(), &f, "tok-fresh", far_future());
+    let (code, out, err) =
+        run_with_claude(&cfg, &claude, &["cube", "--group", "swu-jumpstart-cube"]);
+    assert_eq!((code, out.trim()), (0, "ok"), "{err}");
+    assert!(err.contains("/mcp") && !err.contains("tok-"), "{err}");
 }

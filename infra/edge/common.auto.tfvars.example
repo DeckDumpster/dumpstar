@@ -1,0 +1,8 @@
+# Copy to common.tfvars (git-ignored) and fill; ids are not secrets but are account-specific.
+deploy_role_arn       = "arn:aws:iam::<account>:role/terraform-deploy"
+cloudflare_account_id = ""
+cloudflare_zone_id    = ""
+access_team_name      = ""
+access_idp_id         = ""
+access_group_id       = ""
+pocketid_group_ids    = []

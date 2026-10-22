@@ -129,7 +129,9 @@ const DERIVATIONS: &[(&str, u32)] = &[
     // (sp-eu0o9a).
     // 13: aspect icons written "[Heroism] [Heroism]", no space before "]"
     // (sp-td6hi1).
-    (swu::SRC_OFFICIAL, 13),
+    // 14: Fortify is a known keyword; a card that only mentions Raid or Restore
+    // owes no number; the alarms of an earlier derivation are cleared (sp-h41oq8).
+    (swu::SRC_OFFICIAL, 14),
 ];
 
 pub fn derivation_version(source: &str) -> u32 {
@@ -184,6 +186,33 @@ pub fn apply_at(
             }
             crate::official::remap_cards(&mut page.payload, &known);
             let mut r = apply_payload(&tx, &page.payload)?;
+            // A card or set this page derives afresh no longer carries the alarm
+            // an earlier derivation raised for it, unless the page raises it again.
+            let raised: BTreeSet<(&str, &str)> = page
+                .payload
+                .alarms
+                .iter()
+                .map(|a| (a.kind.as_str(), a.key.as_str()))
+                .collect();
+            let derived = page
+                .payload
+                .cards
+                .iter()
+                .map(|c| ("official_unparseable_keyword", c.card_id.as_str()))
+                .chain(
+                    page.payload
+                        .sets
+                        .iter()
+                        .map(|s| ("unmapped_set_category", s.set_code.as_str())),
+                );
+            for (kind, key) in derived {
+                if !raised.contains(&(kind, key)) {
+                    r.alarms += tx.execute(
+                        "DELETE FROM alarms WHERE kind = ?1 AND key = ?2",
+                        params![kind, key],
+                    )?;
+                }
+            }
             for p in &page.payload.printings {
                 r.alarms += tx.execute(
                     "DELETE FROM alarms WHERE kind = 'official_bad_record' AND key = ?1",
@@ -645,8 +674,24 @@ fn stamp_release_dates(tx: &Transaction, r: &mut ApplyReport) -> Result<()> {
             )?;
         }
     }
+    // A Weekly Play promo set (`SHDP`) is sold with its main set and takes its date.
+    r.sets += tx.execute(
+        "UPDATE sets SET release_date = (SELECT m.release_date FROM sets m
+                WHERE m.set_code = substr(sets.set_code, 1, length(sets.set_code) - 1))
+          WHERE release_date IS NULL AND category = 'Weekly Play Promos'
+            AND (SELECT m.release_date FROM sets m
+                  WHERE m.set_code = substr(sets.set_code, 1, length(sets.set_code) - 1)) IS NOT NULL",
+        [],
+    )?;
+    // Yearly, convention, judge and retail exclusives are sold across a year or
+    // through a partner and have no release day to record.
     let missing: Vec<(String, String)> = tx
-        .prepare("SELECT set_code, name FROM sets WHERE release_date IS NULL ORDER BY set_code")?
+        .prepare(
+            "SELECT set_code, name FROM sets WHERE release_date IS NULL
+               AND COALESCE(category, '') NOT IN ('Yearly Promos', 'Convention Exclusives',
+                   'Judge Program', 'Retail & Partner Exclusives')
+             ORDER BY set_code",
+        )?
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
         .collect::<std::result::Result<_, _>>()?;
     let alarms: Vec<AlarmRecord> = missing
@@ -724,15 +769,17 @@ const JOIN_KINDS: &[&str] = &[
     "group_set_mismatch",
 ];
 
-/// The join's own inputs, hashed: its code, the hand-kept group table and the
+/// The join's own inputs, hashed: its code (and how tcgcsv groups are read), the hand-kept group table and the
 /// remedial crosswalk. A catalog joined under a different one is joined stale.
 fn crosswalk_rev() -> String {
     use sha2::{Digest, Sha256};
     let mut h = Sha256::new();
     for part in [
         include_str!("crosswalk.rs"),
+        include_str!("tcgcsv.rs"),
         include_str!("groups.tsv"),
         include_str!("remedial.tsv"),
+        include_str!("../data/remedial/set-release-dates.csv"),
     ] {
         h.update(part.as_bytes());
         h.update([0]);

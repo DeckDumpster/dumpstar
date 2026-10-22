@@ -104,6 +104,7 @@ pub const KNOWN_KEYWORDS: &[&str] = &[
     "Bounty",
     "Coordinate",
     "Exploit",
+    "Fortify",
     "Grit",
     "Hidden",
     "Overwhelm",
@@ -144,14 +145,21 @@ fn keywords_of(attrs: &Value, card_id: &str, alarms: &mut Vec<AlarmRecord>) -> V
             continue;
         };
         let value = keyword_value(&rules, known);
-        if value.is_none() && !rules.is_empty() && NUMBERED_KEYWORDS.contains(known) {
+        let standing = standing(&rules, known);
+        // A card that only mentions the keyword ("damage equal to its Raid",
+        // "Raid is doubled") has no number to give it; one that has it must.
+        if value.is_none()
+            && !rules.is_empty()
+            && NUMBERED_KEYWORDS.contains(known)
+            && matches!(standing, Standing::Own { .. })
+        {
             alarms.push(AlarmRecord::alarm(
                 "official_unparseable_keyword",
                 card_id,
                 format!("{known} has no number in its rules text"),
             ));
         }
-        let (granted, conditional) = match standing(&rules, known) {
+        let (granted, conditional) = match standing {
             Standing::Own { conditional } => (false, conditional),
             Standing::Granted => (true, false),
             Standing::Absent => continue,
@@ -839,5 +847,50 @@ mod granted_keyword_tests {
         ));
         assert!(stands_alone("Smuggle [3]. Ambush", "Smuggle"));
         assert!(!stands_alone("Sentinelfoo", "Sentinel"));
+    }
+}
+
+#[cfg(test)]
+mod keyword_alarm_tests {
+    use super::keywords_of;
+    use serde_json::json;
+
+    fn alarms_for(text: &str, keywords: &[&str]) -> Vec<String> {
+        let attrs = json!({
+            "text": text,
+            "keywords": {"data": keywords.iter().map(|k| json!({"attributes": {"name": k}})).collect::<Vec<_>>()},
+        });
+        let mut alarms = Vec::new();
+        keywords_of(&attrs, "c", &mut alarms);
+        alarms.into_iter().map(|a| a.detail).collect()
+    }
+
+    #[test]
+    fn fortify_is_a_known_keyword() {
+        assert_eq!(
+            alarms_for("Fortify\nAttached base gains: “draw a card.”", &["Fortify"]),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            alarms_for("Frobnicate", &["Frobnicate"]),
+            ["unknown keyword \"Frobnicate\""]
+        );
+    }
+
+    #[test]
+    fn a_card_that_only_mentions_raid_owes_no_number_but_one_that_has_it_does() {
+        assert!(
+            alarms_for(
+                "A friendly unit deals damage equal to its Raid to an enemy unit.",
+                &["Raid"]
+            )
+            .is_empty()
+        );
+        assert!(alarms_for("Each friendly unit's Raid is doubled.", &["Raid"]).is_empty());
+        assert_eq!(
+            alarms_for("Raid\nWhen Played: draw a card.", &["Raid"]),
+            ["Raid has no number in its rules text"]
+        );
+        assert!(alarms_for("Raid 2", &["Raid"]).is_empty());
     }
 }

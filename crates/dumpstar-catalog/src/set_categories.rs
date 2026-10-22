@@ -10,6 +10,7 @@ pub const CATEGORY_ORDER: &[&str] = &[
     "Convention Exclusives",
     "Judge Program",
     "Intro & Starter Products",
+    "Standalone Products",
     "Retail & Partner Exclusives",
 ];
 

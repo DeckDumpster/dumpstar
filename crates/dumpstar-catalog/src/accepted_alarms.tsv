@@ -1,0 +1,240 @@
+# Alarms triaged by hand and accepted: kind, key, reason (tab separated).
+# A row accepts exactly one alarm (sp-h41oq8); a key not listed here alarms until it is
+# read, fixed in the importer or added here with its reason. Keys are TCGplayer product ids,
+# official printing ids, or card ids.
+ambiguous_tcgcsv	626519	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	628495	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	646471	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	646495	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	657031	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	657032	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	657033	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	657034	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	657035	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	657036	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	657037	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	657038	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	657039	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	657040	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	657041	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	657042	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	657056	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	657062	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	657067	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	664552	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	664553	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	664717	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	672365	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	672366	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	672367	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	672368	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	686690	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	714429	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	714431	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	714432	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	714433	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	714434	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	714435	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	714436	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	714437	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	714438	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	714439	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	714440	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	714441	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	714442	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	714443	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	714444	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	714445	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+ambiguous_tcgcsv	714446	TCGplayer sells one product for several official printings of the same card (a prize wall, event pack or judge run of one card); nothing tells the printings apart, so the join links none rather than guess
+image_wrong_card	1575502041	the official API spells this card's name Orellios; the scan, and the printed card, say Orrelios (the same Zeb)
+image_wrong_card	3608112817	the official API spells this card's name Orellios; the scan, and the printed card, say Orrelios (the same Zeb)
+image_wrong_card	8278088217	the official API spells this card's name Orellios; the scan, and the printed card, say Orrelios (the same Zeb)
+official_without_tcgcsv	1555216304	the official catalog has this promo printing and TCGplayer lists no product for it
+official_without_tcgcsv	5666339874	the official catalog has this promo printing and TCGplayer lists no product for it
+official_without_tcgcsv	6226003924	the official catalog has this promo printing and TCGplayer lists no product for it
+official_without_tcgcsv	6463934326	the official catalog has this promo printing and TCGplayer lists no product for it
+official_without_tcgcsv	7499995534	the official catalog has this promo printing and TCGplayer lists no product for it
+official_without_tcgcsv	7686635334	the official catalog has this promo printing and TCGplayer lists no product for it
+official_without_tcgcsv	8660874785	the official catalog has this promo printing and TCGplayer lists no product for it
+official_without_tcgcsv	8977825391	the official catalog has this promo printing and TCGplayer lists no product for it
+tcgcsv_without_official	657043	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	657044	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	657045	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	657046	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	657047	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	657048	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	657049	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	657050	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	657051	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	657052	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	657053	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	657054	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	657057	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	657058	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	657059	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	657060	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	657083	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	657084	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	657085	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	657086	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664655	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664661	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664662	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664663	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664664	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664665	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664666	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664667	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664668	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664669	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664670	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664671	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664672	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664673	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664674	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664675	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664676	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664677	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664678	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664679	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664680	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664681	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664682	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664683	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664684	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664690	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664691	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664692	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664693	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664694	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664695	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664696	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664697	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664698	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664699	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	664700	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	686674	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	686679	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	686680	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	686681	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	686682	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	686684	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	686686	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	686688	TCGplayer lists this Season 1 sector/regional prize product; the official catalog has no printing of it, so there is nothing to link
+tcgcsv_without_official	708080	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708081	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708100	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708101	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708102	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708103	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708104	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708105	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708106	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708107	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708108	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708109	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708110	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708111	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708112	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708113	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708114	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708115	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708116	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708117	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708118	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708119	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708120	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708121	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708122	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708123	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708130	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708136	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708138	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	708162	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	711405	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	711406	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	711407	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	711408	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	711409	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	711410	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	711411	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	711412	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714419	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714420	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714421	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714422	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714423	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714424	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714425	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714426	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714427	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714428	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714430	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714447	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714448	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714449	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714450	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714451	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714452	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714453	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714454	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714455	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714456	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714457	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714458	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714459	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714466	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714471	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	714472	TCGplayer lists this 2026 promo product (prize wall, participation, staff, plastic or foil run); the official catalog has no printing of it yet, so there is nothing to link
+tcgcsv_without_official	721766	TCGplayer lists an oversized Costco promo; the official catalog carries no printing of an oversized card
+truncated_subtitle	n:jarjarbinksmesapropose	the official API publishes Jar Jar Binks' subtitle as 'Mesa Propose…' on every printing and TCGplayer lists it as 'Mesa Propose'; no source the importer reads has a longer one
+unmatched_price	552141:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	588396:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	643590:Normal	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	657071:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	657072:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	657073:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	657074:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	657075:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	657076:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	657077:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	657078:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	657079:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	657080:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	668151:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	668152:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	708093:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	708094:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	708095:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	708096:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	708097:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	708098:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+unmatched_price	708099:Foil	TCGplayer quotes this product in a subtype (Foil or Normal) for which the official catalog has no printing; the price has no printing to attach to
+wrong_group	0279989946	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	0325991067	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	0348312698	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	0765967038	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	1031924732	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	1271758602	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	1551542102	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	2579618055	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	3677559046	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	4171369936	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	4515876759	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	4568785399	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	5112468246	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	5731268275	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	6353957117	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	6636087696	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	7047778474	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	7176555854	official files this Costco promo under CST; TCGplayer sells it in the Ashes of the Empire group (24660), and its number and name match the product exactly
+wrong_group	7254600390	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	7327094852	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	8379900881	official files this Costco promo under CST; TCGplayer sells it in the Ashes of the Empire group (24660), and its number and name match the product exactly
+wrong_group	9071625187	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	9276754664	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	9432633430	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	9529327525	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	9556853623	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	9938796652	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly
+wrong_group	9994988097	official files this Season 1 prize printing under its P26 number; TCGplayer sells it in the Season 1 group (24487), and its number and name match the product exactly

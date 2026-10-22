@@ -291,7 +291,13 @@ async fn session_tenant(
         .get::<SessionUser>()
         .cloned()
         .ok_or_else(|| HttpError(StatusCode::UNAUTHORIZED, "not signed in".into()))?;
-    let id = tenants.resolve_session(&user)?;
+    // A bearer token with no email (Pocket ID access tokens carry only `sub`) was resolved by
+    // `sub` in the bearer layer outside this one, which scoped the tenant. Resolving the empty
+    // email again here refused every such token with a 403 on `/api` that `/mcp` never gave.
+    let id = match tenant::current() {
+        Ok(id) if user.email.is_empty() => id,
+        _ => tenants.resolve_session(&user)?,
+    };
     Ok(SESSION_TENANT.scope(id, next.run(req)).await)
 }
 
@@ -2943,6 +2949,46 @@ mod tests {
             assert_ne!(s, StatusCode::OK, "no cookie, no token");
             let again = site.get("/api/collection").await;
             assert_eq!(again.status(), StatusCode::OK, "cookie still works");
+        }
+
+        /// A Pocket ID access token carries `sub` and no email: once the site has learned the
+        /// subject at a browser sign-in, `/api` serves it as the same tenant `/mcp` does.
+        /// A member's token is not refused with a 403 for lacking an email (sp-s4e2dd).
+        #[tokio::test]
+        async fn a_sub_only_mcp_token_is_accepted_on_api() {
+            let mut site = Site::new(&["alice"]).await;
+            let cb = site.sign_in(member("alice@example.com")).await;
+            assert_eq!(cb.status(), StatusCode::SEE_OTHER);
+            let created = site.send("POST", "/api/collection", Some(ADD_CARD)).await;
+            assert_eq!(created.status(), StatusCode::CREATED);
+            let t = site.provider.mint_jwt(
+                json!({
+                    "iss": site.provider.issuer, "aud": MCP_RESOURCE,
+                    "sub": "user-1", "groups": [GROUP],
+                    "client_id": "claude-code", "exp": unix_now() + 3600,
+                }),
+                None,
+            );
+            let (s, body) = site.api(Some(&t), "GET", "/api/collection", None).await;
+            assert_eq!(s, StatusCode::OK, "{body}");
+            assert!(body.contains("SOR-1-normal"), "{body}");
+        }
+
+        /// A token for a user outside the required group is a 403 that says why.
+        #[tokio::test]
+        async fn a_token_outside_the_group_is_403_with_a_reason_on_api() {
+            let site = Site::new(&["alice"]).await;
+            let t = site.provider.mint_jwt(
+                json!({
+                    "iss": site.provider.issuer, "aud": MCP_RESOURCE,
+                    "sub": "sub-x", "email": "alice@example.com", "groups": ["someone-elses-users"],
+                    "client_id": "claude-code", "exp": unix_now() + 3600,
+                }),
+                None,
+            );
+            let (s, body) = site.api(Some(&t), "GET", "/api/decks", None).await;
+            assert_eq!(s, StatusCode::FORBIDDEN);
+            assert!(body.contains("not_in_group"), "{body}");
         }
 
         /// A bad token is a 401 — never a redirect and never a fall-back to the cookie path.

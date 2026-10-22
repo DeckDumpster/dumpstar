@@ -82,7 +82,7 @@ case "$svc $op" in
 	cmd=""
 	while [ $# -gt 0 ]; do [ "$1" = --cli-input-json ] && cmd="$2"; shift; done
 	jq -c . <<<"$cmd" >>"$STUB/ssm.log"
-	if jq -r ".Parameters.commands[0]" <<<"$cmd" | grep -q "export DUMPSTAR_ENV_VERB=.up."; then
+	if grep -q "export DUMPSTAR_ENV_VERB=.up." <<<"$(jq -r ".Parameters.commands[0]" <<<"$cmd")"; then
 		echo data >>"$STUB/ledger"; echo connector >>"$STUB/ledger"
 	fi
 	echo cmd-1 ;;
@@ -116,7 +116,7 @@ out2="$(bash "$ENV" up --image "tree:$TREE" 2>&1)" && grep -q 'env-2.test' <<<"$
 bash "$ENV" up --image "tree:$TREE" --name env-1 >/dev/null 2>&1 && bad "a taken name is refused" || ok "a taken name is refused"
 bash "$ENV" up --image "tree:$TREE" --name env-9 >/dev/null 2>&1 && bad "an unknown slot is refused" || ok "an unknown slot is refused"
 bash "$ENV" up --image "tree:abc" >/dev/null 2>&1 && bad "a short tree is refused" || ok "a short tree is refused"
-st="$(bash "$ENV" status)"; grep -E '^env-1 +tester' <<<"$st" | grep -q "tree:$TREE" && ok "status lists owner, build and URL" || bad "status lists owner, build and URL"
+st="$(bash "$ENV" status)"; grep -qE "^env-1 +tester.*${TREE}" <<<"$st" && ok "status lists owner, build and URL" || bad "status lists owner, build and URL"
 grep -q '^env-3 *free' <<<"$(bash "$ENV" status)" && ok "status shows the free slot" || bad "status shows the free slot"
 
 bash "$ENV" update env-1 --image "tree:$TREE2" >/dev/null && ok "update succeeds" || bad "update succeeds"
@@ -132,7 +132,7 @@ bash "$ENV" down env-1 >/dev/null && bash "$ENV" down env-2 >/dev/null && ok "do
 check "down leaves no live VM" 0 "$(jq -s '[.[] | select(.state != "terminated")] | length' "$STUB"/instances/*.json)"
 check "down leaves no volume" 0 "$(ls "$STUB/volumes" | wc -l)"
 grep -q '^env-1 *free' <<<"$(bash "$ENV" status)" && ok "down frees the slot" || bad "down frees the slot"
-grep -c "DUMPSTAR_ENV_VERB='stop'" "$STUB/ssm.log" | grep -q '^2$' && ok "down stops the connector first" || bad "down stops the connector first"
+[ "$(grep -c "DUMPSTAR_ENV_VERB='stop'" "$STUB/ssm.log")" = 2 ] && ok "down stops the connector first" || bad "down stops the connector first"
 bash "$ENV" down env-1 >/dev/null 2>&1 && bad "down on a free slot is refused" || ok "down on a free slot is refused"
 
 # The control can fail: a leaked volume is removed by down only because down looks for it.

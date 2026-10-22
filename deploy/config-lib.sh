@@ -10,31 +10,26 @@
 # Quadlet does not support), so the file must always exist before the unit
 # starts.
 #
+# The scaffolded env files are the templates under deploy/env/, rendered with the same
+# parameters the Quadlets get (deploy/render-lib.sh): one source for what an instance reads.
+# dumpstar_render_env <access|oidc|metrics|litestream> <instance>  (to stdout)
+dumpstar_render_env() {
+    local dir hostname
+    dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    # shellcheck source=deploy/render-lib.sh
+    . "$dir/render-lib.sh"
+    hostname="$DUMPSTAR_PROD_HOSTNAME"
+    local args=()
+    mapfile -t args < <(dumpstar_render_sed_args "$2" "$hostname" "" "dumpstar-$2-data" "%h/.config/dumpstar/$2" "$2")
+    sed "${args[@]}" "$dir/env/$1.env"
+}
+
 # Usage: dumpstar_scaffold_access_env <instance> <conf_dir>
 dumpstar_scaffold_access_env() {
     local instance="$1" conf_dir="$2"
     if [ ! -f "${conf_dir}/access.env" ]; then
         mkdir -p "$conf_dir"
-        cat > "${conf_dir}/access.env" <<EOF
-# Cloudflare Access config for instance '${instance}'.
-# All three values are REQUIRED: dumpstar refuses to start without them. There
-# is no single-tenant mode and no switch that turns authentication off.
-#
-# Steps:
-# 1. In the Cloudflare Zero Trust dashboard, open Access > Applications.
-# 2. Find the Dumpstar application and copy its AUD tag (64-char hex).
-# 3. Uncomment and fill in the three values below.
-# 4. Redeploy to pick up the new file: bash deploy/deploy.sh ${instance}
-#
-# Note: systemd EnvironmentFile does not strip trailing # comments from value
-# lines. Put comments on their own lines, as shown here.
-# Team domain — e.g. https://myteam.cloudflareaccess.com
-#DUMPSTAR_ACCESS_TEAM_DOMAIN=CHANGE_ME
-# 64-char hex AUD tag from Access > Applications
-#DUMPSTAR_ACCESS_AUD=CHANGE_ME
-# JWKS URL — e.g. https://myteam.cloudflareaccess.com/cdn-cgi/access/certs
-#DUMPSTAR_ACCESS_JWKS_URL=CHANGE_ME
-EOF
+        dumpstar_render_env access "$instance" > "${conf_dir}/access.env"
         chmod 600 "${conf_dir}/access.env"
         echo "    Wrote ${conf_dir}/access.env — fill the CHANGE_ME values; dumpstar will not start without them."
         echo "    See deploy/TENANTS.md §\"Configuring Access for a deployment\" for instructions."
@@ -53,20 +48,7 @@ dumpstar_scaffold_oidc_env() {
     local instance="$1" conf_dir="$2"
     if [ ! -f "${conf_dir}/oidc.env" ]; then
         mkdir -p "$conf_dir"
-        cat > "${conf_dir}/oidc.env" <<EOF
-# Pocket ID sign-in for instance '${instance}'. Uncomment and fill ALL of these to have
-# dumpstar sign users in itself; leave them commented to run behind Cloudflare Access.
-# Put comments on their own lines: systemd EnvironmentFile keeps a trailing # comment as part
-# of the value.
-#DUMPSTAR_OIDC_ISSUER=https://id.gantt.pub
-#DUMPSTAR_OIDC_CLIENT_ID=CHANGE_ME
-#DUMPSTAR_OIDC_CLIENT_SECRET=CHANGE_ME
-#DUMPSTAR_OIDC_REDIRECT_URL=https://star.dumpster.cards/auth/callback
-# The Pocket ID group a user must be in.
-#DUMPSTAR_OIDC_REQUIRED_GROUP=dumpstar-users
-# At least 32 bytes, hex or base64: openssl rand -hex 32
-#DUMPSTAR_OIDC_COOKIE_KEY=CHANGE_ME
-EOF
+        dumpstar_render_env oidc "$instance" > "${conf_dir}/oidc.env"
         chmod 600 "${conf_dir}/oidc.env"
         echo "    Wrote ${conf_dir}/oidc.env — commented out; fill it to sign in with Pocket ID."
     fi
@@ -91,11 +73,7 @@ dumpstar_scaffold_metrics_env() {
             return 0
         fi
         mkdir -p "$conf_dir"
-        cat > "$f" <<EOF
-# OTLP metrics push for instance '${instance}': the product stack's VictoriaMetrics.
-# Put comments on their own lines.
-DUMPSTER_OTLP_METRICS_ENDPOINT=${DUMPSTAR_PRODUCT_OTLP_ENDPOINT}
-EOF
+        dumpstar_render_env metrics "$instance" > "$f"
         chmod 600 "$f"
         echo "    Wrote ${f} — metrics go to ${DUMPSTAR_PRODUCT_OTLP_ENDPOINT}."
     elif [ ! -f "$f" ]; then
@@ -221,28 +199,7 @@ LS_CONF_DIR="${HOME}/.config/dumpstar/${INSTANCE}"
 mkdir -p "${LS_CONF_DIR}/aws"
 chmod 700 "${LS_CONF_DIR}" "${LS_CONF_DIR}/aws"
 if [ ! -f "${LS_CONF_DIR}/litestream.env" ]; then
-    cat > "${LS_CONF_DIR}/litestream.env" <<EOF
-# Litestream S3 target + AWS profile for instance '${INSTANCE}'. Fill CHANGE_ME.
-LITESTREAM_S3_BUCKET=CHANGE_ME
-LITESTREAM_S3_REGION=us-west-2
-# The sidecar replicates EVERY tenants/*.sqlite and derives each tenant's prefix
-# from its filename, so this is the parent prefix, not one database's:
-#   <LITESTREAM_S3_PATH>/<database_id>.sqlite   (see deploy/litestream.yml)
-LITESTREAM_S3_PATH=${INSTANCE}/tenants
-LITESTREAM_TENANTS_DIR=/data/tenants
-# The user registry (handle -> database_id) is replicated by the same sidecar as
-# ITSELF, not as a tenant: it lives at the data root, so the glob above cannot
-# see it. A \`path:\` replica prefix is used verbatim (the file name is NOT
-# appended, unlike directory mode), so this names one database, .sqlite and all.
-# It sits BESIDE <LITESTREAM_S3_PATH>, never inside it — the total-loss
-# procedure lists that parent prefix to enumerate tenants.
-LITESTREAM_REGISTRY_DB=/data/registry.sqlite
-LITESTREAM_S3_REGISTRY_PATH=${INSTANCE}/registry.sqlite
-# Empty = real S3, resolved from the pinned region. Only tests point this
-# elsewhere (tests/litestream/run.sh at a throwaway MinIO).
-LITESTREAM_S3_ENDPOINT=
-AWS_PROFILE=dumpstar
-EOF
+    dumpstar_render_env litestream "$INSTANCE" > "${LS_CONF_DIR}/litestream.env"
     chmod 600 "${LS_CONF_DIR}/litestream.env"
     # NOTE: aws/config + the bootstrap key are NOT created here. aws/config gates
     # the sidecar auto-start (so it won't crash-loop unconfigured), and the key is

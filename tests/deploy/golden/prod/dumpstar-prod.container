@@ -1,0 +1,64 @@
+[Unit]
+Description=Dumpstar server (prod)
+After=network-online.target
+Wants=network-online.target
+# The app runs continuously. OnFailure fires when the unit enters `failed` —
+# which requires the start limit to be reachable. With RestartSec=10 in
+# [Service], five crashes in 300 seconds (a genuine crash-loop trips it in
+# ~50s) exhausts the burst while an ordinary restart after a deploy does not
+# come close. Too tight and a transient blip takes the site down permanently
+# until someone intervenes; too loose and it never fires (today's shape, with
+# the inherited 10s/5 defaults). 300s/5 is the chosen trade. (db-rl3o)
+StartLimitIntervalSec=300
+StartLimitBurst=5
+OnFailure=dumpstar-alert@%n.service
+
+[Container]
+Image=localhost/dumpstar:prod
+Environment=DUMPSTAR_HOME=/data
+# How long the server, once told to stop, keeps answering requests in flight while refusing new
+# ones with 503 (sp-4kt4e8). No fallback: the server refuses to start without it. The stop timeouts
+# below must stay greater (the deploy tier holds them together).
+Environment=DUMPSTAR_DRAIN_TIMEOUT_SECS=30
+# The agent-tool endpoint (/mcp): its own URL, the `aud` its tokens carry. It needs the Pocket ID
+# sign-in below, so the renderer keeps this line only for an instance with a hostname.
+Environment=DUMPSTAR_MCP_RESOURCE=https://star.dumpster.cards/mcp
+# Per-instance Cloudflare Access config. deploy/setup.sh scaffolds this file on
+# every setup, so it always exists. All three values are mandatory: the server
+# refuses to start without them.
+# Values: DUMPSTAR_ACCESS_TEAM_DOMAIN, DUMPSTAR_ACCESS_AUD,
+# DUMPSTAR_ACCESS_JWKS_URL. See "Configuring Access for a deployment" in
+# deploy/TENANTS.md, and deploy/setup.sh for the scaffold command.
+EnvironmentFile=%h/.config/dumpstar/prod/access.env
+# Pocket ID sign-in (DUMPSTAR_OIDC_*). Scaffolded commented out by the same step; when filled
+# the server signs users in itself and ignores Access. See deploy/TENANTS.md.
+EnvironmentFile=%h/.config/dumpstar/prod/oidc.env
+# OTLP metrics push (DUMPSTER_OTLP_METRICS_ENDPOINT). The production scaffold and the renderer set it to the product
+# stack's VictoriaMetrics, which listens on the host's loopback; the slirp4netns network below maps that
+# loopback to 10.0.2.2 inside the container. See deploy/dashboards/dumpstar.json.
+EnvironmentFile=%h/.config/dumpstar/prod/metrics.env
+# slirp4netns, not pasta: the product host runs podman 4.9 whose pasta rejects --map-host-loopback
+# (sp-5ekmwm); allow_host_loopback is supported by every podman there and keeps 10.0.2.2 = host loopback.
+# Bind to loopback only: a Cloudflare Access logout revokes the session at
+# the edge, but the server verifies tokens locally (no revocation check) and
+# accepts them until exp. Binding to 127.0.0.1 closes the path that bypasses
+# the edge — only the cloudflared tunnel (loopback) reaches the container.
+# (db-a5g0)
+Network=slirp4netns:allow_host_loopback=true
+PublishPort=127.0.0.1:8091:8080
+Volume=dumpstar-prod-data:/data:Z
+AutoUpdate=local
+# podman's grace before SIGKILL: longer than the drain, so the drain is never cut short.
+# PodmanArgs, not StopTimeout=: the product host runs podman 4.9.3 whose quadlet rejects that key and
+# generates no unit at all (sp-mxinc0).
+PodmanArgs=--stop-timeout=40
+
+[Service]
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=120
+# systemd's own bound on a stop, above the stop timeout so podman's SIGKILL comes first and cleanly.
+TimeoutStopSec=45
+
+[Install]
+WantedBy=default.target

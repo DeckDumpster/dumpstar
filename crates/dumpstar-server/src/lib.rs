@@ -259,6 +259,20 @@ async fn api_responses_are_private(
     resp
 }
 
+/// Count a signed-in request for the reaper's idle clock (`metrics::ACTIVITY_METRIC`).
+async fn count_activity(
+    State(metrics): State<metrics::Metrics>,
+    req: axum::extract::Request,
+    next: middleware::Next,
+) -> Response {
+    let path = req.uri().path().to_owned();
+    let resp = next.run(req).await;
+    if resp.status().is_success() && !metrics::is_probe_path(&path) {
+        metrics.activity();
+    }
+    resp
+}
+
 /// Require an OIDC session on every path but the bypass list and `/auth/*`. A browser
 /// navigating is sent to Pocket ID; a signed-in user outside the required group gets a 403.
 /// An `/api` call without a session is a 401, never a redirect: the SPA's `fetch` cannot follow
@@ -472,6 +486,12 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
         .layer(middleware::from_fn(api_responses_are_private))
         .layer(dumpster_kit_telemetry::RouteMetricsLayer::new(
             state.metrics.telemetry(),
+        ))
+        // Inside compression, outside the gate: it sees the gate's verdict. A 2xx past the
+        // gate on a path the gate does not bypass is a signed-in request.
+        .layer(middleware::from_fn_with_state(
+            state.metrics.clone(),
+            count_activity,
         ))
         // Outermost, so it sees the final response of every route above.
         .layer(compression())

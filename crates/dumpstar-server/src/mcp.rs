@@ -467,7 +467,24 @@ fn display_lines(conn: &Connection, lines: impl serde::Serialize) -> Result<Valu
     let mut v = json!(lines);
     for l in v.as_array_mut().into_iter().flatten() {
         if let Some(id) = l["card_id"].as_str().map(String::from) {
-            l["card_id"] = json!(display_id(conn, &id)?);
+            let shown = display_id(conn, &id)?;
+            // Prose built from the row names the card as the tools do: id and name.
+            if let Some(hint) = l["hint"].as_str().map(String::from) {
+                let name: Option<String> = conn
+                    .query_row(
+                        "SELECT name FROM shared.cards WHERE card_id = ?1",
+                        [&id],
+                        |r| r.get(0),
+                    )
+                    .optional()
+                    .map_err(|e| db_err(e.into()))?;
+                let label = match name {
+                    Some(n) => format!("{shown} {n}"),
+                    None => shown.clone(),
+                };
+                l["hint"] = json!(hint.replace(&id, &label));
+            }
+            l["card_id"] = json!(shown);
         }
     }
     Ok(v)

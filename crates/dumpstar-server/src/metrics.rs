@@ -5,7 +5,7 @@
 //!
 //! Attributes are bounded enums only — never a tenant id, an email or the query text.
 
-use dumpster_kit_telemetry::{Config, Histogram, Telemetry};
+use dumpster_kit_telemetry::{Config, Counter, Histogram, Telemetry};
 
 /// Milliseconds; includes the 200 ms line the dashboard draws.
 const MS_BUCKETS: &[f64] = &[
@@ -16,6 +16,16 @@ const ROW_BUCKETS: &[f64] = &[0.0, 1.0, 10.0, 25.0, 50.0, 100.0, 250.0, 1000.0, 
 pub const SEARCH_PAGE_METRIC: &str = "dumpstar_search_page_ms";
 pub const SEARCH_TOTALS_METRIC: &str = "dumpstar_search_totals_ms";
 pub const SEARCH_ROWS_METRIC: &str = "dumpstar_search_rows";
+/// Authenticated requests served, labelled by instance: what the test-environment reaper reads
+/// to tell a used environment from an idle one (sp-4wy00r). Never `/health` or an unsigned call.
+pub const ACTIVITY_METRIC: &str = "dumpstar_authenticated_requests_total";
+/// The instance name the activity counter is labelled with; `{{INSTANCE}}` in `metrics.env`.
+pub const INSTANCE_ENV: &str = "DUMPSTAR_INSTANCE";
+
+/// Paths that answer without a credential or are a machine's probe: never activity.
+pub fn is_probe_path(path: &str) -> bool {
+    path == "/health" || path == "/api/backup-status" || path.starts_with("/.well-known/")
+}
 
 /// The telemetry handle plus the search instruments. `disabled()` records nothing.
 #[derive(Clone)]
@@ -24,6 +34,8 @@ pub struct Metrics {
     page_ms: Histogram,
     totals_ms: Histogram,
     rows: Histogram,
+    activity: Counter,
+    instance: Option<String>,
 }
 
 /// The page index a request lands on, bucketed: `0`, `1`, `2-4`, `5-19`, `20+`.
@@ -72,7 +84,20 @@ impl Metrics {
                 "1",
                 ROW_BUCKETS,
             ),
+            activity: telemetry.counter(
+                ACTIVITY_METRIC,
+                "Authenticated requests served (MCP, /api, pages); not health checks",
+            ),
+            instance: std::env::var(INSTANCE_ENV).ok().filter(|v| !v.is_empty()),
             telemetry,
+        }
+    }
+
+    /// One authenticated request. An unnamed instance records nothing: a series with no
+    /// instance label could not be told from another environment's.
+    pub fn activity(&self) {
+        if let Some(instance) = &self.instance {
+            self.activity.add(1, &[("instance", instance.as_str())]);
         }
     }
 
@@ -128,6 +153,16 @@ impl Metrics {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn probes_are_not_activity() {
+        assert!(is_probe_path("/health"));
+        assert!(is_probe_path("/api/backup-status"));
+        assert!(is_probe_path("/.well-known/oauth-protected-resource/mcp"));
+        assert!(!is_probe_path("/api/collection"));
+        assert!(!is_probe_path("/mcp"));
+        assert!(!is_probe_path("/"));
+    }
 
     #[test]
     fn depth_buckets() {

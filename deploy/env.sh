@@ -7,6 +7,7 @@
 #   bash deploy/env.sh update env-N (--image tree:<sha> | --ref <branch|sha> | --tree <dir>)
 #   bash deploy/env.sh status
 #   bash deploy/env.sh down env-N
+#   bash deploy/env.sh reap
 #
 # A slot is env-1..env-3. Its hostname, tunnel, Access application and Pocket ID client were
 # pre-provisioned once, in the slot's own Terraform workspace (infra/edge), so NOTHING HERE RUNS
@@ -37,6 +38,8 @@
 # THE DATA (sp-2xkn6g): up restores the concierge tenant's latest Litestream replica into the
 # slot's volume, as the only tenant of a fresh registry, beside a freshly built catalog. Never
 # Ryan's tenant, never prod's live database, nothing synced afterwards; drift is accepted.
+# Optional: DUMPSTAR_ENV_METRICS_URL, the VictoriaMetrics base URL the reaper and status read activity
+# from. Unset means activity is unknown (the TTL still applies), never a default.
 # The AMI must carry podman (Quadlet), jq, curl, openssl, the aws CLI and the SSM agent.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -57,13 +60,22 @@ DUMPSTAR_ENV_PORT="$(sed -n 's|.*default *= *"http://127.0.0.1:\([0-9]*\)".*|\1|
 DUMPSTAR_ENV_BUDGET_UP=300
 DUMPSTAR_ENV_BUDGET_EDGE=120
 DUMPSTAR_ENV_BUDGET_UPDATE=120
+# The reaper (sp-4wy00r): an environment lives at most TTL seconds, and goes after IDLE seconds
+# with no authenticated request. Activity is the server's own counter (crates/dumpstar-server
+# metrics.rs ACTIVITY_METRIC, labelled instance=<slot>), read from the product VictoriaMetrics at
+# DUMPSTAR_ENV_METRICS_URL. up and update count as activity. A counter that cannot be read is
+# "unknown": it never extends life and never idles an environment out, so the TTL alone applies.
+DUMPSTAR_ENV_TTL=7200
+DUMPSTAR_ENV_IDLE=1800
+DUMPSTAR_ENV_ACTIVITY_METRIC="$(sed -n 's|.*ACTIVITY_METRIC: &str = "\(.*\)";|\1|p' "$SCRIPT_DIR/../crates/dumpstar-server/src/metrics.rs")"
+[ -n "$DUMPSTAR_ENV_ACTIVITY_METRIC" ] || { echo "env: no ACTIVITY_METRIC in crates/dumpstar-server/src/metrics.rs" >&2; exit 1; }
 # Resource classes `up` creates, each removed by `down`.
 DUMPSTAR_ENV_RESOURCES="instance volume data connector"
 # The tag every launch must carry: the launch policy allows only instances so tagged.
 DUMPSTAR_ENV_POOL_TAG="spill:owner=round"
 
 die() { echo "env: $*" >&2; exit 1; }
-now() { date +%s; }
+now() { echo "${DUMPSTAR_ENV_NOW:-$(date +%s)}"; }
 
 env_load_config() {
 	if [ -n "${DUMPSTAR_ENV_CONF:-}" ]; then
@@ -202,6 +214,23 @@ concierge_replica_url() {
 		LITESTREAM_S3_REGION="$DUMPSTAR_ENV_BACKUP_REGION" tenant_replica_url "$DUMPSTAR_ENV_CONCIERGE_DB"
 }
 
+# env_activity <slot> <since-seconds>: active | idle | unknown. Active when the slot's authenticated
+# request counter rose in the last <since> seconds (clamped to two scrape intervals..the idle
+# window), or first appeared in it. Anything but a successful query is unknown.
+env_activity() {
+	local slot="$1" w="$2" m="$DUMPSTAR_ENV_ACTIVITY_METRIC" q resp
+	[ -n "${DUMPSTAR_ENV_METRICS_URL:-}" ] || { echo unknown; return; }
+	[ "$w" -ge 120 ] || w=120
+	[ "$w" -le "$DUMPSTAR_ENV_IDLE" ] || w="$DUMPSTAR_ENV_IDLE"
+	q="sum(increase(${m}{instance=\"$slot\"}[${w}s])) > 0 or (sum(${m}{instance=\"$slot\"}) unless sum(${m}{instance=\"$slot\"} offset ${w}s))"
+	resp="$(curl -sf --max-time 10 --data-urlencode "query=$q" "${DUMPSTAR_ENV_METRICS_URL%/}/api/v1/query" 2>/dev/null)" || { echo unknown; return; }
+	case "$(jq -r '.status + " " + (.data.result | length | tostring)' <<<"$resp" 2>/dev/null || true)" in
+	"success 0") echo idle ;;
+	success\ [1-9]*) echo active ;;
+	*) echo unknown ;;
+	esac
+}
+
 render_slot() { # render_slot <slot> <outdir>
 	bash "$SCRIPT_DIR/render.sh" "$2" "$1" --hostname "$(hostname_of "$1")" \
 		--port "$DUMPSTAR_ENV_PORT" --secrets "/etc/dumpstar/$1"
@@ -299,7 +328,7 @@ cmd_update() {
 cmd_status() {
 	env_load_config
 	local s line age la
-	printf '%-6s %-9s %-14s %-48s %-6s %-10s %s\n' SLOT OWNER STATE BUILD AGE ACTIVITY URL
+	printf '%-6s %-9s %-14s %-48s %-6s %-16s %s\n' SLOT OWNER STATE BUILD AGE ACTIVITY URL
 	for s in $DUMPSTAR_ENV_SLOTS; do
 		line="$(slot_instances "$s" | head -1)"
 		if [ -z "$line" ]; then
@@ -309,8 +338,9 @@ cmd_status() {
 		age="$(jq -r '.launch' <<<"$line")"
 		age=$(($(now) - $(date -d "$age" +%s)))
 		la="$(jq -r '.tags["dumpstar-env:last-activity"] // empty' <<<"$line")"
-		if [ -n "$la" ]; then la="$(($(now) - la))s ago"; else la="unknown"; fi
-		printf '%-6s %-9s %-14s %-48s %-6s %-10s %s\n' "$s" \
+		if [ "$(env_activity "$s" "$DUMPSTAR_ENV_IDLE")" = unknown ]; then la="activity unknown"
+		elif [ -n "$la" ]; then la="$(($(now) - la))s ago"; else la="activity unknown"; fi
+		printf '%-6s %-9s %-14s %-48s %-6s %-16s %s\n' "$s" \
 			"$(jq -r '.tags["dumpstar-env:owner"] // "?"' <<<"$line")" "$(jq -r .state <<<"$line")" \
 			"$(jq -r '.tags["dumpstar-env:build"] // "?"' <<<"$line")" "${age}s" "$la" "https://$(hostname_of "$s")/"
 	done
@@ -355,6 +385,37 @@ cmd_down() {
 	echo "env: $slot down; no VM and no volume left (the slot's Terraform is untouched)"
 }
 
+# cmd_reap: one pass over the slots. Run every minute by deploy/realenv-reap.timer, so an idle
+# environment is gone within five minutes of its 30th.
+cmd_reap() {
+	local s line id age la launch w act
+	env_load_config
+	for s in $DUMPSTAR_ENV_SLOTS; do
+		line="$(slot_instances "$s" | head -1)"
+		[ -n "$line" ] || continue
+		id="$(jq -r .id <<<"$line")"
+		launch="$(date -d "$(jq -r .launch <<<"$line")" +%s)"
+		age=$(($(now) - launch))
+		if [ "$age" -ge "$DUMPSTAR_ENV_TTL" ]; then
+			echo "env: reaping $s: ${age}s old, past the ${DUMPSTAR_ENV_TTL}s TTL"
+			cmd_down_id "$id"
+			continue
+		fi
+		la="$(jq -r '.tags["dumpstar-env:last-activity"] // empty' <<<"$line")"
+		[ -n "$la" ] || la="$launch"
+		w=$(($(now) - la))
+		act="$(env_activity "$s" "$w")"
+		case "$act" in
+		active) la="$(now)"; tag_instance "$id" "dumpstar-env:last-activity=$la" ;;
+		unknown) echo "env: $s: activity unknown; only the TTL applies" >&2 ;;
+		esac
+		if [ "$act" != unknown ] && [ $(($(now) - la)) -ge "$DUMPSTAR_ENV_IDLE" ]; then
+			echo "env: reaping $s: idle $(($(now) - la))s, past the ${DUMPSTAR_ENV_IDLE}s limit"
+			cmd_down_id "$id"
+		fi
+	done
+}
+
 trap 'rm -rf "${ENV_TMP:-}"' EXIT
 verb="${1:-}"
 [ $# -gt 0 ] && shift
@@ -363,5 +424,6 @@ up) cmd_up "$@" ;;
 update) cmd_update "$@" ;;
 status) cmd_status ;;
 down) cmd_down "$@" ;;
+reap) cmd_reap ;;
 *) sed -n '3,9p' "$0" >&2; exit 2 ;;
 esac

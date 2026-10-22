@@ -1315,3 +1315,11 @@ podman port systemd-dumpstar-<name> 8080/tcp
 podman exec -it systemd-dumpstar-<name> sh
 podman volume inspect dumpstar-<name>-data
 ```
+
+## Disposable environments (`deploy/env.sh`, sp-8i63uo)
+
+`bash deploy/env.sh up --image tree:<sha> [--name env-N]` brings up a copy of the site on an EC2
+VM at `env-N.test.dumpster.cards`, through the slot's pre-provisioned edge (`infra/edge`); `update`
+swaps the container, `status` lists owner, build, age, last activity and URL, `down` destroys the
+VM and its data. No Terraform runs in any of them. The header of `deploy/env.sh` lists the
+configuration it refuses to run without; `deploy/env-vm.sh` is what runs on the VM.

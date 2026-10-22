@@ -138,6 +138,12 @@ of searches per pack (step 3) and choose from the results yourself; never search
    --deck <id>` on the saved deck (step 5); skip `allocate`. If you run it on one pack
    anyway it does not refuse: it prints `no contested cards` and exits 0 (or `FAIL allocation:` if
    that pack's pool cannot meet the skeleton).
+   **Before saving a pack, check it against the packs already saved:** write a plan whose
+   packs are the saved ones as `{"deck": <id>}` plus the new pack with its `picks`, and run
+   `swu-cube-check allocate --plan plan.json`. A saved pack holds its copies; a pick of the new
+   pack that a saved pack holds fails with `<pack> picks <card>, which is unavailable — held by
+   <pack>` and a non-zero exit, as does any pack that loses a pick it named. Swap the card and rerun
+   until it prints `ok`, then save.
    Heroism-only, Villainy-only and no-aspect cards (Longbeam Cruiser) fit packs of any color, so an
    early pack's picks can use up copies a later color depends on, and the per-pack checker cannot
    see it. Give each pack a `queries` list (the four searches of step 4, as strings) and run

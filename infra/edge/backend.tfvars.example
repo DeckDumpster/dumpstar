@@ -1,0 +1,6 @@
+# Copy to backend.tfvars (gitignored). terraform init -backend-config=backend.tfvars
+# The S3 backend takes the role inside assume_role; a top-level role_arn is refused.
+bucket = "<state-bucket>"
+assume_role = {
+  role_arn = "arn:aws:iam::<account>:role/terraform-deploy"
+}

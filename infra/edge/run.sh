@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One instance's edge, in its own workspace: bash run.sh <prod|env-1|env-2|env-3> <plan|apply|import-plan> [terraform args]
-# Needs backend.tfvars (bucket, role_arn) and common.tfvars (see common.auto.tfvars.example),
+# Needs backend.tfvars (bucket, assume_role = { role_arn = ... }; see backend.tfvars.example) and common.tfvars (see common.auto.tfvars.example),
 # CLOUDFLARE_API_TOKEN and POCKETID_API_TOKEN in the environment. Never prints an output value
 # that is a secret: there are none.
 set -euo pipefail

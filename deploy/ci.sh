@@ -815,6 +815,9 @@ if tier lint; then
     step "No pipeline into grep -q, which inverts under pipefail (tests/ci/grepq_test.sh)"
     bash "$REPO_DIR/tests/ci/grepq_test.sh"
 
+    step "Terraform backend takes assume_role, not a top-level role_arn (tests/ci/tf_backend_test.sh)"
+    bash "$REPO_DIR/tests/ci/tf_backend_test.sh"
+
     step "Dashboard JSON is valid and queries only metrics the server sends (tests/ci/dashboard_test.sh)"
     bash "$REPO_DIR/tests/ci/dashboard_test.sh"
 

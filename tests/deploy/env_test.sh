@@ -5,7 +5,7 @@
 #
 #   1. UP, STATUS, UPDATE, DOWN WORK: up takes a free slot and prints the URL and how to sign in,
 #      records the edge share; a second up takes the next slot; a taken --name is refused; update
-#      swaps the build and refuses --ref/--tree (sp-b2pnhw); down frees the slot.
+#      swaps the build; down frees the slot.
 #   2. NO TERRAFORM: terraform on PATH is a tripwire that fails the run; none of the verbs call it.
 #   3. THE TEARDOWN POSITIVE CONTROL: every resource class `up` creates is named in
 #      DUMPSTAR_ENV_RESOURCES, and after `down` none of them is left (no VM, no volume, no
@@ -121,7 +121,27 @@ grep -q '^env-3 *free' <<<"$(bash "$ENV" status)" && ok "status shows the free s
 
 bash "$ENV" update env-1 --image "tree:$TREE2" >/dev/null && ok "update succeeds" || bad "update succeeds"
 check "update records the new build" "tree:$TREE2" "$(jq -r '.tags["dumpstar-env:build"]' "$STUB/instances/$id1.json")"
-bash "$ENV" update env-1 --ref main >/dev/null 2>&1 && bad "update --ref is refused until sp-b2pnhw" || ok "update --ref is refused until sp-b2pnhw"
+
+# 6. A ref or an unpushed tree is built locally, tagged -local, and prod refuses the tag (sp-b2pnhw).
+printf '#!/usr/bin/env bash\necho "podman $*" >>"%s/podman.log"\nexit 0\n' "$WORK" >"$BIN/podman"; chmod +x "$BIN/podman"
+DIRTY="$WORK/dirty"; mkdir -p "$DIRTY"
+git -C "$DIRTY" init -q && printf 'FROM scratch\n' >"$DIRTY/Containerfile" && git -C "$DIRTY" add -A &&
+	git -C "$DIRTY" -c user.name=t -c user.email=t@t commit -qm base
+printf 'uncommitted\n' >"$DIRTY/new.txt"
+dtree="$(git -C "$DIRTY" rev-parse 'HEAD^{tree}')"
+bash "$ENV" update env-1 --tree "$DIRTY" >/dev/null 2>&1 && ok "update --tree a dirty tree succeeds" || bad "update --tree a dirty tree succeeds"
+btag="$(jq -r '.tags["dumpstar-env:build"]' "$STUB/instances/$id1.json")"
+case "$btag" in dir:*) ok "the dirty tree is recorded as a local build" ;; *) bad "the dirty tree is recorded as a local build ($btag)" ;; esac
+lref="$(grep -o 'tree-[0-9a-f]\{40\}-local' "$WORK/podman.log" | head -1)"
+[ -n "$lref" ] && ok "the image is tagged tree-<sha>-local" || bad "the image is tagged tree-<sha>-local"
+[ "$lref" != "tree-${dtree}-local" ] && ok "the dirty file changes the tree id" || bad "the dirty file changes the tree id"
+grep -q '^podman build' "$WORK/podman.log" && grep -q '^podman push .*-local' "$WORK/podman.log" && ok "built and published" || bad "built and published"
+bash "$ENV" update env-1 --ref HEAD >/dev/null 2>&1 && ok "update --ref builds the ref" || bad "update --ref builds the ref"
+bash "$ENV" update env-1 --ref no-such-ref >/dev/null 2>&1 && bad "an unknown ref is refused" || ok "an unknown ref is refused"
+( . "$REPO_DIR/deploy/published-image-lib.sh"
+  dumpstar_refuse_local_image prod "x:tree-${TREE}-local" 2>/dev/null && exit 1
+  dumpstar_refuse_local_image prod "x:tree-${TREE}" && dumpstar_refuse_local_image test "x:tree-${TREE}-local" ) && ok "prod refuses a -local tag, CI's tag passes" || bad "prod refuses a -local tag, CI's tag passes"
+grep -q 'dumpstar_refuse_local_image "\$INSTANCE" "\$PUBLISHED" "\${DUMPSTAR_PREBUILT_IMAGE:-}"' "$REPO_DIR/deploy/deploy.sh" && ok "deploy.sh runs the refusal before building" || bad "deploy.sh runs the refusal before building"
 check "update neither launches nor terminates" 2 "$(grep -c instance "$STUB/ledger")"
 
 # 3. The teardown positive control.

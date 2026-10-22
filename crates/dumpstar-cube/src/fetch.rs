@@ -139,6 +139,12 @@ pub fn allocation(
                             dp[k] = p[k].clone();
                         }
                     }
+                    dp["saved"] = json!(true);
+                    if let Some(extra) = p["picks"].as_array() {
+                        let mut all = dp["picks"].as_array().cloned().unwrap_or_default();
+                        all.extend(extra.iter().cloned());
+                        dp["picks"] = json!(all);
+                    }
                     dp
                 }
                 None => p.clone(),

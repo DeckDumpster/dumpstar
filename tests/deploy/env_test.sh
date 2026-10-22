@@ -146,8 +146,8 @@ check "a volume that outlived its VM is deleted by down" 0 "$(ls "$STUB/volumes"
 # 4. No secret in the shipped script; port is the edge's origin_service.
 grep -q 'dumpstar/env-1/edge' "$STUB/ssm.log" && ok "the command names the secret" || bad "the command names the secret"
 grep -qE "(TUNNEL_TOKEN|CLIENT_SECRET)=[A-Za-z0-9]{8,}" "$STUB/ssm.log" && bad "a secret value is in the SSM command" || ok "no secret value is in the SSM command"
-want="$(sed -n 's/^DUMPSTAR_ENV_PORT=\(.*\)/\1/p' "$ENV")"
-grep -q "127.0.0.1:${want}\"" "$REPO_DIR/infra/edge/variables.tf" && ok "the origin port is infra/edge's origin_service" || bad "the origin port drifted from infra/edge"
+want="$(sed -n 's|.*default *= *"http://127.0.0.1:\([0-9]*\)".*|\1|p' "$REPO_DIR/infra/edge/variables.tf")"
+grep -q "export DUMPSTAR_ENV_PORT='${want}'" "$STUB/ssm.log" && ok "the origin port is infra/edge's origin_service" || bad "the origin port drifted from infra/edge"
 
 # 5. No fallback.
 (unset DUMPSTAR_ENV_AMI; bash "$ENV" status >/dev/null 2>&1) && bad "a missing value is refused" || ok "a missing value is refused"

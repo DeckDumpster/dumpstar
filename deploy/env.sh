@@ -39,8 +39,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/published-image-lib.sh"
 
 DUMPSTAR_ENV_SLOTS="env-1 env-2 env-3"
-# What the slot's tunnel forwards to: infra/edge/variables.tf origin_service (held by the test).
-DUMPSTAR_ENV_PORT=8091
+# What the slot's tunnel forwards to: the origin_service default in infra/edge/variables.tf, read, not copied.
+DUMPSTAR_ENV_PORT="$(sed -n 's|.*default *= *"http://127.0.0.1:\([0-9]*\)".*|\1|p' "$SCRIPT_DIR/../infra/edge/variables.tf" | head -1)"
+[ -n "$DUMPSTAR_ENV_PORT" ] || { echo "env: no origin_service default in infra/edge/variables.tf" >&2; exit 1; }
 # Budgets, in seconds, from the design: the whole of up, the real edge's share of it, and update.
 DUMPSTAR_ENV_BUDGET_UP=300
 DUMPSTAR_ENV_BUDGET_EDGE=120

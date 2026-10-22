@@ -40,7 +40,7 @@ User=0
 # tenants/, because `watch: true` needs the directory itself to see new files.
 Volume=dumpstar-prod-data:/data:Z
 # Instance-agnostic config, mounted read-only from the single clone.
-Volume=/home/ryan/spira/run/worktree/sp-qgjpvj/deploy/litestream.yml:/etc/litestream.yml:ro
+Volume=/home/ryangantt/dumpstar/deploy/litestream.yml:/etc/litestream.yml:ro
 # Assume-role profile (role_arn + source_profile) — non-secret, a regular file
 # the SDK reads to auto-refresh temporary creds (never long-lived static keys).
 Volume=%h/.config/dumpstar/prod/aws/config:/aws/config:ro

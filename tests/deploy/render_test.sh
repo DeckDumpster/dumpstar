@@ -24,7 +24,8 @@ ok() { echo "  PASS  $1"; pass=$((pass + 1)); }
 bad() { echo "  FAIL  $1"; fail=$((fail + 1)); }
 
 R="$REPO_DIR/deploy/render.sh"
-bash "$R" "$WORK/prod" prod
+CHK=/home/ryangantt/dumpstar
+bash "$R" "$WORK/prod" prod --checkout "$CHK"
 if diff -r "$REPO_DIR/tests/deploy/golden/prod" "$WORK/prod" >"$WORK/d1"; then
 	ok "prod renders byte-equal to the golden files"
 else bad "prod differs from the golden files"; cat "$WORK/d1"; fi
@@ -36,7 +37,7 @@ else ok "no env file inlines a secret"; fi
 # env-1, every declared parameter different, alerting set as prod's so the gate is not in play.
 export DUMPSTAR_ALERT_INSTANCES="prod env-1"
 bash "$R" "$WORK/env1" env-1 --hostname env-1.example.test --port 9001 --volume vol-env-1 \
-	--secrets /srv/env-1/secrets --s3-prefix pre/env-1
+	--secrets /srv/env-1/secrets --s3-prefix pre/env-1 --checkout "$CHK"
 # Map prod's render forward to env-1's values; a literal the template should have parameterised
 # stays "prod" in the env-1 render and is then the difference.
 forward() { # forward <dir>
@@ -58,7 +59,7 @@ else bad "undeclared difference between prod and env-1"; cat "$WORK/d2"; fi
 # The alerting gate: by default env-1 is silent (no OnFailure=), and nothing else changes.
 unset DUMPSTAR_ALERT_INSTANCES
 bash "$R" "$WORK/env1g" env-1 --hostname env-1.example.test --port 9001 --volume vol-env-1 \
-	--secrets /srv/env-1/secrets --s3-prefix pre/env-1
+	--secrets /srv/env-1/secrets --s3-prefix pre/env-1 --checkout "$CHK"
 diff -r "$WORK/prodf" "$WORK/env1g" | grep '^[<>]' | grep -v '^< OnFailure=' >"$WORK/d3" || true
 if [ ! -s "$WORK/d3" ]; then ok "the only other difference is the OnFailure= alerting gate"
 else bad "env-1 differs beyond the alerting gate"; cat "$WORK/d3"; fi
@@ -67,9 +68,9 @@ else bad "env-1 differs beyond the alerting gate"; cat "$WORK/d3"; fi
 cp -r "$REPO_DIR" "$WORK/planted" 2>/dev/null || true
 sed -i 's|^Environment=DUMPSTAR_HOME=/data|Environment=DUMPSTAR_HOME=/data\nEnvironment=DUMPSTAR_PEER=dumpstar-prod|' "$WORK/planted/deploy/dumpstar.container"
 export DUMPSTAR_ALERT_INSTANCES="prod env-1"
-bash "$WORK/planted/deploy/render.sh" "$WORK/pp" prod
+bash "$WORK/planted/deploy/render.sh" "$WORK/pp" prod --checkout "$CHK"
 bash "$WORK/planted/deploy/render.sh" "$WORK/pe" env-1 --hostname env-1.example.test --port 9001 \
-	--volume vol-env-1 --secrets /srv/env-1/secrets --s3-prefix pre/env-1
+	--volume vol-env-1 --secrets /srv/env-1/secrets --s3-prefix pre/env-1 --checkout "$CHK"
 forward "$WORK/pp"
 if diff -r "$WORK/pp" "$WORK/pe" >/dev/null; then bad "a planted hardcoded literal went unnoticed"
 else ok "a hardcoded literal in a template is caught"; fi

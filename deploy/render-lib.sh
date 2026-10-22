@@ -35,18 +35,21 @@ dumpstar_render_sed_args() {
     [ -n "$hostname" ] || printf '%s\n' -e '/^Environment=DUMPSTAR_MCP_RESOURCE=/d'
 }
 
-# dumpstar_render_instance <outdir> <instance> <hostname> <port> <volume> <secrets-dir> <s3-prefix>
-# Writes the two Quadlets and the four env files, with the repo's own templates.
+# dumpstar_render_instance <outdir> <instance> <hostname> <port> <volume> <secrets-dir> <s3-prefix> [checkout]
+# Writes the two Quadlets and the four env files, with the repo's own templates. <checkout> is
+# the deploy checkout's absolute path as the host sees it (the seventh parameter; it is baked
+# into the sidecar's litestream.yml mount); it defaults to the checkout rendering.
 dumpstar_render_instance() {
-    local out="$1" instance="$2" repo_dir args=()
+    local out="$1" instance="$2" repo_dir args=() checkout="${8:-}"
     repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    [ -n "$checkout" ] || checkout="$repo_dir"
     shift
     mapfile -t args < <(dumpstar_render_sed_args "$@")
     mkdir -p "$out"
     local alert=()
     dumpstar_units_alerting "$instance" || alert=(-e '/^OnFailure=/d')
     sed "${args[@]}" "${alert[@]}" "$repo_dir/deploy/dumpstar.container" >"$out/dumpstar-${instance}.container"
-    sed "${args[@]}" "${alert[@]}" -e "s|{{REPO_DIR}}|${repo_dir}|g" \
+    sed "${args[@]}" "${alert[@]}" -e "s|{{REPO_DIR}}|${checkout}|g" \
         "$repo_dir/deploy/dumpstar-litestream.container" >"$out/dumpstar-litestream-${instance}.container"
     local f
     for f in access oidc metrics litestream; do

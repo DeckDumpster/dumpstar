@@ -132,7 +132,7 @@ of searches per pack (step 3) and choose from the results yourself; never search
 3. **Plan copies across the whole cube.** Whenever two or more packs are planned together (a
    full cube or any multi-pack build), run `swu-cube-check allocate` before building any pack. A
    single pack cannot compete with itself for copies, so it needs only `swu-cube-check pack
-   --planned` (step 5) and `pack` on the saved deck; skip `allocate`. If you run it on one pack
+   --deck <id>` on the saved deck (step 5); skip `allocate`. If you run it on one pack
    anyway it does not refuse: it prints `no contested cards` and exits 0 (or `FAIL allocation:` if
    that pack's pool cannot meet the skeleton).
    Heroism-only, Villainy-only and no-aspect cards (Longbeam Cruiser) fit packs of any color, so an
@@ -143,15 +143,8 @@ of searches per pack (step 3) and choose from the results yourself; never search
 derives each Leader's four searches from the saved deck, takes its draw cards as `picks`, and runs
 them. The plan file holds only what you decide, `{"packs": [{"name": "Pack 1", "queries": ["...", ...],
 "picks": ["SOR-5"], "candidates": ["SOR-9"]}]}` (a pack may name `"deck": <id>` instead of
-queries), never search rows. The by-hand form that follows (rows in `eligible`, `owned`) still
-works for a plan file that carries them; do not produce it from tool output. Write
-   `{"owned": {"<card id>": <available copies>}, "packs": [{"name": "Pack 1", "slots": 15,
-   "eligible": [<search_cards row>, ...]}]}` (eligible = the rows that pack's searches returned, as
-   they came back: `allocate` reads each row's `id`, `name`, `subtitle`, `rarity`, `type`, `cost` and `game.arenas`), plus the pack's
-   `"picks"` (cards planned for it) and, while undecided, `"candidates"` (cards it may still choose,
-   ids or rows). Eligibility alone never reserves a copy: only a pack's picks and candidates do, so
-   a pack with neither reserves nothing. Run
-   `swu-cube-check allocate plan.json`, or pipe it on stdin. It reserves only the **contested** copies: cards more packs pick or
+queries). Run
+   `swu-cube-check allocate --plan plan.json`, or pipe it on stdin. It reserves only the **contested** copies: cards more packs pick or
    consider than there are copies of ; with none it prints
    `no contested cards`. By default it prints one line per pack (`Pack 2: 15 of 15 picks, skeleton ok,
    contested reserved 12, short 0, lost 40 (SOR-160 to Pack 5, ...)`: cards placed of slots,
@@ -191,11 +184,14 @@ works for a plan file that carries them; do not produce it from tool output. Wri
    cards that meet section 4, the 25-HP and 30-HP bases, and the Leader. A contested card reserved to another pack in step 3 is not yours to pick. Prefer
    cards of the Leader's own alignment and color; same-color cards with no alignment, cards of the Leader's
    alignment with no color, and cards with no aspects are also allowed.
-5. **Check the planned pack, then save it.** Before any write, assemble the pack document (below)
-   and run `swu-cube-check pack --planned`. Fix every `FAIL` line, then `create_deck` (`format`:
-   `SWU Jumpstart Cube`, `group`: the group name (the same for all 20 packs), `name`: `Pack <n>`) and
-   `set_deck_lines` with the 18 `{card_id, qty: 1}` lines. A refusal says which lines are short and
-   changes nothing: swap those cards and retry.
+5. **Save the pack by card ids, then check the saved deck.** A planned pack is named by card
+   ids only: the Leader, the two bases and the 15 draw ids, each with a qty of 1. Write no card
+   objects and no files. `create_deck` (`format`: `SWU Jumpstart Cube`, `group`: the group name
+   (the same for all 20 packs), `name`: `Pack <n>`), then `set_deck_lines` with the 18
+   `{card_id, qty: 1}` lines. A refusal says which lines are short and changes nothing: swap those
+   cards and retry. Then run `swu-cube-check pack --deck <id>`: the checker fetches the deck and its
+   card data itself. Fix every `FAIL` line with `set_deck_lines` on the same deck (it replaces the
+   lines; never delete and recreate) and run `pack --deck <id>` again.
 6. **Check the whole group.** Run `swu-cube-check cube --group <group>`: it lists the group's
    decks, fetches each, and checks them (no `get_deck` calls, no files). `cube` sums each card's `qty` over the packs and fails `cube-copies`, naming
    the card and the packs, when the sum exceeds the `owned_count` in the files. `reserved` must equal `qty` on every line. The cube-level check applies to a
@@ -213,25 +209,19 @@ works for a plan file that carries them; do not produce it from tool output. Wri
 `FAIL <rule>: <what is wrong>` line per broken rule, and exit 1 on any failure. Build it with
 `cargo build -p dumpstar-cube --release` (binary `target/release/swu-cube-check`).
 
-A **pack document** is `get_deck`'s result as-is: it carries the card object of every line under
-`cards`, keyed by card id (the `<SET>-<number>` form). Each card has the shape of a `search_cards` row, or
-of the `card` member of `get_card`'s result (`get_card` returns `{card, copies, printings}`; use
-only `.card`). To check a pack before saving it, build the same document by hand from those:
+A **pack document** is `get_deck`'s result, which only the checker handles: `pack --deck <id>`,
+`cube --group` and `copies --group` fetch it for you and you never write one. It carries the card
+object of every line under `cards`, keyed by card id (the `<SET>-<number>` form), each with the
+shape of a `search_cards` row. A file form (`pack [FILE]`) exists for the checker's own tests; do
+not produce one.
 
-```json
-{"deck": {"name": "Pack 1", "group": "swu-jumpstart-cube"},
- "lines": [{"card_id": "SOR-5", "qty": 1, "zone": "main"}],
- "cards": {"SOR-5": {"name": "...", "type": "Leader", "cost": 5,
-                        "game": {"aspects": ["Vigilance", "Heroism"], "arenas": ["Ground"], "hp": 6}}}}
-```
+Card fields the checker reads and the digest covers (generated from `DIGEST_CARD_FIELDS` in `crates/dumpstar-cube/src/lib.rs`; a test asserts this line matches it): `/name`, `/subtitle`, `/type`, `/rarity`, `/cost`, `/game/hp`, `/game/epic_action`, `/game/aspects`, `/game/arenas`. 
 
-Card fields the checker reads and the digest covers (generated from `DIGEST_CARD_FIELDS` in `crates/dumpstar-cube/src/lib.rs`; a test asserts this line matches it): `/name`, `/subtitle`, `/type`, `/rarity`, `/cost`, `/game/hp`, `/game/epic_action`, `/game/aspects`, `/game/arenas`. The example above shows the minimum shape; copy every one of these from the `search_cards` row.
-
-The `reserved` rule is meaningful only on the post-save `get_deck` document, where the server
-reports reservations. A planned (pre-save) document has none, so check it with `--planned`, which
-ignores `reserved`; never fill `reserved` in by hand. A planned `ok` makes no claim about copies
-across packs, and `pack` never checks them: only `swu-cube-check cube` over the saved decks (or
-`set_deck_lines` refusing) has run that sum.
+The `reserved` rule is meaningful only on the saved deck, where the server reports reservations.
+`pack` never checks copies across packs: only `swu-cube-check cube` or `copies` over the saved
+decks (or `set_deck_lines` refusing) has run that sum. `copies` needs each card's `owned_count`: a
+saved deck carries it, and a document without it gets the counts from the site when you are
+signed in; when it cannot (not signed in) it exits 2 naming the missing data and never prints `ok`.
 
 A **cube document** is an array of pack documents, or `{"packs": [...], "cards": {...}}` with the
 cards shared. Rules reported: `shape`, `leader`, `base-hp`, `base-aspect`, `base-name`,

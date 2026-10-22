@@ -229,6 +229,11 @@ fn help_prints_the_usage_for_every_subcommand_and_exits_zero() {
 #[test]
 fn copies_reports_only_the_shared_card_over_two_packs() {
     let mut c = cube();
+    for p in c.iter_mut().take(2) {
+        for card in p["cards"].as_object_mut().unwrap().values_mut() {
+            card["owned_count"] = json!(5);
+        }
+    }
     c[0]["cards"]["C1-0"]["owned_count"] = json!(1);
     c[1]["cards"]["C1-0"] = c[0]["cards"]["C1-0"].clone();
     c[1]["lines"][3]["card_id"] = json!("C1-0");
@@ -301,5 +306,24 @@ fn the_pack_line_names_an_unmet_skeleton_and_a_short_pack() {
             "Plan 2: 1 of 2 picks, skeleton not checked, contested reserved 0, short 1, lost 0"
         ),
         "{out}"
+    );
+}
+
+#[test]
+fn copies_refuses_when_it_cannot_get_owned_counts() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = dir.path().join("planned.json");
+    std::fs::write(&f, cube()[0].to_string()).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_swu-cube-check"))
+        .args(["copies", "--planned", f.to_str().unwrap()])
+        .env("SWU_CUBE_CHECK_CONFIG", dir.path().join("none.json"))
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stdout).trim().is_empty());
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("owned_count") && err.contains("login"),
+        "{err}"
     );
 }

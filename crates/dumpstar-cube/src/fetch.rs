@@ -187,3 +187,64 @@ pub fn allocation(
     }
     Ok(json!({ "owned": owned, "packs": packs }))
 }
+
+/// Gives every card on a pack's lines that has no `owned_count` the count the site reports, found
+/// by searching its name over the owned cards and matching the id; a card the search does not
+/// return is not owned and gets 0. Returns how many cards were filled.
+pub fn fill_owned(src: &dyn Source, doc: &mut Value) -> Result<usize, String> {
+    let mut missing: BTreeMap<String, String> = BTreeMap::new();
+    let mut note = |cards: &Value, lines: &Value| {
+        for l in lines.as_array().into_iter().flatten() {
+            let Some(id) = l["card_id"].as_str() else {
+                continue;
+            };
+            let c = &cards[id];
+            if c.get("owned_count").is_none_or(Value::is_null) {
+                let name = c["name"].as_str().unwrap_or(id);
+                missing.insert(id.to_string(), name.to_string());
+            }
+        }
+    };
+    match &*doc {
+        Value::Array(packs) => packs.iter().for_each(|p| note(&p["cards"], &p["lines"])),
+        d => {
+            for p in d["packs"].as_array().into_iter().flatten() {
+                let shared = if p["cards"].is_object() {
+                    &p["cards"]
+                } else {
+                    &d["cards"]
+                };
+                note(shared, &p["lines"]);
+            }
+            if d.get("packs").is_none() {
+                note(&d["cards"], &d["lines"]);
+            }
+        }
+    }
+    let mut counts: BTreeMap<String, u64> = BTreeMap::new();
+    let names: std::collections::BTreeSet<&String> = missing.values().collect();
+    for name in names {
+        for row in src.search(&format!("\"{name}\""))? {
+            if let Some(id) = id_of(&row) {
+                counts.insert(id.to_string(), row["owned_count"].as_u64().unwrap_or(0));
+            }
+        }
+    }
+    let fill = |cards: &mut Value| {
+        for id in missing.keys() {
+            if let Some(c) = cards.get_mut(id.as_str()).filter(|c| c.is_object()) {
+                c["owned_count"] = json!(counts.get(id).copied().unwrap_or(0));
+            }
+        }
+    };
+    match doc {
+        Value::Array(packs) => packs.iter_mut().for_each(|p| fill(&mut p["cards"])),
+        d => {
+            fill(&mut d["cards"]);
+            for p in d["packs"].as_array_mut().into_iter().flatten() {
+                fill(&mut p["cards"]);
+            }
+        }
+    }
+    Ok(missing.len())
+}

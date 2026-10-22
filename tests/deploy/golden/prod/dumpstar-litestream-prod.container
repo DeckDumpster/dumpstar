@@ -1,0 +1,63 @@
+[Unit]
+Description=Dumpstar Litestream backup sidecar (prod)
+# Continuously replicates EVERY tenant collection DB to S3 (dumpstar-8ch.3,
+# multi-tenant since pd-fof4). One sidecar for all tenants: deploy/litestream.yml
+# watches the tenants/ directory, so provisioning a tenant needs no unit change
+# and no restart.
+# The repo path + instance are sed-substituted by deploy/setup.sh — single-clone
+# deployment (all instances share one checkout; only the data volume differs).
+After=dumpstar-prod.service network-online.target
+Wants=network-online.target
+# Don't start (and crash-loop) until the operator has configured backups.
+# Auto-starts on boot once the (non-secret) aws/config role profile exists;
+# the bootstrap key itself comes from a podman secret (below).
+ConditionPathExists=%h/.config/dumpstar/prod/aws/config
+# Layer 2 (dumpstar-ivq.3): the sidecar runs continuously and does NOT exit
+# on auth errors (the canonical silent failure — Layer 1 catches that). But a
+# hard crash-loop SHOULD page: bound the restarts so systemd reaches `failed`
+# and fires the alert. (Quadlet passes [Unit]/[Service] keys through verbatim.)
+StartLimitIntervalSec=300
+StartLimitBurst=5
+OnFailure=dumpstar-alert@%n.service
+
+[Container]
+# PINNED, and the version is duplicated from deploy/litestream-lib.sh's
+# DUMPSTAR_LITESTREAM_IMAGE because a Quadlet unit cannot source a shell library.
+# The two spellings are held together by tests/litestream/image_pin_test.sh —
+# the same arrangement the Containerfile's Debian pins have (pd-pejn), and for
+# the same reason: `:latest` moved 0.5.16 -> 0.5.17 under this box on
+# 2026-08-31 and deleted the log line deploy/backup-check.sh judges every tenant
+# from (pd-pfxf). Bump both, or the gate fails in under a second.
+Image=docker.io/litestream/litestream:0.5.17
+Exec=replicate -config /etc/litestream.yml
+# Run as container-root so (under rootless Podman) it maps to the invoking user
+# — matching the app's ownership of tenants/*.sqlite + the mounted creds.
+# Litestream 0.5 WRITES bookkeeping tables to the DB, so it needs read+write.
+User=0
+
+# Same data volume as the app — read the live tenant DBs + their WALs (RW: the
+# replica manages WAL checkpointing). The whole volume is mounted, not just
+# tenants/, because `watch: true` needs the directory itself to see new files.
+Volume=dumpstar-prod-data:/data:Z
+# Instance-agnostic config, mounted read-only from the single clone.
+Volume=/home/ryan/spira/run/worktree/sp-qgjpvj/deploy/litestream.yml:/etc/litestream.yml:ro
+# Assume-role profile (role_arn + source_profile) — non-secret, a regular file
+# the SDK reads to auto-refresh temporary creds (never long-lived static keys).
+Volume=%h/.config/dumpstar/prod/aws/config:/aws/config:ro
+# The bootstrap key (the ONLY secret) is a podman secret mounted as a file —
+# kept out of plaintext dotfiles. Create it once per instance:
+#   printf '[bootstrap]\naws_access_key_id=...\naws_secret_access_key=...\n' \
+#     | podman secret create dumpstar-prod-backup-s3 -
+Secret=dumpstar-prod-backup-s3,type=mount,target=/aws/credentials
+Environment=AWS_CONFIG_FILE=/aws/config
+Environment=AWS_SHARED_CREDENTIALS_FILE=/aws/credentials
+
+# S3 target (bucket/region/parent path), tenants dir, and AWS_PROFILE — user-provided.
+EnvironmentFile=%h/.config/dumpstar/prod/litestream.env
+
+[Service]
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

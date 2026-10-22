@@ -13,7 +13,7 @@ when Ryan settles the ask filed with sp-zcne5d; only `backups.tf` changes):
 
 ```bash
 cd infra
-terraform init -backend-config="bucket=<state-bucket>" -backend-config="role_arn=<deploy-role>"
+terraform init -backend-config=backend.tfvars        # from backend.tfvars.example: bucket, assume_role = { role_arn }
 terraform test                                          # hermetic, mocked provider
 terraform apply -var deploy_role_arn=<DeployRoleArn>    # MFA session
 bash ../deploy/infra-config.sh prod --secrets           # lake.env, litestream.env, podman secrets
@@ -34,7 +34,7 @@ aws CLI and the SSM agent; if it lacks either, add them to ephemeral-ci's substr
 
 ```bash
 cd infra/env
-terraform init -backend-config=backend.tfvars        # backend.tfvars: bucket, role_arn (gitignored)
+terraform init -backend-config=backend.tfvars        # backend.tfvars: bucket, assume_role = { role_arn } (gitignored; see backend.tfvars.example)
 terraform test                                       # hermetic, mocked provider
 terraform apply -var deploy_role_arn=<DeployRoleArn> \
   -var replica_prefix=prod/tenants/<concierge database id>   # MFA session, by the Concierge

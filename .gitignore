@@ -27,3 +27,6 @@
 
 # The UI fixture pair is built from text at use time, never committed:
 # tests/ui/fixtures/build.sh (cached by the hash of its inputs).
+
+# Terraform backend settings are per-account; the .example files are committed.
+/infra/**/backend.tfvars

@@ -96,7 +96,8 @@ check "PATH untouched" "$ORIG_PATH" "$PATH"
 check "no store flags" "" "${DUMPSTAR_STORE_GLOBAL_ARGS:-}"
 
 # The unit a no-store setup.sh would generate, byte for byte.
-sed -e 's|{{INSTANCE}}|prod|g' -e 's|{{PORT}}:8080|8090:8080|' \
+sed -e 's|{{INSTANCE}}|prod|g' -e 's|{{PORT}}|8090|g' -e 's|{{VOLUME}}|dumpstar-prod-data|g' \
+	-e 's|{{SECRETS_DIR}}|%h/.config/dumpstar/prod|g' -e 's|{{HOSTNAME}}|star.dumpster.cards|g' \
 	"${REPO_DIR}/deploy/dumpstar.container" > "${WORK}/prod.container"
 cp "${WORK}/prod.container" "${WORK}/prod.expected"
 dumpstar_store_stamp_unit "${WORK}/prod.container"
@@ -618,12 +619,15 @@ check "sidecar unit names this checkout" "1" \
 
 # Every unit the shipped templates define, byte for byte — not just the one that
 # was noticed. Drift is per-file, so an assertion on one file finds one bug.
-sed -e 's|{{INSTANCE}}|prod|g' -e "s|{{REPO_DIR}}|${REPO_DIR}|g" \
+sed -e 's|{{INSTANCE}}|prod|g' -e 's|{{VOLUME}}|dumpstar-prod-data|g' \
+	-e 's|{{SECRETS_DIR}}|%h/.config/dumpstar/prod|g' -e 's|{{S3_PREFIX}}|prod|g' \
+	-e "s|{{REPO_DIR}}|${REPO_DIR}|g" \
 	"${REPO_DIR}/deploy/dumpstar-litestream.container" > "${WORK}/ls.expected"
 check "sidecar unit matches the template" "same" \
 	"$(cmp -s "${QUADLET}/dumpstar-litestream-prod.container" "${WORK}/ls.expected" && echo same || echo differs)"
 
-sed -e 's|{{INSTANCE}}|prod|g' -e 's|{{PORT}}:8080|8090:8080|' \
+sed -e 's|{{INSTANCE}}|prod|g' -e 's|{{PORT}}|8090|g' -e 's|{{VOLUME}}|dumpstar-prod-data|g' \
+	-e 's|{{SECRETS_DIR}}|%h/.config/dumpstar/prod|g' -e 's|{{HOSTNAME}}|star.dumpster.cards|g' \
 	"${REPO_DIR}/deploy/dumpstar.container" > "${WORK}/app.expected"
 check "app unit matches the template" "same" \
 	"$(cmp -s "${QUADLET}/dumpstar-prod.container" "${WORK}/app.expected" && echo same || echo differs)"
@@ -731,7 +735,7 @@ check "and leaves no temp files behind" "0" \
 # fixture setup).
 UPGRADE_MISSING=""
 while IFS= read -r raw_path; do
-	expanded="$(printf '%s' "$raw_path" | sed "s|%h|${FAKE_HOME}|g; s|{{INSTANCE}}|prod|g")"
+	expanded="$(printf '%s' "$raw_path" | sed "s|{{SECRETS_DIR}}|%h/.config/dumpstar/prod|g; s|%h|${FAKE_HOME}|g; s|{{INSTANCE}}|prod|g")"
 	mkdir -p "$(dirname "$expanded")"
 	: > "$expanded"
 	rm -f "$expanded"
@@ -3028,7 +3032,7 @@ check "…and says so" "1" "$(printf '%s' "$OUT20" | grep -c 'Inline # comment' 
 check "no Quadlet unit uses EnvironmentFile=- (Quadlet does not support it)" "0" \
 	"$(grep -h '^EnvironmentFile=-' "${REPO_DIR}"/deploy/*.container | wc -l)"
 check "the app unit reads its Access config from a file that always exists" "1" \
-	"$(grep -c '^EnvironmentFile=%h/\.config/dumpstar/{{INSTANCE}}/access\.env$' "${REPO_DIR}/deploy/dumpstar.container")"
+	"$(grep -c '^EnvironmentFile={{SECRETS_DIR}}/access\.env$' "${REPO_DIR}/deploy/dumpstar.container")"
 check "the app unit publishes loopback only" "1" \
 	"$(grep -c '^PublishPort=127\.0\.0\.1:{{PORT}}:8080$' "${REPO_DIR}/deploy/dumpstar.container")"
 check "the app unit bounds restarts and alerts on failure" "3" \

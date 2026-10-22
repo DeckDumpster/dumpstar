@@ -1000,6 +1000,8 @@ g_deploy_scripts() {
 if tier deploy; then
     step "Deploy scripts: unit install + store resolution + low-disk guard + scheduling"
     bash "$REPO_DIR/tests/deploy/run.sh"
+    step "Render: prod reproduces the golden files; prod vs another instance differ only in declared parameters (tests/deploy/render_test.sh)"
+    bash "$REPO_DIR/tests/deploy/render_test.sh"
     step "Quadlet dry-run at the production podman version (tests/deploy/quadlet_dryrun_test.sh)"
     bash "$REPO_DIR/tests/deploy/quadlet_dryrun_test.sh"
 fi

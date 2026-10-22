@@ -59,6 +59,8 @@ dumpstar_origin_url() {
 # unit and the renderer cannot disagree about which instances may page (pd-n0lf).
 # shellcheck source=deploy/alert-gate.sh
 . "$(dirname "${BASH_SOURCE[0]}")/alert-gate.sh"
+# shellcheck source=deploy/render-lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/render-lib.sh"
 
 # ── HOST-WIDE UNITS: ONE COPY PER BOX, AND IT IS NOT YOURS (pd-onyd) ─────────
 #
@@ -431,7 +433,6 @@ dumpstar_units_enable_timers() {
 dumpstar_units_install() {
     local _alert_sed=()
     dumpstar_units_alerting "$1" || _alert_sed=(-e '/^OnFailure=/d')
-    [ "$1" = prod ] || _alert_sed+=(-e '/^Environment=DUMPSTAR_MCP_RESOURCE=/d')
     local instance="$1" port="${2:-0}"
     local repo_dir quadlet_dir systemd_user_dir service_name
     repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -442,7 +443,7 @@ dumpstar_units_install() {
     DUMPSTAR_UNITS_CHANGED=()
     mkdir -p "$quadlet_dir" "$systemd_user_dir"
 
-    local existing_port port_mapping
+    local existing_port
     if [ "$port" = "0" ] && [ -f "${quadlet_dir}/${service_name}.container" ]; then
         existing_port="$(sed -n \
             -e 's|^PublishPort=\([0-9]\{1,\}\):8080$|\1|p' \
@@ -459,17 +460,19 @@ dumpstar_units_install() {
     if [ "$port" = "0" ] && [ "$instance" = prod ]; then
         port="$DUMPSTAR_PROD_PORT"
     fi
-    if [ "$port" = "0" ]; then
-        port_mapping=":8080"
-    else
-        port_mapping="${port}:8080"
-    fi
+    # Blank renders "127.0.0.1::8080", which is the same auto-pick.
+    [ "$port" = "0" ] && port=""
+    # The six declared parameters (deploy/render-lib.sh); the defaults are what an instance
+    # set up by hand has always had.
+    local hostname="" render_args=()
+    [ "$instance" = prod ] && hostname="$DUMPSTAR_PROD_HOSTNAME"
+    mapfile -t render_args < <(dumpstar_render_sed_args "$instance" "$hostname" "$port" \
+        "dumpstar-${instance}-data" "%h/.config/dumpstar/${instance}" "$instance")
 
     # --- The app's Quadlet unit ---------------------------------------------
     _dumpstar_units_render "${quadlet_dir}/${service_name}.container" stamp \
         "$repo_dir/deploy/dumpstar.container" \
-        -e "s|{{INSTANCE}}|${instance}|g" \
-        -e "s|{{PORT}}:8080|${port_mapping}|g" \
+        "${render_args[@]}" \
         "${_alert_sed[@]}"
 
     # --- The host-wide units ------------------------------------------------
@@ -489,7 +492,7 @@ dumpstar_units_install() {
     # --- The Litestream backup sidecar (dumpstar-8ch.3) -----------------
     _dumpstar_units_render "${quadlet_dir}/dumpstar-litestream-${instance}.container" stamp \
         "$repo_dir/deploy/dumpstar-litestream.container" \
-        -e "s|{{INSTANCE}}|${instance}|g" \
+        "${render_args[@]}" \
         -e "s|{{REPO_DIR}}|${repo_dir}|g" \
         "${_alert_sed[@]}"
 }

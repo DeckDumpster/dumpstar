@@ -1323,3 +1323,15 @@ VM at `env-N.test.dumpster.cards`, through the slot's pre-provisioned edge (`inf
 swaps the container, `status` lists owner, build, age, last activity and URL, `down` destroys the
 VM and its data. No Terraform runs in any of them. The header of `deploy/env.sh` lists the
 configuration it refuses to run without; `deploy/env-vm.sh` is what runs on the VM.
+
+### The reaper (`deploy/env.sh reap`, sp-4wy00r)
+
+An environment is torn down at a 2 h TTL, or after 30 minutes with no authenticated request.
+Activity is the server's own `dumpstar_authenticated_requests_total{instance="env-N"}` (OTLP; `/health`,
+`/api/backup-status`, `/.well-known/*` and unsigned calls are not counted), read from the
+VictoriaMetrics at `DUMPSTAR_ENV_METRICS_URL`. `up` and `update` count. When the counter cannot be
+read the activity is *unknown*: it never extends life, `realenv status` shows `activity unknown`,
+and only the TTL applies. Install by hand on the box that holds the AWS profile: copy
+`realenv-reap.service` and `.timer` (substituting `{{REPO_DIR}}`) into `~/.config/systemd/user/`,
+put `DUMPSTAR_ENV_CONF=<file>` in `~/.config/dumpstar/realenv.env`, and enable the timer. The unit
+carries `CPUQuota=20%`.

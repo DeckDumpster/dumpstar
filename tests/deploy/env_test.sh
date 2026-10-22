@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tier: T2
-# covers: deploy/env.sh deploy/env-vm.sh
+# covers: deploy/env.sh deploy/env-vm.sh deploy/realenv-reap.service deploy/realenv-reap.timer
 # tests/deploy/env_test.sh — the env tool (sp-8i63uo) against a stubbed AWS, curl and sleep.
 #
 #   1. UP, STATUS, UPDATE, DOWN WORK: up takes a free slot and prints the URL and how to sign in,
@@ -12,6 +12,9 @@
 #      connector). The control can fail: a stub that leaks a volume is caught.
 #   4. THE SHIPPED SCRIPT NEVER CARRIES A SECRET: the SSM command holds the secret's name, not its
 #      value, and the origin port the tool uses is infra/edge's origin_service.
+#   6. THE REAPER (sp-4wy00r): past 2 h an environment is gone however busy; idle 30 min with a
+#      readable counter it is gone; active it survives; with an unreadable counter only the TTL
+#      applies and status says "activity unknown". up and update count as activity.
 #   5. NO FALLBACK: a missing configuration value refuses the command.
 #
 # Hermetic: bash, jq, sed, tar.
@@ -90,7 +93,15 @@ case "$svc $op" in
 *) echo "stub aws: unhandled $svc $op" >&2; exit 1 ;;
 esac
 STUBEOF
-printf '#!/usr/bin/env bash\necho 200\n' >"$BIN/curl"
+cat >"$BIN/curl" <<'CURLEOF'
+#!/usr/bin/env bash
+# The metrics store answers /api/v1/query from $STUB/metric.json, or fails when it is absent;
+# everything else is a 200 from the edge.
+case "$*" in
+*/api/v1/query*) [ -f "$STUB/metric.json" ] && cat "$STUB/metric.json" || exit 22 ;;
+*) echo 200 ;;
+esac
+CURLEOF
 printf '#!/usr/bin/env bash\nexit 0\n' >"$BIN/sleep"
 printf '#!/usr/bin/env bash\necho "terraform was called: $*" >>"%s/terraform.called"; exit 1\n' "$WORK" >"$BIN/terraform"
 chmod +x "$BIN"/*
@@ -181,6 +192,53 @@ grep -q 'setup' <<<"$script" && ok "up builds the catalog" || bad "up builds the
 
 # 5. No fallback.
 (unset DUMPSTAR_ENV_AMI; bash "$ENV" status >/dev/null 2>&1) && bad "a missing value is refused" || ok "a missing value is refused"
+
+# 6. The reaper.
+export DUMPSTAR_ENV_METRICS_URL=http://metrics.invalid:8428
+bash "$ENV" up --image "tree:$TREE" >/dev/null
+rid="$(basename "$(ls -t "$STUB"/instances/*.json | head -1)" .json)"
+rjson="$STUB/instances/$rid.json"
+launch="$(date -d "$(jq -r .launch "$rjson")" +%s)"
+settag() { jq --arg v "$1" '.tags["dumpstar-env:last-activity"] = $v' "$rjson" >"$STUB/t" && mv "$STUB/t" "$rjson"; }
+state() { jq -r .state "$rjson"; }
+reap_at() { DUMPSTAR_ENV_NOW=$((launch + $1)) bash "$ENV" reap 2>&1; }
+echo '{"status":"success","data":{"result":[]}}' >"$STUB/metric.json"
+settag "$((launch + 60))"
+reap_at 1800 >/dev/null; check "idle under 30 min survives" running "$(state)"
+reap_at 1859 >/dev/null; check "idle 29m59s survives" running "$(state)"
+echo '{"status":"success","data":{"result":[{"value":[0,"1"]}]}}' >"$STUB/metric.json"
+reap_at 1900 >/dev/null; check "in use: survives past the idle limit" running "$(state)"
+check "activity moves the idle clock" "$((launch + 1900))" "$(jq -r '.tags["dumpstar-env:last-activity"]' "$rjson")"
+reap_at 3600 >/dev/null; check "in use: still alive at 1 h" running "$(state)"
+echo '{"status":"success","data":{"result":[]}}' >"$STUB/metric.json"
+reap_at $((3600 + 1800)) >/dev/null; check "idle for 30 min: torn down" terminated "$(state)"
+check "the idle teardown leaves no volume" 0 "$(ls "$STUB/volumes" | wc -l)"
+
+bash "$ENV" up --image "tree:$TREE" >/dev/null
+rid="$(basename "$(ls -t "$STUB"/instances/*.json | head -1)" .json)"; rjson="$STUB/instances/$rid.json"
+launch="$(date -d "$(jq -r .launch "$rjson")" +%s)"
+echo '{"status":"success","data":{"result":[{"value":[0,"1"]}]}}' >"$STUB/metric.json"
+settag "$((launch + 7000))"
+reap_at 7199 >/dev/null; check "in use just under the TTL survives" running "$(state)"
+reap_at 7200 >/dev/null; check "the TTL ends a busy environment" terminated "$(state)"
+
+bash "$ENV" up --image "tree:$TREE" >/dev/null
+rid="$(basename "$(ls -t "$STUB"/instances/*.json | head -1)" .json)"; rjson="$STUB/instances/$rid.json"
+launch="$(date -d "$(jq -r .launch "$rjson")" +%s)"
+rm -f "$STUB/metric.json"
+settag "$((launch + 60))"
+out="$(reap_at 5000)"; check "unreadable counter: not idled out" running "$(state)"
+grep -q 'activity unknown' <<<"$out" && ok "the reaper says activity is unknown" || bad "the reaper says activity is unknown"
+grep -qE '^env-1 .*activity unknown' <<<"$(bash "$ENV" status)" && ok "status shows activity unknown" || bad "status shows activity unknown"
+echo '{"status":"error","data":{}}' >"$STUB/metric.json"
+reap_at 5000 >/dev/null; check "an error answer is unknown too" running "$(state)"
+check "unknown never moves the idle clock" "$((launch + 60))" "$(jq -r '.tags["dumpstar-env:last-activity"]' "$rjson")"
+reap_at 7200 >/dev/null; check "unreadable counter: the TTL still applies" terminated "$(state)"
+(unset DUMPSTAR_ENV_METRICS_URL; bash "$ENV" up --image "tree:$TREE" >/dev/null
+	rid="$(basename "$(ls -t "$STUB"/instances/*.json | head -1)" .json)"
+	launch="$(date -d "$(jq -r .launch "$STUB/instances/$rid.json")" +%s)"
+	DUMPSTAR_ENV_NOW=$((launch + 7300)) bash "$ENV" reap >/dev/null 2>&1
+	[ "$(jq -r .state "$STUB/instances/$rid.json")" = terminated ]) && ok "no metrics URL: TTL only" || bad "no metrics URL: TTL only"
 
 echo "env_test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

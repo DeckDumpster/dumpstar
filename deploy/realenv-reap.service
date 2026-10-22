@@ -1,0 +1,13 @@
+[Unit]
+Description=Disposable test environment reaper (2 h TTL, 30 min idle)
+
+[Service]
+Type=oneshot
+# One pass over env-1..3: tears down what is past its TTL or idle. Reads DUMPSTAR_ENV_CONF (the
+# same file `deploy/env.sh` uses; see its header).
+EnvironmentFile=%h/.config/dumpstar/realenv.env
+ExecStart=/bin/sh -c 'exec bash {{REPO_DIR}}/deploy/env.sh reap'
+# A pass lists three slots and may tear one down over SSM and EC2; nothing here is long.
+TimeoutStartSec=600
+# Fence: a loop that polls on the shared box may not starve production.
+CPUQuota=20%

@@ -122,7 +122,8 @@ fn handle(
             let mut rows = Vec::new();
             for d in decks {
                 for (id, c) in d["cards"].as_object().unwrap() {
-                    if id.starts_with('C') && matches_query(c, &q("q").unwrap_or_default()) {
+                    let query = q("q").unwrap_or_default();
+                    if (id.starts_with('C') || query.starts_with('"')) && matches_query(c, &query) {
                         let mut r = c.clone();
                         r["id"] = json!(id);
                         r["owned_count"] = json!(2);
@@ -407,4 +408,26 @@ fn an_expired_claude_sign_in_says_reconnect_and_falls_through_to_login() {
         run_with_claude(&cfg, &claude, &["cube", "--group", "swu-jumpstart-cube"]);
     assert_eq!((code, out.trim()), (0, "ok"), "{err}");
     assert!(err.contains("/mcp") && !err.contains("tok-"), "{err}");
+}
+
+#[test]
+fn copies_planned_fetches_the_owned_counts_it_lacks() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = serve(cube(), true);
+    let cfg = signed_in(dir.path(), &f, "tok-fresh", far_future());
+    let mut pack = cube()[0].clone();
+    for c in pack["cards"].as_object_mut().unwrap().values_mut() {
+        c.as_object_mut().unwrap().remove("owned_count");
+    }
+    let file = dir.path().join("planned.json");
+    std::fs::write(&file, pack.to_string()).unwrap();
+    let (code, out, err) = run(&cfg, &["copies", "--planned", file.to_str().unwrap()]);
+    assert_eq!((code, out.trim()), (0, "ok"), "{err}");
+    assert!(
+        f.seen
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|r| r.contains("/api/agent/search"))
+    );
 }

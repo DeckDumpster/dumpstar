@@ -116,6 +116,11 @@ fn main() -> ExitCode {
     if planned {
         dumpstar_cube::strip_reservations(&mut value);
     }
+    if mode == "copies" {
+        if let Err(e) = fill_owned(&mut value, remote.site.as_deref()) {
+            return fail(e);
+        }
+    }
     let result = match mode {
         "pack" => dumpstar_cube::check_pack_value(&value),
         "cube" => dumpstar_cube::check_cube_value(&value),
@@ -123,6 +128,36 @@ fn main() -> ExitCode {
         _ => return usage(),
     };
     report(result)
+}
+
+/// A copies check needs `owned_count` on every card; a document without them gets the site's
+/// counts, and with no sign-in the check is refused rather than reported `ok`.
+fn fill_owned(value: &mut serde_json::Value, site_override: Option<&str>) -> Result<(), String> {
+    use dumpstar_cube::site;
+    // Sign in only when something is missing.
+    let probe = dumpstar_cube::fetch::fill_owned(&NoSite, &mut value.clone());
+    if probe.is_ok() {
+        return Ok(());
+    }
+    let src = site::Site::open(&site::config_path(), site_override).map_err(|e| {
+        format!("cannot check copies: the document carries no owned_count and the site's counts need a sign-in ({e})")
+    });
+    dumpstar_cube::fetch::fill_owned(&src?, value).map(|_| ())
+}
+
+/// A source that holds nothing: filling succeeds against it only when no card is missing a count.
+struct NoSite;
+
+impl dumpstar_cube::fetch::Source for NoSite {
+    fn list_group(&self, _: &str) -> Result<Vec<i64>, String> {
+        Err("no site".into())
+    }
+    fn deck(&self, _: i64) -> Result<serde_json::Value, String> {
+        Err("no site".into())
+    }
+    fn search(&self, _: &str) -> Result<Vec<serde_json::Value>, String> {
+        Err("no site".into())
+    }
 }
 
 fn allocate(path: &str, verbose: bool) -> ExitCode {

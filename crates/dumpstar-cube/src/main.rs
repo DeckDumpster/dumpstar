@@ -116,10 +116,10 @@ fn main() -> ExitCode {
     if planned {
         dumpstar_cube::strip_reservations(&mut value);
     }
-    if mode == "copies" {
-        if let Err(e) = fill_owned(&mut value, remote.site.as_deref()) {
-            return fail(e);
-        }
+    if mode == "copies"
+        && let Err(e) = fill_owned(&mut value, remote.site.as_deref())
+    {
+        return fail(e);
     }
     let result = match mode {
         "pack" => dumpstar_cube::check_pack_value(&value),

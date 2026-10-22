@@ -1002,6 +1002,8 @@ if tier deploy; then
     bash "$REPO_DIR/tests/deploy/run.sh"
     step "Render: prod reproduces the golden files; prod vs another instance differ only in declared parameters (tests/deploy/render_test.sh)"
     bash "$REPO_DIR/tests/deploy/render_test.sh"
+    step "env tool: up/update/status/down against a stubbed AWS; teardown positive control (tests/deploy/env_test.sh)"
+    bash "$REPO_DIR/tests/deploy/env_test.sh"
     step "Quadlet dry-run at the production podman version (tests/deploy/quadlet_dryrun_test.sh)"
     bash "$REPO_DIR/tests/deploy/quadlet_dryrun_test.sh"
 fi

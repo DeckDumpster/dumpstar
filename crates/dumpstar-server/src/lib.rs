@@ -3352,6 +3352,10 @@ mod tests {
                 "refusal names the holder: {refusal}"
             );
             assert!(
+                refusal.contains("hint\":\"SOR-1 ") && refusal.contains(" has 2 copies"),
+                "hint names the card id and name, not the internal id: {refusal}"
+            );
+            assert!(
                 refusal.contains("(id ")
                     && refusal.contains("qty ")
                     && refusal.contains("set_deck_lines"),

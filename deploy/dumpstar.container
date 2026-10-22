@@ -21,22 +21,22 @@ Environment=DUMPSTAR_HOME=/data
 # below must stay greater (the deploy tier holds them together).
 Environment=DUMPSTAR_DRAIN_TIMEOUT_SECS=30
 # The agent-tool endpoint (/mcp): its own URL, the `aud` its tokens carry. It needs the Pocket ID
-# sign-in below, so units_install keeps this line for prod only and deletes it elsewhere.
-Environment=DUMPSTAR_MCP_RESOURCE=https://star.dumpster.cards/mcp
+# sign-in below, so the renderer keeps this line only for an instance with a hostname.
+Environment=DUMPSTAR_MCP_RESOURCE=https://{{HOSTNAME}}/mcp
 # Per-instance Cloudflare Access config. deploy/setup.sh scaffolds this file on
 # every setup, so it always exists. All three values are mandatory: the server
 # refuses to start without them.
 # Values: DUMPSTAR_ACCESS_TEAM_DOMAIN, DUMPSTAR_ACCESS_AUD,
 # DUMPSTAR_ACCESS_JWKS_URL. See "Configuring Access for a deployment" in
 # deploy/TENANTS.md, and deploy/setup.sh for the scaffold command.
-EnvironmentFile=%h/.config/dumpstar/{{INSTANCE}}/access.env
+EnvironmentFile={{SECRETS_DIR}}/access.env
 # Pocket ID sign-in (DUMPSTAR_OIDC_*). Scaffolded commented out by the same step; when filled
 # the server signs users in itself and ignores Access. See deploy/TENANTS.md.
-EnvironmentFile=%h/.config/dumpstar/{{INSTANCE}}/oidc.env
-# OTLP metrics push (DUMPSTER_OTLP_METRICS_ENDPOINT). The scaffold sets it for prod to the product
+EnvironmentFile={{SECRETS_DIR}}/oidc.env
+# OTLP metrics push (DUMPSTER_OTLP_METRICS_ENDPOINT). The production scaffold and the renderer set it to the product
 # stack's VictoriaMetrics, which listens on the host's loopback; the slirp4netns network below maps that
 # loopback to 10.0.2.2 inside the container. See deploy/dashboards/dumpstar.json.
-EnvironmentFile=%h/.config/dumpstar/{{INSTANCE}}/metrics.env
+EnvironmentFile={{SECRETS_DIR}}/metrics.env
 # slirp4netns, not pasta: the product host runs podman 4.9 whose pasta rejects --map-host-loopback
 # (sp-5ekmwm); allow_host_loopback is supported by every podman there and keeps 10.0.2.2 = host loopback.
 # Bind to loopback only: a Cloudflare Access logout revokes the session at
@@ -46,7 +46,7 @@ EnvironmentFile=%h/.config/dumpstar/{{INSTANCE}}/metrics.env
 # (db-a5g0)
 Network=slirp4netns:allow_host_loopback=true
 PublishPort=127.0.0.1:{{PORT}}:8080
-Volume=dumpstar-{{INSTANCE}}-data:/data:Z
+Volume={{VOLUME}}:/data:Z
 AutoUpdate=local
 # podman's grace before SIGKILL: longer than the drain, so the drain is never cut short.
 # PodmanArgs, not StopTimeout=: the product host runs podman 4.9.3 whose quadlet rejects that key and

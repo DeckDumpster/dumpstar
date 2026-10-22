@@ -383,7 +383,9 @@ MP="$(podman volume inspect -f '{{.Mountpoint}}' "$VOLUME")"
 # setup.sh stamps it; never started, and a no-op on a box with no alternate
 # store — which is prod.
 mkdir -p "$QUADLET_DIR"
-sed -e "s|{{INSTANCE}}|${INSTANCE}|g" -e "s|{{PORT}}:8080|$(free_port):8080|" \
+sed -e "s|{{INSTANCE}}|${INSTANCE}|g" -e "s|{{PORT}}|$(free_port)|g" \
+	-e "s|{{VOLUME}}|dumpstar-${INSTANCE}-data|g" -e "s|{{SECRETS_DIR}}|%h/.config/dumpstar/${INSTANCE}|g" \
+	-e '/^Environment=DUMPSTAR_MCP_RESOURCE=/d' \
 	"${REPO_DIR}/deploy/dumpstar.container" >"$INSTANCE_UNIT"
 dumpstar_store_stamp_unit "$INSTANCE_UNIT"
 systemctl --user daemon-reload
@@ -1231,6 +1233,8 @@ sed -e "s|{{REPO_DIR}}|${REPO_DIR}|g" -e "s|dumpstar-alert@|${P}-alert@|g" \
 # generator, which is exactly the wiring §8 is checking.
 mkdir -p "$QUADLET_DIR"
 sed -e "s|{{INSTANCE}}|${INSTANCE}|g" -e "s|{{REPO_DIR}}|${REPO_DIR}|g" \
+	-e "s|{{VOLUME}}|dumpstar-${INSTANCE}-data|g" -e "s|{{SECRETS_DIR}}|%h/.config/dumpstar/${INSTANCE}|g" \
+	-e "s|{{S3_PREFIX}}|${INSTANCE}|g" \
 	-e "s|dumpstar-alert@|${P}-alert@|g" \
 	"${REPO_DIR}/deploy/dumpstar-litestream.container" \
 	>"${QUADLET_DIR}/${P}-litestream-${INSTANCE}.container"

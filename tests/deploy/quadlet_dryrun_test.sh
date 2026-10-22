@@ -20,7 +20,9 @@ trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/units"
 n=0
 for t in "$SRC"/*.container; do
-	sed -e 's|{{INSTANCE}}|qtest|g' -e 's|{{PORT}}|8099|g' -e "s|{{REPO_DIR}}|$REPO_DIR|g" \
+	sed -e 's|{{INSTANCE}}|qtest|g' -e 's|{{PORT}}|8099|g' -e 's|{{VOLUME}}|dumpstar-qtest-data|g' \
+		-e 's|{{SECRETS_DIR}}|%h/.config/dumpstar/qtest|g' -e 's|{{S3_PREFIX}}|qtest|g' \
+		-e '/^Environment=DUMPSTAR_MCP_RESOURCE=/d' -e "s|{{REPO_DIR}}|$REPO_DIR|g" \
 		"$t" >"$WORK/units/$(basename "$t" | sed 's/^dumpstar\.container$/dumpstar-qtest.container/')"
 	n=$((n + 1))
 done

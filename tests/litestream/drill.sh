@@ -594,6 +594,8 @@ echo "  registry.sqlite at the data root holds that mapping and nothing else doe
 # The shipped Quadlet sidecar unit, installed the way deploy/setup.sh installs it.
 mkdir -p "$QUADLET_DIR"
 sed -e "s|{{INSTANCE}}|${INSTANCE}|g" -e "s|{{REPO_DIR}}|${REPO_DIR}|g" \
+	-e "s|{{VOLUME}}|dumpstar-${INSTANCE}-data|g" -e "s|{{SECRETS_DIR}}|%h/.config/dumpstar/${INSTANCE}|g" \
+	-e "s|{{S3_PREFIX}}|${INSTANCE}|g" \
 	"${REPO_DIR}/deploy/dumpstar-litestream.container" > "${QUADLET_DIR}/${SIDECAR}.container"
 dumpstar_store_stamp_unit "${QUADLET_DIR}/${SIDECAR}.container"
 systemctl --user daemon-reload

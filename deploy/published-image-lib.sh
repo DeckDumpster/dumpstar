@@ -82,3 +82,60 @@ dumpstar_image_fetch() {
 	echo "WARNING: falling back to building on this host." >&2
 	return 0
 }
+
+# A tag ending -local is an image built on a developer's machine by `realenv`
+# (sp-b2pnhw) from a ref or an unpushed tree: nothing CI tested. Prod never ships one.
+dumpstar_image_is_local() { case "$1" in *-local) return 0 ;; esac; return 1; }
+
+# dumpstar_refuse_local_image <instance> <image ref>...
+# Fails (prod only) when any named image carries a -local tag.
+dumpstar_refuse_local_image() {
+	local instance="$1" r
+	shift
+	[ "$instance" = prod ] || return 0
+	for r in "$@"; do
+		if dumpstar_image_is_local "$r"; then
+			echo "ERROR: ${r} is a -local build (made by realenv, never tested by CI); prod ships only CI's images." >&2
+			return 1
+		fi
+	done
+}
+
+# dumpstar_local_image_ref <tree sha>
+dumpstar_local_image_ref() { printf '%s:tree-%s-local\n' "$DUMPSTAR_IMAGE_REPO" "$1"; }
+
+# dumpstar_local_tree <repo_dir> [ref]
+# Prints the tree id of <ref>, or (no ref) of the working tree including uncommitted
+# and untracked-but-not-ignored files, via a throwaway index.
+dumpstar_local_tree() {
+	local dir="$1" ref="${2:-}" idx rc
+	if [ -n "$ref" ]; then
+		git -C "$dir" rev-parse --verify -q "${ref}^{tree}"
+		return
+	fi
+	idx="$(mktemp -u)"
+	GIT_INDEX_FILE="$idx" git -C "$dir" add -A >/dev/null && GIT_INDEX_FILE="$idx" git -C "$dir" write-tree
+	rc=$?
+	rm -f "$idx"
+	return $rc
+}
+
+# dumpstar_local_image_build <repo_dir> <tree sha>
+# Builds exactly as CI does (dumpstar_image_ensure over the tree's own Containerfile) and
+# tags tree-<sha>-local. The tree is exported with git archive, so the build sees that
+# tree and nothing else in the checkout.
+dumpstar_local_image_build() {
+	local dir="$1" tree="$2" ref src rc
+	ref="$(dumpstar_local_image_ref "$tree")"
+	src="$(mktemp -d)"
+	git -C "$dir" archive "$tree" | tar -x -C "$src" || { rm -rf "$src"; return 1; }
+	(
+		unset DUMPSTAR_PREBUILT_IMAGE
+		# shellcheck source=deploy/image-lib.sh
+		. "$(dirname "${BASH_SOURCE[0]}")/image-lib.sh"
+		dumpstar_image_ensure "$ref" "$src" >&2
+	)
+	rc=$?
+	rm -rf "$src"
+	return $rc
+}

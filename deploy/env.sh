@@ -3,8 +3,8 @@
 # env — disposable dumpstar environments on an EC2 VM (sp-8i63uo; design "Disposable test
 # environments from any build", 2026-10-21).
 #
-#   bash deploy/env.sh up --image tree:<sha> [--name env-N]
-#   bash deploy/env.sh update env-N --image tree:<sha>
+#   bash deploy/env.sh up (--image tree:<sha> | --ref <branch|sha> | --tree <dir>) [--name env-N]
+#   bash deploy/env.sh update env-N (--image tree:<sha> | --ref <branch|sha> | --tree <dir>)
 #   bash deploy/env.sh status
 #   bash deploy/env.sh down env-N
 #
@@ -28,6 +28,15 @@
 #       the instance profile lets the VM read secret dumpstar/<slot>/edge and nothing else
 #   DUMPSTAR_ENV_ACCESS_TEAM  the Zero Trust team name (infra/edge access_team_name)
 #   DUMPSTAR_ENV_CLOUDFLARED_IMAGE  the pinned connector image
+#   DUMPSTAR_ENV_BACKUP_BUCKET  DUMPSTAR_ENV_BACKUP_PATH  DUMPSTAR_ENV_BACKUP_REGION
+#       prod's Litestream target (LITESTREAM_S3_BUCKET / _PATH / _REGION in its litestream.env);
+#       the instance profile may read the concierge tenant's replica under it and nothing else
+#   DUMPSTAR_ENV_CONCIERGE_DB  the concierge tenant's database id (dumpstar tenant list on prod)
+#   DUMPSTAR_ENV_CONCIERGE_EMAIL  the verified email bound to the concierge tenant in the environment
+#
+# THE DATA (sp-2xkn6g): up restores the concierge tenant's latest Litestream replica into the
+# slot's volume, as the only tenant of a fresh registry, beside a freshly built catalog. Never
+# Ryan's tenant, never prod's live database, nothing synced afterwards; drift is accepted.
 # The AMI must carry podman (Quadlet), jq, curl, openssl, the aws CLI and the SSM agent.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -37,6 +46,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/render-lib.sh"
 # shellcheck source=deploy/published-image-lib.sh
 . "$SCRIPT_DIR/published-image-lib.sh"
+# shellcheck source=deploy/litestream-lib.sh
+. "$SCRIPT_DIR/litestream-lib.sh"
 
 DUMPSTAR_ENV_SLOTS="env-1 env-2 env-3"
 # What the slot's tunnel forwards to: the origin_service default in infra/edge/variables.tf, read, not copied.
@@ -61,7 +72,7 @@ env_load_config() {
 		. "$DUMPSTAR_ENV_CONF"
 	fi
 	local v name
-	for v in AWS_PROFILE REGION AMI SUBNET SECURITY_GROUP INSTANCE_TYPE INSTANCE_PROFILE ACCESS_TEAM CLOUDFLARED_IMAGE; do
+	for v in AWS_PROFILE REGION AMI SUBNET SECURITY_GROUP INSTANCE_TYPE INSTANCE_PROFILE ACCESS_TEAM CLOUDFLARED_IMAGE BACKUP_BUCKET BACKUP_PATH BACKUP_REGION CONCIERGE_DB CONCIERGE_EMAIL; do
 		name="DUMPSTAR_ENV_$v"
 		[ -n "${!name:-}" ] || die "$name is not set (no default; see the header of deploy/env.sh)"
 	done
@@ -75,15 +86,44 @@ valid_slot() {
 	return 1
 }
 
-# parse_build <spec>: sets IMAGE_REF. Only a CI image by tree is built here; a ref or a tree is
-# sp-b2pnhw.
+# parse_build <spec>: sets IMAGE_REF. tree:<sha> is CI's image. ref:<branch|sha> and
+# dir:<path> (a dirty tree included) are built here exactly as CI builds, tagged
+# tree-<sha>-local and pushed for the VM to pull (sp-b2pnhw); prod refuses such a tag.
 parse_build() {
+	local sha dir
 	case "$1" in
 	tree:*)
-		local sha="${1#tree:}"
+		sha="${1#tree:}"
 		[[ "$sha" =~ ^[0-9a-f]{40}$ ]] || die "tree:<sha> needs the 40-hex tree id, got '$sha'"
 		IMAGE_REF="${DUMPSTAR_IMAGE_REPO}:tree-${sha}" ;;
-	*) die "unsupported build '$1': only --image tree:<sha> (a ref or an unpushed tree is sp-b2pnhw)" ;;
+	ref:*)
+		sha="$(dumpstar_local_tree "$SCRIPT_DIR/.." "${1#ref:}")" || die "no such ref '${1#ref:}'"
+		build_local "$sha" ;;
+	dir:*)
+		dir="${1#dir:}"
+		[ -d "$dir" ] || die "--tree $dir is not a directory"
+		sha="$(dumpstar_local_tree "$dir")" || die "cannot read the tree of $dir"
+		build_local "$sha" "$dir" ;;
+	*) die "unsupported build '$1'" ;;
+	esac
+}
+
+# build_local <tree sha> [dir]: build in the repo holding the tree, publish, set IMAGE_REF.
+build_local() {
+	local sha="$1" dir="${2:-$SCRIPT_DIR/..}"
+	IMAGE_REF="$(dumpstar_local_image_ref "$sha")"
+	echo "env: building $IMAGE_REF locally" >&2
+	dumpstar_local_image_build "$dir" "$sha" || die "the local image build failed"
+	dumpstar_registry_login || die "registry login failed"
+	podman push "$IMAGE_REF" >&2 || die "publishing $IMAGE_REF failed"
+}
+
+# build_arg <flag> <value>: the one spelling of a build, from --image, --ref or --tree.
+build_arg() {
+	case "$1" in
+	--image) printf '%s' "$2" ;;
+	--ref) printf 'ref:%s' "$2" ;;
+	--tree) printf 'dir:%s' "$2" ;;
 	esac
 }
 
@@ -154,6 +194,14 @@ wait_edge() {
 	return 1
 }
 
+# concierge_replica_url: the latest replica of the concierge tenant, addressed exactly as prod's
+# sidecar wrote it (litestream-lib.sh). A database id that is not one is refused there.
+concierge_replica_url() {
+	validate_database_id "$DUMPSTAR_ENV_CONCIERGE_DB" >/dev/null || die "DUMPSTAR_ENV_CONCIERGE_DB is not a database id"
+	LITESTREAM_S3_BUCKET="$DUMPSTAR_ENV_BACKUP_BUCKET" LITESTREAM_S3_PATH="$DUMPSTAR_ENV_BACKUP_PATH" \
+		LITESTREAM_S3_REGION="$DUMPSTAR_ENV_BACKUP_REGION" tenant_replica_url "$DUMPSTAR_ENV_CONCIERGE_DB"
+}
+
 render_slot() { # render_slot <slot> <outdir>
 	bash "$SCRIPT_DIR/render.sh" "$2" "$1" --hostname "$(hostname_of "$1")" \
 		--port "$DUMPSTAR_ENV_PORT" --secrets "/etc/dumpstar/$1"
@@ -165,13 +213,13 @@ cmd_up() {
 	local image="" slot="" t0 t1 t2 id s tmp mine first
 	while [ $# -gt 0 ]; do
 		case "$1" in
-		--image) image="${2:-}"; shift 2 ;;
+		--image | --ref | --tree) [ -z "$image" ] || die "up: give one of --image, --ref, --tree"
+			image="$(build_arg "$1" "${2:-}")"; shift 2 ;;
 		--name) slot="${2:-}"; shift 2 ;;
 		*) die "up: unknown argument $1" ;;
 		esac
 	done
-	[ -n "$image" ] || die "up: --image tree:<sha> is required"
-	parse_build "$image"
+	[ -n "$image" ] || die "up: --image tree:<sha>, --ref <branch|sha> or --tree <dir> is required"
 	env_load_config
 	t0="$(now)"
 	if [ -n "$slot" ]; then
@@ -183,6 +231,7 @@ cmd_up() {
 		done
 		[ -n "$slot" ] || die "up: all slots are taken ($DUMPSTAR_ENV_SLOTS); env down one"
 	fi
+	parse_build "$image"
 	tmp="$(mktemp -d)"
 	ENV_TMP="$tmp"
 	render_slot "$slot" "$tmp/render"
@@ -204,7 +253,9 @@ cmd_up() {
 	wait_ssm "$id" || { cmd_down_id "$id"; die "up: $id never reported to SSM; destroyed"; }
 	ssm_run "$id" up "$slot" "$tmp/render" "DUMPSTAR_ENV_IMAGE_REF=$IMAGE_REF" \
 		"DUMPSTAR_ENV_ACCESS_TEAM=$DUMPSTAR_ENV_ACCESS_TEAM" "DUMPSTAR_ENV_HOSTNAME=$(hostname_of "$slot")" \
-		"DUMPSTAR_ENV_EDGE_SECRET=dumpstar/$slot/edge" "DUMPSTAR_ENV_CLOUDFLARED_IMAGE=$DUMPSTAR_ENV_CLOUDFLARED_IMAGE" ||
+		"DUMPSTAR_ENV_EDGE_SECRET=dumpstar/$slot/edge" "DUMPSTAR_ENV_CLOUDFLARED_IMAGE=$DUMPSTAR_ENV_CLOUDFLARED_IMAGE" \
+		"DUMPSTAR_ENV_CONCIERGE_REPLICA=$(concierge_replica_url)" "DUMPSTAR_ENV_LITESTREAM_IMAGE=$DUMPSTAR_LITESTREAM_IMAGE" \
+		"DUMPSTAR_ENV_CONCIERGE_EMAIL=$DUMPSTAR_ENV_CONCIERGE_EMAIL" ||
 		{ cmd_down_id "$id"; die "up: starting $slot failed; the VM was destroyed"; }
 	t1="$(now)"
 	wait_edge "$(hostname_of "$slot")" || { cmd_down_id "$id"; die "up: the edge never answered for $(hostname_of "$slot"); the VM was destroyed"; }
@@ -223,17 +274,17 @@ cmd_update() {
 	shift
 	while [ $# -gt 0 ]; do
 		case "$1" in
-		--image) image="${2:-}"; shift 2 ;;
-		--ref | --tree) die "update: $1 is not built yet (sp-b2pnhw); use --image tree:<sha>" ;;
+		--image | --ref | --tree) [ -z "$image" ] || die "update: give one of --image, --ref, --tree"
+			image="$(build_arg "$1" "${2:-}")"; shift 2 ;;
 		*) die "update: unknown argument $1" ;;
 		esac
 	done
-	[ -n "$image" ] || die "update: --image tree:<sha> is required"
+	[ -n "$image" ] || die "update: --image tree:<sha>, --ref <branch|sha> or --tree <dir> is required"
 	valid_slot "$slot" || die "update: $slot is not one of: $DUMPSTAR_ENV_SLOTS"
-	parse_build "$image"
 	env_load_config
 	id="$(slot_instances "$slot" | head -1 | jq -r '.id // empty')"
 	[ -n "$id" ] || die "update: $slot has no environment"
+	parse_build "$image"
 	t0="$(now)"
 	tmp="$(mktemp -d)"
 	ENV_TMP="$tmp"

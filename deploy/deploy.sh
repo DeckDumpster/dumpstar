@@ -79,6 +79,10 @@ else
         echo "ERROR: deploy stopped before touching ${SERVICE_NAME}; it is still running its previous version." >&2
         exit 1
     }
+    dumpstar_refuse_local_image "$INSTANCE" "$PUBLISHED" "${DUMPSTAR_PREBUILT_IMAGE:-}" || {
+        echo "ERROR: deploy stopped before touching ${SERVICE_NAME}; it is still running its previous version." >&2
+        exit 1
+    }
     if [ -n "$PUBLISHED" ]; then export DUMPSTAR_PREBUILT_IMAGE="$PUBLISHED"; fi
     dumpstar_image_ensure "dumpstar:${INSTANCE}" "$REPO_DIR"
     unset DUMPSTAR_PREBUILT_IMAGE

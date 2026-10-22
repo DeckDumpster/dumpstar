@@ -112,7 +112,7 @@ pub fn weekly_play_group(abbreviation: &str, is_set: &dyn Fn(&str) -> bool) -> O
     if is_set(&own) {
         return Some(GroupInfo {
             set_code: own,
-            kind: GroupKind::Main,
+            kind: GroupKind::WeeklyPlay,
             variants: vec![],
         });
     }

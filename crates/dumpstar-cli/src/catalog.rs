@@ -203,7 +203,8 @@ pub fn run(args: CatalogApplyArgs) -> anyhow::Result<()> {
 /// lacks, or a thin price day pages.
 pub fn check(args: CatalogCheckArgs) -> anyhow::Result<()> {
     let catalog = Catalog::open_readonly(&shared_path(args.shared_db)?)?;
-    let alarms = check::run(catalog.conn(), Utc::now())?;
+    let report = check::run_report(catalog.conn(), Utc::now())?;
+    let alarms = report.open;
     for c in check::set_coverage(catalog.conn())? {
         println!(
             "coverage {}: {}/{} ({}%)",
@@ -212,6 +213,20 @@ pub fn check(args: CatalogCheckArgs) -> anyhow::Result<()> {
             c.printings,
             c.percent()
         );
+    }
+    let mut accepted: std::collections::BTreeMap<&str, usize> = Default::default();
+    for (a, _) in &report.accepted {
+        *accepted.entry(a.kind.as_str()).or_default() += 1;
+    }
+    for (kind, n) in &accepted {
+        println!("accepted {kind}: {n} (src/accepted_alarms.tsv)");
+    }
+    let mut info: std::collections::BTreeMap<&str, usize> = Default::default();
+    for a in &report.info {
+        *info.entry(a.kind.as_str()).or_default() += 1;
+    }
+    for (kind, n) in &info {
+        println!("info {kind}: {n}");
     }
     for a in &alarms {
         println!("ALARM {} {}: {}", a.kind, a.key, a.detail);

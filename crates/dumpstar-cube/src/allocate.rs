@@ -36,6 +36,8 @@ pub struct Plan {
     /// card id -> (copies owned, packs wanting it), for every contested card.
     pub contested: BTreeMap<String, (usize, usize)>,
     pub failures: Vec<Failure>,
+    /// Names of packs that are saved decks (`"saved": true`): they hold their copies outright.
+    pub saved: BTreeSet<String>,
     /// One entry per pack, by pack name.
     pub summary: Vec<PackSummary>,
 }
@@ -141,6 +143,8 @@ pub fn allocate_value<'a>(doc: &'a Value, fill: bool) -> Result<Plan, String> {
     let mut skel: Vec<Option<Vec<(&str, Meta)>>> = Vec::new();
     let mut wants: Vec<BTreeSet<&str>> = Vec::new();
     let mut pick_n: Vec<usize> = Vec::new();
+    let mut pick_set: Vec<BTreeSet<&str>> = Vec::new();
+    let mut saved: Vec<bool> = Vec::new();
     let mut pool_n: Vec<usize> = Vec::new();
     for (i, (name, p)) in packs.iter().enumerate() {
         names.push(name.clone());
@@ -165,16 +169,17 @@ pub fn allocate_value<'a>(doc: &'a Value, fill: bool) -> Result<Plan, String> {
                 want.insert(canon_id(id));
             }
         }
-        pick_n.push(
-            p.get("picks")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter_map(|c| c.as_str().or_else(|| c.get("id")?.as_str()))
-                .map(canon_id)
-                .collect::<BTreeSet<_>>()
-                .len(),
-        );
+        let picked: BTreeSet<&str> = p
+            .get("picks")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|c| c.as_str().or_else(|| c.get("id")?.as_str()))
+            .map(canon_id)
+            .collect();
+        pick_n.push(picked.len());
+        pick_set.push(picked);
+        saved.push(p.get("saved").and_then(Value::as_bool).unwrap_or(false));
         wants.push(want);
         let mut ids = BTreeSet::new();
         let mut rows: BTreeMap<&str, Option<Meta>> = BTreeMap::new();
@@ -337,6 +342,16 @@ pub fn allocate_value<'a>(doc: &'a Value, fill: bool) -> Result<Plan, String> {
     for c in demand.keys() {
         let mut ps = users.remove(c).unwrap_or_default();
         ps.retain(|p| demand[c].contains(p));
+        // A saved deck keeps its copy: it is already reserved on the site and cannot be taken back.
+        let firm: BTreeSet<usize> = demand[c]
+            .iter()
+            .copied()
+            .filter(|&p| saved[p])
+            .take(copies_owned[c])
+            .collect();
+        if !firm.is_empty() {
+            ps = firm;
+        }
         for &p in &ps {
             count[p] += 1;
         }
@@ -388,6 +403,35 @@ pub fn allocate_value<'a>(doc: &'a Value, fill: bool) -> Result<Plan, String> {
             ));
         }
     }
+    // A pack that loses a card it named in `picks` to a saved deck cannot be saved as written: the
+    // saved deck's copy is already reserved on the site. A loss to an unsaved pack is the plan's own
+    // assignment, which the pack is told to follow.
+    for (p, s) in summary.iter().enumerate() {
+        if saved[p] {
+            continue;
+        }
+        for (c, to) in s
+            .lost
+            .iter()
+            .filter(|(c, _)| pick_set[p].contains(c.as_str()))
+        {
+            let held: Vec<&str> = to
+                .iter()
+                .filter(|t| names.iter().position(|n| n == *t).is_some_and(|q| saved[q]))
+                .map(String::as_str)
+                .collect();
+            if !held.is_empty() {
+                failures.push(fail(
+                    "allocation",
+                    format!(
+                        "{} picks {c}, which is unavailable — held by {}",
+                        s.name,
+                        held.join(", ")
+                    ),
+                ));
+            }
+        }
+    }
     for (c, ps) in &reserved_to {
         reservations.insert(
             c.to_string(),
@@ -398,6 +442,10 @@ pub fn allocate_value<'a>(doc: &'a Value, fill: bool) -> Result<Plan, String> {
         reservations,
         contested,
         failures,
+        saved: (0..packs.len())
+            .filter(|&p| saved[p])
+            .map(|p| names[p].clone())
+            .collect(),
         summary,
     })
 }
@@ -1003,5 +1051,21 @@ mod tests {
             allocate_value(&rev, false).unwrap(),
         );
         assert_eq!(a.reservations, b.reservations);
+    }
+
+    #[test]
+    fn a_pick_held_by_a_saved_pack_fails_the_plan_naming_the_pack_and_card() {
+        let doc = json!({"owned": {"X": 1, "Y": 1}, "packs": [
+            {"name": "Hold 1", "saved": true, "slots": 1, "eligible": ["X"], "picks": ["X"]},
+            {"name": "Hold 2", "slots": 1, "eligible": ["X", "Y"], "picks": ["X"]},
+        ]});
+        let plan = allocate_value(&doc, false).unwrap();
+        assert_eq!(plan.reservations["X"], vec!["Hold 1"]);
+        assert_eq!(plan.failures.len(), 1, "{:?}", plan.failures);
+        let m = &plan.failures[0].message;
+        assert!(
+            m.contains("Hold 2") && m.contains("X") && m.contains("held by Hold 1"),
+            "{m}"
+        );
     }
 }

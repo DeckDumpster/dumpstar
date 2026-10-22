@@ -426,7 +426,6 @@ pub fn keyword_missing_from_keywords(conn: &Connection) -> Result<Vec<AlarmRecor
     Ok(out)
 }
 
-/// A sentence or line of at least ten characters that occurs twice.
 /// A stored keyword whose granted or conditional flag disagrees with the one
 /// rule its rules text derives (sp-gww4nf): own, conditional own, granted to
 /// another unit, or removed ("lose X") and so not stored at all.
@@ -474,9 +473,12 @@ pub fn keyword_misclassified(conn: &Connection) -> Result<Vec<AlarmRecord>> {
     Ok(out)
 }
 
+/// A line of at least ten characters that occurs twice. A clause repeated
+/// inside a line is a card that says it twice ("It costs 1 resource less" in
+/// each branch of a choice); the importer's defect was a whole line stated twice.
 fn repeated_sentence(rules: &str) -> Option<String> {
     let mut seen: Vec<&str> = Vec::new();
-    for part in rules.split(['\n', '.']).map(str::trim) {
+    for part in rules.split('\n').map(str::trim) {
         if part.len() < 10 {
             continue;
         }
@@ -494,7 +496,12 @@ fn repeated_sentence(rules: &str) -> Option<String> {
 /// (`number_collision`): a promo run filed under its parent set, as `SOR` once
 /// held a Weekly Play Battlefield Marine at the number of Director Krennic,
 /// breaks it. And a main expansion's Standard printings are numbered exactly
-/// 1..N (`standard_numbering_gap`), tokens (`T01`) aside.
+/// 1..N (`standard_numbering_gap`), tokens (`T01`) aside. Only the Normal
+/// finish is held to it: the official API numbers a Standard Foil of a main
+/// expansion in a run of its own, past the set's printed card count (JTL 525
+/// is the foil of a card numbered below 262), and not the Rose Gold and Gold
+/// Serialized parallels (variant codes 36, 37) the official API files as
+/// Standard at SEC's Serialized Prestige numbers.
 pub fn numbering(conn: &Connection) -> Result<Vec<AlarmRecord>> {
     let mut out = Vec::new();
     let mut stmt = conn.prepare(
@@ -521,6 +528,7 @@ pub fn numbering(conn: &Connection) -> Result<Vec<AlarmRecord>> {
         "SELECT p.set_code, CAST(p.number AS INTEGER) FROM printings p
            JOIN sets s ON s.set_code = p.set_code
           WHERE s.category = 'Main Expansions' AND p.variant = 'Standard'
+            AND p.finish = 'Normal' AND COALESCE(p.variant_code, '') NOT IN ('36', '37')
             AND p.number NOT GLOB '*[^0-9]*' AND p.number <> ''
           GROUP BY p.set_code, CAST(p.number AS INTEGER)
           ORDER BY p.set_code, 2",
@@ -555,8 +563,8 @@ pub fn numbering(conn: &Connection) -> Result<Vec<AlarmRecord>> {
 /// Data-lint over what the sources recorded, not what the join did.
 ///
 /// `number_out_of_range`: a main expansion's Standard printing numbered above
-/// twice the set's median Standard number, which no printed card count of the
-/// set reaches (the rest of the set is numbered 1..N; see [`numbering`]).
+/// twice the set's median Standard Normal number, which no printed card count
+/// of the set reaches (the rest of the set is numbered 1..N; see [`numbering`]).
 /// `truncated_subtitle`: a card whose subtitle ends in an ellipsis, which the
 /// source cut short (the official record of Jar Jar Binks carries
 /// "Mesa Propose…" on every one of its printings).
@@ -566,6 +574,7 @@ pub fn datalint(conn: &Connection) -> Result<Vec<AlarmRecord>> {
         "SELECT p.set_code, p.number, CAST(p.number AS INTEGER) FROM printings p
            JOIN sets s ON s.set_code = p.set_code
           WHERE s.category = 'Main Expansions' AND p.variant = 'Standard'
+            AND p.finish = 'Normal' AND COALESCE(p.variant_code, '') NOT IN ('36', '37')
             AND p.number NOT GLOB '*[^0-9]*' AND p.number <> ''
           ORDER BY p.set_code, 3",
     )?;
@@ -764,21 +773,63 @@ pub fn variant_image_shared(conn: &Connection) -> Result<Vec<AlarmRecord>> {
     Ok(out)
 }
 
-pub fn run(conn: &Connection, now: DateTime<Utc>) -> Result<Vec<AlarmRecord>> {
-    let mut out = stored(conn)?;
-    out.extend(missing_price_days(conn, now)?);
-    out.extend(coverage_drops(conn)?);
-    out.extend(missing_sealed_images(conn)?);
-    out.extend(numbering(conn)?);
-    out.extend(datalint(conn)?);
-    out.extend(missing_structured_text(conn)?);
-    out.extend(suspect_rules_text(conn)?);
-    out.extend(keyword_number_missing(conn)?);
-    out.extend(keyword_missing_from_keywords(conn)?);
-    out.extend(keyword_misclassified(conn)?);
-    out.extend(wrong_group(conn)?);
-    out.extend(image_wrong_card(conn)?);
-    out.extend(variant_image_shared(conn)?);
+/// What one check pass found: the alarms that fail the unit, the known-accepted
+/// ones (with the reason each is accepted), and the notes that never page.
+#[derive(Debug, Default)]
+pub struct Report {
+    pub open: Vec<AlarmRecord>,
+    pub accepted: Vec<(AlarmRecord, String)>,
+    pub info: Vec<AlarmRecord>,
+}
+
+/// Rows of `accepted_alarms.tsv`: `kind`, `key`, `reason`. A row accepts the one
+/// alarm of that kind and key and nothing else; a new key alarms until someone
+/// has read it and added a row (or fixed the data).
+pub fn accepted_table() -> Vec<(String, String, String)> {
+    include_str!("accepted_alarms.tsv")
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+        .filter_map(|l| {
+            let mut f = l.splitn(3, '\t');
+            Some((
+                f.next()?.trim().to_string(),
+                f.next()?.trim().to_string(),
+                f.next()?.trim().to_string(),
+            ))
+        })
+        .collect()
+}
+
+/// An official printing no tcgcsv product matches, in a set that is not on sale
+/// yet: tcgcsv lists a set once it is, so the gap is expected until its release
+/// date (`official_without_tcgcsv` only; every other kind still alarms).
+fn unreleased_set_gaps(conn: &Connection, now: DateTime<Utc>) -> Result<Vec<String>> {
+    let today = now.date_naive().to_string();
+    let mut stmt = conn.prepare(
+        "SELECT p.printing_id FROM printings p JOIN sets s ON s.set_code = p.set_code
+          WHERE s.release_date > ?1",
+    )?;
+    let ids = stmt
+        .query_map([today], |r| r.get::<_, String>(0))?
+        .collect::<std::result::Result<_, _>>()?;
+    Ok(ids)
+}
+
+pub fn run_report(conn: &Connection, now: DateTime<Utc>) -> Result<Report> {
+    let mut all = stored(conn)?;
+    all.extend(missing_price_days(conn, now)?);
+    all.extend(coverage_drops(conn)?);
+    all.extend(missing_sealed_images(conn)?);
+    all.extend(numbering(conn)?);
+    all.extend(datalint(conn)?);
+    all.extend(missing_structured_text(conn)?);
+    all.extend(suspect_rules_text(conn)?);
+    all.extend(keyword_number_missing(conn)?);
+    all.extend(keyword_missing_from_keywords(conn)?);
+    all.extend(keyword_misclassified(conn)?);
+    all.extend(wrong_group(conn)?);
+    all.extend(image_wrong_card(conn)?);
+    all.extend(variant_image_shared(conn)?);
     let latest: Option<String> = conn.query_row(
         "SELECT MAX(observed_on) FROM prices WHERE source = 'tcgcsv'",
         [],
@@ -787,12 +838,37 @@ pub fn run(conn: &Connection, now: DateTime<Utc>) -> Result<Vec<AlarmRecord>> {
     if let Some(day) = latest {
         let c = coverage(conn, &day)?;
         if c.ratio() < MIN_COVERAGE {
-            out.push(AlarmRecord::alarm(
+            all.push(AlarmRecord::alarm(
                 "low_price_coverage",
                 day.clone(),
                 format!("{} of {} printings priced on {day}", c.priced, c.eligible),
             ));
         }
     }
-    Ok(out)
+    let table = accepted_table();
+    let unreleased = unreleased_set_gaps(conn, now)?;
+    let mut report = Report::default();
+    for a in all {
+        if a.severity != "alarm" {
+            report.info.push(a);
+        } else if let Some((_, _, why)) = table
+            .iter()
+            .find(|(k, key, _)| *k == a.kind && *key == a.key)
+        {
+            report.accepted.push((a, why.clone()));
+        } else if a.kind == "official_without_tcgcsv" && unreleased.contains(&a.key) {
+            report.accepted.push((
+                a,
+                "its set is not released yet; tcgcsv lists a set once it is".into(),
+            ));
+        } else {
+            report.open.push(a);
+        }
+    }
+    Ok(report)
+}
+
+/// The alarms that fail the unit.
+pub fn run(conn: &Connection, now: DateTime<Utc>) -> Result<Vec<AlarmRecord>> {
+    Ok(run_report(conn, now)?.open)
 }

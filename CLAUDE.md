@@ -12,7 +12,7 @@ catalog, tenancy and the shared kit arrive in later rows.
 | --- | --- |
 | `crates/dumpstar-core` | domain types, the collection search query parser, importers |
 | `crates/dumpstar-db` | SQLite schemas — `shared.sqlite` is `dumpstar-catalog`'s `schema.sql` plus the overlay `schema_shared.sql`, tenants are `schema_user.sql` — and the queries and seeds over them |
-| `crates/dumpstar-catalog` | the SWU catalog seam: `schema.sql`, record types, raw landing, idempotent apply, the fake source, the `catalog-apply` job; the official-API and tcgcsv adapters (`swu`, `official`, `tcgcsv`), the join (`crosswalk`, `groups.tsv`), alarms (`check`, `catalog-check`) |
+| `crates/dumpstar-catalog` | the SWU catalog seam: `schema.sql`, record types, raw landing, idempotent apply, the fake source, the `catalog-apply` job; the official-API and tcgcsv adapters (`swu`, `official`, `tcgcsv`), the join (`crosswalk`, `groups.tsv`), alarms (`check`, `catalog-check`; `accepted_alarms.tsv` lists the hand-triaged alarms it passes, one row per kind and key with its reason) |
 | `crates/dumpstar-ingest` | the transport for the kit's TCGCSV client (`dumpster-kit-tcgcsv`, pinned by rev in the workspace `Cargo.toml`; category 79, Star Wars: Unlimited), retry, raw landing wire |
 | `crates/dumpstar-derive`, `-lakehouse` | the site's land/derive entry points and the `dumpstar-lake-derive` binary, over `dumpster-kit-lake`/`-derive`/`-lakehouse` |
 | `crates/dumpstar-ship`, `-erase` | the `DUMPSTAR` bindings and operator binaries over the kit's `-keys`, `-ship`, `-erase`; the raw landing zone, key custody, shipper, deletion and replay themselves are the kit's (`dumpster-kit-*` pinned in the workspace `Cargo.toml`) |

@@ -28,6 +28,15 @@
 #       the instance profile lets the VM read secret dumpstar/<slot>/edge and nothing else
 #   DUMPSTAR_ENV_ACCESS_TEAM  the Zero Trust team name (infra/edge access_team_name)
 #   DUMPSTAR_ENV_CLOUDFLARED_IMAGE  the pinned connector image
+#   DUMPSTAR_ENV_BACKUP_BUCKET  DUMPSTAR_ENV_BACKUP_PATH  DUMPSTAR_ENV_BACKUP_REGION
+#       prod's Litestream target (LITESTREAM_S3_BUCKET / _PATH / _REGION in its litestream.env);
+#       the instance profile may read the concierge tenant's replica under it and nothing else
+#   DUMPSTAR_ENV_CONCIERGE_DB  the concierge tenant's database id (dumpstar tenant list on prod)
+#   DUMPSTAR_ENV_CONCIERGE_EMAIL  the verified email bound to the concierge tenant in the environment
+#
+# THE DATA (sp-2xkn6g): up restores the concierge tenant's latest Litestream replica into the
+# slot's volume, as the only tenant of a fresh registry, beside a freshly built catalog. Never
+# Ryan's tenant, never prod's live database, nothing synced afterwards; drift is accepted.
 # The AMI must carry podman (Quadlet), jq, curl, openssl, the aws CLI and the SSM agent.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -37,6 +46,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/render-lib.sh"
 # shellcheck source=deploy/published-image-lib.sh
 . "$SCRIPT_DIR/published-image-lib.sh"
+# shellcheck source=deploy/litestream-lib.sh
+. "$SCRIPT_DIR/litestream-lib.sh"
 
 DUMPSTAR_ENV_SLOTS="env-1 env-2 env-3"
 # What the slot's tunnel forwards to: the origin_service default in infra/edge/variables.tf, read, not copied.
@@ -61,7 +72,7 @@ env_load_config() {
 		. "$DUMPSTAR_ENV_CONF"
 	fi
 	local v name
-	for v in AWS_PROFILE REGION AMI SUBNET SECURITY_GROUP INSTANCE_TYPE INSTANCE_PROFILE ACCESS_TEAM CLOUDFLARED_IMAGE; do
+	for v in AWS_PROFILE REGION AMI SUBNET SECURITY_GROUP INSTANCE_TYPE INSTANCE_PROFILE ACCESS_TEAM CLOUDFLARED_IMAGE BACKUP_BUCKET BACKUP_PATH BACKUP_REGION CONCIERGE_DB CONCIERGE_EMAIL; do
 		name="DUMPSTAR_ENV_$v"
 		[ -n "${!name:-}" ] || die "$name is not set (no default; see the header of deploy/env.sh)"
 	done
@@ -154,6 +165,14 @@ wait_edge() {
 	return 1
 }
 
+# concierge_replica_url: the latest replica of the concierge tenant, addressed exactly as prod's
+# sidecar wrote it (litestream-lib.sh). A database id that is not one is refused there.
+concierge_replica_url() {
+	validate_database_id "$DUMPSTAR_ENV_CONCIERGE_DB" >/dev/null || die "DUMPSTAR_ENV_CONCIERGE_DB is not a database id"
+	LITESTREAM_S3_BUCKET="$DUMPSTAR_ENV_BACKUP_BUCKET" LITESTREAM_S3_PATH="$DUMPSTAR_ENV_BACKUP_PATH" \
+		LITESTREAM_S3_REGION="$DUMPSTAR_ENV_BACKUP_REGION" tenant_replica_url "$DUMPSTAR_ENV_CONCIERGE_DB"
+}
+
 render_slot() { # render_slot <slot> <outdir>
 	bash "$SCRIPT_DIR/render.sh" "$2" "$1" --hostname "$(hostname_of "$1")" \
 		--port "$DUMPSTAR_ENV_PORT" --secrets "/etc/dumpstar/$1"
@@ -204,7 +223,9 @@ cmd_up() {
 	wait_ssm "$id" || { cmd_down_id "$id"; die "up: $id never reported to SSM; destroyed"; }
 	ssm_run "$id" up "$slot" "$tmp/render" "DUMPSTAR_ENV_IMAGE_REF=$IMAGE_REF" \
 		"DUMPSTAR_ENV_ACCESS_TEAM=$DUMPSTAR_ENV_ACCESS_TEAM" "DUMPSTAR_ENV_HOSTNAME=$(hostname_of "$slot")" \
-		"DUMPSTAR_ENV_EDGE_SECRET=dumpstar/$slot/edge" "DUMPSTAR_ENV_CLOUDFLARED_IMAGE=$DUMPSTAR_ENV_CLOUDFLARED_IMAGE" ||
+		"DUMPSTAR_ENV_EDGE_SECRET=dumpstar/$slot/edge" "DUMPSTAR_ENV_CLOUDFLARED_IMAGE=$DUMPSTAR_ENV_CLOUDFLARED_IMAGE" \
+		"DUMPSTAR_ENV_CONCIERGE_REPLICA=$(concierge_replica_url)" "DUMPSTAR_ENV_LITESTREAM_IMAGE=$DUMPSTAR_LITESTREAM_IMAGE" \
+		"DUMPSTAR_ENV_CONCIERGE_EMAIL=$DUMPSTAR_ENV_CONCIERGE_EMAIL" ||
 		{ cmd_down_id "$id"; die "up: starting $slot failed; the VM was destroyed"; }
 	t1="$(now)"
 	wait_edge "$(hostname_of "$slot")" || { cmd_down_id "$id"; die "up: the edge never answered for $(hostname_of "$slot"); the VM was destroyed"; }

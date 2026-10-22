@@ -205,7 +205,13 @@ fn allocate_value(doc: &serde_json::Value, verbose: bool, fill: bool) -> ExitCod
                     .lost
                     .iter()
                     .take(LOST_SHOWN)
-                    .map(|(c, to)| format!("{c} to {}", to.join("+")))
+                    .map(|(c, to)| {
+                        if !to.is_empty() && to.iter().all(|t| plan.saved.contains(t)) {
+                            format!("{c} held by {}", to.join("+"))
+                        } else {
+                            format!("{c} to {}", to.join("+"))
+                        }
+                    })
                     .collect();
                 let more = s.lost.len().saturating_sub(LOST_SHOWN);
                 println!(

@@ -326,6 +326,134 @@ fn wait_for_code(listener: &TcpListener, state: &str) -> Result<String, String> 
 }
 
 const RELOGIN: &str = "run `swu-cube-check login`";
+const RECONNECT: &str = "reconnect dumpstar in Claude Code (/mcp) or run `swu-cube-check login`";
+
+/// What Claude Code's own MCP sign-in holds for a site. Read-only: its store is never written and
+/// its refresh token is never used (rotating it would break Claude Code's copy).
+#[derive(Debug, PartialEq)]
+pub enum Mcp {
+    /// No readable entry for this site: not available, never an error.
+    Absent,
+    /// An entry whose access token has expired.
+    Expired(String),
+    Valid {
+        server: String,
+        token: String,
+    },
+}
+
+fn origin(url: &str) -> Option<String> {
+    let u = reqwest::Url::parse(url).ok()?;
+    Some(format!(
+        "{}://{}{}",
+        u.scheme(),
+        u.host_str()?,
+        u.port().map(|p| format!(":{p}")).unwrap_or_default()
+    ))
+}
+
+/// Pick the `mcpOAuth` entry in a Claude Code credentials document whose `serverUrl` origin is
+/// `site`'s. `now_ms` is the clock in epoch milliseconds.
+pub fn mcp_entry(creds: &str, site: &str, now_ms: u64) -> Mcp {
+    let Ok(v) = serde_json::from_str::<Value>(creds) else {
+        return Mcp::Absent;
+    };
+    let Some(want) = origin(site) else {
+        return Mcp::Absent;
+    };
+    let mut expired = None;
+    for (key, e) in v["mcpOAuth"].as_object().into_iter().flatten() {
+        if e["serverUrl"].as_str().and_then(origin).as_deref() != Some(&want) {
+            continue;
+        }
+        let server = e["serverName"]
+            .as_str()
+            .or_else(|| key.split('|').next())
+            .unwrap_or("dumpstar")
+            .to_string();
+        let Some(token) = e["accessToken"].as_str().filter(|t| !t.is_empty()) else {
+            continue;
+        };
+        match e["expiresAt"].as_u64() {
+            Some(at) if at > now_ms + SKEW * 1000 => {
+                return Mcp::Valid {
+                    server,
+                    token: token.into(),
+                };
+            }
+            _ => expired = Some(server),
+        }
+    }
+    expired.map_or(Mcp::Absent, Mcp::Expired)
+}
+
+/// The text of Claude Code's credentials store: `$SWU_CUBE_CHECK_CLAUDE_CREDENTIALS`, else
+/// `~/.claude/.credentials.json`, else (macOS) the login Keychain's "Claude Code-credentials".
+fn claude_credentials() -> Option<String> {
+    if let Some(p) = std::env::var_os("SWU_CUBE_CHECK_CLAUDE_CREDENTIALS") {
+        return std::fs::read_to_string(p).ok();
+    }
+    let home = PathBuf::from(std::env::var_os("HOME")?);
+    if let Ok(t) = std::fs::read_to_string(home.join(".claude/.credentials.json")) {
+        return Some(t);
+    }
+    if cfg!(target_os = "macos") {
+        let o = std::process::Command::new("security")
+            .args([
+                "find-generic-password",
+                "-s",
+                "Claude Code-credentials",
+                "-w",
+            ])
+            .output()
+            .ok()?;
+        if o.status.success() {
+            return String::from_utf8(o.stdout).ok();
+        }
+    }
+    None
+}
+
+pub fn claude_mcp(site: &str) -> Mcp {
+    claude_credentials().map_or(Mcp::Absent, |t| mcp_entry(&t, site, now() * 1000))
+}
+
+/// The site a command talks to: `--site`, else the cached login's, else `$DUMPSTAR_SITE`, else
+/// the default.
+pub fn site_url(path: &PathBuf, site_override: Option<&str>) -> String {
+    site_override
+        .map(String::from)
+        .or_else(|| load(path).ok().flatten().map(|c| c.site))
+        .or_else(|| std::env::var("DUMPSTAR_SITE").ok())
+        .unwrap_or_else(|| DEFAULT_SITE.to_string())
+        .trim_end_matches('/')
+        .to_string()
+}
+
+/// The credential in use, in order: Claude Code's MCP sign-in, then the checker's own login.
+/// The first element names the source, never the token.
+pub fn credential(
+    path: &PathBuf,
+    site_override: Option<&str>,
+) -> Result<(String, String, String), String> {
+    let base = site_url(path, site_override);
+    match claude_mcp(&base) {
+        Mcp::Valid { server, token } => {
+            return Ok((format!("Claude Code MCP sign-in ({server})"), token, base));
+        }
+        Mcp::Expired(server) => {
+            eprintln!("Claude Code's sign-in for {server} has expired: {RECONNECT}")
+        }
+        Mcp::Absent => {}
+    }
+    let (token, cfg) = access_token(path, site_override)?;
+    let who = if cfg.who.is_empty() {
+        "(unnamed)"
+    } else {
+        &cfg.who
+    };
+    Ok((format!("swu-cube-check login ({who})"), token, cfg.site))
+}
 
 /// The cached sign-in's access token, refreshed when it is near expiry. A missing cache or a
 /// refresh the issuer refuses is an error naming `login`; nothing else is tried.
@@ -367,9 +495,9 @@ pub struct Site {
 
 impl Site {
     pub fn open(path: &PathBuf, site_override: Option<&str>) -> Result<Site, String> {
-        let (token, cfg) = access_token(path, site_override)?;
+        let (_, token, base) = credential(path, site_override)?;
         Ok(Site {
-            base: cfg.site,
+            base,
             token,
             client: http()?,
         })
@@ -453,6 +581,81 @@ mod tests {
             challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"),
             "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
         );
+    }
+
+    const NOW: u64 = 1_000_000_000_000;
+
+    fn creds(entries: &[(&str, &str, u64)]) -> String {
+        let m: serde_json::Map<String, Value> = entries
+            .iter()
+            .map(|(name, url, exp)| {
+                (
+                    format!("{name}|abc123"),
+                    serde_json::json!({"serverName": name, "serverUrl": url,
+                        "accessToken": "tok", "refreshToken": "r", "expiresAt": exp}),
+                )
+            })
+            .collect();
+        serde_json::json!({"mcpOAuth": m}).to_string()
+    }
+
+    #[test]
+    fn a_valid_entry_for_the_site_is_used() {
+        let c = creds(&[("dumpstar", "https://star.dumpster.cards/mcp", NOW + 600_000)]);
+        assert_eq!(
+            mcp_entry(&c, "https://star.dumpster.cards", NOW),
+            Mcp::Valid {
+                server: "dumpstar".into(),
+                token: "tok".into()
+            }
+        );
+    }
+
+    #[test]
+    fn an_expired_entry_is_named_not_used() {
+        let c = creds(&[("dumpstar", "https://star.dumpster.cards/mcp", NOW - 1)]);
+        assert_eq!(
+            mcp_entry(&c, "https://star.dumpster.cards", NOW),
+            Mcp::Expired("dumpstar".into())
+        );
+    }
+
+    #[test]
+    fn another_server_is_absent() {
+        let c = creds(&[("other", "https://other.example/mcp", NOW + 600_000)]);
+        assert_eq!(
+            mcp_entry(&c, "https://star.dumpster.cards", NOW),
+            Mcp::Absent
+        );
+    }
+
+    #[test]
+    fn a_valid_entry_beats_an_expired_one_for_the_same_site() {
+        let c = creds(&[
+            ("old", "https://star.dumpster.cards/mcp", NOW - 1),
+            ("dumpstar", "https://star.dumpster.cards/mcp", NOW + 600_000),
+        ]);
+        assert!(matches!(
+            mcp_entry(&c, "https://star.dumpster.cards", NOW),
+            Mcp::Valid { .. }
+        ));
+    }
+
+    #[test]
+    fn malformed_stores_are_absent() {
+        for c in [
+            "",
+            "not json",
+            "{}",
+            r#"{"mcpOAuth": 3}"#,
+            r#"{"mcpOAuth": {"a|b": {"serverUrl": 1}}}"#,
+        ] {
+            assert_eq!(
+                mcp_entry(c, "https://star.dumpster.cards", NOW),
+                Mcp::Absent,
+                "{c}"
+            );
+        }
     }
 
     #[test]

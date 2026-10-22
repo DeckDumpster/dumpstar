@@ -15,9 +15,13 @@
 //! resolved in pack order.
 //!
 //! An eligible entry may also be a `search_cards` row (`id`, `type`, `cost`, `game.arenas`). A pack
-//! with any such row, and 15 slots, is a draw-card pack: it gets 15 cards that satisfy the pack
-//! skeleton (8 ground units, 3-4 space units, 3-4 events/upgrades, and the cost curve), or a named
-//! shortfall. Bare card ids in such a pack carry no type, so they are never chosen for it.
+//! with any such row, and 15 slots, is a draw-card pack: its pool must be able to satisfy the pack
+//! skeleton (8 ground units, 3-4 space units, 3-4 events/upgrades, and the cost curve), or the
+//! shortfall is named. The plan invents no picks: without `fill`, a pack with empty picks wants
+//! nothing reserved, but its slots are still placed from its pool, so shared pools that run dry
+//! report a shortfall naming the competing packs. With `fill` each such pack is given 15 cards that
+//! meet the skeleton; they count as filled (never as picks) and are reserved and contested like
+//! picks. Bare card ids in such a pack carry no type, so they are never chosen for it.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -27,7 +31,7 @@ use crate::{CURVE, DRAW_CARDS, Failure, GROUND_UNITS, fail};
 
 pub struct Plan {
     /// card id -> the packs it is reserved to, in pack order.
-    /// Only contested cards appear: the plan never picks a pack's draw list.
+    /// Only contested cards appear: the plan picks a pack's draw list only under `fill`.
     pub reservations: BTreeMap<String, Vec<String>>,
     /// card id -> (copies owned, packs wanting it), for every contested card.
     pub contested: BTreeMap<String, (usize, usize)>,
@@ -40,8 +44,12 @@ pub struct PackSummary {
     pub name: String,
     /// Slots the pack has.
     pub slots: usize,
-    /// Cards the plan holds for the pack: the skeleton selection, or the copies it could assign.
-    pub placed: usize,
+    /// Cards the pack's author named in `picks`.
+    pub picks: usize,
+    /// Cards `--fill` chose for the pack (0 without it); never counted as picks.
+    pub filled: usize,
+    /// Cards the pack is eligible for that have an owned copy.
+    pub pool: usize,
     /// Whether the pack skeleton was checked: `Some(true)` met, `Some(false)` unmet, `None` not
     /// checked (not a 15-slot pack, or only bare card ids that carry no type).
     pub skeleton: Option<bool>,
@@ -53,7 +61,7 @@ pub struct PackSummary {
     pub lost: Vec<(String, Vec<String>)>,
 }
 
-pub fn allocate_value<'a>(doc: &'a Value) -> Result<Plan, String> {
+pub fn allocate_value<'a>(doc: &'a Value, fill: bool) -> Result<Plan, String> {
     let owned = doc
         .get("owned")
         .and_then(Value::as_object)
@@ -132,6 +140,8 @@ pub fn allocate_value<'a>(doc: &'a Value) -> Result<Plan, String> {
     let mut eligible: Vec<Vec<&str>> = Vec::new();
     let mut skel: Vec<Option<Vec<(&str, Meta)>>> = Vec::new();
     let mut wants: Vec<BTreeSet<&str>> = Vec::new();
+    let mut pick_n: Vec<usize> = Vec::new();
+    let mut pool_n: Vec<usize> = Vec::new();
     for (i, (name, p)) in packs.iter().enumerate() {
         names.push(name.clone());
         slots.push(
@@ -155,6 +165,16 @@ pub fn allocate_value<'a>(doc: &'a Value) -> Result<Plan, String> {
                 want.insert(canon_id(id));
             }
         }
+        pick_n.push(
+            p.get("picks")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|c| c.as_str().or_else(|| c.get("id")?.as_str()))
+                .map(canon_id)
+                .collect::<BTreeSet<_>>()
+                .len(),
+        );
         wants.push(want);
         let mut ids = BTreeSet::new();
         let mut rows: BTreeMap<&str, Option<Meta>> = BTreeMap::new();
@@ -181,36 +201,36 @@ pub fn allocate_value<'a>(doc: &'a Value) -> Result<Plan, String> {
                 .filter(|(id, _)| copies.get(id).copied().unwrap_or(0) > 0)
                 .collect()
         }));
-        eligible.push(if skeleton {
-            Vec::new()
-        } else {
-            ids.into_iter()
-                .filter(|c| copies.get(c).copied().unwrap_or(0) > 0)
-                .collect()
-        });
+        let usable: Vec<&str> = ids
+            .into_iter()
+            .filter(|c| copies.get(c).copied().unwrap_or(0) > 0)
+            .collect();
+        pool_n.push(usable.len());
+        eligible.push(if skeleton && fill { Vec::new() } else { usable });
     }
-
-    // A card is contested when more packs pick or consider it than there are copies; eligibility
-    // alone never counts.
-    let mut demand: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
-    for (p, want) in wants.iter().enumerate() {
-        for &c in want {
-            if copies.contains_key(c) {
-                demand.entry(c).or_default().push(p);
-            }
-        }
-    }
-    demand.retain(|c, ps| ps.len() > copies[c]);
-    let contested: BTreeMap<String, (usize, usize)> = demand
-        .iter()
-        .map(|(c, ps)| (c.to_string(), (copies[c], ps.len())))
-        .collect();
 
     let mut failures = Vec::new();
     let mut unsolved_packs: BTreeSet<usize> = BTreeSet::new();
     let mut fixed: BTreeMap<&str, BTreeSet<usize>> = BTreeMap::new();
     let skeleton_packs: Vec<usize> = (0..packs.len()).filter(|&p| skel[p].is_some()).collect();
-    if !skeleton_packs.is_empty() {
+    let mut filled = vec![0usize; packs.len()];
+    if !fill {
+        // Without --fill the plan invents no cards: a skeleton pack is only checked to be possible
+        // from its own pool, and its slots are placed like any pack's, to show shared pools run dry.
+        for &p in &skeleton_packs {
+            let pool = skel[p].as_deref().unwrap_or(&[]);
+            let alone = pool.iter().map(|(id, _)| (*id, 1)).collect();
+            let weight = pool.iter().map(|(id, _)| (*id, 0.0)).collect();
+            if solve_pack(pool, &alone, &weight).is_empty() {
+                unsolved_packs.insert(p);
+                failures.push(fail(
+                    "allocation",
+                    skeleton_shortfall(&names[p], pool, false),
+                ));
+                eligible[p].clear();
+            }
+        }
+    } else if !skeleton_packs.is_empty() {
         let pools: Vec<&[(&str, Meta)]> =
             skel.iter().map(|s| s.as_deref().unwrap_or(&[])).collect();
         let (picks, unsolved) = plan_skeletons(&skeleton_packs, &pools, &copies);
@@ -218,6 +238,8 @@ pub fn allocate_value<'a>(doc: &'a Value) -> Result<Plan, String> {
             for c in cards {
                 *copies.get_mut(c).unwrap() -= 1;
                 fixed.entry(c).or_default().insert(p);
+                wants[p].insert(c);
+                filled[p] += 1;
             }
         }
         for p in unsolved {
@@ -228,6 +250,22 @@ pub fn allocate_value<'a>(doc: &'a Value) -> Result<Plan, String> {
             ));
         }
     }
+
+    // A card is contested when more packs pick, consider or were filled with it than there are
+    // copies; eligibility alone never counts.
+    let mut demand: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
+    for (p, want) in wants.iter().enumerate() {
+        for &c in want {
+            if copies_owned.contains_key(c) {
+                demand.entry(c).or_default().push(p);
+            }
+        }
+    }
+    demand.retain(|c, ps| ps.len() > copies_owned[c]);
+    let contested: BTreeMap<String, (usize, usize)> = demand
+        .iter()
+        .map(|(c, ps)| (c.to_string(), (copies_owned[c], ps.len())))
+        .collect();
 
     // held[p] = cards assigned to pack p; users[c] = packs holding c.
     let mut held: Vec<BTreeSet<&str>> = vec![BTreeSet::new(); packs.len()];
@@ -244,7 +282,7 @@ pub fn allocate_value<'a>(doc: &'a Value) -> Result<Plan, String> {
     }
 
     for p in 0..packs.len() {
-        if skel[p].is_some() {
+        if unsolved_packs.contains(&p) || (fill && skel[p].is_some()) {
             continue;
         }
         let short = slots[p] - held[p].len();
@@ -322,18 +360,18 @@ pub fn allocate_value<'a>(doc: &'a Value) -> Result<Plan, String> {
         .map(|p| PackSummary {
             name: names[p].clone(),
             slots: slots[p],
-            placed: if unsolved_packs.contains(&p) {
+            picks: pick_n[p],
+            filled: if unsolved_packs.contains(&p) {
                 0
-            } else if skel[p].is_some() {
-                slots[p]
             } else {
-                held[p].len()
+                filled[p]
             },
+            pool: pool_n[p],
             skeleton: skel[p].as_ref().map(|_| !unsolved_packs.contains(&p)),
             reserved: count[p],
             short: if unsolved_packs.contains(&p) {
                 slots[p]
-            } else if skel[p].is_some() {
+            } else if fill && skel[p].is_some() {
                 0
             } else {
                 slots[p] - held[p].len()
@@ -780,7 +818,7 @@ mod tests {
             doc,
             [&["Longbeam Cruiser", "Command Unit"], &["Longbeam Cruiser"]],
         );
-        let plan = allocate_value(&doc).unwrap();
+        let plan = allocate_value(&doc, false).unwrap();
         assert!(plan.failures.is_empty(), "{:?}", plan.failures);
         assert_eq!(
             plan.reservations["Longbeam Cruiser"],
@@ -793,7 +831,7 @@ mod tests {
     fn a_shortfall_names_the_card_and_the_competing_packs() {
         let mut doc = starving();
         doc["owned"]["Command Unit"] = json!(0);
-        let plan = allocate_value(&doc).unwrap();
+        let plan = allocate_value(&doc, false).unwrap();
         assert_eq!(plan.failures.len(), 1);
         let m = &plan.failures[0].message;
         assert!(
@@ -806,7 +844,7 @@ mod tests {
     fn a_pack_takes_one_copy_of_a_card() {
         let doc =
             json!({"owned": {"A": 2}, "packs": [{"name": "P", "slots": 2, "eligible": ["A"]}]});
-        assert_eq!(allocate_value(&doc).unwrap().failures.len(), 1);
+        assert_eq!(allocate_value(&doc, false).unwrap().failures.len(), 1);
     }
 
     /// An eligible pool whose card-id order breaks the skeleton: ten cost-2 events sort first, so
@@ -838,7 +876,7 @@ mod tests {
     #[test]
     fn one_pack_reserves_nothing() {
         let doc = skeleton_doc(1);
-        let plan = allocate_value(&doc).unwrap();
+        let plan = allocate_value(&doc, false).unwrap();
         assert!(plan.failures.is_empty(), "{:?}", plan.failures);
         assert!(plan.reservations.is_empty(), "{:?}", plan.reservations);
     }
@@ -846,7 +884,7 @@ mod tests {
     #[test]
     fn two_packs_wanting_one_copy_assign_it_to_exactly_one() {
         let doc = skeleton_doc(2);
-        let plan = allocate_value(&doc).unwrap();
+        let plan = allocate_value(&doc, false).unwrap();
         assert!(plan.failures.is_empty(), "{:?}", plan.failures);
         // Every card is wanted by both packs and owned once: all are contested, each to one pack.
         assert_eq!(plan.reservations.len(), 10 + 2 * 15);
@@ -859,7 +897,7 @@ mod tests {
         let mut doc = skeleton_doc(1);
         let eligible = doc["packs"][0]["eligible"].as_array_mut().unwrap();
         eligible.retain(|r| r["game"]["arenas"][0] != "Space");
-        let plan = allocate_value(&doc).unwrap();
+        let plan = allocate_value(&doc, false).unwrap();
         assert_eq!(plan.failures.len(), 1);
         let m = &plan.failures[0].message;
         assert!(m.contains("Pack 1") && m.contains("space"), "{m}");
@@ -875,7 +913,7 @@ mod tests {
     #[test]
     fn a_card_eligible_for_two_packs_but_picked_by_neither_is_reserved_to_neither() {
         let doc = with_picks(starving(), [&["Command Unit"], &[]]);
-        let plan = allocate_value(&doc).unwrap();
+        let plan = allocate_value(&doc, false).unwrap();
         assert!(plan.failures.is_empty(), "{:?}", plan.failures);
         assert!(plan.reservations.is_empty(), "{:?}", plan.reservations);
         assert!(plan.contested.is_empty());
@@ -886,7 +924,7 @@ mod tests {
         let mut doc = starving();
         doc["owned"]["Command Unit"] = json!(0);
         let doc = with_picks(doc, [&["Longbeam Cruiser"], &["Longbeam Cruiser"]]);
-        let plan = allocate_value(&doc).unwrap();
+        let plan = allocate_value(&doc, false).unwrap();
         assert_eq!(plan.reservations["Longbeam Cruiser"].len(), 1);
         assert_eq!(plan.failures.len(), 1);
         assert!(
@@ -909,7 +947,7 @@ mod tests {
         doc["packs"][0]["candidates"] =
             json!(own.iter().map(|r| r["id"].clone()).collect::<Vec<_>>());
         doc["packs"][0]["eligible"] = json!(own);
-        let plan = allocate_value(&doc).unwrap();
+        let plan = allocate_value(&doc, false).unwrap();
         assert!(plan.failures.is_empty(), "{:?}", plan.failures);
         assert!(!plan.reservations.contains_key("Z1-00"));
         assert_eq!(plan.reservations["A-000"].len(), 1);
@@ -930,7 +968,7 @@ mod tests {
 
     #[test]
     fn a_rare_owned_twice_wanted_by_two_packs_is_reserved_to_one() {
-        let plan = allocate_value(&rares(["A", "B"])).unwrap();
+        let plan = allocate_value(&rares(["A", "B"]), false).unwrap();
         assert!(plan.failures.is_empty(), "{:?}", plan.failures);
         assert_eq!(plan.reservations["R-1"].len(), 1);
         assert!(!plan.reservations.contains_key("C-1"));
@@ -938,8 +976,8 @@ mod tests {
 
     #[test]
     fn reversing_the_packs_gives_the_same_reservations() {
-        let a = allocate_value(&rares(["A", "B"])).unwrap();
-        let b = allocate_value(&rares(["B", "A"])).unwrap();
+        let a = allocate_value(&rares(["A", "B"]), false).unwrap();
+        let b = allocate_value(&rares(["B", "A"]), false).unwrap();
         assert_eq!(a.reservations, b.reservations);
         let lost = |p: &Plan| {
             p.summary
@@ -960,7 +998,10 @@ mod tests {
             }
         }
         rev["packs"].as_array_mut().unwrap().reverse();
-        let (a, b) = (allocate_value(&doc).unwrap(), allocate_value(&rev).unwrap());
+        let (a, b) = (
+            allocate_value(&doc, false).unwrap(),
+            allocate_value(&rev, false).unwrap(),
+        );
         assert_eq!(a.reservations, b.reservations);
     }
 }

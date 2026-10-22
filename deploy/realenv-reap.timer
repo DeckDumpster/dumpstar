@@ -1,0 +1,12 @@
+[Unit]
+Description=Disposable test environment reaper timer
+
+[Timer]
+# Every minute: an environment idle for 30 minutes is gone within 5 more, with the pass itself
+# and a teardown (about two minutes) well inside the margin.
+OnCalendar=minutely
+AccuracySec=10s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

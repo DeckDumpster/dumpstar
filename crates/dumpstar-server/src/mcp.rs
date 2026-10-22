@@ -1003,7 +1003,7 @@ impl ToolProvider for DumpstarTools {
             ),
             def(
                 "collection_summary",
-                "Counts of owned, reserved (in a deck) and available copies, distinct cards, decks and deck groups, with a `breakdown` of owned and available copies by type, aspect and set; bases by HP and epic or vanilla; leaders by aspect and alignment.".into(),
+                "Counts of owned, reserved (in a deck) and available copies, distinct cards, decks and deck groups, with a `breakdown` of owned and available copies by type, aspect and set; bases by HP and epic or vanilla; leaders by aspect and alignment. `leaders.by_aspect` is a raw count of leaders having each aspect: a two-color leader counts under both colors and a leader with no color under none, so it overstates the leaders that can lead a pack of one color; `leaders.by_aspect_alignment` splits each color by alignment.".into(),
                 schema(json!({}), &[]),
             ),
             def(

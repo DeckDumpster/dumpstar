@@ -126,6 +126,9 @@ of searches per pack (step 3) and choose from the results yourself; never search
 1. **`collection_summary`.** Learn what is owned and what is still available. A cube needs about
    20 Leaders, 40 bases (5 epic and 5 vanilla per color) and 300 draw cards. Leaders and non-base Rares and Legendaries are singleton,
    so count **distinct** ones (by title and subtitle); Commons, Uncommons and bases may repeat, so copies count for them.
+   Size the Leaders from `leaders.by_aspect_alignment`, not `leaders.by_aspect`: `by_aspect` is a raw
+   count of leaders having each aspect, so it counts a two-color leader under both colors and
+   overstates how many can lead a pack of one color.
 2. **Allocate leaders and base pairs.** Pick 20 Leaders: 10 Heroism, 10 Villainy, 5 of each color
    (for example Command 3+2, Vigilance 2+3, Aggression 3+2, Cunning 2+3). Apply the universality
    rule. Each pack takes an epic and a vanilla base of its Leader's color; if the collection lacks them, say so and build what is possible.

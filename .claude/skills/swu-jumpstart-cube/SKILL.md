@@ -149,15 +149,19 @@ them. The plan file holds only what you decide, `{"packs": [{"name": "Pack 1", "
 queries). Run
    `swu-cube-check allocate --plan plan.json`, or pipe it on stdin. It reserves only the **contested** copies: cards more packs pick or
    consider than there are copies of ; with none it prints
-   `no contested cards`. By default it prints one line per pack (`Pack 2: 15 of 15 picks, skeleton ok,
-   contested reserved 12, short 0, lost 40 (SOR-160 to Pack 5, ...)`: cards placed of slots,
+   `no contested cards`. It never invents picks: a pack with empty `picks` shows `0 of 15 picks`, and only
+   `picks` and `candidates` reserve. Empty-pick packs still have their slots placed from their pools, so
+   a shared pool too small for them all fails with `FAIL allocation:` naming the competing packs; pass
+   `--fill` to have the checker choose 15 skeleton cards for each draw-card pack, which are counted
+   as `filled` (never as picks), reserved and contested like picks. By default it prints one line per pack (`Pack 2: 15 of 15 picks, eligible pool of 80, skeleton ok,
+   contested reserved 12, short 0, lost 40 (SOR-160 to Pack 5, ...)`: picks you named of slots (`, N filled` with `--fill`), cards the pack is eligible for and owns,
    whether the pack skeleton was met (`ok`, `unmet`, or `not checked` for bare ids or a non-15 slot
    pack), contested copies reserved to it (0 is normal for a pack nobody competes with), slots it
    could not fill, contested cards that went to other packs); `--verbose` adds every `reserve <card>: Pack 2 (contested: 1 copy, 2 packs)`
    line. A Leader or non-base Rare or Legendary (the singleton set of `cube-singleton`, by title and
    subtitle) is reserved to at most one pack whatever the copies owned. The result does not depend
    on the packs' order in the file: packs are taken in name order, and a copy nobody holds goes to
-   the wanting pack with the fewest reservations so far, then by name. Pack names must be unique. It does not pick any pack's draw list. It prints `ok`, or `FAIL allocation:`
+   the wanting pack with the fewest reservations so far, then by name. Pack names must be unique. It does not pick any pack's draw list unless you pass `--fill`. It prints `ok`, or `FAIL allocation:`
    naming the card and the packs competing for it, which you report to the user; with rows, that
    also means no 15 cards meet the pack skeleton (8 ground, 3-4 space, 3-4 events or upgrades, the
    cost curve) from the pack's pool, and the message says what the pool lacks. Bare card ids carry no

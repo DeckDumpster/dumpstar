@@ -271,15 +271,53 @@ fn skeleton_pool(owned: &mut serde_json::Map<String, serde_json::Value>) -> Vec<
 fn the_pack_line_says_what_each_number_counts_for_an_uncontested_pack() {
     let mut owned = serde_json::Map::new();
     let rows = skeleton_pool(&mut owned);
-    let doc = json!({"owned": owned, "packs": [{"name": "Plan 1", "slots": 15, "eligible": rows, "candidates": rows}]});
+    let ids: Vec<_> = rows.iter().map(|r| r["id"].clone()).collect();
+    let doc = json!({"owned": owned, "packs": [{"name": "Plan 1", "slots": 15, "eligible": rows, "picks": ids}]});
     let (code, out) = run("allocate", &doc.to_string());
     assert_eq!(code, 0, "{out}");
     assert!(
-        out.contains(
-            "Plan 1: 15 of 15 picks, skeleton ok, contested reserved 0, short 0, lost 0\n"
-        ),
+        out.contains("Plan 1: 15 of 15 picks, eligible pool of 15, skeleton ok, contested reserved 0, short 0, lost 0\n"),
         "{out}"
     );
+}
+
+#[test]
+fn empty_picks_are_not_invented_and_a_filled_pack_says_filled() {
+    let mut owned = serde_json::Map::new();
+    let rows = skeleton_pool(&mut owned);
+    let doc = json!({"owned": owned, "packs": [{"name": "Plan 1", "slots": 15, "eligible": rows, "picks": []}]});
+    let (code, out) = run("allocate", &doc.to_string());
+    assert_eq!(code, 0, "{out}");
+    assert!(
+        out.contains("Plan 1: 0 of 15 picks, eligible pool of 15, skeleton ok"),
+        "{out}"
+    );
+    assert!(!out.contains("filled") || out.contains("--fill"), "{out}");
+    let (code, out) = run_args(&["allocate", "--fill"], &doc.to_string());
+    assert_eq!(code, 0, "{out}");
+    assert!(
+        out.contains("Plan 1: 0 of 15 picks, 15 filled, eligible pool of 15"),
+        "{out}"
+    );
+}
+
+#[test]
+fn twenty_empty_packs_over_a_small_shared_pool_report_contention() {
+    let mut owned = serde_json::Map::new();
+    let rows = skeleton_pool(&mut owned);
+    let packs: Vec<_> = (0..20)
+        .map(
+            |i| json!({"name": format!("Pack {i:02}"), "slots": 15, "eligible": rows, "picks": []}),
+        )
+        .collect();
+    let doc = json!({"owned": owned, "packs": packs});
+    let (code, out) = run("allocate", &doc.to_string());
+    assert_eq!(code, 1, "{out}");
+    assert!(
+        out.contains("FAIL allocation:") && out.contains("competing packs"),
+        "{out}"
+    );
+    assert!(!out.contains("no contested cards\n"), "{out}");
 }
 
 #[test]
@@ -297,13 +335,13 @@ fn the_pack_line_names_an_unmet_skeleton_and_a_short_pack() {
     assert_eq!(code, 1, "{out}");
     assert!(
         out.contains(
-            "Plan 1: 0 of 15 picks, skeleton unmet, contested reserved 0, short 15, lost 0"
+            "Plan 1: 0 of 15 picks, eligible pool of 14, skeleton unmet, contested reserved 0, short 15, lost 0"
         ),
         "{out}"
     );
     assert!(
         out.contains(
-            "Plan 2: 1 of 2 picks, skeleton not checked, contested reserved 0, short 1, lost 0"
+            "Plan 2: 1 of 2 picks, eligible pool of 1, skeleton not checked, contested reserved 0, short 1, lost 0"
         ),
         "{out}"
     );

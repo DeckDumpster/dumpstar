@@ -26,6 +26,8 @@ fn main() -> ExitCode {
     args.retain(|a| a != "--planned");
     let verbose = args.iter().any(|a| a == "--verbose");
     args.retain(|a| a != "--verbose");
+    let fill = args.iter().any(|a| a == "--fill");
+    args.retain(|a| a != "--fill");
     let status = args.iter().any(|a| a == "--status");
     args.retain(|a| a != "--status");
     if args.iter().any(|a| a == "--help" || a == "-h") {
@@ -53,7 +55,7 @@ fn main() -> ExitCode {
         return login(&remote, status);
     }
     if remote.any() {
-        return fetched(&args, &remote, planned, verbose);
+        return fetched(&args, &remote, planned, verbose, fill);
     }
     let (mode, paths) = match args.as_slice() {
         [m] => (m.as_str(), vec!["-"]),
@@ -64,7 +66,7 @@ fn main() -> ExitCode {
         _ => return usage(),
     };
     if mode == "allocate" {
-        return allocate(paths[0], verbose);
+        return allocate(paths[0], verbose, fill);
     }
     let mut docs = Vec::new();
     for path in &paths {
@@ -160,7 +162,7 @@ impl dumpstar_cube::fetch::Source for NoSite {
     }
 }
 
-fn allocate(path: &str, verbose: bool) -> ExitCode {
+fn allocate(path: &str, verbose: bool, fill: bool) -> ExitCode {
     let mut text = String::new();
     let read = if path == "-" {
         std::io::stdin().read_to_string(&mut text).map(|_| ())
@@ -172,20 +174,31 @@ fn allocate(path: &str, verbose: bool) -> ExitCode {
         return ExitCode::from(2);
     }
     match serde_json::from_str::<serde_json::Value>(&text) {
-        Ok(v) => allocate_value(&v, verbose),
+        Ok(v) => allocate_value(&v, verbose, fill),
         Err(e) => fail(format!("not JSON: {path}: {e}")),
     }
 }
 
-fn allocate_value(doc: &serde_json::Value, verbose: bool) -> ExitCode {
-    match dumpstar_cube::allocate::allocate_value(doc) {
+fn allocate_value(doc: &serde_json::Value, verbose: bool, fill: bool) -> ExitCode {
+    match dumpstar_cube::allocate::allocate_value(doc, fill) {
         Err(e) => {
             eprintln!("{e}");
             ExitCode::from(2)
         }
         Ok(plan) => {
-            if plan.reservations.is_empty() {
-                println!("no contested cards");
+            if plan.reservations.is_empty() && plan.failures.is_empty() {
+                let bare = plan
+                    .summary
+                    .iter()
+                    .filter(|s| s.picks == 0 && s.filled == 0)
+                    .count();
+                if bare == 0 {
+                    println!("no contested cards");
+                } else {
+                    println!(
+                        "no contested cards among picks ({bare} pack(s) have no picks; contention among their pools is not measured unless --fill)"
+                    );
+                }
             }
             for s in &plan.summary {
                 let lost: Vec<String> = s
@@ -196,10 +209,16 @@ fn allocate_value(doc: &serde_json::Value, verbose: bool) -> ExitCode {
                     .collect();
                 let more = s.lost.len().saturating_sub(LOST_SHOWN);
                 println!(
-                    "{}: {} of {} picks, skeleton {}, contested reserved {}, short {}, lost {}{}",
+                    "{}: {} of {} picks{}, eligible pool of {}, skeleton {}, contested reserved {}, short {}, lost {}{}",
                     s.name,
-                    s.placed,
+                    s.picks,
                     s.slots,
+                    if s.filled > 0 {
+                        format!(", {} filled", s.filled)
+                    } else {
+                        String::new()
+                    },
+                    s.pool,
                     match s.skeleton {
                         Some(true) => "ok",
                         Some(false) => "unmet",
@@ -258,14 +277,15 @@ const USAGE: &str = "usage: swu-cube-check login [--site URL] [--client-id ID] |
   --deck/--group/--plan  fetch decks and run searches over the site's /api yourself; every deck's lines_digest is checked.
             An expired or rejected sign-in exits 2 naming `login`; there is no fallback. allocate --plan FILE is
             {\"packs\": [{\"name\", \"queries\": [search strings], \"deck\": ID?, \"picks\": [...]}]} with the rows fetched for you
-       swu-cube-check pack [--planned] [FILE] | cube [--planned] [FILE...] | copies [--planned] [FILE...] | allocate [--verbose] [FILE]
+       swu-cube-check pack [--planned] [FILE] | cube [--planned] [FILE...] | copies [--planned] [FILE...] | allocate [--verbose] [--fill] [FILE]
   pack      check one pack document (get_deck's result) against the pack rules
   cube      check a 20-pack cube: a cube document, or one pack file per deck
   copies    only the copy-count check (cube-copies) over any number of pack files, for a partial build
-  allocate  plan copies across the cube (one line per pack: picks placed of slots, skeleton ok/unmet/not checked, contested reserved, short, lost; --verbose adds every
+  allocate  plan copies across the cube (one line per pack: picks of slots (+ filled with --fill), eligible pool, skeleton ok/unmet/not checked, contested reserved, short, lost; --verbose adds every
             reserve line; a Leader or non-base Rare/Legendary goes to at most one pack): {\"owned\": {id: copies}, \"packs\": [{\"name\", \"slots\": 15,
             \"eligible\": [search_cards rows or card ids], \"picks\": [...], \"candidates\": [...]}]}; only picks and candidates reserve; rows carry type, cost and arenas, so a
-            15-slot pack is placed cards that meet the pack skeleton, or a named shortfall; `contested reserved` counts only copies more packs want than are owned, so 0 is normal
+            15-slot pack must be able to meet the pack skeleton from its pool, or gets a named shortfall; the plan invents no picks: --fill chooses 15 skeleton cards for each
+            such pack and counts them as filled, reserved and contested like picks; `contested reserved` counts only copies more packs want than are owned, so 0 is normal
   FILE is read in place of stdin (`-` is stdin); exit 0 ok, 1 a rule failed, 2 unreadable input";
 
 fn usage() -> ExitCode {
@@ -348,7 +368,7 @@ fn login(r: &Remote, status: bool) -> ExitCode {
     }
 }
 
-fn fetched(args: &[String], r: &Remote, planned: bool, verbose: bool) -> ExitCode {
+fn fetched(args: &[String], r: &Remote, planned: bool, verbose: bool, fill: bool) -> ExitCode {
     use dumpstar_cube::{fetch, site};
     let [mode] = args else { return usage() };
     let src = match site::Site::open(&site::config_path(), r.site.as_deref()) {
@@ -387,7 +407,7 @@ fn fetched(args: &[String], r: &Remote, planned: bool, verbose: bool) -> ExitCod
         Err(e) => return fail(e),
     };
     if mode == "allocate" {
-        return allocate_value(&value, verbose);
+        return allocate_value(&value, verbose, fill);
     }
     if planned {
         dumpstar_cube::strip_reservations(&mut value);

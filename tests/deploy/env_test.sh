@@ -99,7 +99,8 @@ export STUB PATH="$BIN:$PATH"
 export DUMPSTAR_ENV_AWS_PROFILE=p DUMPSTAR_ENV_REGION=us-west-2 DUMPSTAR_ENV_AMI=ami-1 DUMPSTAR_ENV_SUBNET=subnet-1 \
 	DUMPSTAR_ENV_SECURITY_GROUP=sg-1 DUMPSTAR_ENV_INSTANCE_TYPE=c7i.large DUMPSTAR_ENV_INSTANCE_PROFILE=envvm \
 	DUMPSTAR_ENV_ACCESS_TEAM=team DUMPSTAR_ENV_CLOUDFLARED_IMAGE=docker.io/cloudflare/cloudflared:2026.1.0 \
-	DUMPSTAR_ENV_OWNER=tester
+	DUMPSTAR_ENV_OWNER=tester DUMPSTAR_ENV_BACKUP_BUCKET=bk DUMPSTAR_ENV_BACKUP_PATH=prod/tenants DUMPSTAR_ENV_BACKUP_REGION=us-west-2 \
+	DUMPSTAR_ENV_CONCIERGE_DB=01KZHQVMMS4CSRASCMG5XRCPC3 DUMPSTAR_ENV_CONCIERGE_EMAIL=concierge@example.com
 ENV="$REPO_DIR/deploy/env.sh"
 TREE=$(printf 'a%.0s' $(seq 40))
 TREE2=$(printf 'b%.0s' $(seq 40))
@@ -148,6 +149,15 @@ grep -q 'dumpstar/env-1/edge' "$STUB/ssm.log" && ok "the command names the secre
 grep -qE "(TUNNEL_TOKEN|CLIENT_SECRET)=[A-Za-z0-9]{8,}" "$STUB/ssm.log" && bad "a secret value is in the SSM command" || ok "no secret value is in the SSM command"
 want="$(sed -n 's|.*default *= *"http://127.0.0.1:\([0-9]*\)".*|\1|p' "$REPO_DIR/infra/edge/variables.tf")"
 grep -q "export DUMPSTAR_ENV_PORT='${want}'" "$STUB/ssm.log" && ok "the origin port is infra/edge's origin_service" || bad "the origin port drifted from infra/edge"
+
+# 6. The data: the concierge tenant's replica only, never the registry or another tenant.
+script="$(jq -r '.Parameters.commands[0]' <<<"$(grep -m1 "DUMPSTAR_ENV_VERB='up'" "$STUB/ssm.log")")"
+grep -q "export DUMPSTAR_ENV_CONCIERGE_REPLICA='s3://bk/prod/tenants/01KZHQVMMS4CSRASCMG5XRCPC3.sqlite?region=us-west-2'" <<<"$script" &&
+	ok "up addresses the concierge tenant's replica" || bad "up addresses the concierge tenant's replica"
+grep -q 'tenant create concierge' <<<"$script" && ! grep -qE 'tenant create (ryan|collection)|registry\.sqlite' <<<"$script" &&
+	ok "the volume gets the concierge tenant and no other" || bad "the volume gets the concierge tenant and no other"
+grep -q 'setup' <<<"$script" && ok "up builds the catalog" || bad "up builds the catalog"
+(unset DUMPSTAR_ENV_CONCIERGE_DB; bash "$ENV" up --image "tree:$TREE" >/dev/null 2>&1) && bad "no concierge database id is refused" || ok "no concierge database id is refused"
 
 # 5. No fallback.
 (unset DUMPSTAR_ENV_AMI; bash "$ENV" status >/dev/null 2>&1) && bad "a missing value is refused" || ok "a missing value is refused"

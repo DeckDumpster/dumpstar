@@ -6,7 +6,8 @@
 # Terraform. DUMPSTAR_ENV_VERB selects the step:
 #
 #   up      write the slot's env files (secrets from Secrets Manager, never echoed), install
-#           the units, pull the image, start the container and the tunnel connector
+#           the units, pull the image, fill the data volume (the concierge tenant's latest
+#           replica and a fresh catalog; sp-2xkn6g), start the container and the tunnel connector
 #   update  pull a different build, tag it as the slot's image, restart the container only:
 #           hostname, client, data and connector are untouched
 #   stop    stop the tunnel connector and the container (before the VM is destroyed)
@@ -37,6 +38,24 @@ set_key() {
 	rm -f "$tmp"
 }
 
+# fill_data: the slot's volume holds the concierge tenant and a catalog, and nothing else. The
+# registry is new, so no other tenant exists; the replica is the instance profile's to read, and
+# only the concierge's is addressed. Runs before the app starts, so nothing writes while it does.
+fill_data() {
+	local vol="dumpstar-${slot}-data" mnt id image="localhost/dumpstar:${slot}"
+	podman volume create "$vol" >/dev/null
+	mnt="$(podman volume inspect -f '{{.Mountpoint}}' "$vol")"
+	podman run --rm -v "$vol:/data:Z" -e DUMPSTAR_HOME=/data --entrypoint dumpstar "$image" setup
+	id="$(podman run --rm -v "$vol:/data:Z" -e DUMPSTAR_HOME=/data --entrypoint dumpstar "$image" \
+		tenant create concierge | sed -n 's/^Created user concierge -> database \([0-9A-Z]\{26\}\) .*/\1/p')"
+	[ -n "$id" ] || { echo "env-vm: could not create the concierge tenant" >&2; return 1; }
+	rm -f "$mnt/tenants/$id.sqlite" "$mnt/tenants/$id.sqlite-wal" "$mnt/tenants/$id.sqlite-shm"
+	podman run --rm --user 0:0 --network host -v "$vol:/data:Z" "$DUMPSTAR_ENV_LITESTREAM_IMAGE" \
+		restore -integrity-check full -o "/data/tenants/$id.sqlite" "$DUMPSTAR_ENV_CONCIERGE_REPLICA"
+	podman run --rm -v "$vol:/data:Z" -e DUMPSTAR_HOME=/data --entrypoint dumpstar "$image" \
+		tenant identity add concierge --email "$DUMPSTAR_ENV_CONCIERGE_EMAIL"
+}
+
 wait_health() {
 	local i
 	for i in $(seq 1 60); do
@@ -51,7 +70,8 @@ case "$DUMPSTAR_ENV_VERB" in
 up)
 	: "${DUMPSTAR_ENV_RENDER:?}" "${DUMPSTAR_ENV_IMAGE_REF:?}" "${DUMPSTAR_ENV_REGION:?}" \
 		"${DUMPSTAR_ENV_ACCESS_TEAM:?}" "${DUMPSTAR_ENV_HOSTNAME:?}" "${DUMPSTAR_ENV_PORT:?}" \
-		"${DUMPSTAR_ENV_EDGE_SECRET:?}" "${DUMPSTAR_ENV_CLOUDFLARED_IMAGE:?}"
+		"${DUMPSTAR_ENV_EDGE_SECRET:?}" "${DUMPSTAR_ENV_CLOUDFLARED_IMAGE:?}" \
+		"${DUMPSTAR_ENV_CONCIERGE_REPLICA:?}" "${DUMPSTAR_ENV_LITESTREAM_IMAGE:?}" "${DUMPSTAR_ENV_CONCIERGE_EMAIL:?}"
 	install -d -m 0700 "$secrets_dir" "$secrets_dir/aws"
 	install -d -m 0755 "$unit_dir"
 	cp "$DUMPSTAR_ENV_RENDER"/*.env "$secrets_dir/"
@@ -98,6 +118,7 @@ WantedBy=multi-user.target
 UNIT
 	cp "$DUMPSTAR_ENV_RENDER/dumpstar-${slot}.container" "$unit_dir/${app}.container"
 	pull_and_tag
+	fill_data
 	systemctl daemon-reload
 	systemctl start "${app}.service"
 	wait_health

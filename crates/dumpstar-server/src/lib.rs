@@ -3675,6 +3675,194 @@ mod tests {
             assert!(e.is_err());
         }
 
+        /// Deck groups: the swu-cube flow (a group by name on create_deck, list_decks by
+        /// group) is unchanged, groups have CRUDL over MCP and the API, a group releases as a
+        /// unit, and both delete modes do what they say.
+        #[tokio::test]
+        async fn deck_groups_are_managed_as_a_unit_and_the_name_flow_still_works() {
+            let mut site = Site::with_catalog(&["alice", "bob"], SECOND_CARD).await;
+            site.sign_in(member("alice@example.com")).await;
+            for _ in 0..2 {
+                let r = site.send("POST", "/api/collection", Some(ADD_CARD)).await;
+                assert_eq!(r.status(), StatusCode::CREATED);
+            }
+            let alice = site.token_for("alice@example.com");
+            let bob = site.token_for("bob@example.com");
+
+            // The plugin's flow: name a group that does not exist yet.
+            let mut ids = vec![];
+            for n in ["Pack 1", "Pack 2"] {
+                let d = site
+                    .tool(
+                        &alice,
+                        "create_deck",
+                        json!({"name": n, "format": "Jumpstart", "group": "Cube"}),
+                    )
+                    .await
+                    .unwrap();
+                ids.push(d["deck"]["id"].as_i64().unwrap());
+            }
+            let listed = site
+                .tool(&alice, "list_decks", json!({"group": "Cube"}))
+                .await
+                .unwrap();
+            assert_eq!(listed["decks"].as_array().unwrap().len(), 2);
+            let groups = site.tool(&alice, "list_groups", json!({})).await.unwrap();
+            assert_eq!(groups["groups"][0]["name"], "Cube");
+            assert_eq!(groups["groups"][0]["deck_count"], 2);
+            assert!(
+                site.tool(&bob, "list_groups", json!({})).await.unwrap()["groups"]
+                    .as_array()
+                    .unwrap()
+                    .is_empty(),
+                "another tenant sees none"
+            );
+
+            // CRUDL over MCP.
+            let made = site
+                .tool(
+                    &alice,
+                    "create_group",
+                    json!({"name": "Spare", "description": "d", "format": "Jumpstart"}),
+                )
+                .await
+                .unwrap();
+            let spare = made["group"]["id"].as_i64().unwrap();
+            assert!(
+                site.tool(&alice, "create_group", json!({"name": "Spare"}))
+                    .await
+                    .is_err()
+            );
+            let renamed = site
+                .tool(
+                    &alice,
+                    "update_group",
+                    json!({"id": spare, "name": "Spare 2", "description": null}),
+                )
+                .await
+                .unwrap();
+            assert_eq!(renamed["group"]["name"], "Spare 2");
+            assert!(renamed["group"]["description"].is_null());
+            let by_name = site
+                .tool(&alice, "get_group", json!({"name": "Cube"}))
+                .await
+                .unwrap();
+            assert_eq!(by_name["decks"].as_array().unwrap().len(), 2);
+            let refused = site
+                .rpc(
+                    &alice,
+                    "tools/call",
+                    json!({"name": "delete_group", "arguments": {"id": spare}}),
+                )
+                .await;
+            assert!(
+                refused["error"]["message"]
+                    .as_str()
+                    .is_some_and(|m| m.contains("'decks'")),
+                "the decks choice is required: {refused}"
+            );
+            site.tool(
+                &alice,
+                "delete_group",
+                json!({"id": spare, "decks": "ungroup"}),
+            )
+            .await
+            .unwrap();
+
+            // The API sees the same groups; a group renames with its decks.
+            let (s, body) = site
+                .api(Some(&alice), "GET", "/api/deck-groups", None)
+                .await;
+            assert_eq!(s, StatusCode::OK);
+            let list: serde_json::Value = serde_json::from_str(&body).unwrap();
+            let cube = list[0]["id"].as_i64().unwrap();
+            let (s, _) = site
+                .api(
+                    Some(&alice),
+                    "PUT",
+                    &format!("/api/deck-groups/{cube}"),
+                    Some(r#"{"name":"Cube 2"}"#),
+                )
+                .await;
+            assert_eq!(s, StatusCode::OK);
+            assert_eq!(get_deck(&site, &alice, ids[0]).await["group"], "Cube 2");
+            let (s, _) = site
+                .api(Some(&bob), "GET", &format!("/api/deck-groups/{cube}"), None)
+                .await;
+            assert_eq!(s, StatusCode::NOT_FOUND);
+
+            // Release the whole group: both decks' copies return.
+            site.tool(
+                &alice,
+                "set_deck_lines",
+                json!({"id": ids[0], "lines": [{"card_id": "SOR-1", "qty": 2}]}),
+            )
+            .await
+            .unwrap();
+            async fn held(site: &Site, tok: &str) -> i64 {
+                let g = site
+                    .tool(tok, "get_group", json!({"name": "Cube 2"}))
+                    .await
+                    .unwrap();
+                g["group"]["card_count"].as_i64().unwrap()
+            }
+            assert_eq!(held(&site, &alice).await, 2);
+            let (s, body) = site
+                .api(
+                    Some(&alice),
+                    "POST",
+                    &format!("/api/deck-groups/{cube}/release"),
+                    None,
+                )
+                .await;
+            assert_eq!((s, body.as_str()), (StatusCode::OK, r#"{"released":2}"#));
+            assert_eq!(held(&site, &alice).await, 0);
+
+            // Delete is refused without a choice; ungroup keeps the decks...
+            let url = format!("/api/deck-groups/{cube}");
+            let (s, _) = site.api(Some(&alice), "DELETE", &url, None).await;
+            assert_eq!(s, StatusCode::BAD_REQUEST);
+            let (s, _) = site
+                .api(
+                    Some(&alice),
+                    "DELETE",
+                    &format!("{url}?decks=ungroup"),
+                    None,
+                )
+                .await;
+            assert_eq!(s, StatusCode::OK);
+            assert!(get_deck(&site, &alice, ids[0]).await["group"].is_null());
+            // ...and the other mode deletes them with the group.
+            let g = site
+                .tool(&alice, "create_group", json!({"name": "Doomed"}))
+                .await
+                .unwrap()["group"]["id"]
+                .as_i64()
+                .unwrap();
+            site.tool(
+                &alice,
+                "update_deck",
+                json!({"id": ids[1], "group": "Doomed"}),
+            )
+            .await
+            .unwrap();
+            let done = site
+                .tool(&alice, "delete_group", json!({"id": g, "decks": "delete"}))
+                .await
+                .unwrap();
+            assert_eq!(done["decks_deleted"], 1);
+            assert!(
+                site.tool(&alice, "get_deck", json!({"id": ids[1]}))
+                    .await
+                    .is_err()
+            );
+            assert!(
+                site.tool(&alice, "get_deck", json!({"id": ids[0]}))
+                    .await
+                    .is_ok()
+            );
+        }
+
         /// sp-8y7ro4: the skill's second search (`a:<color> -a:heroism -a:villainy -t:base`) finds
         /// the same-color card with no alignment that the aligned search cannot.
         #[tokio::test]

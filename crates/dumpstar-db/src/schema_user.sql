@@ -89,6 +89,20 @@ CREATE TABLE IF NOT EXISTS decks (
     updated_at        TEXT NOT NULL
 );
 
+-- A deck group: a named container a set of decks is managed through (a cube's
+-- packs). Membership is by name — `decks.deck_group` holds the group's `name`
+-- — so a rename is one transaction (deck_groups::update) and the free-text
+-- column older builds and the MCP tools write stays the single link.
+-- `deck_groups::converge` makes a row of every name a deck carries.
+CREATE TABLE IF NOT EXISTS deck_groups (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL UNIQUE CHECK (name <> ''),
+    description TEXT,
+    format      TEXT,                          -- optional free-text format label
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+
 -- A deck's card list: game cards (shared.printings.card_id, an app-layer FK),
 -- never printings, and never physical copies — owned/missing is computed
 -- against the collection. A deck's lines reserve concrete copies through

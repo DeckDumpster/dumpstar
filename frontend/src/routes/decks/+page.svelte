@@ -4,8 +4,11 @@
 	import { count } from '$lib/format';
 	import { EmptyState } from '$lib/components/ui';
 	import type { Deck } from '$lib/types/Deck';
+	import type { DeckGroup } from '$lib/types/DeckGroup';
 
 	let decks = $state<Deck[]>([]);
+	let groups = $state<DeckGroup[]>([]);
+	let newGroup = $state('');
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let newName = $state('');
@@ -14,7 +17,8 @@
 
 	async function load() {
 		try {
-			decks = await api.decks();
+			[decks, groups] = await Promise.all([api.decks(), api.deckGroups()]);
+			error = null;
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -41,6 +45,24 @@
 			busy = false;
 		}
 	}
+
+	const ungrouped = $derived(decks.filter((d) => !d.group));
+	const membersOf = (g: DeckGroup) => decks.filter((d) => d.group === g.name);
+
+	async function createGroup() {
+		if (!newGroup.trim()) return;
+		busy = true;
+		error = null;
+		try {
+			await api.createDeckGroup({ name: newGroup.trim() });
+			newGroup = '';
+			await load();
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		} finally {
+			busy = false;
+		}
+	}
 </script>
 
 <svelte:head><title>Decks — Dumpstar</title></svelte:head>
@@ -59,31 +81,107 @@
 	<button type="submit" disabled={busy}>Create</button>
 </form>
 
+<form
+	class="newform"
+	onsubmit={(e) => {
+		e.preventDefault();
+		createGroup();
+	}}
+>
+	<input type="text" placeholder="New deck group name…" bind:value={newGroup} />
+	<button type="submit" disabled={busy}>Create group</button>
+</form>
+
 {#if error}<p class="error">{error}</p>{/if}
 
 {#if loading}
 	<p class="muted">Loading…</p>
-{:else if decks.length === 0}
+{:else if decks.length === 0 && groups.length === 0}
 	<EmptyState
 		title="No decks yet."
 		description="A deck holds the copies you've committed to a list, so they stop counting as loose collection. Name one above to create your first."
 	/>
 {:else}
-	<div class="grid">
-		{#each decks as deck (deck.id)}
-			<a class="tile" href="/decks/{deck.id}">
-				<div class="name">{deck.name}</div>
-				<div class="meta">
-					<span class="state state-{deck.state}">{deck.state}</span>
-					{#if deck.owner}· {deck.owner}{/if}
+	{#each groups as group (group.id)}
+		<details class="group">
+			<summary>
+				<span class="gname">{group.name}</span>
+				<span class="gmeta">
+					{count(group.deck_count)} decks · {count(group.card_count)} cards
+				</span>
+				<a class="open" href="/deck-groups/{group.id}">Manage group</a>
+			</summary>
+			{#if membersOf(group).length === 0}
+				<p class="muted">No decks in this group yet.</p>
+			{:else}
+				<div class="grid">
+					{#each membersOf(group) as deck (deck.id)}
+						{@render tile(deck)}
+					{/each}
 				</div>
-				<div class="count">{count(deck.card_count)} cards</div>
-			</a>
-		{/each}
-	</div>
+			{/if}
+		</details>
+	{/each}
+
+	{#if ungrouped.length > 0}
+		{#if groups.length > 0}<h2>Ungrouped decks</h2>{/if}
+		<div class="grid">
+			{#each ungrouped as deck (deck.id)}
+				{@render tile(deck)}
+			{/each}
+		</div>
+	{/if}
 {/if}
 
+{#snippet tile(deck: Deck)}
+	<a class="tile" href="/decks/{deck.id}">
+		<div class="name">{deck.name}</div>
+		<div class="meta">
+			<span class="state state-{deck.state}">{deck.state}</span>
+			{#if deck.owner}· {deck.owner}{/if}
+		</div>
+		<div class="count">{count(deck.card_count)} cards</div>
+	</a>
+{/snippet}
+
 <style>
+	h2 {
+		color: var(--color-text-accent);
+		font-size: var(--text-xl);
+		margin: var(--space-6) 0 var(--space-3);
+	}
+	.group {
+		background: var(--color-surface-panel);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-xl);
+		padding: var(--space-3) var(--space-4);
+		margin-bottom: var(--space-4);
+	}
+	summary {
+		cursor: pointer;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: var(--space-1) var(--space-3);
+		margin-bottom: var(--space-2);
+	}
+	.gname {
+		font-weight: 700;
+		color: var(--color-text-accent);
+	}
+	.gmeta {
+		font-size: var(--text-md);
+		color: var(--color-text-subtle);
+	}
+	.open {
+		margin-left: auto;
+		font-size: var(--text-md);
+		color: var(--color-text);
+	}
+	input {
+		min-width: 0;
+		max-width: 100%;
+	}
 	h1 {
 		color: var(--color-text-accent);
 	}

@@ -445,6 +445,10 @@ mod tests {
 
              INSERT INTO deck_cards (deck_id, card_id, zone, qty) VALUES (1, 'C1', 'main', 3);
 
+             INSERT INTO deck_groups (id, name, description, format, created_at, updated_at)
+             VALUES (1, 'Cube', 'twenty packs', 'Jumpstart', '2026-07-01T00:00:00+00:00',
+                     '2026-07-01T00:00:00+00:00');
+
              INSERT INTO orders (id, order_number, source, seller_name, order_date, subtotal,
                                  shipping, tax, total, shipping_status, estimated_delivery,
                                  notes, created_at)

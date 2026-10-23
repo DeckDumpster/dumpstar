@@ -20,6 +20,10 @@ import type { Deck } from './types/Deck';
 import type { DeckDetail } from './types/DeckDetail';
 import type { NewDeck } from './types/NewDeck';
 import type { DeckEdit } from './types/DeckEdit';
+import type { DeckGroup } from './types/DeckGroup';
+import type { DeckGroupEdit } from './types/DeckGroupEdit';
+import type { GroupDetail } from './types/GroupDetail';
+import type { NewDeckGroup } from './types/NewDeckGroup';
 import type { SealedEntry } from './types/SealedEntry';
 import type { SealedProduct } from './types/SealedProduct';
 import type { NewSealed } from './types/NewSealed';
@@ -230,6 +234,19 @@ export const api = {
 	createDeck: (d: Partial<NewDeck> & { name: string }) => send<Deck>('POST', '/api/decks', d),
 	updateDeck: (id: number, e: Partial<DeckEdit>) => send<Deck>('PUT', `/api/decks/${id}`, e),
 	deleteDeck: (id: number) => send<void>('DELETE', `/api/decks/${id}`),
+
+	// --- Deck groups ---
+	deckGroups: () => getJson<DeckGroup[]>('/api/deck-groups'),
+	deckGroup: (id: number) => getJson<GroupDetail>(`/api/deck-groups/${id}`),
+	createDeckGroup: (g: Partial<NewDeckGroup> & { name: string }) =>
+		send<DeckGroup>('POST', '/api/deck-groups', g),
+	updateDeckGroup: (id: number, e: Partial<DeckGroupEdit>) =>
+		send<GroupDetail>('PUT', `/api/deck-groups/${id}`, e),
+	/** What happens to the group's decks is always chosen: `ungroup` keeps them, `delete` deletes them. */
+	deleteDeckGroup: (id: number, decks: 'ungroup' | 'delete') =>
+		send<{ decks: number; decks_deleted: number }>('DELETE', `/api/deck-groups/${id}?decks=${decks}`),
+	releaseDeckGroup: (id: number) =>
+		send<{ released: number }>('POST', `/api/deck-groups/${id}/release`),
 
 	// --- Sealed products ---
 	sealedCollection: () => getJson<SealedEntry[]>('/api/sealed/collection'),

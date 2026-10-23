@@ -89,6 +89,7 @@ fn from_row(r: &rusqlite::Row) -> rusqlite::Result<Deck> {
 /// Create a deck; returns its id.
 pub fn create(conn: &Connection, new: &NewDeck) -> Result<i64> {
     let now = crate::clock::now_rfc3339();
+    crate::deck_groups::ensure(conn, new.group.as_deref())?;
     conn.execute(
         "INSERT INTO decks \
            (name, description, format, owner, state, sleeve_color, \
@@ -129,6 +130,8 @@ pub fn list(conn: &Connection) -> Result<Vec<Deck>> {
 
 /// Update editable fields. Returns whether a row changed.
 pub fn update(conn: &Connection, id: i64, edit: &DeckEdit) -> Result<bool> {
+    // An empty group takes the deck out of its group.
+    crate::deck_groups::ensure(conn, edit.group.as_deref())?;
     let n = conn.execute(
         "UPDATE decks SET \
            name             = COALESCE(?2, name), \
@@ -140,7 +143,7 @@ pub fn update(conn: &Connection, id: i64, edit: &DeckEdit) -> Result<bool> {
            storage_location = COALESCE(?8, storage_location), \
            notes            = COALESCE(?9, notes), \
            updated_at       = ?10, \
-           deck_group       = COALESCE(?11, deck_group) \
+           deck_group       = CASE WHEN ?11 = '' THEN NULL ELSE COALESCE(?11, deck_group) END \
          WHERE id = ?1",
         params![
             id,
@@ -171,6 +174,7 @@ pub struct DeckPatch {
 
 /// Apply a [`DeckPatch`]. Returns whether the deck exists.
 pub fn patch(conn: &Connection, id: i64, p: &DeckPatch) -> Result<bool> {
+    crate::deck_groups::ensure(conn, p.group.as_ref().and_then(|g| g.as_deref()))?;
     let flat = |f: &Option<Option<String>>| f.clone().flatten();
     let n = conn.execute(
         "UPDATE decks SET \
@@ -354,7 +358,10 @@ pub enum SetLines {
 /// Run `f` inside `BEGIN IMMEDIATE`: the write lock is taken up front, so two
 /// callers racing for the last free copy are serialized and the second sees
 /// the first's reservation.
-fn immediate<T>(conn: &Connection, f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
+pub(crate) fn immediate<T>(
+    conn: &Connection,
+    f: impl FnOnce(&Connection) -> Result<T>,
+) -> Result<T> {
     conn.execute_batch("BEGIN IMMEDIATE")?;
     match f(conn) {
         Ok(v) => {
@@ -520,18 +527,21 @@ pub fn set_lines(conn: &Connection, deck_id: i64, lines: &[Line]) -> Result<SetL
 /// Free every copy a deck holds, keeping its lines. Returns how many copies
 /// were freed.
 pub fn release(conn: &Connection, deck_id: i64) -> Result<u32> {
-    immediate(conn, |conn| {
-        require_deck(conn, deck_id)?;
-        let mut stmt = conn.prepare("SELECT id FROM collection WHERE deck_id = ?1")?;
-        let held: Vec<i64> = stmt
-            .query_map([deck_id], |r| r.get(0))?
-            .collect::<rusqlite::Result<_>>()?;
-        for id in &held {
-            conn.execute("UPDATE collection SET deck_id = NULL WHERE id = ?1", [id])?;
-            log_move(conn, *id, Some(deck_id), None, None, "released")?;
-        }
-        Ok(held.len() as u32)
-    })
+    immediate(conn, |conn| release_in(conn, deck_id))
+}
+
+/// [`release`] inside a transaction the caller holds.
+pub(crate) fn release_in(conn: &Connection, deck_id: i64) -> Result<u32> {
+    require_deck(conn, deck_id)?;
+    let mut stmt = conn.prepare("SELECT id FROM collection WHERE deck_id = ?1")?;
+    let held: Vec<i64> = stmt
+        .query_map([deck_id], |r| r.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    for id in &held {
+        conn.execute("UPDATE collection SET deck_id = NULL WHERE id = ?1", [id])?;
+        log_move(conn, *id, Some(deck_id), None, None, "released")?;
+    }
+    Ok(held.len() as u32)
 }
 
 /// A deck's lines with the copies backing each card.
@@ -682,19 +692,22 @@ pub fn validate(conn: &Connection, deck_id: i64) -> Result<Validation> {
 /// Delete a deck. Its cards are un-assigned (collection.deck_id is
 /// `ON DELETE SET NULL`), never deleted.
 pub fn delete(conn: &Connection, id: i64) -> Result<bool> {
-    immediate(conn, |conn| {
-        // The move log names decks without a cascade; the history of the
-        // copies stays, minus the reference to the deck that is going.
-        conn.execute(
-            "UPDATE movement_log SET from_deck_id = NULL WHERE from_deck_id = ?1",
-            [id],
-        )?;
-        conn.execute(
-            "UPDATE movement_log SET to_deck_id = NULL WHERE to_deck_id = ?1",
-            [id],
-        )?;
-        Ok(conn.execute("DELETE FROM decks WHERE id = ?1", [id])? > 0)
-    })
+    immediate(conn, |conn| delete_in(conn, id))
+}
+
+/// [`delete`] inside a transaction the caller holds.
+pub(crate) fn delete_in(conn: &Connection, id: i64) -> Result<bool> {
+    // The move log names decks without a cascade; the history of the
+    // copies stays, minus the reference to the deck that is going.
+    conn.execute(
+        "UPDATE movement_log SET from_deck_id = NULL WHERE from_deck_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "UPDATE movement_log SET to_deck_id = NULL WHERE to_deck_id = ?1",
+        [id],
+    )?;
+    Ok(conn.execute("DELETE FROM decks WHERE id = ?1", [id])? > 0)
 }
 
 #[cfg(test)]

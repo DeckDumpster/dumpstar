@@ -298,6 +298,22 @@ async fn api_responses_are_private(
     resp
 }
 
+/// Count a request in and out by route; in flight is entered minus left.
+async fn track_in_flight(
+    State(metrics): State<metrics::Metrics>,
+    req: axum::extract::Request,
+    next: middleware::Next,
+) -> Response {
+    let route = req
+        .extensions()
+        .get::<axum::extract::MatchedPath>()
+        .map_or_else(|| "unmatched".to_string(), |p| p.as_str().to_string());
+    metrics.in_flight(&route, true);
+    let resp = next.run(req).await;
+    metrics.in_flight(&route, false);
+    resp
+}
+
 /// Count a signed-in request for the reaper's idle clock (`metrics::ACTIVITY_METRIC`).
 async fn count_activity(
     State(metrics): State<metrics::Metrics>,
@@ -527,6 +543,10 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
             api_bearer,
         ))
         .layer(middleware::from_fn(api_responses_are_private))
+        .layer(middleware::from_fn_with_state(
+            state.metrics.clone(),
+            track_in_flight,
+        ))
         .layer(dumpster_kit_telemetry::RouteMetricsLayer::new(
             state.metrics.telemetry(),
         ))

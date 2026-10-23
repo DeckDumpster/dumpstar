@@ -3195,7 +3195,7 @@ M22="${WORK}/m22"
 dumpstar_scaffold_metrics_env prod "$M22/prod" >/dev/null
 EP22="$(sed -n 's/^DUMPSTER_OTLP_METRICS_ENDPOINT=//p' "$M22/prod/metrics.env")"
 check "prod's metrics.env sets the endpoint, uncommented" "1" 	"$(grep -c '^DUMPSTER_OTLP_METRICS_ENDPOINT=http' "$M22/prod/metrics.env" || true)"
-check "the endpoint is the product stack's OTLP path" "http://10.0.2.2:8428/opentelemetry/v1/metrics" "$EP22"
+check "the endpoint is the product stack's OTLP path" "http://100.95.160.116:8428/opentelemetry/v1/metrics" "$EP22"
 check "prod's metrics.env has no placeholder" "0" "$(grep -c 'CHANGE_ME' "$M22/prod/metrics.env" || true)"
 check "the unit maps the host loopback to that address" "1" 	"$(grep -c '^Network=slirp4netns:allow_host_loopback=true$' "${REPO_DIR}/deploy/dumpstar.container" || true)"
 mkdir -p "$M22/old"

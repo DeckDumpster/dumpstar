@@ -12,7 +12,7 @@ output "access_app_id" {
 }
 
 output "pocketid_client_id" {
-  value = pocketid_client.this[var.instance].client_id
+  value = pocketid_client.this[var.instance].id
 }
 
 output "edge_secret_name" {

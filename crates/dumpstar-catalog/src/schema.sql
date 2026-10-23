@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS cards (
     arenas           TEXT NOT NULL DEFAULT '[]', -- JSON array
     rules_text       TEXT,
     keywords         TEXT NOT NULL DEFAULT '[]', -- JSON array of {"name": "Raid", "value": 2|null}
+    mechanics        TEXT NOT NULL DEFAULT '[]', -- JSON array of {"name": "force", "role": "produces|consumes|requires", "side": "front|deployed"?, "optional": bool}
     is_unique        INTEGER NOT NULL DEFAULT 0, -- 1 for a unique card (the bullet before its name)
     epic_action      TEXT                       -- a leader's or base's epic action text, when it has one
 );

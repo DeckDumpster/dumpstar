@@ -4369,6 +4369,38 @@ mod tests {
             assert_eq!(ku["total"], json!(0), "{ku}");
         }
 
+        /// sp-iz2vmf: the card object carries its mechanics, and makes:, uses:, needs: and
+        /// has:dependency search them.
+        #[tokio::test]
+        async fn mechanics_are_in_the_card_object_and_searchable() {
+            let site = Site::with_catalog(
+                &["alice"],
+                &format!("{SECOND_CARD} UPDATE cards SET mechanics='[{{\"name\":\"force\",\"role\":\"consumes\",\"side\":\"front\",\"optional\":false}}]' WHERE card_id='SOR-2';"),
+            )
+            .await;
+            let t = site.token_for("alice@example.com");
+            let card = site
+                .tool(&t, "get_card", json!({"id": "SOR-2"}))
+                .await
+                .unwrap();
+            assert_eq!(
+                card["card"]["game"]["mechanics"],
+                json!([{"name": "force", "role": "consumes", "side": "front", "optional": false}])
+            );
+            for (q, total) in [
+                ("uses:force", 1),
+                ("has:dependency", 1),
+                ("makes:force", 0),
+                ("needs:force", 0),
+            ] {
+                let r = site
+                    .tool(&t, "search_cards", json!({"q": q}))
+                    .await
+                    .unwrap();
+                assert_eq!(r["total"], json!(total), "{q}: {r}");
+            }
+        }
+
         /// sp-5mb0l3: every term query_help lists is in the search_cards description.
         #[tokio::test]
         async fn the_search_cards_description_names_every_query_help_term() {

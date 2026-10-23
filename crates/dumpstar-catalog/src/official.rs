@@ -749,6 +749,10 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
                 arenas: rel_names(a, "arenas"),
                 rules_text: rules_text_of(a),
                 keywords: keywords_of(a, &card_id, &mut payload.alarms),
+                mechanics: {
+                    let rules = rules_text_of(a);
+                    crate::mechanics::mechanics_of(card_type_of(a).as_deref(), rules.as_deref())
+                },
                 unique: a.get("unique").and_then(Value::as_bool).unwrap_or(false),
                 epic_action: text(a, "epicAction").or_else(|| epic_action_in(a)),
                 rules_html: {

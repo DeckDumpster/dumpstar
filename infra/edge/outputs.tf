@@ -7,10 +7,6 @@ output "tunnel_id" {
   value = cloudflare_zero_trust_tunnel_cloudflared.this[var.instance].id
 }
 
-output "access_app_id" {
-  value = cloudflare_zero_trust_access_application.this[var.instance].id
-}
-
 output "pocketid_client_id" {
   value = pocketid_client.this[var.instance].id
 }

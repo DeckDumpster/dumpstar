@@ -43,26 +43,6 @@ variable "cloudflare_zone_id" {
   description = "Zone of dumpster.cards."
 }
 
-variable "access_team_name" {
-  type        = string
-  description = "Zero Trust team name (<team>.cloudflareaccess.com)."
-}
-
-variable "access_idp_id" {
-  type        = string
-  description = "Id of the Pocket ID identity provider configured in Zero Trust."
-}
-
-variable "access_group_id" {
-  type        = string
-  description = "Id of the Access group that requires membership of the Pocket ID group. Every instance uses the same one; the concierge test identity is a member."
-}
-
-variable "access_session_duration" {
-  type    = string
-  default = "24h"
-}
-
 variable "pocketid_url" {
   type    = string
   default = "https://id.gantt.pub"
@@ -85,14 +65,11 @@ variable "lake_bucket" {
 }
 
 # Prod's resources exist already; set this once to import them (prod.import.tfvars). Leave null
-# for a slot. The ids are the tunnel id, the DNS record id, the Access policy id, the Access
-# application id and the Pocket ID client id.
+# for a slot. The ids are the tunnel id, the DNS record id and the Pocket ID client id.
 variable "import_ids" {
   type = object({
     tunnel          = string
     dns_record      = string
-    access_policy   = string
-    access_app      = string
     pocketid_client = string
   })
   default = null

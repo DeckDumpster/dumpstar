@@ -62,33 +62,10 @@ resource "cloudflare_dns_record" "this" {
 }
 
 # --- Access ----------------------------------------------------------------------------------
-
-resource "cloudflare_zero_trust_access_policy" "this" {
-  for_each   = local.keys
-  account_id = var.cloudflare_account_id
-  name       = "dumpstar-${var.instance} required group"
-  decision   = "allow"
-
-  include = [{
-    group = { id = var.access_group_id }
-  }]
-}
-
-resource "cloudflare_zero_trust_access_application" "this" {
-  for_each                  = local.keys
-  account_id                = var.cloudflare_account_id
-  name                      = "dumpstar-${var.instance}"
-  type                      = "self_hosted"
-  domain                    = var.hostname
-  session_duration          = var.access_session_duration
-  allowed_idps              = [var.access_idp_id]
-  auto_redirect_to_identity = true
-
-  policies = [{
-    id         = cloudflare_zero_trust_access_policy.this[each.key].id
-    precedence = 1
-  }]
-}
+# Deliberately none. Prod has no Cloudflare Access application: dumpstar does its own sign-in
+# (Pocket ID OIDC for pages, MCP OAuth for /mcp, bearer for /api), and an edge login wall in
+# front of a slot would turn /.well-known/*, /mcp, /api and /health into a 302 to a login page
+# that MCP and API clients cannot pass. A slot is reachable exactly the way prod is.
 
 # --- Pocket ID OIDC client -------------------------------------------------------------------
 
@@ -133,7 +110,6 @@ resource "aws_secretsmanager_secret_version" "edge" {
     CLOUDFLARED_TUNNEL_TOKEN    = data.cloudflare_zero_trust_tunnel_cloudflared_token.this[each.key].token
     DUMPSTAR_OIDC_CLIENT_ID     = pocketid_client.this[each.key].id
     DUMPSTAR_OIDC_CLIENT_SECRET = pocketid_client.this[each.key].client_secret
-    DUMPSTAR_ACCESS_AUD         = cloudflare_zero_trust_access_application.this[each.key].aud
   })
 
   # client_id is an optional input of pocketid_client, null when unset: the generated
@@ -144,9 +120,8 @@ resource "aws_secretsmanager_secret_version" "edge" {
         data.cloudflare_zero_trust_tunnel_cloudflared_token.this[each.key].token,
         pocketid_client.this[each.key].id,
         pocketid_client.this[each.key].client_secret,
-        cloudflare_zero_trust_access_application.this[each.key].aud,
       ] : v != null && v != ""])
-      error_message = "the edge secret for ${var.instance} would carry an empty value (tunnel token, OIDC client id, OIDC client secret or Access aud)"
+      error_message = "the edge secret for ${var.instance} would carry an empty value (tunnel token, OIDC client id or OIDC client secret)"
     }
   }
 }

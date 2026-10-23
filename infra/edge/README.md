@@ -17,15 +17,15 @@ Per instance:
 
 - Cloudflare tunnel `dumpstar-<instance>`, its ingress (hostname → `origin_service`, else 404)
   and a proxied CNAME to `<tunnel>.cfargotunnel.com`.
-- Access policy (allow the one required group, the same on every instance; the concierge test
-  identity is a member of it) and a self-hosted Access application on the hostname, Pocket ID
-  as the only IdP.
+- No Cloudflare Access application or policy, on a slot or on prod: prod has none, and an edge
+  login wall would answer `/.well-known/*`, `/mcp`, `/api` and `/health` with a 302 before
+  dumpstar does, which MCP and API clients cannot pass. dumpstar signs in itself (Pocket ID OIDC).
 - Pocket ID OIDC client `dumpstar-<instance>` (callback `https://<host>/auth/callback`, PKCE,
   limited to the required Pocket ID group), through the registry's maintained community provider
   `Trozz/pocketid` — no bespoke tool.
 - S3 prefix `instance/<instance>/` in the lake bucket.
 - Secrets Manager `dumpstar/<instance>/edge`: `CLOUDFLARED_TUNNEL_TOKEN`, `DUMPSTAR_OIDC_CLIENT_ID`,
-  `DUMPSTAR_OIDC_CLIENT_SECRET`, `DUMPSTAR_ACCESS_AUD`. The same mechanism as `dumpstar/lake`;
+  `DUMPSTAR_OIDC_CLIENT_SECRET`. The same mechanism as `dumpstar/lake`;
   there are no secret outputs, so no log carries one.
 
 ## Apply order
@@ -48,12 +48,12 @@ bash run.sh env-1 apply
 
 ## Importing prod (once)
 
-Prod's tunnel, DNS record, Access app/policy and Pocket ID client were made by hand
+Prod's tunnel, DNS record and Pocket ID client were made by hand
 (`deploy/README.md`, sp-qmkwly). Copy `prod.import.tfvars.example` to `prod.import.tfvars`, fill
-the five ids, then `bash run.sh prod import-plan`; the plan must show only the imports and no
+the three ids, then `bash run.sh prod import-plan`; the plan must show only the imports and no
 change. Apply, then delete the file: the `import` blocks only fire while `import_ids` is set.
 Two things to read in that first plan: `tunnel_secret` is ignored (an imported tunnel keeps its
-own), and anything the dashboard set that the module does not (session length, IdP list) shows as
+own), and anything the dashboard set that the module does not shows as
 a diff to settle in `variables.tf`, not to apply over.
 
 Providers read `CLOUDFLARE_API_TOKEN` and `POCKETID_API_TOKEN` from the environment.

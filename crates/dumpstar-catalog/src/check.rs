@@ -428,8 +428,27 @@ pub fn keyword_missing_from_keywords(conn: &Connection) -> Result<Vec<AlarmRecor
 
 /// A card whose rules text mentions a mechanic-like term (the Force, the
 /// initiative, a token) that its stored mechanics do not account for: new
-/// wording outside the derivation's vocabulary (sp-1qcjva).
+/// wording outside the derivation's vocabulary (sp-1qcjva). Not an outage: the
+/// finding is `info`, and `catalog-check` files it as a vocabulary-fix bead
+/// ([`crate::filing`]) instead of failing the unit.
 pub fn mechanic_unmatched(conn: &Connection) -> Result<Vec<AlarmRecord>> {
+    Ok(mechanic_findings(conn)?
+        .into_iter()
+        .map(|f| {
+            AlarmRecord::info(
+                "mechanic_unmatched",
+                f.card_id,
+                format!(
+                    "the rules text says \"{}\" but derives no mechanic for it",
+                    f.phrase
+                ),
+            )
+        })
+        .collect())
+}
+
+/// Every (card, unmatched phrase) with the card's rules text.
+pub fn mechanic_findings(conn: &Connection) -> Result<Vec<crate::filing::Finding>> {
     let mut out = Vec::new();
     let mut stmt = conn.prepare(
         "SELECT card_id, mechanics, rules_text FROM cards
@@ -447,11 +466,11 @@ pub fn mechanic_unmatched(conn: &Connection) -> Result<Vec<AlarmRecord>> {
         let have: Vec<crate::mechanics::MechanicRecord> =
             serde_json::from_str(&mechanics).unwrap_or_default();
         for phrase in crate::mechanics::unmatched_terms(Some(&rules), &have) {
-            out.push(AlarmRecord::alarm(
-                "mechanic_unmatched",
-                id.clone(),
-                format!("the rules text says \"{phrase}\" but derives no mechanic for it"),
-            ));
+            out.push(crate::filing::Finding {
+                card_id: id.clone(),
+                rules_text: rules.clone(),
+                phrase,
+            });
         }
     }
     Ok(out)

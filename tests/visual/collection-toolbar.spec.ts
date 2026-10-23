@@ -89,7 +89,7 @@ for (const width of [390, 1280]) {
 			localStorage.setItem('collection.view', 'table');
 			sessionStorage.clear();
 		});
-		await page.goto('/collection?q=set%3Asor&all=1');
+		await page.goto('/collection?q=set%3Asor');
 		await page.locator('[data-testid="columns-button"]').waitFor();
 		const star = await measure(page, 'star');
 

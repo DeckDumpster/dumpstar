@@ -118,7 +118,7 @@ async function openCollection(
 		localStorage.setItem('collection.sortDir', 'asc');
 		sessionStorage.clear();
 	}, view);
-	await page.goto('/collection?q=set%3Asor&all=1');
+	await page.goto('/collection?q=set%3Asor');
 	await page.locator(view === 'grid' ? '[data-testid="collection-grid"]' : 'table.dd').waitFor();
 	return asked;
 }

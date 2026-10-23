@@ -64,7 +64,7 @@ test('the phone list is Name and Type, wrapped, with nothing clipped', async ({ 
 		localStorage.removeItem('collection.hiddenColumns.phone');
 		sessionStorage.clear();
 	});
-	await page.goto('/collection?q=set%3Asor&all=1');
+	await page.goto('/collection?q=set%3Asor');
 	await page.locator('table.dd').waitFor();
 
 	const heads = await page.locator('table.dd thead th').allInnerTexts();

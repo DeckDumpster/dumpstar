@@ -20,11 +20,22 @@ export function facetClause(field: string, value: string): string {
 	return field ? `${field}:${v}` : v;
 }
 
-/** A `/collection` URL pre-filtered by one facet. Always catalog-wide
- *  (`all=1`) so unowned matches show too — clicking an artist or an
- *  aspect is an exploration of the whole catalog, not just owned
- *  cards (dumpstar-67l). */
-export function facetHref(field: string, value: string): string {
-	const params = new URLSearchParams({ q: facetClause(field, value), all: '1' });
-	return `/collection?${params.toString()}`;
+/** The query the collection page is showing. A facet link is built far from
+ *  the page (card modal, table cells), so the page publishes its query here
+ *  and `facetHref` reads it. Only `is:unowned` is carried from it. */
+let currentQuery = '';
+export function setFacetContext(q: string): void {
+	currentQuery = q;
+}
+
+const UNOWNED = /(^|[\s(])is:unowned(?=$|[\s)])/i;
+
+/** A `/collection` URL pre-filtered by one facet. The query alone decides the
+ *  results: a facet click is an owned-only search, unless the query being left
+ *  already says `is:unowned`, in which case the new query keeps that
+ *  predicate so a catalog-wide exploration stays catalog-wide. */
+export function facetHref(field: string, value: string, from: string = currentQuery): string {
+	const clause = facetClause(field, value);
+	const q = UNOWNED.test(from) ? `is:unowned ${clause}` : clause;
+	return `/collection?${new URLSearchParams({ q }).toString()}`;
 }

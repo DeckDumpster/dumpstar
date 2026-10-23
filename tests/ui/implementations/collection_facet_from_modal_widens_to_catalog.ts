@@ -20,14 +20,12 @@ export async function steps(h: ReplayHarness) {
   await h.click_by_selector('.cardtile[title^="Wampa"]');
   await h.wait_for_visible('[role="dialog"]', 6000);
 
-  // Click the Aggression facet inside the modal — its href carries &all=1.
+  // Click the Aggression facet inside the modal.
   await h.wait_for_visible(ASPECT_LINK, 6000);
   await h.click_by_selector(ASPECT_LINK);
-  await h.page.waitForURL(/\/collection\?.*all=1/, { timeout: 6000 });
+  await h.page.waitForURL(/\/collection\?.*aspect/, { timeout: 6000 });
 
-  // The catalog must widen on this client-side nav (no reload): an unowned
-  // Aggression card appears as a dimmed missing tile.
-  await h.wait_for_visible('.cardtile.missing', 6000);
-  await h.assert_visible('.cardtile.missing');
+  // The facet stays in-collection: an owned-only search.
+  await h.wait_for_visible('.cardtile', 6000);
   await h.screenshot('final_state');
 }

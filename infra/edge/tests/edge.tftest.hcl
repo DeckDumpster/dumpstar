@@ -139,3 +139,42 @@ run "unknown_instance_is_refused" {
 
   expect_failures = [var.instance]
 }
+
+run "edge_secret_carries_the_generated_oidc_client_id" {
+  command = apply
+
+  assert {
+    condition     = jsondecode(aws_secretsmanager_secret_version.edge["env-2"].secret_string).DUMPSTAR_OIDC_CLIENT_ID == pocketid_client.this["env-2"].id
+    error_message = "DUMPSTAR_OIDC_CLIENT_ID must be the client's id: client_id is an unset input"
+  }
+  assert {
+    condition     = output.pocketid_client_id == pocketid_client.this["env-2"].id
+    error_message = "the pocketid_client_id output is the client's id"
+  }
+}
+
+run "an_empty_secret_value_refuses_the_plan" {
+  command = plan
+
+  override_data {
+    target = data.cloudflare_zero_trust_tunnel_cloudflared_token.this
+    values = {
+      token = ""
+    }
+  }
+  override_resource {
+    target = pocketid_client.this
+    values = {
+      id            = "client"
+      client_secret = "secret"
+    }
+  }
+  override_resource {
+    target = cloudflare_zero_trust_access_application.this
+    values = {
+      aud = "aud"
+    }
+  }
+
+  expect_failures = [aws_secretsmanager_secret_version.edge]
+}

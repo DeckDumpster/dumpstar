@@ -1,0 +1,4 @@
+# Copy to common.tfvars (git-ignored) and fill; same values as infra/edge/common.tfvars.
+deploy_role_arn       = "arn:aws:iam::<account>:role/terraform-deploy"
+cloudflare_account_id = ""
+access_idp_id         = ""

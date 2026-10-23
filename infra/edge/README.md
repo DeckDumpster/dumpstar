@@ -21,6 +21,17 @@ Per instance:
   `DUMPSTAR_OIDC_CLIENT_SECRET`, `DUMPSTAR_ACCESS_AUD`. The same mechanism as `dumpstar/lake`;
   there are no secret outputs, so no log carries one.
 
+## Apply order
+
+The Access group every instance's policy points at is not made here: it is the one shared group
+declared in `../edge-shared` (group `dumpstar-users`: include the Pocket ID IdP's login method,
+require the OIDC claim `groups = dumpstar-users` from it). So:
+
+1. `cd infra/edge-shared && bash run.sh apply` — once, in its own state, never touched by an
+   instance's apply or destroy.
+2. Put its output (`bash run.sh output access_group_id`) in `common.tfvars` as `access_group_id`.
+3. Then each instance: `bash run.sh <instance> apply` here.
+
 ```bash
 cd infra/edge
 terraform test                           # hermetic, mocked providers

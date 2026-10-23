@@ -4,6 +4,9 @@
 	import { api } from '$lib/api';
 	import DeckLines from '$lib/components/DeckLines.svelte';
 	import { buildDeckView } from '$lib/deckView';
+	import DeckMeta from '$lib/components/DeckMeta.svelte';
+	import { breadcrumbs } from '$lib/breadcrumbs.svelte';
+	import { deckCrumbs } from '$lib/deckCrumbs';
 	import CollectionPicker from '$lib/components/CollectionPicker.svelte';
 	import { Button, EmptyState } from '$lib/components/ui';
 	import type { DeckDetail } from '$lib/types/DeckDetail';
@@ -29,6 +32,10 @@
 			loading = false;
 		}
 	}
+
+	$effect(() => {
+		if (detail) breadcrumbs.set(deckCrumbs(detail.deck.name));
+	});
 
 	$effect(() => {
 		void page.params.id;
@@ -99,35 +106,14 @@
 	<header>
 		<div>
 			<h1>{detail.deck.name}</h1>
-			<p class="sub">
-				{#if detail.deck.owner}{detail.deck.owner} · {/if}
-				{#if detail.deck.format}{detail.deck.format} · {/if}
-				<label>
-					Lifecycle
-					<select
-						value={detail.deck.state}
-						disabled={busy}
-						onchange={(e) => changeState(e.currentTarget.value)}
-					>
-						{#each states as s (s)}<option value={s}>{s}</option>{/each}
-					</select>
-				</label>
-				<label>
-					Group
-					<select
-						value={detail.deck.group ?? ''}
-						disabled={busy}
-						onchange={(e) => changeGroup(e.currentTarget.value)}
-					>
-						<option value="">None</option>
-						{#each groups as g (g.id)}<option value={g.name}>{g.name}</option>{/each}
-					</select>
-				</label>
-				{#if detail.deck.group}
-					{@const g = groups.find((x) => x.name === detail?.deck.group)}
-					{#if g}<a href="/deck-groups/{g.id}">Open group</a>{/if}
-				{/if}
-			</p>
+			<DeckMeta
+				deck={detail.deck}
+				{groups}
+				{states}
+				{busy}
+				onState={changeState}
+				onGroup={changeGroup}
+			/>
 		</div>
 		<div class="actions">
 			<button onclick={() => (picking = true)}>+ Add cards</button>
@@ -171,11 +157,6 @@
 		color: var(--color-text-accent);
 		margin: 0;
 	}
-	.sub {
-		color: var(--color-text-subtle);
-		font-size: 0.85rem;
-		margin: 0.25rem 0 0;
-	}
 	.muted {
 		color: var(--color-text-subtle);
 	}
@@ -185,13 +166,6 @@
 	.actions {
 		display: flex;
 		gap: 0.5rem;
-	}
-	select {
-		background: var(--color-surface-page);
-		border: 1px solid var(--color-border);
-		color: var(--color-text);
-		border-radius: 6px;
-		padding: 0.15rem;
 	}
 	button {
 		background: var(--color-accent);

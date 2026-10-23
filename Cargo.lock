@@ -1251,6 +1251,7 @@ dependencies = [
  "dumpstar-catalog",
  "dumpstar-core",
  "dumpster-kit-conformance",
+ "dumpster-kit-keys",
  "dumpster-kit-ship",
  "dumpster-kit-tenancy",
  "reqwest",

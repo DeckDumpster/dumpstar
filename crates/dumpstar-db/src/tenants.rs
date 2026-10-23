@@ -215,6 +215,16 @@ fn unadopted(handle: &str, legacy: &Path) -> Result<DbError> {
     )))
 }
 
+/// Record active key state for a `database_id` just minted, on the registry
+/// connection that minted it, so the `user` row and its `tenant_key` row commit
+/// together. Without it `dumpstar-ship` has no key to derive for the tenant and
+/// skips it. The same call `dumpstar keys register` makes.
+fn register_key(conn: &Connection, database_id: &str) -> Result<()> {
+    dumpster_kit_keys::state::register(conn, database_id)
+        .map(|_| ())
+        .map_err(|e| DbError::Env(format!("cannot register key state for {database_id}: {e}")))
+}
+
 /// Register `handle` and provision their collection database.
 ///
 /// The `database_id` is minted by the registry, so the filename is never
@@ -234,6 +244,7 @@ pub fn create(handle: &str) -> Result<Tenant> {
     let mut conn = registry::open()?;
     let tx = conn.transaction()?;
     let user = registry::insert(&tx, handle)?;
+    register_key(&tx, &user.database_id)?;
     // `open_user` creates the parent directory and applies the user schema,
     // so a freshly created tenant is immediately usable.
     let tenant = Tenant::of(user)?;
@@ -421,6 +432,7 @@ pub fn migrate() -> Result<Vec<Moved>> {
         let from = tenant_db_path(&handle)?;
         let tx = conn.transaction()?;
         let user = registry::insert(&tx, &handle)?;
+        register_key(&tx, &user.database_id)?;
         let to = tenant_db_path_for_id(&user.database_id)?;
         relocate(&handle, &from, &to, Litestream::Reset)?;
         if let Err(e) = tx.commit() {

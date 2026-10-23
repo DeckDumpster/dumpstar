@@ -68,3 +68,21 @@ pub fn context<'a>(
         cli,
     }
 }
+
+/// The skipped tenants of `report` that are live but have no key state at all.
+///
+/// A tenant with a registry row and no `tenant_key` row is a tenant nothing ever
+/// registered; the shipper skips it and, unless every tenant is skipped, calls
+/// the run partial. That is a fault of the box, not of the tenant, so the run
+/// fails on it. A revoked tenant has a (tombstoned) row and is not named here.
+pub fn unkeyed_skips(
+    report: &dumpster_kit_ship::run::Report,
+    registry: &Connection,
+) -> Vec<String> {
+    report
+        .skipped()
+        .into_iter()
+        .filter(|(id, _)| matches!(dumpster_kit_keys::state::find(registry, id), Ok(None)))
+        .map(|(id, _)| id.to_string())
+        .collect()
+}

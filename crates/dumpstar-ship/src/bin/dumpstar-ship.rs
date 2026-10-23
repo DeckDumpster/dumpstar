@@ -192,7 +192,11 @@ fn do_run(a: &RunArgs) -> anyhow::Result<i32> {
     let ctx = dumpstar_ship::context(&keys, zone.as_ref(), &config, &registry);
     let kit_tenants: Vec<_> = tenants.iter().map(dumpstar_ship::kit_tenant).collect();
     let report = dumpster_kit_ship::ship_all(&ctx, &kit_tenants, a.max_rows);
-    let outcome = report.outcome();
+    let mut outcome = report.outcome();
+    let unkeyed = dumpstar_ship::unkeyed_skips(&report, &registry);
+    if !unkeyed.is_empty() && matches!(outcome, Outcome::Partial) {
+        outcome = Outcome::Failed;
+    }
 
     println!();
     match outcome {
@@ -234,6 +238,14 @@ fn do_run(a: &RunArgs) -> anyhow::Result<i32> {
                 eprintln!("  {database_id}: {why}");
             }
         }
+    }
+    if !unkeyed.is_empty() {
+        eprintln!(
+            "FAILED — {} live tenant(s) have no key state and were skipped: {}. Register each \
+             with `dumpstar keys register <id>`.",
+            unkeyed.len(),
+            unkeyed.join(", ")
+        );
     }
     Ok(outcome.code())
 }

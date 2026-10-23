@@ -17,7 +17,7 @@ hits="$(grep -rnE 'backend-config="?role_arn=|^[[:space:]]*role_arn[[:space:]]*=
 hits="$(grep -E 'backend-config="?role_arn=|\(bucket, role_arn' <<<"$hits" || true)"
 [ -z "$hits" ] || bad "old-form backend instruction:"$'\n'"$hits"
 
-for root_dir in infra infra/edge infra/env; do
+for root_dir in infra infra/edge infra/edge-shared infra/env; do
   ex="$root/$root_dir/backend.tfvars.example"
   [ -f "$ex" ] || { bad "$root_dir: no backend.tfvars.example"; continue; }
   grep -qE '^bucket[[:space:]]*=[[:space:]]*"' "$ex" || bad "$ex: no bucket"

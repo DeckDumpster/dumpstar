@@ -243,6 +243,14 @@ grep -q 'tenant create concierge' <<<"$script" && ! grep -qE 'tenant create (rya
 grep -q 'setup' <<<"$script" && ok "up builds the catalog" || bad "up builds the catalog"
 (unset DUMPSTAR_ENV_CONCIERGE_DB; bash "$ENV" up --image "tree:$TREE" >/dev/null 2>&1) && bad "no concierge database id is refused" || ok "no concierge database id is refused"
 
+# 9. A catalog-less slot is not ready (sp-0a1juj): env-vm.sh's catalog check against a stubbed podman.
+grep -q 'catalog-apply --swu' <<<"$script" && ok "up builds the catalog with catalog-apply" || bad "up builds the catalog with catalog-apply"
+printf '#!/usr/bin/env bash\necho "${STUB_CARDS:-0}"\n' >"$BIN/podman"; chmod +x "$BIN/podman"
+catalog_verb() { DUMPSTAR_ENV_VERB=catalog DUMPSTAR_ENV_SLOT=env-1 bash "$REPO_DIR/deploy/env-vm.sh" 2>&1; }
+cat_out="$(STUB_CARDS=0 catalog_verb)" && bad "an empty catalog fails up" || ok "an empty catalog fails up"
+grep -q 'catalog is empty' <<<"$cat_out" && ok "the failure names the empty catalog" || bad "the failure names the empty catalog"
+STUB_CARDS=1234 catalog_verb >/dev/null && ok "a catalog present passes" || bad "a catalog present passes"
+
 # 5. No fallback.
 (unset DUMPSTAR_ENV_AMI; bash "$ENV" status >/dev/null 2>&1) && bad "a missing value is refused" || ok "a missing value is refused"
 

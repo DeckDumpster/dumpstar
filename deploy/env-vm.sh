@@ -7,7 +7,7 @@
 #
 #   up      write the slot's env files (secrets from Secrets Manager, never echoed), install
 #           the units, pull the image, fill the data volume (the concierge tenant's latest
-#           replica and a fresh catalog; sp-2xkn6g), start the container and the tunnel connector
+#           replica and a catalog built by catalog-apply, refused when empty; sp-2xkn6g), start the container and the tunnel connector
 #   update  pull a different build, tag it as the slot's image, restart the container only:
 #           hostname, client, data and connector are untouched
 #   stop    stop the tunnel connector and the container (before the VM is destroyed)
@@ -52,8 +52,23 @@ fill_data() {
 	rm -f "$mnt/tenants/$id.sqlite" "$mnt/tenants/$id.sqlite-wal" "$mnt/tenants/$id.sqlite-shm"
 	podman run --rm --user 0:0 --network host -v "$vol:/data:Z" "$DUMPSTAR_ENV_LITESTREAM_IMAGE" \
 		restore -integrity-check full -o "/data/tenants/$id.sqlite" "$DUMPSTAR_ENV_CONCIERGE_REPLICA"
+	# The catalog is built from the same upstream sources as prod's nightly refresh.
+	podman run --rm --network host -v "$vol:/data:Z" -e DUMPSTAR_HOME=/data --entrypoint dumpstar "$image" \
+		catalog-apply --swu
+	require_catalog
 	podman run --rm -v "$vol:/data:Z" -e DUMPSTAR_HOME=/data --entrypoint dumpstar "$image" \
 		tenant identity add concierge --email "$DUMPSTAR_ENV_CONCIERGE_EMAIL"
+}
+
+# require_catalog: the slot's catalog holds cards. `setup` writes an empty schema, so an up that
+# stopped there would restore a tenant whose copies resolve to nothing (sp-0a1juj).
+require_catalog() {
+	local vol="dumpstar-${slot}-data" n
+	n="$(podman run --rm -v "$vol:/data:Z" --entrypoint sqlite3 "localhost/dumpstar:${slot}" \
+		/data/shared.sqlite 'select count(*) from cards' 2>/dev/null || true)"
+	case "$n" in '' | *[!0-9]*) n=0 ;; esac
+	[ "$n" -gt 0 ] || { echo "env-vm: the catalog is empty (0 cards in shared.sqlite); refusing to report ready" >&2; return 1; }
+	echo "env-vm: catalog holds $n cards"
 }
 
 wait_health() {
@@ -131,6 +146,9 @@ update)
 	pull_and_tag
 	systemctl restart "${app}.service"
 	wait_health
+	;;
+catalog)
+	require_catalog
 	;;
 stop)
 	systemctl stop "${conn}.service" 2>/dev/null || true

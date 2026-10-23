@@ -1259,11 +1259,16 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "dumpstar-catalog",
  "dumpstar-db",
  "dumpstar-ingest",
  "dumpster-kit-derive",
  "dumpster-kit-lake",
+ "dumpster-kit-lakehouse",
+ "hex",
+ "reqwest",
  "rusqlite",
+ "sha2 0.10.9",
  "tempfile",
 ]
 

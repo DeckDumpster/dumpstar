@@ -55,6 +55,7 @@
 //! | | |
 //! | --- | --- |
 //! | **0** | the catalog is the derivation of that partition |
+//! | **2** | the catalog was derived from the TCGCSV half alone: the official card crawl for that partition is absent or incomplete, so the card list is as old as the last whole crawl |
 //! | **1** | there is no catalog for that partition — absent, short, clockless, a URL `raw/` has no record of, or the derivation itself failed |
 
 mod replay;
@@ -151,7 +152,32 @@ fn shared(args: SharedArgs) -> anyhow::Result<()> {
 
     // Which runs, and the refusals. Before anything opens the catalog: a date
     // that cannot be derived must not leave a half-written one behind.
-    let plan = partition::choose(&zone, &args.ingest_date, &partition::TCGCSV)?;
+    let mut plan = partition::choose(&zone, &args.ingest_date, &dumpstar_derive::TCGCSV_TABLE)?;
+    // The official crawl is the half a night can do without: its absence costs
+    // the card list its freshness, where a missing TCGCSV day costs prices that
+    // cannot be fetched later. An incomplete crawl is treated as absent — half
+    // a crawl is a quietly smaller catalog.
+    let official = match partition::choose(&zone, &args.ingest_date, &dumpstar_derive::OFFICIAL_TABLE)
+    {
+        Ok(p) if !p.chosen.is_empty() => {
+            plan.chosen.extend(p.chosen);
+            true
+        }
+        Ok(_) => {
+            eprintln!(
+                "!! no official card crawl landed for {} — deriving the TCGCSV half alone",
+                args.ingest_date
+            );
+            false
+        }
+        Err(e) => {
+            eprintln!(
+                "!! the official card crawl for {} is not usable ({e:#}) — deriving the TCGCSV half alone",
+                args.ingest_date
+            );
+            false
+        }
+    };
     let clock = partition::clock_of(&plan.chosen, &args.ingest_date)?;
     println!(
         "  clock {} (observed {}) — recovered from the run's manifests, not read here",
@@ -167,7 +193,7 @@ fn shared(args: SharedArgs) -> anyhow::Result<()> {
     println!("Opening shared catalog at {}", db_path.display());
     let mut conn = dumpstar_db::open_shared(&db_path)?;
 
-    let report = dumpstar_derive::derive(
+    let report = dumpstar_derive::derive_with(
         &mut conn,
         &dumpstar_derive::Options {
             clock: clock.clone(),
@@ -178,6 +204,7 @@ fn shared(args: SharedArgs) -> anyhow::Result<()> {
             landing: None,
             replay: Some(replay.clone() as Arc<dyn dumpstar_ingest::landing::ReplaySource>),
         },
+        official,
     )?;
 
     // Provenance: `raw_derivation.complete` carries each dataset's own answer.
@@ -215,8 +242,18 @@ fn shared(args: SharedArgs) -> anyhow::Result<()> {
         report.printings
     );
     reclaim(&conn);
+    if !official {
+        // The catalog was rebuilt and is serving; its card list is as old as the
+        // last night that had a whole crawl. Not a failure (the unit's
+        // SuccessExitStatus=2), and not silent either: deploy/derive.sh says so.
+        drop(conn);
+        std::process::exit(EXIT_PARTIAL);
+    }
     Ok(())
 }
+
+/// The catalog was derived from a partition with no usable official crawl.
+const EXIT_PARTIAL: i32 = 2;
 
 /// Give the catalog's WAL back, after this job's LAST write and before it exits
 /// (pd-t50h).

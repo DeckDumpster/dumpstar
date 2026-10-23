@@ -32,6 +32,22 @@ impl Catalog {
         })
     }
 
+    /// Wrap a connection some other opener already prepared (the schema applied,
+    /// WAL on, foreign keys on). The offline derive builds its catalog through
+    /// `dumpstar-db`'s read-write open, which converges the overlay too, and
+    /// applies payloads through this.
+    pub fn from_connection(conn: Connection) -> Self {
+        Self {
+            conn,
+            rebuilt_legacy: false,
+        }
+    }
+
+    /// Give the connection back.
+    pub fn into_connection(self) -> Connection {
+        self.conn
+    }
+
     /// Open for serving: SQLite's read-only flag, so any write errors.
     pub fn open_readonly(path: &Path) -> Result<Self> {
         let conn = Connection::open_with_flags(

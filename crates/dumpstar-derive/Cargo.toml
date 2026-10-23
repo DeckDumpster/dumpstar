@@ -6,14 +6,19 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+dumpstar-catalog.workspace = true
 dumpstar-db.workspace = true
 dumpstar-ingest.workspace = true
 dumpster-kit-lake.workspace = true
 dumpster-kit-derive.workspace = true
+dumpster-kit-lakehouse.workspace = true
 
 rusqlite.workspace = true
 anyhow.workspace = true
 chrono.workspace = true
+reqwest.workspace = true
+sha2.workspace = true
+hex.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

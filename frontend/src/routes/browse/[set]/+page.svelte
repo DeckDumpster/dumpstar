@@ -4,6 +4,8 @@
 	import { goto, afterNavigate, beforeNavigate } from '$app/navigation';
 	import { api } from '$lib/api';
 	import { latestOnly } from '$lib/latest';
+	import ActionErrorOverlay from '$lib/components/ActionErrorOverlay.svelte';
+	import { createActionErrors } from '$lib/actionError';
 	import VariantModal from '$lib/components/VariantModal.svelte';
 		import { breadcrumbs } from '$lib/breadcrumbs.svelte';
 	import {
@@ -26,6 +28,8 @@
 	let binder = $state<BinderPage | null>(null);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
+	let actionErrors = $state<any[]>([]);
+	const actionErr = createActionErrors((items) => (actionErrors = items));
 
 	// Hydrate every page/layout/filter knob from the URL so reloads + shared
 	// links land in the same view. (PLAN §6.8 keys the binder cache on
@@ -178,6 +182,7 @@
 		const key = `${set}?${JSON.stringify(params)}`;
 		loading = true;
 		error = null;
+		actionErr.dismiss('load');
 		selectedSlot = null;
 		let settled = false;
 		try {
@@ -188,6 +193,7 @@
 		} catch (e) {
 			settled = true;
 			error = e instanceof Error ? e.message : String(e);
+			actionErr.fail('load', 'load this set', e, load);
 		} finally {
 			if (settled) {
 				loading = false;
@@ -321,6 +327,7 @@
 		const printing = slot.printings.find((p) => p.printing_id === printingId);
 		if (!printing) return;
 		printing.owned_count += 1;
+		actionErr.dismiss(`add:${printingId}`);
 		try {
 			if (sessionBatchId === null) {
 				sessionBatchId = await api.createBatch({
@@ -336,7 +343,9 @@
 			});
 		} catch (e) {
 			printing.owned_count -= 1; // revert
-			error = e instanceof Error ? e.message : String(e);
+			actionErr.fail(`add:${printingId}`, `add ${slot.name}`, e, () =>
+				addToSlot(slot, printingId)
+			);
 		}
 	}
 
@@ -344,14 +353,21 @@
 	async function removeCopy(printingId: string) {
 		const slot = selectedSlot;
 		if (!slot) return;
+		await removeFromSlot(slot, printingId);
+	}
+
+	async function removeFromSlot(slot: BinderSlot, printingId: string) {
 		const printing = slot.printings.find((p) => p.printing_id === printingId);
 		if (!printing || printing.owned_count <= 0) return;
 		printing.owned_count -= 1;
+		actionErr.dismiss(`remove:${printingId}`);
 		try {
 			await api.removeCopyByPrinting(printingId);
 		} catch (e) {
 			printing.owned_count += 1; // revert
-			error = e instanceof Error ? e.message : String(e);
+			actionErr.fail(`remove:${printingId}`, `remove ${slot.name}`, e, () =>
+				removeFromSlot(slot, printingId)
+			);
 		}
 	}
 
@@ -464,7 +480,7 @@
 {#if loading && !binder}
 	<p class="muted">Loading…</p>
 {:else if error && !binder}
-	<p class="error">Failed to load binder: {error}</p>
+	<p class="muted">This set didn't load.</p>
 {:else if binder}
 	<div class="binderpage">
 		<header>
@@ -639,7 +655,6 @@
 			</div>
 		</Toolbar>
 
-		{#if error}<p class="error">{error}</p>{/if}
 
 		{#if binder.slots.length === 0}
 			{#if search}
@@ -1071,3 +1086,5 @@
 		}
 	}
 </style>
+
+<ActionErrorOverlay items={actionErrors} ondismiss={(k) => actionErr.dismiss(k)} />

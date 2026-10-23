@@ -3203,10 +3203,16 @@ printf '#DUMPSTER_OTLP_METRICS_ENDPOINT=https://CHANGE_ME/opentelemetry/v1/metri
 ' > "$M22/old/metrics.env"
 dumpstar_scaffold_metrics_env prod "$M22/old" >/dev/null
 check "an old prod placeholder file is rewritten" "$EP22" 	"$(sed -n 's/^DUMPSTER_OTLP_METRICS_ENDPOINT=//p' "$M22/old/metrics.env")"
-printf 'DUMPSTER_OTLP_METRICS_ENDPOINT=http://elsewhere:1/x
+printf 'DUMPSTER_OTLP_METRICS_ENDPOINT=http://10.0.2.2:8428/opentelemetry/v1/metrics
+DUMPSTAR_INSTANCE=prod
 ' > "$M22/old/metrics.env"
-dumpstar_scaffold_metrics_env prod "$M22/old" >/dev/null
-check "a set prod endpoint is left alone" "http://elsewhere:1/x" 	"$(sed -n 's/^DUMPSTER_OTLP_METRICS_ENDPOINT=//p' "$M22/old/metrics.env")"
+printf 'DUMPSTAR_OIDC_CLIENT_SECRET=operator-secret\n' > "$M22/old/oidc.env"
+OUT22="$(dumpstar_scaffold_metrics_env prod "$M22/old")"
+check "a deploy converges a stale renderer-owned endpoint" "$EP22" 	"$(sed -n 's/^DUMPSTER_OTLP_METRICS_ENDPOINT=//p' "$M22/old/metrics.env")"
+check "the deploy names the key it changed" "1" "$(grep -c 'Changed DUMPSTER_OTLP_METRICS_ENDPOINT' <<<"$OUT22" || true)"
+check "an operator-supplied secret beside it is untouched" "DUMPSTAR_OIDC_CLIENT_SECRET=operator-secret" "$(cat "$M22/old/oidc.env")"
+OUT22="$(dumpstar_scaffold_metrics_env prod "$M22/old")"
+check "a converged file is left silent" "" "$OUT22"
 dumpstar_scaffold_metrics_env test1 "$M22/t" >/dev/null
 check "a test instance sends nothing" "0" "$(grep -c '^DUMPSTER_OTLP' "$M22/t/metrics.env" || true)"
 

@@ -69,13 +69,29 @@ DUMPSTAR_PRODUCT_OTLP_ENDPOINT="http://100.95.160.116:8428/opentelemetry/v1/metr
 dumpstar_scaffold_metrics_env() {
     local instance="$1" conf_dir="$2" f="$2/metrics.env"
     if [ "$instance" = prod ]; then
-        if [ -f "$f" ] && grep -q '^DUMPSTER_OTLP_METRICS_ENDPOINT=' "$f"; then
+        mkdir -p "$conf_dir"
+        if [ ! -f "$f" ]; then
+            dumpstar_render_env metrics "$instance" > "$f"
+            chmod 600 "$f"
+            echo "    Wrote ${f} — metrics go to ${DUMPSTAR_PRODUCT_OTLP_ENDPOINT}."
             return 0
         fi
-        mkdir -p "$conf_dir"
-        dumpstar_render_env metrics "$instance" > "$f"
-        chmod 600 "$f"
-        echo "    Wrote ${f} — metrics go to ${DUMPSTAR_PRODUCT_OTLP_ENDPOINT}."
+        # Every KEY=value the renderer emits is renderer-owned: converge it on each deploy, so a
+        # renderer change reaches an instance that already has the file (sp-krqpg6). Keys the
+        # operator added to the file are not in the rendering and are left alone.
+        local line key want have
+        while IFS= read -r line; do
+            case "$line" in ''|'#'*) continue ;; esac
+            key="${line%%=*}"; want="${line#*=}"
+            have="$(sed -n "s/^${key}=//p" "$f" | tail -n 1)"
+            [ "$have" = "$want" ] && continue
+            if grep -q "^${key}=" "$f"; then
+                sed -i "/^${key}=/d" "$f"
+            fi
+            printf '%s\n' "$line" >> "$f"
+            chmod 600 "$f"
+            echo "    Changed ${key} in ${f}: '${have}' -> '${want}'."
+        done < <(dumpstar_render_env metrics "$instance")
     elif [ ! -f "$f" ]; then
         mkdir -p "$conf_dir"
         cat > "$f" <<EOF

@@ -1,15 +1,25 @@
 [Unit]
-Description=Dumpstar SWU catalog and price sync (%i)
-# Fetches the official catalog (at most one crawl a day) and the tcgcsv prices,
-# lands both raw, then applies them to shared.sqlite. Nothing in the request
-# path does any of this.
+Description=Dumpstar SWU set art and sealed-product pictures (%i)
+# Since sp-6i11rn this unit no longer builds the catalog. shared.sqlite is derived
+# OFFLINE from the lake's raw/: dumpstar-refresh@%i lands the official card pages
+# and the tcgcsv prices, dumpstar-derive@%i replays them. What is left here is
+# the pictures — set art and sealed-product images from the publishers' image
+# hosts, into the data directory — which need the sealed_images rows that derive
+# writes, so this runs after it. Nothing in the request path does any of this.
+#
+# ROLLBACK of the cutover (reversible until a nightly cycle from the lake has been
+# verified on prod): `systemctl --user edit dumpstar-catalog-sync@%i`, set
+# ExecStart= to the legacy online job —
+#   ExecStart=/bin/sh -c 'exec podman exec systemd-dumpstar-%i dumpstar catalog-apply --swu'
+# — and disable dumpstar-refresh@%i.timer and dumpstar-derive@%i.timer, so two
+# builders never write one catalog.
 After=network-online.target
+After=dumpstar-derive@%i.service
 Wants=network-online.target
 OnFailure=dumpstar-alert@%n.service
 
 [Service]
 Type=oneshot
-# A dead official API still lets the prices through; the job exits non-zero for
-# it, which is what pages.
-ExecStart=/bin/sh -c 'exec podman exec systemd-dumpstar-%i dumpstar catalog-apply --swu'
+# A set with no art exits non-zero, which is what pages.
+ExecStart=/bin/sh -c 'exec podman exec systemd-dumpstar-%i dumpstar catalog-apply --assets'
 TimeoutStartSec=1800

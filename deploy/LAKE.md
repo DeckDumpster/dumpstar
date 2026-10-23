@@ -2,6 +2,8 @@
 
 > **2026-10-16 (sp-l74uk0): the Python lake is deleted.** `lake/` (the PyIceberg job image), `deploy/prices.sh`, `deploy/value-snapshots.sh`, `deploy/nessie-backup.sh`, `deploy/setup-lake.sh`, their units and `tests/lake/` are gone: dumpstar's production never had a lakehouse installed, so none of it ever ran there. The lake is being rebuilt in Rust on dumpster-kit's lake crates (Ryan, 2026-10-16: "the path should be all rust, with nessie if necessary"). Sections below that describe those files are history until that port lands; the Rust derive (`crates/dumpstar-lakehouse`, `deploy/derive.sh`) and the shipper (`deploy/ship.sh`) are unchanged.
 
+> **2026-10-23 (sp-6i11rn): the SWU catalog derives from this lake.** `dumpstar data refresh` lands the official card API pages (`raw/source=official/dataset=cards/`, one part per page, a full crawl every night) and the tcgcsv `last-updated.txt` stamp (`raw/source=tcgcsv/dataset=last-updated/`) beside the groups, products and prices; `dumpstar-lake-derive shared --ingest-date D` replays them through the same adapters and apply the online `catalog-apply --swu` used, so a derivation-version bump re-derives everything from the night's raw. The prod container reaches neither the official API nor tcgcsv. A date whose official crawl is absent or incomplete still derives its prices and exits 2. Rollback is `deploy/dumpstar-catalog-sync.service`'s header.
+
 > **Provenance.** This document was written for the Pokémon site this workspace was
 > copied from. The pokemontcg.io tail, the pokemon-tcg-data bulk corpus, the Japan
 > catalog, set symbols and the "PARTIAL" (exit 2) derive described below were removed

@@ -426,6 +426,37 @@ pub fn keyword_missing_from_keywords(conn: &Connection) -> Result<Vec<AlarmRecor
     Ok(out)
 }
 
+/// A card whose rules text mentions a mechanic-like term (the Force, the
+/// initiative, a token) that its stored mechanics do not account for: new
+/// wording outside the derivation's vocabulary (sp-1qcjva).
+pub fn mechanic_unmatched(conn: &Connection) -> Result<Vec<AlarmRecord>> {
+    let mut out = Vec::new();
+    let mut stmt = conn.prepare(
+        "SELECT card_id, mechanics, rules_text FROM cards
+         WHERE rules_text IS NOT NULL ORDER BY card_id",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+        ))
+    })?;
+    for row in rows {
+        let (id, mechanics, rules) = row?;
+        let have: Vec<crate::mechanics::MechanicRecord> =
+            serde_json::from_str(&mechanics).unwrap_or_default();
+        for phrase in crate::mechanics::unmatched_terms(Some(&rules), &have) {
+            out.push(AlarmRecord::alarm(
+                "mechanic_unmatched",
+                id.clone(),
+                format!("the rules text says \"{phrase}\" but derives no mechanic for it"),
+            ));
+        }
+    }
+    Ok(out)
+}
+
 /// A stored keyword whose granted or conditional flag disagrees with the one
 /// rule its rules text derives (sp-gww4nf): own, conditional own, granted to
 /// another unit, or removed ("lose X") and so not stored at all.
@@ -827,6 +858,7 @@ pub fn run_report(conn: &Connection, now: DateTime<Utc>) -> Result<Report> {
     all.extend(keyword_number_missing(conn)?);
     all.extend(keyword_missing_from_keywords(conn)?);
     all.extend(keyword_misclassified(conn)?);
+    all.extend(mechanic_unmatched(conn)?);
     all.extend(wrong_group(conn)?);
     all.extend(image_wrong_card(conn)?);
     all.extend(variant_image_shared(conn)?);

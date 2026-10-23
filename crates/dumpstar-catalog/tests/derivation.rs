@@ -201,3 +201,31 @@ fn reapplying_records_the_derivation_version_in_force() {
     )));
     assert!(dumpstar_catalog::apply::derivation_version("official") >= 8);
 }
+
+#[test]
+fn a_mechanic_like_phrase_the_derivation_missed_is_flagged() {
+    let dir = tempfile::tempdir().unwrap();
+    let c = Catalog::open_writer(&dir.path().join("shared.sqlite")).unwrap();
+    for (id, mechanics, text) in [
+        ("NOVEL", "[]", "When Played: You may spend the Force."),
+        (
+            "DERIVED",
+            "[{\"name\":\"force\",\"role\":\"consumes\",\"optional\":true}]",
+            "When Played: You may use the Force.",
+        ),
+        ("PLAIN", "[]", "Sentinel\nRaid 2"),
+    ] {
+        c.conn()
+            .execute(
+                "INSERT INTO cards (card_id, name, card_type, rules_text, mechanics) VALUES (?1, ?1, 'Unit', ?3, ?2)",
+                rusqlite::params![id, mechanics, text],
+            )
+            .unwrap();
+    }
+    let a = dumpstar_catalog::check::mechanic_unmatched(c.conn()).unwrap();
+    let keys: Vec<(&str, &str)> = a
+        .iter()
+        .map(|r| (r.kind.as_str(), r.key.as_str()))
+        .collect();
+    assert_eq!(keys, vec![("mechanic_unmatched", "NOVEL")]);
+}

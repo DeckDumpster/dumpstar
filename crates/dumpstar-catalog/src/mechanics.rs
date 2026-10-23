@@ -181,6 +181,63 @@ fn scan(line: &str) -> Vec<(String, &'static str, bool)> {
     out
 }
 
+/// A mechanic-like term in a card's rules text that the stored mechanics do
+/// not account for (sp-1qcjva): the Force, the initiative, an Experience,
+/// Shield or Advantage token, or a capitalised "X token". Each is the term and
+/// the words that follow it, so a vocabulary update can name the phrase. The
+/// derivation is a closed vocabulary; this is what notices new wording that
+/// falls outside it.
+pub fn unmatched_terms(rules: Option<&str>, have: &[MechanicRecord]) -> Vec<String> {
+    let has = |name: &str| have.iter().any(|m| m.name == name);
+    let unit_named = |w: &str| {
+        have.iter().any(|m| {
+            m.name
+                .strip_prefix("token_unit:")
+                .is_some_and(|n| n.ends_with(w))
+        })
+    };
+    let mut out: Vec<String> = Vec::new();
+    for line in rules.unwrap_or("").lines() {
+        let line = strip_parens(line);
+        let lower = line.to_ascii_lowercase();
+        let mut note = |from: usize| {
+            let c = lower[from..]
+                .split_whitespace()
+                .take(4)
+                .collect::<Vec<_>>()
+                .join(" ");
+            if !out.contains(&c) {
+                out.push(c);
+            }
+        };
+        for (term, name) in [
+            ("the force", "force"),
+            ("initiative", "initiative"),
+            ("experience", "experience"),
+            ("shield", "shield"),
+            ("advantage", "advantage"),
+        ] {
+            if !has(name) {
+                find_phrase(&lower, term).for_each(&mut note);
+            }
+        }
+        for noun in ["token", "tokens"] {
+            for at in find_phrase(&lower, noun) {
+                let head = lower[..at].trim_end();
+                let Some(prev) = head.split_whitespace().next_back() else {
+                    continue;
+                };
+                let start = head.len() - prev.len();
+                let capitalised = line[start..].chars().next().is_some_and(char::is_uppercase);
+                if capitalised && start > 0 && !NAMES.contains(&prev) && !unit_named(prev) {
+                    note(start);
+                }
+            }
+        }
+    }
+    out
+}
+
 /// What the clause before a token mention does with it, by the nearest verb:
 /// "give an Experience token" produces it, "a unit with a Shield token"
 /// requires it, "remove a Shield token" spends it.
@@ -308,6 +365,28 @@ mod tests {
                 row("token_unit:battle_droid", "produces", None, false),
             ]
         );
+    }
+
+    #[test]
+    fn terms_the_derivation_missed_are_reported() {
+        // The standing positive control: novel wording yields no mechanic.
+        assert!(of("Unit", "When Played: You may spend the Force.").is_empty());
+        assert_eq!(
+            unmatched_terms(Some("When Played: You may spend the Force."), &[]),
+            vec!["the force."]
+        );
+        assert_eq!(
+            unmatched_terms(Some("When Played: Create a Clone Trooper token."), &[]),
+            vec!["trooper token."]
+        );
+        for text in [
+            "When Played: Take the initiative.",
+            "When Played: Use the Force (lose your Force token).",
+            "Create a Battle Droid token.",
+        ] {
+            let have = mechanics_of(Some("Unit"), Some(text));
+            assert!(unmatched_terms(Some(text), &have).is_empty(), "{text}");
+        }
     }
 
     #[test]

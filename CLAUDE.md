@@ -33,6 +33,8 @@ forked with is detected (`dumpstar_catalog::reset_if_legacy`) and emptied on the
 next read-write open or `catalog-apply`; a column the schema merely gains is added in place (`ADDITIVE_COLUMNS`), never by a reset (sp-0mjd2y), and a deploy fails and restores if sets/cards/printings counts change by more than 5%. The legacy file is derived data, tenant files are
 other files and are never touched.
 
+**Deck groups.** A deck group (`deck_groups`: unique name, description, format label) is a named container for decks, managed as a unit through `/api/deck-groups` and the MCP tools `list_groups`, `get_group`, `create_group`, `update_group`, `delete_group`. Membership is by name: `decks.deck_group` holds the group's name, a group named on `create_deck`/`update_deck` is created, and `deck_groups::converge` (every tenant open) makes a group of every name already on a deck. Dumpstar knows nothing about cubes; deckdumpster and pokedumpster have no such container (a stated divergence).
+
 **Not here yet** (each is its own bead of the dumpstar design): authentication
 and tenant resolution under the dumpstar name, the shared `dumpster-kit`
 adoption beyond tokens and primitives, and a Star Wars: Unlimited rework of the

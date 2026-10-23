@@ -7,6 +7,7 @@ pub mod binders;
 pub mod card;
 pub mod collection;
 pub mod conditions;
+pub mod deck_groups;
 pub mod decks;
 pub mod export;
 pub mod import;
@@ -36,6 +37,7 @@ pub fn authenticated_api_router() -> Router<AppState> {
         .merge(sets::routes())
         .merge(binders::routes())
         .merge(decks::routes())
+        .merge(deck_groups::routes())
         .merge(agent::routes())
         .merge(sealed::routes())
         .merge(conditions::routes())

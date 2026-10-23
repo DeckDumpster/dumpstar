@@ -24,6 +24,7 @@ use dumpstar_core::deck::{DeckEntry, Zone};
 use dumpstar_core::query::{KeywordRegistry, parse};
 use dumpstar_db::DbError;
 use dumpstar_db::cards::{self, Card};
+use dumpstar_db::deck_groups;
 use dumpstar_db::decks::{self, CardCount, NewDeck, SetLines};
 use dumpstar_db::search::{self, SearchRow, Slice};
 use dumpstar_db::search_meta::SearchFlag;
@@ -821,9 +822,11 @@ impl DumpstarTools {
         self.with_read(ctx, "collection_summary", |c| {
             let counts = decks::card_counts(c, None).map_err(db_err)?;
             let decks = decks::list(c).map_err(db_err)?;
-            let mut groups: Vec<&str> = decks.iter().filter_map(|d| d.group.as_deref()).collect();
-            groups.sort();
-            groups.dedup();
+            let groups: Vec<String> = deck_groups::list(c)
+                .map_err(db_err)?
+                .into_iter()
+                .map(|g| g.name)
+                .collect();
             Ok(json!({
                 "owned_copies": counts.iter().map(|c| c.owned as u64).sum::<u64>(),
                 "reserved_copies": counts.iter().map(|c| c.reserved as u64).sum::<u64>(),
@@ -977,6 +980,107 @@ impl DumpstarTools {
         })
     }
 
+    fn list_groups(&self, ctx: &ToolContext) -> Result<Value, ToolError> {
+        self.with_read(ctx, "list_groups", |c| {
+            Ok(json!({ "groups": deck_groups::list(c).map_err(db_err)? }))
+        })
+    }
+
+    /// A group by `id`, or by exact `name`.
+    fn group_arg(c: &Connection, args: &Value) -> Result<deck_groups::DeckGroup, ToolError> {
+        let found = match (args.get("id"), arg_str(args, "name")) {
+            (Some(_), _) => {
+                let id = arg_id(args, "id")?;
+                deck_groups::get(c, id).map_err(db_err)?
+            }
+            (None, Some(name)) => deck_groups::find_by_name(c, name).map_err(db_err)?,
+            (None, None) => return Err(failed("give the group's 'id' or 'name'")),
+        };
+        found.ok_or_else(|| failed("not found: deck group"))
+    }
+
+    fn group_response(c: &Connection, id: i64) -> Result<Value, ToolError> {
+        let group = deck_groups::get(c, id)
+            .map_err(db_err)?
+            .ok_or_else(|| failed(format!("not found: deck group {id}")))?;
+        let decks = deck_groups::decks_of(c, id).map_err(db_err)?;
+        Ok(json!({ "group": group, "decks": decks }))
+    }
+
+    fn get_group(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
+        self.with_read(ctx, "get_group", |c| {
+            let id = Self::group_arg(c, args)?.id;
+            Self::group_response(c, id)
+        })
+    }
+
+    fn create_group(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
+        let name = arg_str(args, "name").ok_or_else(|| failed("'name' is required"))?;
+        let new = deck_groups::NewDeckGroup {
+            name: name.to_string(),
+            description: arg_str(args, "description").map(String::from),
+            format: arg_str(args, "format").map(String::from),
+        };
+        self.with_conn(ctx, "create_group", |c| {
+            let id = deck_groups::create(c, &new).map_err(db_err)?;
+            Self::group_response(c, id)
+        })
+    }
+
+    fn update_group(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
+        const KEYS: [&str; 4] = ["id", "name", "description", "format"];
+        let obj = args
+            .as_object()
+            .ok_or_else(|| failed("arguments must be an object"))?;
+        if let Some(k) = obj.keys().find(|k| !KEYS.contains(&k.as_str())) {
+            return Err(failed(format!(
+                "unknown key '{k}'; update_group takes id, name, description, format"
+            )));
+        }
+        let id = arg_id(args, "id")?;
+        // Absent leaves the field; null or "" clears description and format.
+        let field = |k: &str| -> Result<Option<String>, ToolError> {
+            match obj.get(k) {
+                None => Ok(None),
+                Some(Value::Null) => Ok(Some(String::new())),
+                Some(Value::String(s)) => Ok(Some(s.clone())),
+                Some(_) => Err(failed(format!("'{k}' must be a string or null"))),
+            }
+        };
+        let name = match obj.get("name") {
+            None => None,
+            Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
+            Some(_) => return Err(failed("'name' must be a non-empty string")),
+        };
+        let edit = deck_groups::DeckGroupEdit {
+            name,
+            description: field("description")?,
+            format: field("format")?,
+        };
+        self.with_conn(ctx, "update_group", |c| {
+            if !deck_groups::update(c, id, &edit).map_err(db_err)? {
+                return Err(failed(format!("not found: deck group {id}")));
+            }
+            Self::group_response(c, id)
+        })
+    }
+
+    fn delete_group(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
+        let id = arg_id(args, "id")?;
+        let mode = arg_str(args, "decks")
+            .and_then(deck_groups::DeleteMode::parse)
+            .ok_or_else(|| {
+                failed("'decks' is required: \"ungroup\" keeps the decks, \"delete\" deletes them with the group")
+            })?;
+        self.with_conn(ctx, "delete_group", |c| {
+            let done = deck_groups::delete(c, id, mode).map_err(|e| match e {
+                DbError::NotFound(_) => failed(format!("not found: deck group {id}")),
+                e => db_err(e),
+            })?;
+            Ok(json!({ "deleted": id, "decks": done.decks, "decks_deleted": done.decks_deleted }))
+        })
+    }
+
     fn validate_deck(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
         let id = arg_id(args, "id")?;
         self.with_read(ctx, "validate_deck", |c| {
@@ -1125,6 +1229,55 @@ impl ToolProvider for DumpstarTools {
                 "Check the deck against its sanctioned format's rules. A deck whose format label is the user's own is not checked.".into(),
                 schema(json!({"id": id}), &["id"]),
             ),
+            def(
+                "list_groups",
+                "The user's deck groups (a cube, a set of packs), each with its description, format label, deck count and the cards its decks hold. A deck belongs to at most one group; list_decks takes the group's name to list its decks.".into(),
+                schema(json!({}), &[]),
+            ),
+            def(
+                "get_group",
+                "One deck group and its decks, by id or exact name.".into(),
+                schema(
+                    json!({"id": id, "name": {"type": "string", "description": "Exact group name, instead of id"}}),
+                    &[],
+                ),
+            ),
+            def(
+                "create_group",
+                "Create a deck group. Names are unique. create_deck and update_deck also create a group that does not exist yet when they are given its name.".into(),
+                schema(
+                    json!({
+                        "name": {"type": "string"},
+                        "description": {"type": "string"},
+                        "format": {"type": "string", "description": "Free-text format label"},
+                    }),
+                    &["name"],
+                ),
+            ),
+            def(
+                "update_group",
+                "Rename a deck group or change its description or format label; a rename moves its decks with it. Partial: an absent key is left unchanged, and null (or an empty string) clears description or format.".into(),
+                schema(
+                    json!({
+                        "id": id,
+                        "name": {"type": "string"},
+                        "description": {"type": ["string", "null"]},
+                        "format": {"type": ["string", "null"]},
+                    }),
+                    &["id"],
+                ),
+            ),
+            def(
+                "delete_group",
+                "Delete a deck group. `decks` chooses what happens to its decks: \"ungroup\" keeps them without a group, \"delete\" deletes them with it (their cards return to the collection).".into(),
+                schema(
+                    json!({
+                        "id": id,
+                        "decks": {"type": "string", "enum": ["ungroup", "delete"]},
+                    }),
+                    &["id", "decks"],
+                ),
+            ),
         ]
     }
 
@@ -1150,6 +1303,11 @@ impl DumpstarTools {
             "release_deck" => self.release_deck(ctx, &args),
             "delete_deck" => self.delete_deck(ctx, &args),
             "validate_deck" => self.validate_deck(ctx, &args),
+            "list_groups" => self.list_groups(ctx),
+            "get_group" => self.get_group(ctx, &args),
+            "create_group" => self.create_group(ctx, &args),
+            "update_group" => self.update_group(ctx, &args),
+            "delete_group" => self.delete_group(ctx, &args),
             other => Err(failed(format!("unknown tool '{other}'"))),
         }
     }

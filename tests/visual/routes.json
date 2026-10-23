@@ -55,6 +55,7 @@
 		{ "id": "binder-detail", "path": "/binders/2", "about": "A populated 12-pocket binder" },
 		{ "id": "decks", "path": "/decks", "about": "Deck list across all three lifecycle states" },
 		{ "id": "deck-detail", "path": "/decks/1", "about": "A built deck" },
+		{ "id": "deck-group", "path": "/deck-groups/1", "about": "A deck group: its decks, totals and whole-group actions", "waitFor": ".tile" },
 		{ "id": "batches", "path": "/batches", "about": "Batch list with the type filter bar" },
 		{ "id": "batch-detail", "path": "/batches/4", "about": "A binder_click batch" },
 		{ "id": "orders", "path": "/orders", "about": "Order list — one received, one open" },

@@ -7,8 +7,10 @@
 	import CollectionPicker from '$lib/components/CollectionPicker.svelte';
 	import { Button, EmptyState } from '$lib/components/ui';
 	import type { DeckDetail } from '$lib/types/DeckDetail';
+	import type { DeckGroup } from '$lib/types/DeckGroup';
 
 	let detail = $state<DeckDetail | null>(null);
+	let groups = $state<DeckGroup[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let picking = $state(false);
@@ -20,7 +22,7 @@
 		const id = Number(page.params.id);
 		if (!id) return;
 		try {
-			detail = await api.deckDetail(id);
+			[detail, groups] = await Promise.all([api.deckDetail(id), api.deckGroups()]);
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -39,6 +41,21 @@
 		error = null;
 		try {
 			await api.updateDeck(detail.deck.id, { state });
+			await load();
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function changeGroup(group: string) {
+		if (!detail) return;
+		busy = true;
+		error = null;
+		try {
+			// An empty name takes the deck out of its group.
+			await api.updateDeck(detail.deck.id, { group });
 			await load();
 		} catch (e) {
 			error = e instanceof Error ? e.message : String(e);
@@ -95,6 +112,21 @@
 						{#each states as s (s)}<option value={s}>{s}</option>{/each}
 					</select>
 				</label>
+				<label>
+					Group
+					<select
+						value={detail.deck.group ?? ''}
+						disabled={busy}
+						onchange={(e) => changeGroup(e.currentTarget.value)}
+					>
+						<option value="">None</option>
+						{#each groups as g (g.id)}<option value={g.name}>{g.name}</option>{/each}
+					</select>
+				</label>
+				{#if detail.deck.group}
+					{@const g = groups.find((x) => x.name === detail?.deck.group)}
+					{#if g}<a href="/deck-groups/{g.id}">Open group</a>{/if}
+				{/if}
 			</p>
 		</div>
 		<div class="actions">

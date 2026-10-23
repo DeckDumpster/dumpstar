@@ -386,6 +386,7 @@ pub fn user_spec() -> TenantDbSpec {
     let mut spec = TenantDbSpec::new(SCHEMA_USER, crate::app::USER, crate::app::SHARED);
     spec.prepare = |conn| {
         add_missing_user_columns(conn).map_err(into_tenancy)?;
+        crate::deck_groups::converge(conn).map_err(into_tenancy)?;
         crate::conditions::seed_defaults(conn).map_err(into_tenancy)?;
         Ok(())
     };

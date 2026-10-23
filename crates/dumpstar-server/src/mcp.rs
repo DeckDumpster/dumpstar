@@ -458,7 +458,7 @@ pub(crate) fn deck_response(c: &Connection, id: i64) -> Result<Value, ToolError>
     }
     let lines = display_lines(c, lines)?;
     let cards = Value::Object(cards);
-    let lines_digest = dumpstar_cube::lines_digest(&lines, &cards);
+    let lines_digest = crate::digest::lines_digest(&lines, &cards);
     Ok(json!({ "deck": deck, "lines": lines, "lines_digest": lines_digest, "cards": cards }))
 }
 
@@ -1036,7 +1036,7 @@ impl ToolProvider for DumpstarTools {
             ),
             def(
                 "get_deck",
-                "One deck and its lines, each with the copies it reserves, and under cards the full card object of every line keyed by card id (as get_card returns it), so the result is a self-contained pack document. `lines_digest` is the SHA-256 (lowercase hex) of the lines and their card objects in canonical form: one row per line, sorted, of `card_id<TAB>qty<TAB>reserved` then the card's name, subtitle, type, rarity, cost, game.hp, game.epic_action, game.aspects and game.arenas as compact JSON (arrays sorted), each row ending in LF (zone is not included; the field list is dumpstar_cube::DIGEST_CARD_FIELDS); swu-cube-check recomputes it and refuses a file whose lines or cards were altered in copying.".into(),
+                "One deck and its lines, each with the copies it reserves, and under cards the full card object of every line keyed by card id (as get_card returns it), so the result is a self-contained pack document. `lines_digest` is the SHA-256 (lowercase hex) of the lines and their card objects in canonical form: one row per line, sorted, of `card_id<TAB>qty<TAB>reserved` then the card's name, subtitle, type, rarity, cost, game.hp, game.epic_action, game.aspects and game.arenas as compact JSON (arrays sorted), each row ending in LF (zone is not included; the field list is DIGEST_CARD_FIELDS in src/digest.rs); a client recomputes it and refuses a file whose lines or cards were altered in copying.".into(),
                 schema(json!({"id": id}), &["id"]),
             ),
             def(

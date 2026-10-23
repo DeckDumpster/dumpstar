@@ -253,7 +253,8 @@ grep -q 'catalog is empty' <<<"$cat_out" && ok "the failure names the empty cata
 STUB_CARDS=1234 catalog_verb >/dev/null && ok "a catalog present passes" || bad "a catalog present passes"
 
 # sp-hhx5dc: the concierge email is bound with its sub and issuer, so a bearer token resolves.
-tr '\n\\' '  ' <<<"$script" | grep -qE 'tenant identity add concierge --email "\$DUMPSTAR_ENV_CONCIERGE_EMAIL"[[:space:]]+--sub "\$DUMPSTAR_ENV_CONCIERGE_SUB" --issuer "\$DUMPSTAR_ENV_CONCIERGE_ISSUER"' &&
+flat="$(tr '\n\\' '  ' <<<"$script")"
+grep -qE 'tenant identity add concierge --email "\$DUMPSTAR_ENV_CONCIERGE_EMAIL"[[:space:]]+--sub "\$DUMPSTAR_ENV_CONCIERGE_SUB" --issuer "\$DUMPSTAR_ENV_CONCIERGE_ISSUER"' <<<"$flat" &&
 	ok "up binds the concierge email with its sub and issuer" || bad "up binds the concierge email with its sub and issuer"
 grep -q "export DUMPSTAR_ENV_CONCIERGE_SUB='78df0719-1f59-4ec3-b4f5-783908e37499'" <<<"$script" &&
 	grep -q "export DUMPSTAR_ENV_CONCIERGE_ISSUER='https://id.example'" <<<"$script" &&

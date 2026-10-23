@@ -10,7 +10,7 @@ use dumpstar_db::DbError;
 use dumpstar_db::collection::{self, CollectionRow, CopyEdit, NewCopy};
 use dumpstar_db::value_history::{self, ValueSeries};
 
-use crate::{AppError, AppState, blocking};
+use crate::{AppError, AppState, blocking, blocking_read};
 
 /// Build the `/api/collection` router.
 pub fn routes() -> Router<AppState> {
@@ -80,7 +80,7 @@ struct BulkDeleted {
 async fn list(State(state): State<AppState>) -> Result<Json<Vec<CollectionRow>>, AppError> {
     // Single-user app — return everything; client-side does filtering,
     // aggregation, and sort. Lazy loading is YAGNI until we feel it.
-    let rows = blocking(&state, |c| collection::list_rows(c)).await?;
+    let rows = blocking_read(&state, |c| collection::list_rows(c)).await?;
     Ok(Json(rows))
 }
 
@@ -225,7 +225,7 @@ async fn value_history(
         Some("binder") => "binder",
         _ => "all",
     };
-    let series = blocking(&state, move |c| value_history::value_history(c, dimension)).await?;
+    let series = blocking_read(&state, move |c| value_history::value_history(c, dimension)).await?;
     Ok(Json(series))
 }
 

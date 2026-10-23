@@ -13,7 +13,7 @@ use axum::{Json, Router};
 use dumpstar_db::DbError;
 use dumpstar_db::manual_prices::{self, ManualPrice, NewManualPrice};
 
-use crate::{AppError, AppState, blocking};
+use crate::{AppError, AppState, blocking, blocking_read};
 
 /// Build the manual-prices routes (mounted under `/api`).
 pub fn routes() -> Router<AppState> {
@@ -29,7 +29,7 @@ async fn by_printing(
     State(state): State<AppState>,
     Path(printing_id): Path<String>,
 ) -> Result<Json<Vec<ManualPrice>>, AppError> {
-    let rows = blocking(&state, move |c| {
+    let rows = blocking_read(&state, move |c| {
         manual_prices::list_for_printing(c, &printing_id)
     })
     .await?;

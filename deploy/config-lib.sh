@@ -55,9 +55,9 @@ dumpstar_scaffold_oidc_env() {
 }
 
 # The product metrics stack's OTLP endpoint (dumpster-kit deploy/metrics: VictoriaMetrics on the
-# host's loopback, port 8428). The unit maps the host's loopback to 10.0.2.2 inside the container
-# (Network=slirp4netns:allow_host_loopback=true), which is how the container reaches it.
-DUMPSTAR_PRODUCT_OTLP_ENDPOINT="http://10.0.2.2:8428/opentelemetry/v1/metrics"
+# the host's tailnet address, port 8428 — not its loopback, which VictoriaMetrics does not listen
+# on, and not 10.0.2.2, which is that loopback; sp-hxsauf).
+DUMPSTAR_PRODUCT_OTLP_ENDPOINT="http://100.95.160.116:8428/opentelemetry/v1/metrics"
 
 # Write the OTLP metrics config for <instance> into <conf_dir>, mode 600. The Quadlet unit loads
 # it with a mandatory 'EnvironmentFile=' (Quadlet rejects a leading '-'), so the file always

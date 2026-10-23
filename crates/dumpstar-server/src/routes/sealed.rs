@@ -9,7 +9,7 @@ use serde::Deserialize;
 use dumpstar_db::DbError;
 use dumpstar_db::sealed::{self, NewSealed, SealedEdit, SealedEntry, SealedProduct};
 
-use crate::{AppError, AppState, blocking};
+use crate::{AppError, AppState, blocking, blocking_read};
 
 /// Build the sealed routes (mounted under `/api`).
 pub fn routes() -> Router<AppState> {
@@ -29,12 +29,12 @@ async fn search(
     Query(p): Query<SearchParams>,
 ) -> Result<Json<Vec<SealedProduct>>, AppError> {
     let query = p.q.unwrap_or_default();
-    let results = blocking(&state, move |c| sealed::search_products(c, &query, 50)).await?;
+    let results = blocking_read(&state, move |c| sealed::search_products(c, &query, 50)).await?;
     Ok(Json(results))
 }
 
 async fn list(State(state): State<AppState>) -> Result<Json<Vec<SealedEntry>>, AppError> {
-    Ok(Json(blocking(&state, |c| sealed::list(c)).await?))
+    Ok(Json(blocking_read(&state, |c| sealed::list(c)).await?))
 }
 
 async fn create(

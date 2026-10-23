@@ -26,10 +26,12 @@ use dumpstar_core::query::KeywordRegistry;
 use dumpstar_db::DbError;
 use dumpstar_db::search_meta::SearchFlag;
 
+mod dbpool;
 mod digest;
 pub mod drain;
 mod mcp;
 mod metrics;
+mod reqlog;
 mod routes;
 
 use dumpster_kit_mcp_auth::{McpAuth, McpAuthConfig};
@@ -167,13 +169,49 @@ where
 {
     let id = current_tenant()?;
     let tenants = state.tenants.clone();
+    let what = db_route_name();
     let result = tokio::task::spawn_blocking(move || {
         let conn = tenants.connection(&id)?;
         let mut guard = conn.lock().expect("connection mutex poisoned");
-        f(&mut guard)
+        dbpool::bounded(&mut guard, &what, f, DbError::Env)
     })
     .await?;
     Ok(result?)
+}
+
+/// Like [`blocking`], for a handler that only reads: it runs on its own read-only connection,
+/// so it neither waits for another request on the tenant nor makes one wait.
+async fn blocking_read<T, F>(state: &AppState, f: F) -> Result<T, AppError>
+where
+    F: FnOnce(&mut Connection) -> Result<T, DbError> + Send + 'static,
+    T: Send + 'static,
+{
+    let id = current_tenant()?;
+    let tenants = state.tenants.clone();
+    let what = db_route_name();
+    let result = tokio::task::spawn_blocking(move || {
+        let writer = tenants.connection(&id)?;
+        let mut reader = dbpool::checkout(&id, &writer)?;
+        dbpool::bounded(&mut reader, &what, f, DbError::Env)
+    })
+    .await?;
+    Ok(result?)
+}
+
+tokio::task_local! {
+    static DB_ROUTE: String;
+}
+
+fn db_route_name() -> String {
+    DB_ROUTE
+        .try_with(String::clone)
+        .unwrap_or_else(|_| "request".into())
+}
+
+/// Names the request for the database bound's error: `GET /api/collection/search`.
+async fn db_route(req: axum::extract::Request, next: middleware::Next) -> Response {
+    let name = format!("{} {}", req.method(), req.uri().path());
+    DB_ROUTE.scope(name, next.run(req)).await
 }
 
 /// Responses smaller than this are sent uncompressed. (A response of exactly
@@ -260,6 +298,22 @@ async fn api_responses_are_private(
     resp
 }
 
+/// Count a request in and out by route; in flight is entered minus left.
+async fn track_in_flight(
+    State(metrics): State<metrics::Metrics>,
+    req: axum::extract::Request,
+    next: middleware::Next,
+) -> Response {
+    let route = req
+        .extensions()
+        .get::<axum::extract::MatchedPath>()
+        .map_or_else(|| "unmatched".to_string(), |p| p.as_str().to_string());
+    metrics.in_flight(&route, true);
+    let resp = next.run(req).await;
+    metrics.in_flight(&route, false);
+    resp
+}
+
 /// Count a signed-in request for the reaper's idle clock (`metrics::ACTIVITY_METRIC`).
 async fn count_activity(
     State(metrics): State<metrics::Metrics>,
@@ -313,6 +367,9 @@ async fn session_tenant(
         Ok(id) if user.email.is_empty() => id,
         _ => tenants.resolve_session(&user)?,
     };
+    if let Some(slot) = req.extensions().get::<reqlog::TenantSlot>() {
+        slot.set(id.as_str());
+    }
     Ok(SESSION_TENANT.scope(id, next.run(req)).await)
 }
 
@@ -417,6 +474,7 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
             )),
         (None, None) => unreachable!("serve() refuses to start with neither sign-in configured"),
     };
+    let authenticated_api = authenticated_api.layer(middleware::from_fn(db_route));
     let public_api = routes::public_api_router();
     let state_for_gate = state.oidc.clone();
     let mcp_routes = state.mcp.as_ref().map(|m| {
@@ -485,6 +543,10 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
             api_bearer,
         ))
         .layer(middleware::from_fn(api_responses_are_private))
+        .layer(middleware::from_fn_with_state(
+            state.metrics.clone(),
+            track_in_flight,
+        ))
         .layer(dumpster_kit_telemetry::RouteMetricsLayer::new(
             state.metrics.telemetry(),
         ))
@@ -496,6 +558,8 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
         ))
         // Outermost, so it sees the final response of every route above.
         .layer(compression())
+        // Outside everything: logs every request on completion, and while it runs once slow.
+        .layer(middleware::from_fn(reqlog::http))
 }
 
 /// Everything `dumpstar serve` needs to stand the HTTP app up.
@@ -534,6 +598,7 @@ const MCP_BYPASS_PATHS: [&str; 2] = ["/mcp", "/.well-known/oauth-protected-resou
 /// catalog (`dumpstar setup` not run) fails at startup rather than on the
 /// first request.
 pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
+    reqlog::init_from_env();
     // Idempotent shared-catalog convergence on startup. `dumpstar setup` and
     // the nightly `dumpstar-lake-derive shared` normally own shared schema —
     // the refresh used to be on that list and is not since pd-lunn, because
@@ -2314,6 +2379,72 @@ mod tests {
             )
             .await;
             assert_eq!(scoped.unwrap(), 0);
+        }
+
+        /// One slow read and one slow write in flight on a tenant must not make another read
+        /// of that tenant wait: reads run on their own connections, in parallel.
+        #[tokio::test]
+        async fn a_slow_request_does_not_block_another_read_of_the_tenant() {
+            let (dir, _router, tenants_dir, fx) = multi_tenant_app(&["u"]).await;
+            let shared = dir.path().join("shared.sqlite");
+            let registry_db = dir.path().join("registry.sqlite");
+            let database_id = {
+                let reg = dumpstar_db::open_registry(&registry_db).unwrap();
+                dumpstar_db::registry::lookup(&reg, "u")
+                    .unwrap()
+                    .unwrap()
+                    .database_id
+            };
+            let state = AppState {
+                tenants: Arc::new(test_tenants(tenants_dir, shared, &registry_db)),
+                registry: Arc::new(Default::default()),
+                flags: Arc::new(Vec::new()),
+                data_dir: Arc::new(dir.path().to_path_buf()),
+                oidc: None,
+                access: Some(fx.access.clone()),
+                mcp: None,
+                metrics: metrics::Metrics::disabled(),
+            };
+            let count = |state: AppState, id: String| async move {
+                tenant::as_tenant(
+                    &id,
+                    blocking_read(&state, |c| {
+                        Ok(c.query_row("SELECT count(*) FROM collection", [], |r| {
+                            r.get::<_, i64>(0)
+                        })?)
+                    }),
+                )
+                .await
+            };
+            // Warm the tenant: its connections are open and its paths known.
+            count(state.clone(), database_id.clone()).await.unwrap();
+
+            let slow = |state: AppState, id: String, write: bool| {
+                tokio::spawn(async move {
+                    let sleep = |_c: &mut Connection| -> Result<(), DbError> {
+                        std::thread::sleep(std::time::Duration::from_secs(3));
+                        Ok(())
+                    };
+                    if write {
+                        tenant::as_tenant(&id, blocking(&state, sleep)).await
+                    } else {
+                        tenant::as_tenant(&id, blocking_read(&state, sleep)).await
+                    }
+                })
+            };
+            let slow_read = slow(state.clone(), database_id.clone(), false);
+            let slow_write = slow(state.clone(), database_id.clone(), true);
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+            let started = std::time::Instant::now();
+            assert_eq!(count(state.clone(), database_id.clone()).await.unwrap(), 0);
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(1),
+                "a read waited {:?} behind a slow request",
+                started.elapsed()
+            );
+            slow_read.await.unwrap().unwrap();
+            slow_write.await.unwrap().unwrap();
         }
 
         /// Tenant A creates a row in every tenant-owned resource the API

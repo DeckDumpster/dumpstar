@@ -96,6 +96,9 @@ case "$svc $op" in
 	echo cmd-1 ;;
 "ssm get-command-invocation")
 	echo poll >>"$STUB/polls.log"
+	case "$args" in
+	*StandardOutputContent*) printf '%b' "${STUB_SSM_PHASES:-}"; exit 0 ;;
+	esac
 	[ -n "${STUB_SSM_STUCK:-}" ] && echo Pending || echo Success ;;
 *) echo "stub aws: unhandled $svc $op" >&2; exit 1 ;;
 esac
@@ -131,6 +134,19 @@ grep -q 'edge share [0-9]*s' <<<"$out" && ok "up records the edge share" || bad 
 id1="$(basename "$(ls "$STUB"/instances/*.json | head -1)" .json)"
 check "edge share is a tag on the VM" 1 "$(jq '.tags | has("dumpstar-env:edge-seconds")' "$STUB/instances/$id1.json" | grep -c true)"
 check "the launch carries the pool tag the policy demands" round "$(jq -r '.tags["spill:owner"]' "$STUB/instances/$id1.json")"
+
+# sp-3n46zw: up reports where its time went, and an over-budget warning names the slowest phase.
+printf '#!/usr/bin/env bash\ncase "$*" in "+%%s") n=$(cat "$STUB/clock" 2>/dev/null || echo 1000); echo $((n + ${STUB_CLOCK_STEP:-0})) | tee "$STUB/clock" ;; *) exec /bin/date "$@" ;; esac\n' >"$BIN/date"; chmod +x "$BIN/date"
+grep -q 'env: phases: launch [0-9]*s, ssm-ready [0-9]*s, edge [0-9]*s' <<<"$out" && ok "up prints the per-phase timing line" || { bad "up prints the per-phase timing line"; echo "$out"; }
+rm -f "$STUB/clock"
+cp "$STUB/ledger" "$STUB/ledger.pre"
+slow_out="$(STUB_CLOCK_STEP=100 STUB_SSM_PHASES='env-vm-phase pull 12\nenv-vm-phase catalog 200\nenv-vm-phase tenant 30\nenv-vm-phase service 8\n' bash "$ENV" up --image "tree:$TREE2" --name env-3 2>&1)" || bad "slow up still completes"
+grep -q 'phases:.*catalog 200s.*tenant 30s' <<<"$slow_out" && ok "the VM's phases are in the timing line" || { bad "the VM's phases are in the timing line"; echo "$slow_out"; }
+grep -q 'WARNING up over the 300s budget; slowest phase: catalog (200s)' <<<"$slow_out" && ok "the over-budget warning names the slow phase" || { bad "the over-budget warning names the slow phase"; echo "$slow_out"; }
+rm -f "$STUB/clock" "$BIN/date"
+cp "$STUB/ledger.pre" "$STUB/ledger"
+slow_id="$(sed -n 's/.*instance \(i-[0-9]*\)).*/\1/p' <<<"$slow_out" | head -1)"
+jq '.state = "terminated"' "$STUB/instances/$slow_id.json" >"$STUB/t" && mv "$STUB/t" "$STUB/instances/$slow_id.json"
 
 # An edge redirect with no origin behind the tunnel is not dumpstar answering (sp-ycmkmh).
 cp "$STUB/ledger" "$STUB/ledger.keep"; cp "$STUB/ssm.log" "$STUB/ssm.keep"

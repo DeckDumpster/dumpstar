@@ -112,9 +112,17 @@ run "operator_mutations_carry_the_slot_tag_condition" {
 
   assert {
     condition = alltrue([for s in jsondecode(aws_iam_role_policy.operator.policy).Statement :
-      contains(["ec2:TerminateInstances", "ec2:StopInstances", "ec2:DeleteVolume", "ssm:SendCommand"], s.Action[0]) && s.Sid != "RunShellScriptDocument" ? contains(keys(s.Condition.Null), "ec2:ResourceTag/dumpstar-env:slot") : true
+      contains(["ec2:TerminateInstances", "ec2:StopInstances", "ec2:DeleteVolume"], s.Action[0]) ? contains(keys(s.Condition.Null), "ec2:ResourceTag/dumpstar-env:slot") : true
     ])
-    error_message = "terminate, stop, delete-volume and send-command act only on slot-tagged resources"
+    error_message = "terminate, stop and delete-volume act only on slot-tagged resources"
+  }
+
+  # SSM authorizes SendCommand on an instance with ssm:resourceTag/, never ec2:ResourceTag/.
+  assert {
+    condition = length([for s in jsondecode(aws_iam_role_policy.operator.policy).Statement : s if contains(s.Action, "ssm:SendCommand") && s.Sid != "RunShellScriptDocument"]) == 1 && alltrue([for s in jsondecode(aws_iam_role_policy.operator.policy).Statement :
+      s.Condition.Null == { "ssm:resourceTag/dumpstar-env:slot" = "false" } if contains(s.Action, "ssm:SendCommand") && s.Sid != "RunShellScriptDocument"
+    ]) && alltrue([for s in jsondecode(aws_iam_role_policy.operator.policy).Statement : !contains(s.Action, "ssm:SendCommand") if length(try(s.Condition.Null, {})) > 0 && contains(keys(s.Condition.Null), "ec2:ResourceTag/dumpstar-env:slot")])
+    error_message = "ssm:SendCommand on instances is conditioned on ssm:resourceTag/dumpstar-env:slot, in its own statement"
   }
 
   assert {

@@ -87,11 +87,16 @@ case "$svc $op" in
 	cmd=""
 	while [ $# -gt 0 ]; do [ "$1" = --cli-input-json ] && cmd="$2"; shift; done
 	jq -c . <<<"$cmd" >>"$STUB/ssm.log"
+	if [ -n "${STUB_SSM_DENY:-}" ]; then
+		echo "An error occurred (AccessDeniedException) when calling the SendCommand operation: not authorized to perform: ssm:SendCommand" >&2; exit 254
+	fi
 	if grep -q "export DUMPSTAR_ENV_VERB=.up." <<<"$(jq -r ".Parameters.commands[0]" <<<"$cmd")"; then
 		echo data >>"$STUB/ledger"; echo connector >>"$STUB/ledger"
 	fi
 	echo cmd-1 ;;
-"ssm get-command-invocation") echo Success ;;
+"ssm get-command-invocation")
+	echo poll >>"$STUB/polls.log"
+	[ -n "${STUB_SSM_STUCK:-}" ] && echo Pending || echo Success ;;
 *) echo "stub aws: unhandled $svc $op" >&2; exit 1 ;;
 esac
 STUBEOF
@@ -185,6 +190,21 @@ bash "$ENV" down env-1 >/dev/null 2>&1 && bad "down on a free slot is refused" |
 STUB_LEAK_VOLUME=1 bash "$ENV" up --image "tree:$TREE" >/dev/null
 bash "$ENV" down env-1 >/dev/null
 check "a volume that outlived its VM is deleted by down" 0 "$(ls "$STUB/volumes" | wc -l)"
+
+# 7. A failed up or a connector that will not stop never hangs and never leaves a VM (sp-s2zynj).
+live() { cat "$STUB"/instances/*.json | jq -s '[.[] | select(.state != "terminated")] | length'; }
+check "nothing is live before the failure paths" 0 "$(live)"
+STUB_SSM_DENY=1 timeout 60 bash "$ENV" up --image "tree:$TREE" >"$WORK/deny.out" 2>&1 && bad "an up whose SendCommand is denied exits non-zero" || ok "an up whose SendCommand is denied exits non-zero"
+check "the denied up terminated the instance it launched" 0 "$(live)"
+bash "$ENV" up --image "tree:$TREE" >/dev/null
+: >"$STUB/polls.log"
+STUB_SSM_STUCK=1 timeout 60 bash "$ENV" down env-1 >"$WORK/stuck.out" 2>&1 && ok "down with a connector that will not stop succeeds" || { bad "down with a connector that will not stop succeeds"; cat "$WORK/stuck.out"; }
+check "down terminated the VM despite the stuck connector" 0 "$(live)"
+grep -q 'WARNING could not stop the connector' "$WORK/stuck.out" && ok "down names the connector warning" || bad "down names the connector warning"
+[ "$(wc -l <"$STUB/polls.log")" -le 31 ] && ok "down stops polling at its deadline" || bad "down stops polling at its deadline ($(wc -l <"$STUB/polls.log") polls)"
+bash "$ENV" up --image "tree:$TREE" >/dev/null
+STUB_SSM_DENY=1 timeout 60 bash "$ENV" down env-1 >/dev/null 2>&1 && ok "down with a denied stop succeeds" || bad "down with a denied stop succeeds"
+check "down with a denied stop leaves no VM" 0 "$(live)"
 
 # 2. No Terraform.
 [ ! -e "$WORK/terraform.called" ] && ok "no verb ran Terraform" || { bad "a verb ran Terraform"; cat "$WORK/terraform.called"; }

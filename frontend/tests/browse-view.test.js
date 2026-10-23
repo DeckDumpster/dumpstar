@@ -199,10 +199,13 @@ test('tilePrice: owned but unpriced shows nothing', () => {
 	assert.equal(tilePrice({ printings: ps }, null), null);
 });
 
-test('tilePrice: a selection shows that printing\'s price, owned or not', () => {
-	const ps = [P(1, 'Normal', 2, 1), P(2, 'Foil', 0, 5)];
-	assert.equal(tilePrice({ printings: ps }, 1), 1);
+test('tilePrice: an owned tile stays on the dearest owned price after a pip is clicked', () => {
+	const ps = [P(1, 'Normal', 2, 1), P(2, 'Foil', 1, 5)];
+	assert.equal(tilePrice({ printings: ps }, 1), 5);
 	assert.equal(tilePrice({ printings: ps }, 2), 5);
+});
+
+test('tilePrice: an unowned tile shows the selected pip\'s price', () => {
 	const un = [P(1, 'Normal', 0, 1), P(2, 'Foil', 0, 5)];
 	assert.equal(tilePrice({ printings: un }, 2), 5);
 });

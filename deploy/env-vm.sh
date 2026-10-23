@@ -22,6 +22,16 @@ unit_dir="/etc/containers/systemd"
 app="dumpstar-${slot}"
 conn="dumpstar-cloudflared-${slot}"
 
+# phase <name> <command...>: run it and print "env-vm-phase <name> <seconds>" for env.sh to report.
+phase() {
+	local name="$1" t0 rc=0
+	shift
+	t0=$(date +%s)
+	"$@" || rc=$?
+	echo "env-vm-phase $name $(($(date +%s) - t0))"
+	return "$rc"
+}
+
 pull_and_tag() {
 	podman pull --quiet "$DUMPSTAR_ENV_IMAGE_REF" >/dev/null
 	podman tag "$DUMPSTAR_ENV_IMAGE_REF" "localhost/dumpstar:${slot}"
@@ -38,11 +48,23 @@ set_key() {
 	rm -f "$tmp"
 }
 
+restore_tenant() {
+	local vol="dumpstar-${slot}-data" id="$1"
+	podman run --rm --user 0:0 --network host -v "$vol:/data:Z" "$DUMPSTAR_ENV_LITESTREAM_IMAGE" \
+		restore -integrity-check full -o "/data/tenants/$id.sqlite" "$DUMPSTAR_ENV_CONCIERGE_REPLICA"
+}
+
+# The catalog is built from the same upstream sources as prod's nightly refresh.
+catalog_build() {
+	podman run --rm --network host -v "dumpstar-${slot}-data:/data:Z" -e DUMPSTAR_HOME=/data --entrypoint dumpstar \
+		"localhost/dumpstar:${slot}" catalog-apply --swu
+}
+
 # fill_data: the slot's volume holds the concierge tenant and a catalog, and nothing else. The
 # registry is new, so no other tenant exists; the replica is the instance profile's to read, and
 # only the concierge's is addressed. Runs before the app starts, so nothing writes while it does.
 fill_data() {
-	local vol="dumpstar-${slot}-data" mnt id image="localhost/dumpstar:${slot}"
+	local vol="dumpstar-${slot}-data" mnt id cat_pid image="localhost/dumpstar:${slot}"
 	podman volume create "$vol" >/dev/null
 	mnt="$(podman volume inspect -f '{{.Mountpoint}}' "$vol")"
 	podman run --rm -v "$vol:/data:Z" -e DUMPSTAR_HOME=/data --entrypoint dumpstar "$image" setup
@@ -50,11 +72,11 @@ fill_data() {
 		tenant create concierge | sed -n 's/^Created user concierge -> database \([0-9A-Z]\{26\}\) .*/\1/p')"
 	[ -n "$id" ] || { echo "env-vm: could not create the concierge tenant" >&2; return 1; }
 	rm -f "$mnt/tenants/$id.sqlite" "$mnt/tenants/$id.sqlite-wal" "$mnt/tenants/$id.sqlite-shm"
-	podman run --rm --user 0:0 --network host -v "$vol:/data:Z" "$DUMPSTAR_ENV_LITESTREAM_IMAGE" \
-		restore -integrity-check full -o "/data/tenants/$id.sqlite" "$DUMPSTAR_ENV_CONCIERGE_REPLICA"
-	# The catalog is built from the same upstream sources as prod's nightly refresh.
-	podman run --rm --network host -v "$vol:/data:Z" -e DUMPSTAR_HOME=/data --entrypoint dumpstar "$image" \
-		catalog-apply --swu
+	# The catalog build is the long pole and shares nothing with the tenant restore, so they run side by side.
+	phase catalog catalog_build &
+	cat_pid=$!
+	phase tenant restore_tenant "$id" || { wait "$cat_pid" || true; return 1; }
+	wait "$cat_pid" || { echo "env-vm: the catalog build failed" >&2; return 1; }
 	require_catalog
 	podman run --rm -v "$vol:/data:Z" -e DUMPSTAR_HOME=/data --entrypoint dumpstar "$image" \
 		tenant identity add concierge --email "$DUMPSTAR_ENV_CONCIERGE_EMAIL" \
@@ -70,6 +92,11 @@ require_catalog() {
 	case "$n" in '' | *[!0-9]*) n=0 ;; esac
 	[ "$n" -gt 0 ] || { echo "env-vm: the catalog is empty (0 cards in shared.sqlite); refusing to report ready" >&2; return 1; }
 	echo "env-vm: catalog holds $n cards"
+}
+
+start_app() {
+	systemctl start "${app}.service"
+	wait_health
 }
 
 wait_health() {
@@ -135,11 +162,14 @@ RestartSec=5
 WantedBy=multi-user.target
 UNIT
 	cp "$DUMPSTAR_ENV_RENDER/dumpstar-${slot}.container" "$unit_dir/${app}.container"
-	pull_and_tag
-	fill_data
+	# The connector image is pulled while the app image is; neither waits on the other.
+	podman pull --quiet "$DUMPSTAR_ENV_CLOUDFLARED_IMAGE" >/dev/null &
+	cf_pid=$!
+	phase pull pull_and_tag
+	phase fill fill_data
+	wait "$cf_pid" || true
 	systemctl daemon-reload
-	systemctl start "${app}.service"
-	wait_health
+	phase service start_app
 	systemctl start "${conn}.service"
 	echo "env-vm: connector started"
 	;;

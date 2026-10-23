@@ -181,7 +181,10 @@ ssm_run() {
 	for i in $(seq 1 "${SSM_POLLS:-300}"); do
 		st="$(aws_ ssm get-command-invocation --command-id "$cid" --instance-id "$id" --query Status --output text 2>/dev/null || echo Pending)"
 		case "$st" in
-		Success) return 0 ;;
+		Success)
+			aws_ ssm get-command-invocation --command-id "$cid" --instance-id "$id" \
+				--query StandardOutputContent --output text 2>/dev/null | sed -n 's/^env-vm-phase //p' >>"${ENV_PHASES:-/dev/null}" || true
+			return 0 ;;
 		Failed | Cancelled | TimedOut)
 			aws_ ssm get-command-invocation --command-id "$cid" --instance-id "$id" \
 				--query StandardErrorContent --output text >&2 || true
@@ -252,7 +255,7 @@ render_slot() { # render_slot <slot> <outdir>
 hostname_of() { printf '%s.dumpster.cards' "$1"; }
 
 cmd_up() {
-	local image="" slot="" t0 t1 t2 id s tmp mine first
+	local image="" slot="" t0 t1 t2 id s tmp mine first tl ts phases name secs vm_total
 	while [ $# -gt 0 ]; do
 		case "$1" in
 		--image | --ref | --tree) [ -z "$image" ] || die "up: give one of --image, --ref, --tree"
@@ -309,7 +312,10 @@ cmd_up() {
 		aws_ ec2 terminate-instances --instance-ids "$id" >/dev/null
 		die "up: lost the race for $slot to $first; run up again"
 	fi
+	tl="$(now)"
 	wait_ssm "$id" || { cmd_down_id "$id"; die "up: $id never reported to SSM; destroyed"; }
+	ts="$(now)"
+	ENV_PHASES="$tmp/phases"; : >"$ENV_PHASES"
 	ssm_run "$id" up "$slot" "$tmp/render" "DUMPSTAR_ENV_IMAGE_REF=$IMAGE_REF" \
 		"DUMPSTAR_ENV_ACCESS_TEAM=$DUMPSTAR_ENV_ACCESS_TEAM" "DUMPSTAR_ENV_HOSTNAME=$(hostname_of "$slot")" \
 		"DUMPSTAR_ENV_EDGE_SECRET=dumpstar/$slot/edge" "DUMPSTAR_ENV_CLOUDFLARED_IMAGE=$DUMPSTAR_ENV_CLOUDFLARED_IMAGE" \
@@ -323,8 +329,18 @@ cmd_up() {
 	tag_instance "$id" "dumpstar-env:edge-seconds=$((t2 - t1))" "dumpstar-env:up-seconds=$((t2 - t0))" "dumpstar-env:last-activity=$t2"
 	UP_ID=""
 	echo "env: $slot up in $((t2 - t0))s (edge share $((t2 - t1))s, instance $id)"
+	phases="launch $((tl - t0)) ssm-ready $((ts - tl))"
+	vm_total=0
+	while read -r name secs; do
+		[ -n "$name" ] || continue
+		phases+=" $name $secs"; vm_total=$((vm_total + secs))
+	done <"$ENV_PHASES"
+	phases+=" edge $((t2 - t1))"
+	echo "env: phases: $(awk '{for (i = 1; i < NF; i += 2) printf "%s%s %ss", (i > 1 ? ", " : ""), $i, $(i + 1)}' <<<"$phases")"
 	[ $((t2 - t1)) -le "$DUMPSTAR_ENV_BUDGET_EDGE" ] || echo "env: WARNING edge share over the ${DUMPSTAR_ENV_BUDGET_EDGE}s budget; the design's fallback is tailnet-only" >&2
-	[ $((t2 - t0)) -le "$DUMPSTAR_ENV_BUDGET_UP" ] || echo "env: WARNING up over the ${DUMPSTAR_ENV_BUDGET_UP}s budget" >&2
+	if [ $((t2 - t0)) -gt "$DUMPSTAR_ENV_BUDGET_UP" ]; then
+		echo "env: WARNING up over the ${DUMPSTAR_ENV_BUDGET_UP}s budget; slowest phase: $(awk '{m = -1; for (i = 1; i < NF; i += 2) if ($(i + 1) + 0 > m) { m = $(i + 1) + 0; n = $i } printf "%s (%ss)", n, m}' <<<"$phases")" >&2
+	fi
 	echo "url: https://$(hostname_of "$slot")/"
 	echo "sign in: Pocket ID (https://id.gantt.pub) as a member of the dumpstar-users group; the MCP audience is https://$(hostname_of "$slot")/mcp"
 }

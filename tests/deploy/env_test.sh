@@ -124,7 +124,7 @@ TREE=$(printf 'a%.0s' $(seq 40))
 TREE2=$(printf 'b%.0s' $(seq 40))
 
 out="$(bash "$ENV" up --image "tree:$TREE" 2>&1)" || { bad "up failed"; echo "$out"; }
-grep -q 'url: https://env-1.test.dumpster.cards/' <<<"$out" && ok "up prints the slot URL" || { bad "up prints the slot URL"; echo "$out"; }
+grep -q 'url: https://env-1.dumpster.cards/' <<<"$out" && ok "up prints the slot URL" || { bad "up prints the slot URL"; echo "$out"; }
 grep -q 'sign in: Pocket ID' <<<"$out" && ok "up says how to sign in" || bad "up says how to sign in"
 grep -q 'edge share [0-9]*s' <<<"$out" && ok "up records the edge share" || bad "up records the edge share"
 id1="$(basename "$(ls "$STUB"/instances/*.json | head -1)" .json)"

@@ -57,3 +57,12 @@ own), and anything the dashboard set that the module does not shows as
 a diff to settle in `variables.tf`, not to apply over.
 
 Providers read `CLOUDFLARE_API_TOKEN` and `POCKETID_API_TOKEN` from the environment.
+
+## Pocket ID API for the MCP audience
+
+Pocket ID accepts an OAuth `resource` only if it is a registered API, and `Trozz/pocketid` has no
+resource type for one. `terraform_data.mcp_api` therefore runs `pocketid-api.sh` (Pocket ID's
+`/api/apis`, with `POCKETID_API_TOKEN`) to register `https://<hostname>/mcp` with CIMD clients
+allowed, which is what lets Claude Code sign in. An API already registered for the audience is
+adopted, not duplicated (prod's hand-made `dumpstar MCP`); a slot's is deleted on destroy, prod's
+never is. `tests/ci/pocketid_api_test.sh` exercises the script against a stub.

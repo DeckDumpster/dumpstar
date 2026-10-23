@@ -18,3 +18,7 @@ output "edge_secret_name" {
 output "s3_prefix" {
   value = "s3://${local.lake_bucket}/${aws_s3_object.prefix[var.instance].key}"
 }
+
+output "mcp_audience" {
+  value = terraform_data.mcp_api[var.instance].input.audience
+}

@@ -57,7 +57,8 @@ fill_data() {
 		catalog-apply --swu
 	require_catalog
 	podman run --rm -v "$vol:/data:Z" -e DUMPSTAR_HOME=/data --entrypoint dumpstar "$image" \
-		tenant identity add concierge --email "$DUMPSTAR_ENV_CONCIERGE_EMAIL"
+		tenant identity add concierge --email "$DUMPSTAR_ENV_CONCIERGE_EMAIL" \
+		--sub "$DUMPSTAR_ENV_CONCIERGE_SUB" --issuer "$DUMPSTAR_ENV_CONCIERGE_ISSUER"
 }
 
 # require_catalog: the slot's catalog holds cards. `setup` writes an empty schema, so an up that
@@ -86,7 +87,8 @@ up)
 	: "${DUMPSTAR_ENV_RENDER:?}" "${DUMPSTAR_ENV_IMAGE_REF:?}" "${DUMPSTAR_ENV_REGION:?}" \
 		"${DUMPSTAR_ENV_ACCESS_TEAM:?}" "${DUMPSTAR_ENV_HOSTNAME:?}" "${DUMPSTAR_ENV_PORT:?}" \
 		"${DUMPSTAR_ENV_EDGE_SECRET:?}" "${DUMPSTAR_ENV_CLOUDFLARED_IMAGE:?}" \
-		"${DUMPSTAR_ENV_CONCIERGE_REPLICA:?}" "${DUMPSTAR_ENV_LITESTREAM_IMAGE:?}" "${DUMPSTAR_ENV_CONCIERGE_EMAIL:?}"
+		"${DUMPSTAR_ENV_CONCIERGE_REPLICA:?}" "${DUMPSTAR_ENV_LITESTREAM_IMAGE:?}" "${DUMPSTAR_ENV_CONCIERGE_EMAIL:?}" \
+		"${DUMPSTAR_ENV_CONCIERGE_SUB:?}" "${DUMPSTAR_ENV_CONCIERGE_ISSUER:?}"
 	install -d -m 0700 "$secrets_dir" "$secrets_dir/aws"
 	install -d -m 0755 "$unit_dir"
 	cp "$DUMPSTAR_ENV_RENDER"/*.env "$secrets_dir/"

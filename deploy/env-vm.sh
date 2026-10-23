@@ -79,12 +79,13 @@ up)
 	edge="$(aws --region "$DUMPSTAR_ENV_REGION" secretsmanager get-secret-value \
 		--secret-id "$DUMPSTAR_ENV_EDGE_SECRET" --query SecretString --output text)"
 	val() { jq -r --arg k "$1" '.[$k] // empty' <<<"$edge"; }
-	for k in CLOUDFLARED_TUNNEL_TOKEN DUMPSTAR_OIDC_CLIENT_ID DUMPSTAR_OIDC_CLIENT_SECRET DUMPSTAR_ACCESS_AUD; do
+	for k in CLOUDFLARED_TUNNEL_TOKEN DUMPSTAR_OIDC_CLIENT_ID DUMPSTAR_OIDC_CLIENT_SECRET; do
 		[ -n "$(val "$k")" ] || { echo "env-vm: ${DUMPSTAR_ENV_EDGE_SECRET} has no ${k}" >&2; exit 1; }
 	done
 	team="https://${DUMPSTAR_ENV_ACCESS_TEAM}.cloudflareaccess.com"
 	set_key "$secrets_dir/access.env" DUMPSTAR_ACCESS_TEAM_DOMAIN "$team"
-	set_key "$secrets_dir/access.env" DUMPSTAR_ACCESS_AUD "$(val DUMPSTAR_ACCESS_AUD)"
+	# No Access application fronts a slot (as on prod); the deploy config check still wants a value.
+	set_key "$secrets_dir/access.env" DUMPSTAR_ACCESS_AUD "none"
 	set_key "$secrets_dir/access.env" DUMPSTAR_ACCESS_JWKS_URL "${team}/cdn-cgi/access/certs"
 	set_key "$secrets_dir/oidc.env" DUMPSTAR_OIDC_ISSUER "https://id.gantt.pub"
 	set_key "$secrets_dir/oidc.env" DUMPSTAR_OIDC_CLIENT_ID "$(val DUMPSTAR_OIDC_CLIENT_ID)"

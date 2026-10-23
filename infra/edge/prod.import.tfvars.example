@@ -2,7 +2,5 @@
 import_ids = {
   tunnel          = ""
   dns_record      = ""
-  access_policy   = ""
-  access_app      = ""
   pocketid_client = ""
 }

@@ -22,9 +22,6 @@ variables {
   hostname              = "env-2.dumpster.cards"
   cloudflare_account_id = "acct"
   cloudflare_zone_id    = "zone"
-  access_team_name      = "team"
-  access_idp_id         = "idp"
-  access_group_id       = "grp"
   pocketid_group_ids    = ["g1"]
 }
 
@@ -53,20 +50,21 @@ run "dns_is_a_proxied_cname_to_the_tunnel" {
   }
 }
 
-run "access_app_requires_the_group_on_the_hostname" {
+run "nothing_sits_in_front_of_dumpstar_at_the_edge" {
   command = plan
 
+  # Prod has no edge gate and dumpstar signs in itself, so the module may not declare an Access
+  # application or any rule that answers /.well-known/*, /mcp, /api or /health before dumpstar.
   assert {
-    condition     = cloudflare_zero_trust_access_application.this["env-2"].domain == "env-2.dumpster.cards" && cloudflare_zero_trust_access_application.this["env-2"].type == "self_hosted"
-    error_message = "the Access application covers exactly the instance hostname"
+    condition = !anytrue([
+      for f in fileset(path.module, "*.tf") :
+      can(regex("(?m)^\\s*resource\\s+\"cloudflare_(zero_trust_access|ruleset|workers|page_rule|firewall|filter|waf)", file("${path.module}/${f}")))
+    ])
+    error_message = "infra/edge declares an edge-level gate (Access, ruleset, worker, page or firewall rule) that prod does not have"
   }
   assert {
-    condition     = cloudflare_zero_trust_access_policy.this["env-2"].decision == "allow" && tolist(cloudflare_zero_trust_access_policy.this["env-2"].include)[0].group.id == "grp"
-    error_message = "the policy allows only the required group"
-  }
-  assert {
-    condition     = toset(cloudflare_zero_trust_access_application.this["env-2"].allowed_idps) == toset(["idp"])
-    error_message = "only the Pocket ID identity provider may sign in"
+    condition     = length(fileset(path.module, "*.tf")) > 0
+    error_message = "the guard must see the module's files, or it proves nothing"
   }
 }
 
@@ -177,12 +175,6 @@ run "an_empty_secret_value_refuses_the_plan" {
     values = {
       id            = "client"
       client_secret = "secret"
-    }
-  }
-  override_resource {
-    target = cloudflare_zero_trust_access_application.this
-    values = {
-      aud = "aud"
     }
   }
 

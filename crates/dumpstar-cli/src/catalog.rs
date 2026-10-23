@@ -1,10 +1,17 @@
 //! `dumpstar catalog-apply` — the SWU catalog apply job, run by a timer — and
 //! `dumpstar catalog-check`, the alarm check run by another.
 //!
-//! Fetch → land → apply, against `shared.sqlite`. `--swu` is the live job: the
-//! official API crawl (at most one a day) and then the tcgcsv prices. The two
-//! run independently, so a dead official API still lets prices through; the job
-//! still exits non-zero for it.
+//! Since sp-6i11rn the catalog is derived OFFLINE from the lake's `raw/`
+//! (`dumpstar data refresh` lands, `dumpstar-lake-derive shared` derives), and
+//! the timer runs `--assets`: the set art and sealed-product pictures, fetched
+//! from the publishers' image hosts into the data directory. It reaches neither
+//! the official card API nor tcgcsv.
+//!
+//! `--swu` is the legacy online path — fetch → land → apply, against
+//! `shared.sqlite`, the official API crawl (at most one a day) and then the
+//! tcgcsv prices — kept runnable as the rollback of that cutover, until a
+//! nightly cycle from the lake has been verified on prod. A dead official API
+//! still lets prices through there; the job still exits non-zero for it.
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -30,11 +37,17 @@ pub struct CatalogApplyArgs {
     #[arg(long)]
     raw_dir: Option<PathBuf>,
     /// Use the built-in hand-written fake catalog.
-    #[arg(long, conflicts_with = "swu")]
+    #[arg(long, conflicts_with_all = ["swu", "assets"])]
     fake: bool,
-    /// Fetch the official catalog and the tcgcsv prices.
-    #[arg(long)]
+    /// The legacy online path: fetch the official catalog and the tcgcsv prices
+    /// and apply them here. The catalog is derived from the lake now; this is
+    /// the rollback.
+    #[arg(long, conflicts_with = "assets")]
     swu: bool,
+    /// Fetch the set art and sealed-product pictures only. No catalog payload
+    /// is fetched or applied.
+    #[arg(long)]
+    assets: bool,
     /// Origin of the official API (test-tier).
     #[arg(long, default_value = OFFICIAL_BASE)]
     official_base: String,
@@ -106,8 +119,69 @@ fn print_coverage(shared: &std::path::Path, with_unmatched: bool) -> anyhow::Res
     Ok(())
 }
 
+/// The set art and the sealed-product pictures. A miss leaves the set showing
+/// its name, so it is reported but does not fail the job; a set with no art at
+/// all does. Returns what failed.
+fn fetch_assets(
+    http: &HttpFetch,
+    image_dir: Option<PathBuf>,
+    shared: &std::path::Path,
+) -> anyhow::Result<Vec<&'static str>> {
+    let mut failed = Vec::new();
+    // The set logos and art crops are retrieved once into the data dir's own
+    // store; no page ever reaches the publisher's CDN. A miss leaves the set
+    // showing its name, so it is reported but does not fail the job.
+    let art_dir = dumpstar_db::dumpstar_home()?.join("art");
+    match dumpstar_catalog::art::fetch(
+        &art_dir,
+        http,
+        Utc::now().date_naive(),
+        &dumpstar_catalog::art::sources(),
+    ) {
+        Ok(r) => {
+            println!("set art: fetched {} already {}", r.fetched, r.already);
+            for f in r.failed {
+                eprintln!("set art: {f}");
+            }
+        }
+        Err(e) => eprintln!("set art: {e:#}"),
+    }
+    let art_cov = dumpstar_catalog::art::coverage(&art_dir, &dumpstar_catalog::art::sources());
+    println!("{}", art_cov.line());
+    if !art_cov.missing.is_empty() {
+        eprintln!("ALARM set-art: missing {}", art_cov.missing.join(", "));
+        failed.push("set art");
+    }
+    let images = match image_dir {
+        Some(p) => p,
+        None => dumpstar_db::dumpstar_home()?.join("sealed-images"),
+    };
+    match Catalog::open_writer(shared)
+        .map_err(anyhow::Error::from)
+        .and_then(|c| {
+            Ok(dumpstar_catalog::images::fetch_pending(
+                &c,
+                http,
+                &images,
+                &Utc::now().format("%Y-%m-%d").to_string(),
+            )?)
+        }) {
+        Ok(r) => {
+            println!("{}", r.coverage_line());
+            for f in &r.failed {
+                eprintln!("sealed image: {f}");
+            }
+        }
+        Err(e) => eprintln!("sealed images: {e:#}"),
+    }
+    Ok(failed)
+}
+
 pub fn run(args: CatalogApplyArgs) -> anyhow::Result<()> {
-    anyhow::ensure!(args.fake || args.swu, "choose --swu (live) or --fake");
+    anyhow::ensure!(
+        args.fake || args.swu || args.assets,
+        "choose --assets (pictures), --swu (the legacy online catalog) or --fake"
+    );
     let shared = shared_path(args.shared_db)?;
     let raw = match args.raw_dir {
         Some(p) => p,
@@ -115,6 +189,12 @@ pub fn run(args: CatalogApplyArgs) -> anyhow::Result<()> {
     };
     if args.fake {
         return run_source("fake", &FakeSource, &raw, &shared);
+    }
+    if args.assets {
+        let http = HttpFetch::new(PAUSE)?;
+        let failed = fetch_assets(&http, args.image_dir, &shared)?;
+        anyhow::ensure!(failed.is_empty(), "failed: {}", failed.join(", "));
+        return Ok(());
     }
     if Catalog::open_writer(&shared)?.rejoin_if_stale()? {
         println!("crosswalk: the join changed since this catalog was joined; re-joined");
@@ -148,52 +228,7 @@ pub fn run(args: CatalogApplyArgs) -> anyhow::Result<()> {
         eprintln!("tcgcsv: {e:#}");
         failed.push("tcgcsv");
     }
-    // The set logos and art crops are retrieved once into the data dir's own
-    // store; no page ever reaches the publisher's CDN. A miss leaves the set
-    // showing its name, so it is reported but does not fail the job.
-    let art_dir = dumpstar_db::dumpstar_home()?.join("art");
-    match dumpstar_catalog::art::fetch(
-        &art_dir,
-        &http,
-        Utc::now().date_naive(),
-        &dumpstar_catalog::art::sources(),
-    ) {
-        Ok(r) => {
-            println!("set art: fetched {} already {}", r.fetched, r.already);
-            for f in r.failed {
-                eprintln!("set art: {f}");
-            }
-        }
-        Err(e) => eprintln!("set art: {e:#}"),
-    }
-    let art_cov = dumpstar_catalog::art::coverage(&art_dir, &dumpstar_catalog::art::sources());
-    println!("{}", art_cov.line());
-    if !art_cov.missing.is_empty() {
-        eprintln!("ALARM set-art: missing {}", art_cov.missing.join(", "));
-        failed.push("set art");
-    }
-    let images = match args.image_dir {
-        Some(p) => p,
-        None => dumpstar_db::dumpstar_home()?.join("sealed-images"),
-    };
-    match Catalog::open_writer(&shared)
-        .map_err(anyhow::Error::from)
-        .and_then(|c| {
-            Ok(dumpstar_catalog::images::fetch_pending(
-                &c,
-                &http,
-                &images,
-                &Utc::now().format("%Y-%m-%d").to_string(),
-            )?)
-        }) {
-        Ok(r) => {
-            println!("{}", r.coverage_line());
-            for f in &r.failed {
-                eprintln!("sealed image: {f}");
-            }
-        }
-        Err(e) => eprintln!("sealed images: {e:#}"),
-    }
+    failed.extend(fetch_assets(&http, args.image_dir, &shared)?);
     anyhow::ensure!(failed.is_empty(), "failed: {}", failed.join(", "));
     Ok(())
 }

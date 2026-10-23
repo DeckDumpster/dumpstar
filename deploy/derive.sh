@@ -33,26 +33,17 @@
 #
 # ── EXIT STATUS IS THE JOB'S, UNCHANGED ─────────────────────────────────────
 #   0  the catalog was derived from that partition
-#   2  it was derived from a PARTIAL partition: the pokemontcg.io tail did not
-#      complete that night, so the catalog's set list is as old as the last run
-#      that finished one. The half a night cannot lose — TCGCSV's prices — is
-#      whole. A warning, not a page.
+#   2  it was derived from a PARTIAL partition: the official card crawl for that
+#      date is absent or incomplete (the official API was down when the landing
+#      ran), so the catalog's cards are as old as the last whole crawl. The half
+#      a night cannot lose — TCGCSV's prices — is whole. A warning, not a page.
 #   1  there is no catalog for that partition — it is absent, short in TCGCSV,
 #      clockless, missing a URL the derivation asked for, or the derivation
 #      itself failed
 #
-# Exit 2 is here for one reason (pd-llbq): `dumpstar data refresh` already answers
-# a night api.pokemontcg.io is down with exit 2 and a stale set list (pd-nons),
-# and this unit was answering the same night with a refusal and a page. Nobody
-# decided that; it is what fell out of two beads landing beside each other. A
-# pager that fires on most nights of an upstream's bad week is a pager that gets
-# ignored (pd-me6h), and once this job is the only builder of shared.sqlite
-# refusing the night would throw away its PRICES too — the exact loss pd-nons
-# exists to prevent, one side of the split later.
-#
-# It is still narrow. Every other short prefix is exit 1: the exemption is per
-# dataset in crates/dumpstar-lakehouse/src/partition.rs::requirement, where the
-# compiler makes adding another one a decision somebody has to write down.
+# The exemption is per dataset: the official crawl is `Need::Optional` in
+# crates/dumpstar-derive (OFFICIAL_TABLE), the TCGCSV datasets are required, and
+# the compiler makes adding another exemption a decision somebody has to write down.
 set -euo pipefail
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
@@ -183,11 +174,11 @@ case "$RC" in
     # 2. Nothing is greped out of the job's output to say this: the exit status
     # IS the message, and the detail is in the journal under this unit.
     echo "derive: PARTIAL — ${DATE} did not complete for ${INSTANCE}; the catalog was rebuilt from what it holds" >&2
-    echo "  The pokemontcg.io tail did not complete that night. TCGCSV — the half a night" >&2
-    echo "  cannot lose — is whole; the set list is as old as the last run that finished one," >&2
-    echo "  and tomorrow's tail supersedes it. raw_derivation records which datasets were short." >&2
+    echo "  The official card crawl did not complete that night. TCGCSV — the half a night" >&2
+    echo "  cannot lose — is whole; the card list is as old as the last run that finished one," >&2
+    echo "  and tomorrow's crawl supersedes it. raw_derivation records which datasets were read." >&2
     "${SCRIPT_DIR}/alert.sh" "Dumpstar catalog derive PARTIAL (${INSTANCE})" \
-        "The pokemontcg.io tail did not complete for ${DATE}. The catalog was rebuilt from the rest of the partition; its set list is stale until the next whole night. See journalctl --user -u dumpstar-derive@${INSTANCE}.service" ||
+        "The official card crawl did not complete for ${DATE}. The catalog was rebuilt from the rest of the partition; its card list is stale until the next whole night. See journalctl --user -u dumpstar-derive@${INSTANCE}.service" ||
         echo "derive: the PARTIAL warning reached nobody (no Pushover channel configured) — the catalog itself is unaffected" >&2
     ;;
 *)

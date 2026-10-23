@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::process::Output;
 
 use dumpstar_ingest::test_upstream::{FakeUpstream, Reply};
-use dumpstar_ingest::upstream::ENV_TCGCSV_BASE_URL;
+use dumpstar_ingest::upstream::{ENV_OFFICIAL_BASE_URL, ENV_TCGCSV_BASE_URL};
 
 const GROUPS: &str = r#"{"results":[
     {"groupId":23237,"name":"Spark of Rebellion","abbreviation":"SOR",
@@ -22,6 +22,8 @@ const EMPTY: &str = r#"{"results":[],"success":true,"errors":[]}"#;
 fn route(target: &str, _n: usize) -> Reply {
     let path = target.split('?').next().unwrap_or(target);
     match path {
+        "/api/cards" => Reply::ok(r#"{"data":[],"meta":{"pagination":{"pageCount":1}}}"#),
+        "/last-updated.txt" => Reply::ok("2026-09-19T20:05:44+0000"),
         "/tcgplayer/79/groups" => Reply::ok(GROUPS),
         p if p.ends_with("/products") || p.ends_with("/prices") => Reply::ok(EMPTY),
         other => Reply::status(
@@ -40,6 +42,7 @@ fn dumpstar(home: &Path, lake: &Path, upstream: &str, args: &[&str]) -> Output {
         .env("DUMPSTAR_USER", "collection")
         .env("DUMPSTAR_LAKE_DIR", lake)
         .env(ENV_TCGCSV_BASE_URL, upstream)
+        .env(ENV_OFFICIAL_BASE_URL, upstream)
         // A lake.env on the machine running this must never be read.
         .env("HOME", home)
         .env_remove("DUMPSTAR_LAKE_ENV")

@@ -10,9 +10,12 @@ use crate::crosswalk::PRICED_VARIANTS;
 use crate::error::Result;
 use crate::record::AlarmRecord;
 
-/// tcgcsv refreshes around 20:00 UTC and the sync timer runs at 21:00; a day is
-/// due once the clock passes this hour, an hour of slack after the sync starts.
-pub const PRICES_DUE_HOUR_UTC: u32 = 22;
+/// tcgcsv refreshes around 20:00 UTC; the lake landing runs at 06:00 UTC the
+/// next day and the offline derive at 07:00, so a day's prices are due the
+/// morning after, once the clock passes this hour — an hour of slack after the
+/// derive starts (sp-6i11rn; until then the online sync ran at 21:00 and a day
+/// was due at 22:00 the same day).
+pub const PRICES_DUE_HOUR_UTC: u32 = 8;
 /// How far back a missing day is still reported.
 pub const LOOKBACK_DAYS: i64 = 30;
 /// The share of priced-variant printings that must have a price on the latest day.
@@ -50,9 +53,9 @@ pub fn missing_price_days(conn: &Connection, now: DateTime<Utc>) -> Result<Vec<A
     };
     let today = now.date_naive();
     let due = if now.hour() >= PRICES_DUE_HOUR_UTC {
-        today
-    } else {
         today - Duration::days(1)
+    } else {
+        today - Duration::days(2)
     };
     let mut d = first.max(today - Duration::days(LOOKBACK_DAYS));
     let mut out = vec![];

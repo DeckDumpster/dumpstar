@@ -149,7 +149,7 @@ mod raw_coverage {
     use std::sync::Arc;
 
     use dumpstar_ingest::test_upstream::{FakeUpstream, Reply};
-    use dumpstar_ingest::upstream::ENV_TCGCSV_BASE_URL;
+    use dumpstar_ingest::upstream::{ENV_OFFICIAL_BASE_URL, ENV_TCGCSV_BASE_URL};
     use dumpster_kit_lake::{Dataset, DirStore, RawLanding};
 
     const INGEST_DATE: &str = "2026-09-20";
@@ -163,6 +163,8 @@ mod raw_coverage {
     fn route(target: &str, _n: usize) -> Reply {
         let path = target.split('?').next().unwrap_or(target);
         match path {
+            "/api/cards" => Reply::ok(r#"{"data":[],"meta":{"pagination":{"pageCount":1}}}"#),
+            "/last-updated.txt" => Reply::ok("2026-09-19T20:05:44+0000"),
             "/tcgplayer/79/groups" => Reply::ok(GROUPS),
             p if p.ends_with("/products") || p.ends_with("/prices") => Reply::ok(EMPTY),
             other => Reply::status(
@@ -183,7 +185,10 @@ mod raw_coverage {
         // crate::ENV_LOCK is shared with every module that sets upstream origins.
         let _guard = crate::ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // SAFETY: the lock is held for as long as the variable is set.
-        unsafe { std::env::set_var(ENV_TCGCSV_BASE_URL, upstream.base_url()) };
+        unsafe {
+            std::env::set_var(ENV_TCGCSV_BASE_URL, upstream.base_url());
+            std::env::set_var(ENV_OFFICIAL_BASE_URL, upstream.base_url());
+        }
 
         let tmp = tempfile::tempdir().unwrap();
         let clock = dumpstar_derive::DeriveClock::from_manifest(CLOCK_AT, "test clock")
@@ -200,12 +205,21 @@ mod raw_coverage {
             replay: None,
         });
         // SAFETY: as above.
-        unsafe { std::env::remove_var(ENV_TCGCSV_BASE_URL) };
+        unsafe {
+            std::env::remove_var(ENV_TCGCSV_BASE_URL);
+            std::env::remove_var(ENV_OFFICIAL_BASE_URL);
+        }
         outcome.expect("the landing run");
         let manifests = landing.manifests();
 
-        // 1. Every dataset, walked from the enum rather than a list written here.
-        for dataset in Dataset::ALL {
+        // 1. Every dataset: the kit's TCGCSV three, walked from its list rather
+        // than one written here, and the two the catalog adds.
+        let every: Vec<Dataset> = Dataset::ALL
+            .iter()
+            .copied()
+            .chain([dumpstar_derive::CARDS, dumpstar_derive::LAST_UPDATED])
+            .collect();
+        for dataset in &every {
             let landed = manifests
                 .iter()
                 .find(|m| m.dataset == dataset.as_str())

@@ -152,6 +152,15 @@ fn converge(conn: &mut Connection) -> Result<()> {
     Ok(())
 }
 
+/// Converge an already-open read-write catalog again, after something wrote to
+/// it that convergence reads — the derive's applied catalog payloads, which are
+/// what the sealed-product backfill folds. The open converged it before any
+/// payload existed, so without this the derive's own output would differ from
+/// the next open's, and "derive the same date twice" would not be a no-op.
+pub fn converge_shared(conn: &mut Connection) -> Result<()> {
+    converge(conn)
+}
+
 /// Open the shared catalog for a process that must *have* it converged but is
 /// not the thing that builds it — i.e. `dumpstar serve`.
 ///

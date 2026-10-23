@@ -994,27 +994,28 @@ fn a_skipped_price_day_raises_an_alarm_within_the_next_check_window() {
             .any(|a| a.kind == "missing_price_day")
     );
 
-    // The window: a day is due once the sync has had its hour, not before.
+    // The window: a day is due the morning after, once the 07:00 derive has had
+    // its hour, not before.
     let c2 = env();
     sync_official(&c2, &http, at(10, 4));
     priced_on(&c2, &http, "2026-10-11T20:05:44+0000", at(11, 21));
     let r = Catalog::open_readonly(&c2.db).unwrap();
     assert!(
-        check::missing_price_days(r.conn(), at(12, 21))
+        check::missing_price_days(r.conn(), at(13, 7))
             .unwrap()
             .is_empty()
     );
     assert_eq!(
-        check::missing_price_days(r.conn(), at(12, 22))
+        check::missing_price_days(r.conn(), at(13, 8))
             .unwrap()
             .len(),
         1
     );
-    // A day that did arrive, checked an hour after its sync, is quiet.
-    priced_on(&c2, &http, "2026-10-12T20:05:44+0000", at(12, 21));
+    // A day that did arrive, checked an hour after its derive, is quiet.
+    priced_on(&c2, &http, "2026-10-12T20:05:44+0000", at(13, 7));
     let r = Catalog::open_readonly(&c2.db).unwrap();
     assert!(
-        check::missing_price_days(r.conn(), at(12, 23))
+        check::missing_price_days(r.conn(), at(13, 9))
             .unwrap()
             .is_empty()
     );

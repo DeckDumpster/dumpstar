@@ -130,6 +130,12 @@ fn start_upstream(script: Arc<Script>) -> FakeUpstream {
         let (path, _query) = target.split_once('?').unwrap_or((target, ""));
         let parts: Vec<&str> = path.trim_matches('/').split('/').collect();
         match parts.as_slice() {
+            // The official crawl: one empty page. These tests are about the
+            // landing and replay machinery; `catalog_from_lake.rs` carries the
+            // real catalog through it.
+            ["api", "cards"] => Reply::ok(r#"{"data":[],"meta":{"pagination":{"pageCount":1}}}"#),
+            // The stamp's day moves with the script's day, as tcgcsv's does.
+            ["last-updated.txt"] => Reply::ok(format!("2026-08-{:02}T20:05:44+0000", 9 + day)),
             ["tcgplayer", _, "groups"] => Reply::ok(GROUPS),
             ["tcgplayer", _, group, "products"] => Reply::ok(products_json(group.parse().unwrap())),
             ["tcgplayer", _, group, "prices"] => {
@@ -275,6 +281,7 @@ impl Harness {
             // automatic — both are the compiled-in constant. Here the fixture
             // upstream's port is ephemeral, so it has to be passed along.
             .env("DUMPSTAR_TCGCSV_BASE_URL", self.upstream.base_url())
+            .env("DUMPSTAR_OFFICIAL_BASE_URL", self.upstream.base_url())
             // Never read: the lake is `DUMPSTAR_LAKE_DIR` above. Pointed at a
             // path that does not exist so a stray read of the operator's real
             // lake.env would fail loudly rather than pass silently.
@@ -310,6 +317,7 @@ impl Harness {
         // lock above, and the offline half runs in its own process.
         unsafe {
             std::env::set_var("DUMPSTAR_TCGCSV_BASE_URL", self.upstream.base_url());
+            std::env::set_var("DUMPSTAR_OFFICIAL_BASE_URL", self.upstream.base_url());
         }
         guard
     }
@@ -358,10 +366,11 @@ fn a_catalog_derived_from_raw_is_row_identical_to_the_online_one() {
         "the derive must SAY the partition covered it:\n{}",
         text(&out)
     );
-    // Provenance names the three TCGCSV datasets it read.
+    // Provenance names the five datasets it read: the official crawl, and the
+    // four TCGCSV ones (groups, products, prices, the stamp).
     assert_eq!(
         scalar::<i64>(&offline, "SELECT COUNT(*) FROM raw_derivation"),
-        3
+        5
     );
 
     let diff = h.diff(&online, &offline);

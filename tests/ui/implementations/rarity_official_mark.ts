@@ -22,11 +22,11 @@ async function assertMark(h: ReplayHarness) {
 
 export async function steps(h: ReplayHarness) {
   await assertMark(h);
-  await h.navigate('/collection?q=rarity%3Alegendary&all=1');
+  await h.navigate('/collection?q=rarity%3Alegendary');
   await assertMark(h);
   // Rarity sort follows the stored sort values: Special (1) is the lowest,
   // Legendary (5) the highest.
-  await h.navigate('/collection?q=rarity%3Alegendary%20or%20rarity%3Aspecial&all=1');
+  await h.navigate('/collection?q=rarity%3Alegendary%20or%20rarity%3Aspecial');
   await h.click_by_text('Rarity');
   await h.page.waitForTimeout(500);
   const labels = await h.page

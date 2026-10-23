@@ -48,7 +48,7 @@ test('trait links wrap after a separator and stay out of the Aspects column', as
 		localStorage.setItem('collection.hiddenColumns.phone', '[]');
 		sessionStorage.clear();
 	});
-	await page.goto('/collection?q=set%3Asor&all=1');
+	await page.goto('/collection?q=set%3Asor');
 	await page.locator('table.dd').waitFor();
 
 	const m = await page.evaluate(() => {

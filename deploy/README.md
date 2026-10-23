@@ -1324,6 +1324,14 @@ swaps the container, `status` lists owner, build, age, last activity and URL, `d
 VM and its data. No Terraform runs in any of them. The header of `deploy/env.sh` lists the
 configuration it refuses to run without; `deploy/env-vm.sh` is what runs on the VM.
 
+### The operator role (sp-avf7ko)
+
+`env.sh` runs as `dumpstar-env-operator` (`infra/env/operator.tf`, ARN in the `operator_role_arn`
+output), which only `spira-concierge` may assume. `DUMPSTAR_ENV_AWS_PROFILE` names a profile with
+`role_arn = <operator_role_arn>` and `source_profile = spira-concierge`. Launch, terminate, stop,
+delete-volume and send-command are all bound to the `dumpstar-env:slot` tag, and `iam:PassRole` is
+limited to `dumpstar-env-vm`. The Concierge applies it under an MFA session.
+
 ### The reaper (`deploy/env.sh reap`, sp-4wy00r)
 
 An environment is torn down at a 2 h TTL, or after 30 minutes with no authenticated request.

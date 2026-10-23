@@ -229,3 +229,46 @@ fn a_mechanic_like_phrase_the_derivation_missed_is_flagged() {
         .collect();
     assert_eq!(keys, vec![("mechanic_unmatched", "NOVEL")]);
 }
+
+#[test]
+fn an_unmatched_phrase_files_once_and_never_fails_the_check() {
+    use dumpstar_catalog::filing::{Action, file};
+    let dir = tempfile::tempdir().unwrap();
+    let c = Catalog::open_writer(&dir.path().join("shared.sqlite")).unwrap();
+    c.conn()
+        .execute(
+            "INSERT INTO cards (card_id, name, card_type, rules_text, mechanics) VALUES ('NOVEL','NOVEL','Unit','When Played: You may spend the Force.','[]')",
+            [],
+        )
+        .unwrap();
+    let report = dumpstar_catalog::check::run_report(c.conn(), chrono::Utc::now()).unwrap();
+    assert!(report.open.iter().all(|a| a.kind != "mechanic_unmatched"));
+    let findings = dumpstar_catalog::check::mechanic_findings(c.conn()).unwrap();
+    let out = dir.path().join("filings");
+    let first = file(&out, &findings).unwrap().expect("one filing");
+    assert_eq!(first.action, Action::Open);
+    assert_eq!(first.findings.len(), 1);
+    assert_eq!(first.findings[0].card_id, "NOVEL");
+    assert!(first.findings[0].phrase.starts_with("the force"));
+    assert!(file(&out, &findings).unwrap().is_none());
+    assert_eq!(std::fs::read_dir(out.join("outbox")).unwrap().count(), 1);
+    // no findings: nothing filed, state cleared for the next bead
+    assert!(file(&out, &[]).unwrap().is_none());
+    assert_eq!(file(&out, &findings).unwrap().unwrap().action, Action::Open);
+}
+
+#[test]
+fn a_later_finding_appends_to_the_open_bead() {
+    use dumpstar_catalog::filing::{Action, Finding, State, plan};
+    let f = |id: &str| Finding {
+        card_id: id.into(),
+        rules_text: "x".into(),
+        phrase: "p".into(),
+    };
+    let (s, a) = plan(&[f("A")], &State::default());
+    assert_eq!(a.unwrap().action, Action::Open);
+    let (_, b) = plan(&[f("A"), f("B")], &s);
+    let b = b.unwrap();
+    assert_eq!(b.action, Action::Append);
+    assert_eq!(b.findings, vec![f("B")]);
+}

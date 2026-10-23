@@ -240,7 +240,7 @@ render_slot() { # render_slot <slot> <outdir>
 		--port "$DUMPSTAR_ENV_PORT" --secrets "/etc/dumpstar/$1"
 }
 
-hostname_of() { printf '%s.test.dumpster.cards' "$1"; }
+hostname_of() { printf '%s.dumpster.cards' "$1"; }
 
 cmd_up() {
 	local image="" slot="" t0 t1 t2 id s tmp mine first

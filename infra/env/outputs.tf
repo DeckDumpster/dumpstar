@@ -18,3 +18,8 @@ output "ami" {
 output "instance_type" {
   value = var.instance_type
 }
+
+# DUMPSTAR_ENV_AWS_PROFILE names a profile with role_arn = this and source_profile = spira-concierge.
+output "operator_role_arn" {
+  value = aws_iam_role.operator.arn
+}

@@ -3,7 +3,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { api, SearchQueryError } from '$lib/api';
-	import { facetHref } from '$lib/facets';
+	import { facetHref, setFacetContext } from '$lib/facets';
 	import RarityMark from '$lib/components/RarityMark.svelte';
 	import CostMark from '$lib/components/CostMark.svelte';
 	import AspectIcon from '$lib/components/AspectIcon.svelte';
@@ -210,7 +210,7 @@
 			acDismissed = true;
 		}
 	}
-	// Reflect the whole view — query and All-cards — in the URL, so refreshes
+	// Reflect the whole view — query — in the URL, so refreshes
 	// and the back button keep state.
 	// goto(replaceState:true), NOT $app/navigation's replaceState: the latter
 	// only repaints the address bar and stashes the *stale* page.url as the
@@ -218,8 +218,7 @@
 	// ?q=. goto updates page.url so Back restores it. keepFocus so the search
 	// box doesn't blur mid-type.
 	//
-	// One writer for both params: they change together and a second writer
-	// would race this one on goto. There is no `offset` among them any more —
+	// One writer for the URL: a second writer would race this one on goto. There is no `offset` among them any more —
 	// the list is one scrollable result, so where you are in it is a scroll
 	// position (remembered below), not a slice of the URL.
 	function syncUrl() {
@@ -228,8 +227,6 @@
 		const q = searchRaw.trim();
 		if (q) url.searchParams.set('q', q);
 		else url.searchParams.delete('q');
-		if (allCards) url.searchParams.set('all', '1');
-		else url.searchParams.delete('all');
 		if (url.href !== window.location.href) {
 			void goto(url, { replaceState: true, keepFocus: true, noScroll: true });
 		}
@@ -258,7 +255,6 @@
 	// change triggers the resync.
 	$effect(() => {
 		const q = page.url.searchParams.get('q') ?? '';
-		const all = page.url.searchParams.get('all') === '1';
 		untrack(() => {
 			if (q !== searchRaw) {
 				clearTimeout(debounce);
@@ -267,31 +263,13 @@
 				// Close any open modal so the filtered list is visible.
 				selectedCard = null;
 			}
-			// The "All cards" param has to resync from the URL too. A
-			// client-side facet nav (e.g. a card-modal link carrying &all=1)
-			// updates the URL without remounting, so `initialAllCards` never
-			// re-runs — without this, the catalog stayed owned-only until a
-			// manual reload even though the URL already said all=1.
-			if (all !== allCards) {
-				allCards = all;
-			}
 		});
 	});
 
-	// "All cards" toggle widens the server search from owned-only to the whole
-	// catalog (include_unowned=1). Unowned printings come back with
-	// owned_count === 0 and render as dimmed "missing" tiles — the same visual
-	// treatment /browse/[set] uses for unowned binder slots.
-	const initialAllCards =
-		typeof window !== 'undefined' && page.url.searchParams.get('all') === '1';
-	let allCards = $state(initialAllCards);
-	function toggleAllCards() {
-		allCards = !allCards;
-		// Widening owned-only to the whole catalog is a different result set,
-		// so it is read from the top.
-		forgetScroll();
-		syncUrl();
-	}
+	// The query alone decides what is searched: `is:unowned` in it makes the
+	// search catalog-wide, and unowned printings come back with
+	// owned_count === 0 and render as dimmed "missing" tiles.
+	$effect(() => setFacetContext(query));
 
 	/** Fetch the whole result for the current query + toggle + sort. */
 	// Only the newest request may write the page: a sort clicked twice quickly
@@ -314,7 +292,7 @@
 			// chosen, so the order the control claims is the order you get —
 			// and it has to stay server-side, because a sort applied to a
 			// window would order what the window happens to hold.
-			const res = await api.collectionSearch(query, sortKey, sortDir, allCards, 'all');
+			const res = await api.collectionSearch(query, sortKey, sortDir, false, 'all');
 			if (seq !== searchSeq) return;
 			searchRows = res.rows;
 			searchTotal = res.total;
@@ -343,7 +321,6 @@
 	// puts where, and the client only ever draws them in that order.
 	$effect(() => {
 		void query;
-		void allCards;
 		void sortKey;
 		void sortDir;
 		runSearch();
@@ -907,7 +884,7 @@
 	// rows instead of where you were reading.
 
 	function scrollKey(): string {
-		return `collection.scroll:${view}|${query}|${sortKey}|${sortDir}|${allCards ? 1 : 0}`;
+		return `collection.scroll:${view}|${query}|${sortKey}|${sortDir}`;
 	}
 	let scrollSave: ReturnType<typeof setTimeout>;
 	function rememberScroll() {
@@ -1150,7 +1127,7 @@
 				aria-expanded={acOpen}
 				aria-controls="search-ac"
 				autocomplete="off"
-				placeholder={allCards ? 'Search all cards… (t:unit a:vigilance cost<=3)' : 'Search… (t:unit a:vigilance cost<=3)'}
+				placeholder="Search… (t:unit a:vigilance cost<=3)"
 				value={searchRaw}
 				oninput={(e) => onSearch(e.currentTarget.value)}
 				onkeydown={onSearchKeydown}
@@ -1226,15 +1203,6 @@
 				>⋮</button>
 				{#if menuOpen}
 					<div class="menu menuLeft" role="menu">
-						<label class="menuItem" title="Search the full card catalog, not just your collection">
-							<input
-								type="checkbox"
-								data-testid="all-cards-toggle"
-								checked={allCards}
-								onchange={toggleAllCards}
-							/>
-							All cards
-						</label>
 						<a class="menuItem" href="/api/export/csv" download onclick={closeMenu}>Export CSV (ManaBox)</a>
 						<a class="menuItem" href="/api/export/collectr/singles.csv" download onclick={closeMenu}>Export cards (Collectr)</a>
 						<a class="menuItem" href="/api/export/collectr/sealed.csv" download onclick={closeMenu}>Export sealed (Collectr)</a>
@@ -1374,23 +1342,16 @@
 		{:else if query}
 			<EmptyState
 				title="No cards match “{query}”."
-				description={allCards
-					? 'Nothing in the whole catalog matches. Check the spelling, or narrow one keyword at a time.'
-					: 'Nothing you own matches. Turn on “All cards” to search the catalog instead of your collection.'}
+				description="Nothing you own matches. Add is:unowned to the query to search the catalog instead of your collection."
 			>
 				{#snippet action()}
 					<Button variant="ghost" href="/search-help">Search syntax</Button>
 				{/snippet}
 			</EmptyState>
-		{:else if allCards}
-			<EmptyState
-				title="No cards in the catalog."
-				description="The shared catalog has no cards in it, so there is nothing to search."
-			/>
 		{:else}
 			<EmptyState
 				title="Your collection is empty."
-				description="Add cards from a set's binder view — click a slot and that printing is registered as a copy you own. Or turn on “All cards” to browse the catalog first."
+				description="Add cards from a set's binder view — click a slot and that printing is registered as a copy you own. Or search is:unowned to browse the catalog first."
 			>
 				{#snippet action()}
 					<Button href="/browse">Browse sets</Button>

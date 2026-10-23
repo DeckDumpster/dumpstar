@@ -34,8 +34,7 @@ EnvironmentFile={{SECRETS_DIR}}/access.env
 # the server signs users in itself and ignores Access. See deploy/TENANTS.md.
 EnvironmentFile={{SECRETS_DIR}}/oidc.env
 # OTLP metrics push (DUMPSTER_OTLP_METRICS_ENDPOINT). The production scaffold and the renderer set it to the product
-# stack's VictoriaMetrics, which listens on the host's loopback; the slirp4netns network below maps that
-# loopback to 10.0.2.2 inside the container. See deploy/dashboards/dumpstar.json.
+# stack's VictoriaMetrics, which listens on the host's tailnet address (100.95.160.116:8428), not its loopback. See deploy/dashboards/dumpstar.json.
 EnvironmentFile={{SECRETS_DIR}}/metrics.env
 # slirp4netns, not pasta: the product host runs podman 4.9 whose pasta rejects --map-host-loopback
 # (sp-5ekmwm); allow_host_loopback is supported by every podman there and keeps 10.0.2.2 = host loopback.

@@ -10,6 +10,7 @@ dumpstar-core.workspace = true
 dumpstar-catalog.workspace = true
 rusqlite.workspace = true
 dumpster-kit-tenancy.workspace = true
+dumpster-kit-keys.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
 serde.workspace = true

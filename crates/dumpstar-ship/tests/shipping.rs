@@ -1399,3 +1399,40 @@ fn swu_printings_of_every_variant_and_finish_round_trip_through_the_zone() {
     want.sort();
     assert_eq!(staged, want);
 }
+
+// ── key state at creation (sp-yt37j5) ───────────────────────────────────────
+
+#[test]
+fn a_tenant_created_through_the_site_ships_without_a_manual_register() {
+    let world = World::new();
+    let created = dumpstar_db::tenants::create("carol").unwrap();
+    let id = created.user.database_id.clone();
+    let state = dumpster_kit_keys::state::find(&world.registry(), &id).unwrap();
+    assert_eq!(
+        state.map(|s| s.state),
+        Some(dumpster_kit_keys::KeyState::Active)
+    );
+    add_holdings(&world.collection(&id), 2, "2026-08-14");
+
+    let report = ship(&world, &[created], 100);
+    assert_eq!(report.outcome(), Outcome::Clean);
+    assert_eq!(report.events(), 2);
+}
+
+#[test]
+fn a_live_tenant_with_no_key_state_is_named_as_an_unkeyed_skip() {
+    let world = World::new();
+    let alice = world.tenant("alice", ALICE);
+    let bob = world.tenant("bob", BOB);
+    world
+        .registry()
+        .execute("DELETE FROM tenant_key WHERE database_id = ?1", [BOB])
+        .unwrap();
+
+    let report = ship(&world, &[alice, bob], 100);
+    assert_eq!(report.outcome(), Outcome::Partial);
+    assert_eq!(
+        dumpstar_ship::unkeyed_skips(&report, &world.registry()),
+        vec![BOB.to_string()]
+    );
+}

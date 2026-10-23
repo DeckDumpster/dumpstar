@@ -52,10 +52,24 @@ import type { NewManualPrice } from './types/NewManualPrice';
 import type { CreateMissingVariant } from './types/CreateMissingVariant';
 import type { CreateMissingVariantResult } from './types/CreateMissingVariantResult';
 import type { BackupStatus } from './types/BackupStatus';
+/** A non-2xx reply. `message` keeps the `status text — path` form for logs. */
+export class ApiError extends Error {
+	status: number;
+	method: string;
+	url: string;
+	constructor(res: { status: number; statusText: string }, method: string, url: string) {
+		super(`${res.status} ${res.statusText} — ${method === 'GET' ? '' : method + ' '}${url}`);
+		this.name = 'ApiError';
+		this.status = res.status;
+		this.method = method;
+		this.url = url;
+	}
+}
+
 async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
 	const res = await fetch(url, { signal });
 	if (!res.ok) {
-		throw new Error(`${res.status} ${res.statusText} — ${url}`);
+		throw new ApiError(res, 'GET', url);
 	}
 	return (await res.json()) as T;
 }
@@ -68,7 +82,7 @@ async function send<T>(method: string, url: string, body?: unknown): Promise<T> 
 		body: body !== undefined ? JSON.stringify(body) : undefined
 	});
 	if (!res.ok) {
-		throw new Error(`${res.status} ${res.statusText} — ${method} ${url}`);
+		throw new ApiError(res, method, url);
 	}
 	return (res.status === 204 ? undefined : await res.json()) as T;
 }

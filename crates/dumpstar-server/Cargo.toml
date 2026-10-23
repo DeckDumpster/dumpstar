@@ -8,7 +8,7 @@ authors.workspace = true
 [dependencies]
 dumpstar-core.workspace = true
 dumpstar-db.workspace = true
-dumpstar-cube.workspace = true
+sha2.workspace = true
 dumpster-kit-tenancy.workspace = true
 dumpster-kit-oidc.workspace = true
 dumpster-kit-mcp.workspace = true

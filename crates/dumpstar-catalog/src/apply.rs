@@ -805,13 +805,24 @@ impl Catalog {
         let mut n = 0;
         for (source, v) in DERIVATIONS {
             n += self.reapply_landed_at(raw_root, source, *v)?;
+        }
+        self.record_derivations()?;
+        Ok(n)
+    }
+
+    /// Record the derivation version of every source as in force, so "is the
+    /// fix in force" is a query ([`Catalog::derivation_versions`]). The online
+    /// job did this after re-applying; the offline derive does it after a night
+    /// whose payloads were all applied under the current versions.
+    pub fn record_derivations(&mut self) -> Result<()> {
+        for (source, v) in DERIVATIONS {
             self.conn.execute(
                 "INSERT INTO sync_state (key, value) VALUES (?1, ?2)
                  ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 params![derivation_key(source), v.to_string()],
             )?;
         }
-        Ok(n)
+        Ok(())
     }
 
     /// The derivation version each source's stored rows were last re-derived

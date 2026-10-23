@@ -1317,6 +1317,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
+ "dumpstar-catalog",
  "dumpstar-db",
  "dumpstar-derive",
  "dumpstar-ingest",

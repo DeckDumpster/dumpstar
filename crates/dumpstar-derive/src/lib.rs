@@ -61,8 +61,8 @@ use std::sync::Arc;
 
 use rusqlite::Connection;
 
-use dumpstar_catalog::apply::apply;
 use dumpstar_catalog::CatalogError;
+use dumpstar_catalog::apply::apply;
 use dumpstar_catalog::fetch::{Fetch, USER_AGENT};
 use dumpstar_catalog::landing::{Provenance, sha256_hex};
 use dumpstar_catalog::swu::{OFFICIAL_BASE, OfficialSource, TCGCSV_BASE, TcgcsvSource};
@@ -202,9 +202,8 @@ fn dataset_of(url: &str) -> Option<(Source, Dataset, PartFormat)> {
 
 impl Fetch for WireFetch {
     fn get(&self, url: &str) -> dumpstar_catalog::Result<Vec<u8>> {
-        let (source, dataset, format) = dataset_of(url).ok_or_else(|| {
-            CatalogError::Source(format!("{url}: not a landed catalog dataset"))
-        })?;
+        let (source, dataset, format) = dataset_of(url)
+            .ok_or_else(|| CatalogError::Source(format!("{url}: not a landed catalog dataset")))?;
         // A replayed response reaches no upstream, so there is nothing to be
         // polite to.
         if !self.wire.is_replaying() {
@@ -338,8 +337,8 @@ pub fn derive_with(
     // What the open converged before a single payload existed, converged again
     // over what this run applied: the sealed products live in `tcgcsv_products`.
     dumpstar_db::converge_shared(conn)?;
-    report.printings = conn.query_row("SELECT count(*) FROM printings", [], |r| r.get::<_, i64>(0))?
-        as usize;
+    report.printings =
+        conn.query_row("SELECT count(*) FROM printings", [], |r| r.get::<_, i64>(0))? as usize;
     Ok(report)
 }
 
@@ -371,6 +370,7 @@ fn apply_all(
         "  {} payload(s) applied, {} already applied",
         report.applied, report.skipped
     );
+    catalog.record_derivations()?;
     // Format rules are data from the retrieved rules documents, not a payload.
     println!("formats seeded: {} rows changed", catalog.seed_formats()?);
     Ok(report)
@@ -413,7 +413,19 @@ pub fn land(options: &Options<'_>) -> anyhow::Result<Report> {
     .map_err(anyhow::Error::new);
 
     if let Some(landing) = &options.landing {
-        finalize_landing(landing, tcgcsv.as_ref().err().or(official.as_ref().err()))?;
+        // A dead official API must not cost the night's prices, and a landing
+        // zone only says so if the official crawl is the ONLY thing marked
+        // short. `finalize` marks a dataset incomplete when it recorded a failure
+        // of its own, so a failed official fetch does exactly that without an
+        // error being passed (which would mark every dataset of the run short).
+        // An official error with no failure recorded — a page that fetched and
+        // would not parse — leaves a partial prefix that reads as whole, so that
+        // one is passed and poisons the night, loudly.
+        let recorded = landing.manifests().iter().any(|m| {
+            m.source == OFFICIAL.as_str() && m.dataset == CARDS.as_str() && !m.failures.is_empty()
+        });
+        let official_poisons = official.as_ref().err().filter(|_| !recorded);
+        finalize_landing(landing, tcgcsv.as_ref().err().or(official_poisons))?;
     }
     tcgcsv?;
     official?;

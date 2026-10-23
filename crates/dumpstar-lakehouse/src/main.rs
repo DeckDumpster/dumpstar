@@ -157,8 +157,11 @@ fn shared(args: SharedArgs) -> anyhow::Result<()> {
     // the card list its freshness, where a missing TCGCSV day costs prices that
     // cannot be fetched later. An incomplete crawl is treated as absent — half
     // a crawl is a quietly smaller catalog.
-    let official = match partition::choose(&zone, &args.ingest_date, &dumpstar_derive::OFFICIAL_TABLE)
-    {
+    let official = match partition::choose(
+        &zone,
+        &args.ingest_date,
+        &dumpstar_derive::OFFICIAL_TABLE,
+    ) {
         Ok(p) if !p.chosen.is_empty() => {
             plan.chosen.extend(p.chosen);
             true

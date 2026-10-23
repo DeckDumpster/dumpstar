@@ -198,15 +198,20 @@ wait_ssm() {
 	return 1
 }
 
-# wait_edge <hostname>: seconds until Cloudflare's edge answers for the hostname with anything but
-# an unreachable-origin or tunnel-down status. The User-Agent is set: the zone refuses none (1010).
+# wait_edge <hostname>: seconds until dumpstar itself answers through the slot's tunnel: a 200 from
+# /health whose body is dumpstar's own "ok". A redirect, an Access login or an edge error page is the
+# edge answering with no origin behind it, so it never passes; the last thing that answered is named.
+# The User-Agent is set: the zone refuses none (1010).
 wait_edge() {
-	local code i
+	local out code body i last="nothing"
 	for i in $(seq 1 240); do
-		code="$(curl -s -o /dev/null -w '%{http_code}' -A "dumpstar-env/1" --max-time 5 "https://$1/health" || true)"
-		case "$code" in 200 | 301 | 302 | 303 | 307 | 401 | 403) return 0 ;; esac
+		out="$(curl -s -w '\n%{http_code}' -A "dumpstar-env/1" --max-time 5 "https://$1/health" || true)"
+		code="${out##*$'\n'}"; body="${out%$'\n'*}"
+		[ "$code" = 200 ] && [ "$body" = ok ] && return 0
+		last="HTTP $code"
 		sleep 1
 	done
+	echo "wait_edge: $1 never answered from dumpstar; last answer was $last (an edge redirect or error page is not dumpstar; is the VM up and the tunnel connected?)" >&2
 	return 1
 }
 

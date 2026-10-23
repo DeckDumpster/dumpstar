@@ -103,10 +103,10 @@ STUBEOF
 cat >"$BIN/curl" <<'CURLEOF'
 #!/usr/bin/env bash
 # The metrics store answers /api/v1/query from $STUB/metric.json, or fails when it is absent;
-# everything else is a 200 from the edge.
+# /health is dumpstar's "ok" 200, or an edge 302 to an Access login when $STUB/edge-only exists.
 case "$*" in
 */api/v1/query*) [ -f "$STUB/metric.json" ] && cat "$STUB/metric.json" || exit 22 ;;
-*) echo 200 ;;
+*) if [ -f "$STUB/edge-only" ]; then printf '\n302\n'; else printf 'ok\n200\n'; fi ;;
 esac
 CURLEOF
 printf '#!/usr/bin/env bash\nexit 0\n' >"$BIN/sleep"
@@ -131,7 +131,13 @@ id1="$(basename "$(ls "$STUB"/instances/*.json | head -1)" .json)"
 check "edge share is a tag on the VM" 1 "$(jq '.tags | has("dumpstar-env:edge-seconds")' "$STUB/instances/$id1.json" | grep -c true)"
 check "the launch carries the pool tag the policy demands" round "$(jq -r '.tags["spill:owner"]' "$STUB/instances/$id1.json")"
 
+# An edge redirect with no origin behind the tunnel is not dumpstar answering (sp-ycmkmh).
 cp "$STUB/ledger" "$STUB/ledger.keep"; cp "$STUB/ssm.log" "$STUB/ssm.keep"
+: >"$STUB/edge-only"
+edge_out="$(bash "$ENV" up --image "tree:$TREE2" --name env-3 2>&1)" && bad "an edge 302 fails up" || ok "an edge 302 fails up"
+grep -q 'HTTP 302' <<<"$edge_out" && ok "the failure names what answered" || bad "the failure names what answered"
+rm -f "$STUB/edge-only"
+cp "$STUB/ledger.keep" "$STUB/ledger"; cp "$STUB/ssm.keep" "$STUB/ssm.log"
 check "the root volume holds the default floor" 60 "$(cat "$STUB/last-root-gb")"
 STUB_AMI_SNAPSHOT_GB=64 bash "$ENV" up --image "tree:$TREE2" --name env-3 >/dev/null 2>&1 || bad "a 64 GB snapshot AMI launches"
 check "the root volume is at least the AMI snapshot (64)" 64 "$(cat "$STUB/last-root-gb")"

@@ -111,13 +111,14 @@ export function orderedPips(printings) {
 		.map(({ p }) => ({ ...p, color: finishColor(p.finish) }));
 }
 
-/** The price on a tile. With a pip selected, that printing's price. With none,
- *  the dearest owned printing's price, so an owned card always shows one; null
- *  for a card with nothing owned (or nothing owned that is priced).
+/** The price on a tile. A card with any copy owned always shows its dearest
+ *  owned printing's price, whatever pip was clicked. An unowned card shows
+ *  nothing until a pip is selected, then that printing's price.
  *  @param {{ printings: { printing_id: string | number, owned_count: number, market_price: number | null }[] }} slot
  *  @param {string | number | null} selectedId */
 export function tilePrice(slot, selectedId) {
-	if (selectedId != null) {
+	if (!slot.printings.some((p) => p.owned_count > 0)) {
+		if (selectedId == null) return null;
 		return slot.printings.find((p) => p.printing_id === selectedId)?.market_price ?? null;
 	}
 	const v = slot.printings

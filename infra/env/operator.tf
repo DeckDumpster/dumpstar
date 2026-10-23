@@ -96,12 +96,21 @@ resource "aws_iam_role_policy" "operator" {
       {
         Sid    = "ManageSlotInstances"
         Effect = "Allow"
-        Action = ["ec2:TerminateInstances", "ec2:StopInstances", "ssm:SendCommand"]
+        Action    = ["ec2:TerminateInstances", "ec2:StopInstances"]
+        Resource  = ["${local.region_arn}:${local.account_id}:instance/*"]
+        Condition = local.slot_tagged
+      },
+      {
+        # SSM authorizes SendCommand against ssm:resourceTag/; ec2:ResourceTag/ is never set in
+        # that request context, so the ec2 key denies every call (sp-s2zynj).
+        Sid    = "SendCommandToSlotInstances"
+        Effect = "Allow"
+        Action = ["ssm:SendCommand"]
         Resource = [
           "${local.region_arn}:${local.account_id}:instance/*",
           "arn:aws:ssm:${var.aws_region}:${local.account_id}:managed-instance/*",
         ]
-        Condition = local.slot_tagged
+        Condition = { Null = { "ssm:resourceTag/dumpstar-env:slot" = "false" } }
       },
       {
         Sid       = "DeleteSlotVolumes"

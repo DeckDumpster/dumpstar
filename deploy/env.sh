@@ -60,6 +60,8 @@ DUMPSTAR_ENV_PORT="$(sed -n 's|.*default *= *"http://127.0.0.1:\([0-9]*\)".*|\1|
 DUMPSTAR_ENV_BUDGET_UP=300
 DUMPSTAR_ENV_BUDGET_EDGE=120
 DUMPSTAR_ENV_BUDGET_UPDATE=120
+# down's deadline for stopping the connector: polls of 2 s each (60 s) before it terminates anyway.
+DUMPSTAR_ENV_STOP_POLLS=30
 # The reaper (sp-4wy00r): an environment lives at most TTL seconds, and goes after IDLE seconds
 # with no authenticated request. Activity is the server's own counter (crates/dumpstar-server
 # metrics.rs ACTIVITY_METRIC, labelled instance=<slot>), read from the product VictoriaMetrics at
@@ -169,8 +171,8 @@ ssm_run() {
 	script+="$(cat "$SCRIPT_DIR/env-vm.sh")"
 	cmd="$(jq -n --arg s "$script" --arg id "$id" \
 		'{InstanceIds: [$id], DocumentName: "AWS-RunShellScript", TimeoutSeconds: 600, Parameters: {commands: [$s]}}')"
-	cid="$(aws_ ssm send-command --cli-input-json "$cmd" --query Command.CommandId --output text)"
-	for i in $(seq 1 300); do
+	cid="$(aws_ ssm send-command --cli-input-json "$cmd" --query Command.CommandId --output text)" || return 1
+	for i in $(seq 1 "${SSM_POLLS:-300}"); do
 		st="$(aws_ ssm get-command-invocation --command-id "$cid" --instance-id "$id" --query Status --output text 2>/dev/null || echo Pending)"
 		case "$st" in
 		Success) return 0 ;;
@@ -285,6 +287,7 @@ cmd_up() {
 		--block-device-mappings "DeviceName=/dev/sda1,Ebs={VolumeSize=$root_gb,VolumeType=gp3,DeleteOnTermination=true}" \
 		--tag-specifications "ResourceType=instance,Tags=[$tags]" "ResourceType=volume,Tags=[$tags]" \
 		--query 'Instances[0].InstanceId' --output text)"
+	UP_ID="$id"
 	# Two ups can pick the same slot: the earlier launch keeps it, the later gives itself back.
 	first="$(slot_instances "$slot" | head -1 | jq -r .id)"
 	if [ "$first" != "$id" ]; then
@@ -302,6 +305,7 @@ cmd_up() {
 	wait_edge "$(hostname_of "$slot")" || { cmd_down_id "$id"; die "up: the edge never answered for $(hostname_of "$slot"); the VM was destroyed"; }
 	t2="$(now)"
 	tag_instance "$id" "dumpstar-env:edge-seconds=$((t2 - t1))" "dumpstar-env:up-seconds=$((t2 - t0))" "dumpstar-env:last-activity=$t2"
+	UP_ID=""
 	echo "env: $slot up in $((t2 - t0))s (edge share $((t2 - t1))s, instance $id)"
 	[ $((t2 - t1)) -le "$DUMPSTAR_ENV_BUDGET_EDGE" ] || echo "env: WARNING edge share over the ${DUMPSTAR_ENV_BUDGET_EDGE}s budget; the design's fallback is tailnet-only" >&2
 	[ $((t2 - t0)) -le "$DUMPSTAR_ENV_BUDGET_UP" ] || echo "env: WARNING up over the ${DUMPSTAR_ENV_BUDGET_UP}s budget" >&2
@@ -367,7 +371,7 @@ cmd_down_id() {
 		tmp="$(mktemp -d)"
 		mkdir -p "$tmp/render"
 		# Best effort: a VM that cannot be reached loses its connector when it is terminated.
-		ssm_run "$id" stop "$slot" "$tmp/render" || echo "env: could not stop the connector over SSM; terminating the VM ends it" >&2
+		SSM_POLLS="$DUMPSTAR_ENV_STOP_POLLS" ssm_run "$id" stop "$slot" "$tmp/render" || echo "env: WARNING could not stop the connector over SSM within ${DUMPSTAR_ENV_STOP_POLLS} polls; terminating the VM ends it" >&2
 		rm -rf "$tmp"
 	fi
 	aws_ ec2 terminate-instances --instance-ids "$id" >/dev/null
@@ -428,7 +432,18 @@ cmd_reap() {
 	done
 }
 
-trap 'rm -rf "${ENV_TMP:-}"' EXIT
+# An up that dies after RunInstances for any reason terminates what it launched.
+env_exit() {
+	local rc=$?
+	rm -rf "${ENV_TMP:-}"
+	if [ -n "${UP_ID:-}" ]; then
+		echo "env: up failed after launching $UP_ID; terminating it" >&2
+		aws_ ec2 terminate-instances --instance-ids "$UP_ID" >/dev/null 2>&1 || echo "env: COULD NOT TERMINATE $UP_ID; terminate it by hand" >&2
+		[ "$rc" -ne 0 ] || rc=1
+	fi
+	exit "$rc"
+}
+trap env_exit EXIT
 verb="${1:-}"
 [ $# -gt 0 ] && shift
 case "$verb" in

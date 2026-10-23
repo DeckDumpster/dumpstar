@@ -50,7 +50,7 @@ for (const dir of ['asc', 'desc'] as const) {
 				},
 				[key, dir]
 			);
-			await page.goto('/collection?q=set%3Asor&all=1');
+			await page.goto('/collection?q=set%3Asor');
 			await page.locator('table.dd').waitFor();
 			const m = await page.evaluate(() => {
 				const caret = document.querySelector('table.dd th.sortable .caret') as HTMLElement | null;

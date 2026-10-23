@@ -118,7 +118,8 @@ export DUMPSTAR_ENV_AWS_PROFILE=p DUMPSTAR_ENV_REGION=us-west-2 DUMPSTAR_ENV_AMI
 	DUMPSTAR_ENV_SECURITY_GROUP=sg-1 DUMPSTAR_ENV_INSTANCE_TYPE=c7i.large DUMPSTAR_ENV_INSTANCE_PROFILE=envvm \
 	DUMPSTAR_ENV_ACCESS_TEAM=team DUMPSTAR_ENV_CLOUDFLARED_IMAGE=docker.io/cloudflare/cloudflared:2026.1.0 \
 	DUMPSTAR_ENV_OWNER=tester DUMPSTAR_ENV_BACKUP_BUCKET=bk DUMPSTAR_ENV_BACKUP_PATH=prod/tenants DUMPSTAR_ENV_BACKUP_REGION=us-west-2 \
-	DUMPSTAR_ENV_CONCIERGE_DB=01KZHQVMMS4CSRASCMG5XRCPC3 DUMPSTAR_ENV_CONCIERGE_EMAIL=concierge@example.com
+	DUMPSTAR_ENV_CONCIERGE_DB=01KZHQVMMS4CSRASCMG5XRCPC3 DUMPSTAR_ENV_CONCIERGE_EMAIL=concierge@example.com \
+	DUMPSTAR_ENV_CONCIERGE_SUB=78df0719-1f59-4ec3-b4f5-783908e37499 DUMPSTAR_ENV_CONCIERGE_ISSUER=https://id.example
 ENV="$REPO_DIR/deploy/env.sh"
 TREE=$(printf 'a%.0s' $(seq 40))
 TREE2=$(printf 'b%.0s' $(seq 40))
@@ -250,6 +251,19 @@ catalog_verb() { DUMPSTAR_ENV_VERB=catalog DUMPSTAR_ENV_SLOT=env-1 bash "$REPO_D
 cat_out="$(STUB_CARDS=0 catalog_verb)" && bad "an empty catalog fails up" || ok "an empty catalog fails up"
 grep -q 'catalog is empty' <<<"$cat_out" && ok "the failure names the empty catalog" || bad "the failure names the empty catalog"
 STUB_CARDS=1234 catalog_verb >/dev/null && ok "a catalog present passes" || bad "a catalog present passes"
+
+# sp-hhx5dc: the concierge email is bound with its sub and issuer, so a bearer token resolves.
+flat="$(tr '\n\\' '  ' <<<"$script")"
+grep -qE 'tenant identity add concierge --email "\$DUMPSTAR_ENV_CONCIERGE_EMAIL"[[:space:]]+--sub "\$DUMPSTAR_ENV_CONCIERGE_SUB" --issuer "\$DUMPSTAR_ENV_CONCIERGE_ISSUER"' <<<"$flat" &&
+	ok "up binds the concierge email with its sub and issuer" || bad "up binds the concierge email with its sub and issuer"
+grep -q "export DUMPSTAR_ENV_CONCIERGE_SUB='78df0719-1f59-4ec3-b4f5-783908e37499'" <<<"$script" &&
+	grep -q "export DUMPSTAR_ENV_CONCIERGE_ISSUER='https://id.example'" <<<"$script" &&
+	ok "up ships the sub and issuer to the VM" || bad "up ships the sub and issuer to the VM"
+n_before="$(ls "$STUB/instances" | wc -l)"
+nosub="$(unset DUMPSTAR_ENV_CONCIERGE_SUB; bash "$ENV" up --image "tree:$TREE" 2>&1)" && bad "no concierge sub is refused" || ok "no concierge sub is refused"
+grep -q 'DUMPSTAR_ENV_CONCIERGE_SUB' <<<"$nosub" && ok "the refusal names how to supply the sub" || bad "the refusal names how to supply the sub"
+check "the sub refusal precedes any create call" "$n_before" "$(ls "$STUB/instances" | wc -l)"
+(unset DUMPSTAR_ENV_CONCIERGE_ISSUER; bash "$ENV" up --image "tree:$TREE" >/dev/null 2>&1) && bad "no concierge issuer is refused" || ok "no concierge issuer is refused"
 
 # 5. No fallback.
 (unset DUMPSTAR_ENV_AMI; bash "$ENV" status >/dev/null 2>&1) && bad "a missing value is refused" || ok "a missing value is refused"

@@ -34,6 +34,10 @@
 #       the instance profile may read the concierge tenant's replica under it and nothing else
 #   DUMPSTAR_ENV_CONCIERGE_DB  the concierge tenant's database id (dumpstar tenant list on prod)
 #   DUMPSTAR_ENV_CONCIERGE_EMAIL  the verified email bound to the concierge tenant in the environment
+#   DUMPSTAR_ENV_CONCIERGE_SUB  DUMPSTAR_ENV_CONCIERGE_ISSUER  (required by up only) the identity
+#       provider subject and issuer of that email, read from prod's binding
+#       (dumpstar tenant identity list concierge); an MCP or API bearer carries the sub and no email,
+#       and a new registry maps a sub to a tenant only through this binding (sp-hhx5dc)
 #
 # THE DATA (sp-2xkn6g): up restores the concierge tenant's latest Litestream replica into the
 # slot's volume, as the only tenant of a fresh registry, beside a freshly built catalog. Never
@@ -259,6 +263,10 @@ cmd_up() {
 	done
 	[ -n "$image" ] || die "up: --image tree:<sha>, --ref <branch|sha> or --tree <dir> is required"
 	env_load_config
+	for s in SUB ISSUER; do
+		[ -n "$(eval "echo \"\${DUMPSTAR_ENV_CONCIERGE_$s:-}\"")" ] ||
+			die "up: DUMPSTAR_ENV_CONCIERGE_$s is not set; every MCP/API bearer call would be 403 no_tenant. Read the concierge's sub and issuer from prod (dumpstar tenant identity list concierge) and set it in the env config"
+	done
 	t0="$(now)"
 	if [ -n "$slot" ]; then
 		valid_slot "$slot" || die "up: $slot is not one of: $DUMPSTAR_ENV_SLOTS"
@@ -306,7 +314,8 @@ cmd_up() {
 		"DUMPSTAR_ENV_ACCESS_TEAM=$DUMPSTAR_ENV_ACCESS_TEAM" "DUMPSTAR_ENV_HOSTNAME=$(hostname_of "$slot")" \
 		"DUMPSTAR_ENV_EDGE_SECRET=dumpstar/$slot/edge" "DUMPSTAR_ENV_CLOUDFLARED_IMAGE=$DUMPSTAR_ENV_CLOUDFLARED_IMAGE" \
 		"DUMPSTAR_ENV_CONCIERGE_REPLICA=$(concierge_replica_url)" "DUMPSTAR_ENV_LITESTREAM_IMAGE=$DUMPSTAR_LITESTREAM_IMAGE" \
-		"DUMPSTAR_ENV_CONCIERGE_EMAIL=$DUMPSTAR_ENV_CONCIERGE_EMAIL" ||
+		"DUMPSTAR_ENV_CONCIERGE_EMAIL=$DUMPSTAR_ENV_CONCIERGE_EMAIL" \
+		"DUMPSTAR_ENV_CONCIERGE_SUB=$DUMPSTAR_ENV_CONCIERGE_SUB" "DUMPSTAR_ENV_CONCIERGE_ISSUER=$DUMPSTAR_ENV_CONCIERGE_ISSUER" ||
 		{ cmd_down_id "$id"; die "up: starting $slot failed; the VM was destroyed"; }
 	t1="$(now)"
 	wait_edge "$(hostname_of "$slot")" || { cmd_down_id "$id"; die "up: the edge never answered for $(hostname_of "$slot"); the VM was destroyed"; }

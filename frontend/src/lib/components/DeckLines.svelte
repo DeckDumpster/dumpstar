@@ -21,9 +21,38 @@
 	}
 </script>
 
+{#snippet row(l: DeckLine)}
+			<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+			<li
+				class="line"
+				data-printing={l.printingId}
+				data-finish={l.finish}
+				data-condition={l.condition}
+				onmouseenter={() => show(l)}
+				onfocusin={() => show(l)}
+				onclick={(e) => tap(e, l)}
+			>
+				<span class="qty">{l.qty}×</span>
+				<CostMark cost={l.cost} />
+				<a class="name" href={l.href}>{l.name}</a>
+				<span class="asp">
+					{#each l.aspects as a (a)}<AspectIcon name={a} size="1.1em" />{/each}
+				</span>
+				{#if onRemove}
+					<button
+						type="button"
+						class="rm"
+						disabled={busy}
+						aria-label="Remove one {l.name}"
+						onclick={() => onRemove(l.copyIds[0])}>−</button
+					>
+				{/if}
+			</li>
+{/snippet}
+
 <div class="deck">
-	<aside class="pinned" aria-label="Leader and base">
-		{#each [...view.leaders, ...view.bases] as l (l.key)}
+	<aside class="pinned" aria-label="Leader">
+		{#each view.leaders as l (l.key)}
 			<figure class="pin" data-printing={l.printingId} data-condition={l.condition}>
 				<a href={l.href}>
 					{#if l.image}<img src={l.image} alt={l.name} />{:else}<span class="noart">{l.name}</span>{/if}
@@ -31,11 +60,9 @@
 				<figcaption>{l.name}</figcaption>
 			</figure>
 		{/each}
-		{#if preview}
-			<div class="preview" aria-hidden="true">
-				{#if preview.image}<img src={preview.image} alt="" />{/if}
-			</div>
-		{/if}
+		<div class="preview" aria-hidden="true">
+			{#if preview?.image}<img src={preview.image} alt="" />{/if}
+		</div>
 	</aside>
 
 	<div class="lists">
@@ -56,41 +83,29 @@
 			</ul>
 		</section>
 
+		<div class="groups">
+		{#if view.leaders.length || view.bases.length}
+			<section class="group" aria-label="Leader and base">
+				<h2>Leader and base <span class="count">{view.leaders.length + view.bases.length}</span></h2>
+				<ul>
+					{#each [...view.leaders, ...view.bases] as l (l.key)}
+						{@render row(l)}
+					{/each}
+				</ul>
+			</section>
+		{/if}
+
 		{#each view.groups as g (g.label)}
 			<section class="group">
 				<h2>{g.label} <span class="count">{g.count}</span></h2>
 				<ul>
 					{#each g.lines as l (l.key)}
-						<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-						<li
-							class="line"
-							data-printing={l.printingId}
-							data-finish={l.finish}
-							data-condition={l.condition}
-							onmouseenter={() => show(l)}
-							onfocusin={() => show(l)}
-							onclick={(e) => tap(e, l)}
-						>
-							<span class="qty">{l.qty}×</span>
-							<CostMark cost={l.cost} />
-							<a class="name" href={l.href}>{l.name}</a>
-							<span class="asp">
-								{#each l.aspects as a (a)}<AspectIcon name={a} size="1.1em" />{/each}
-							</span>
-							{#if onRemove}
-								<button
-									type="button"
-									class="rm"
-									disabled={busy}
-									aria-label="Remove one {l.name}"
-									onclick={() => onRemove(l.copyIds[0])}>−</button
-								>
-							{/if}
-						</li>
+					{@render row(l)}
 					{/each}
 				</ul>
 			</section>
 		{/each}
+		</div>
 	</div>
 </div>
 
@@ -202,8 +217,15 @@
 		min-width: 2rem;
 		color: var(--color-text-subtle);
 	}
+	.groups {
+		column-width: 22rem;
+		column-gap: var(--space-4);
+	}
+	.group {
+		break-inside: avoid;
+	}
 	.name {
-		flex: 1;
+		flex: 0 1 auto;
 		min-width: 0;
 		overflow-wrap: anywhere;
 		color: var(--color-text);
@@ -216,6 +238,7 @@
 		gap: var(--space-0-5);
 	}
 	.rm {
+		margin-left: auto;
 		background: none;
 		border: 1px solid var(--color-border);
 		color: var(--color-text-subtle);

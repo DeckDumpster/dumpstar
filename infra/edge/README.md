@@ -6,6 +6,13 @@ pre-provisioned test slots `env-1..env-3` (`env-N.dumpster.cards`). Each instanc
 **workspace** with its own state (`env:/<instance>/dumpstar/edge/terraform.tfstate`), so a slot
 applies and destroys alone.
 
+**Slot hostnames are one label under the zone.** The zone's free Universal SSL certificate covers
+`dumpster.cards` and `*.dumpster.cards`, and a wildcard covers exactly one label, so
+`env-N.test.dumpster.cards` gets no edge certificate and never answers. The `hostname` validation
+refuses any slot name with more than one label below the zone. `env-N.test.dumpster.cards` remains
+the preferred scheme (operator verdict, sp-z14vrm) once the zone has a certificate covering
+`*.test.dumpster.cards`; the single-label validation is what has to change at that point.
+
 Per instance:
 
 - Cloudflare tunnel `dumpstar-<instance>`, its ingress (hostname → `origin_service`, else 404)

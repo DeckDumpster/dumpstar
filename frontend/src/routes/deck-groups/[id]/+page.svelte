@@ -3,6 +3,8 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api';
 	import { count } from '$lib/format';
+	import { breadcrumbs } from '$lib/breadcrumbs.svelte';
+	import { deckCrumbs } from '$lib/deckCrumbs';
 	import { EmptyState } from '$lib/components/ui';
 	import type { GroupDetail } from '$lib/types/GroupDetail';
 
@@ -28,6 +30,10 @@
 			loading = false;
 		}
 	}
+
+	$effect(() => {
+		if (detail) breadcrumbs.set(deckCrumbs(detail.group.name));
+	});
 
 	$effect(() => {
 		void page.params.id;

@@ -334,7 +334,7 @@ deterministically, the repeat is byte-identical and lands on the same key.
 | 0 | every registered tenant shipped | nothing |
 | 2 | the run finished; some tenants skipped | `SuccessExitStatus=2`, a Pushover warning naming who |
 | 3 | **SEQUENCE GAP** — events were LOST | fails the unit, plus its own alarm naming the tenant and range |
-| 1 | the run never started, or shipped nobody | fails the unit |
+| 1 | the run never started, shipped nobody, or skipped a live tenant that has no key state | fails the unit |
 
 A **gap** means the outbox's monotonic sequence has a hole. That sequence is
 gap-free by construction (`AUTOINCREMENT`, written by a trigger inside the
@@ -358,8 +358,9 @@ never does — reconciling is not the shipper's job.
 
 A **tombstoned** tenant (see [`KEYS.md`](KEYS.md)) is skipped and is *not* an
 anomaly: their key refuses to derive, so nothing of theirs can be written, and
-the run is still clean. A tenant nobody has run `dumpstar keys register` for is
-skipped as a **warning** — absence is not permission.
+the run is still clean. Tenant creation registers key state itself, so a live
+tenant with none is a fault of the box: it is skipped (absence is not
+permission) and the run **fails**, naming it.
 
 ### Scheduling
 

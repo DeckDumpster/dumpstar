@@ -482,15 +482,16 @@ check "nothing left to ship -> 0" "0" "$RC"
 check "…and it says so" "yes" \
 	"$(grep -q 'ship: OK' "${WORK}/wrapper.log" && echo yes || echo no)"
 
-# A tenant whose key nobody registered: skipped, warned, exit 2.
+# A live tenant whose key nobody registered (sp-yt37j5): skipped, and the run
+# FAILS on it — exit 1, naming who.
 sql "${DATA}/registry.sqlite" "DELETE FROM tenant_key WHERE database_id = '$BOB'"
 add_holdings "${DATA}/tenants/${BOB}.sqlite" 2 2026-08-15
 add_holdings "${DATA}/tenants/${ALICE}.sqlite" 2 2026-08-15
 RC=0
 wrapper || RC=$?
-check "a tenant with no key state -> 2" "2" "$RC"
-check "…and the warning names who" "yes" \
-	"$(grep -q "ship: PARTIAL — tenants skipped: ${BOB}" "${WORK}/wrapper.log" && echo yes || echo no)"
+check "a live tenant with no key state -> 1" "1" "$RC"
+check "…and the failure names who" "yes" \
+	"$(grep -q "live tenant(s) have no key state and were skipped: ${BOB}" "${WORK}/wrapper.log" && echo yes || echo no)"
 
 # A lost outbox event: exit 3, its own message, and a durable record.
 add_holdings "${DATA}/tenants/${ALICE}.sqlite" 4 2026-08-16

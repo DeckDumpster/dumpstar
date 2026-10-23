@@ -26,6 +26,7 @@ use dumpstar_core::query::KeywordRegistry;
 use dumpstar_db::DbError;
 use dumpstar_db::search_meta::SearchFlag;
 
+mod dbpool;
 mod digest;
 pub mod drain;
 mod mcp;
@@ -167,13 +168,49 @@ where
 {
     let id = current_tenant()?;
     let tenants = state.tenants.clone();
+    let what = db_route_name();
     let result = tokio::task::spawn_blocking(move || {
         let conn = tenants.connection(&id)?;
         let mut guard = conn.lock().expect("connection mutex poisoned");
-        f(&mut guard)
+        dbpool::bounded(&mut guard, &what, f, DbError::Env)
     })
     .await?;
     Ok(result?)
+}
+
+/// Like [`blocking`], for a handler that only reads: it runs on its own read-only connection,
+/// so it neither waits for another request on the tenant nor makes one wait.
+async fn blocking_read<T, F>(state: &AppState, f: F) -> Result<T, AppError>
+where
+    F: FnOnce(&mut Connection) -> Result<T, DbError> + Send + 'static,
+    T: Send + 'static,
+{
+    let id = current_tenant()?;
+    let tenants = state.tenants.clone();
+    let what = db_route_name();
+    let result = tokio::task::spawn_blocking(move || {
+        let writer = tenants.connection(&id)?;
+        let mut reader = dbpool::checkout(&id, &writer)?;
+        dbpool::bounded(&mut reader, &what, f, DbError::Env)
+    })
+    .await?;
+    Ok(result?)
+}
+
+tokio::task_local! {
+    static DB_ROUTE: String;
+}
+
+fn db_route_name() -> String {
+    DB_ROUTE
+        .try_with(String::clone)
+        .unwrap_or_else(|_| "request".into())
+}
+
+/// Names the request for the database bound's error: `GET /api/collection/search`.
+async fn db_route(req: axum::extract::Request, next: middleware::Next) -> Response {
+    let name = format!("{} {}", req.method(), req.uri().path());
+    DB_ROUTE.scope(name, next.run(req)).await
 }
 
 /// Responses smaller than this are sent uncompressed. (A response of exactly
@@ -417,6 +454,7 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
             )),
         (None, None) => unreachable!("serve() refuses to start with neither sign-in configured"),
     };
+    let authenticated_api = authenticated_api.layer(middleware::from_fn(db_route));
     let public_api = routes::public_api_router();
     let state_for_gate = state.oidc.clone();
     let mcp_routes = state.mcp.as_ref().map(|m| {
@@ -2314,6 +2352,72 @@ mod tests {
             )
             .await;
             assert_eq!(scoped.unwrap(), 0);
+        }
+
+        /// One slow read and one slow write in flight on a tenant must not make another read
+        /// of that tenant wait: reads run on their own connections, in parallel.
+        #[tokio::test]
+        async fn a_slow_request_does_not_block_another_read_of_the_tenant() {
+            let (dir, _router, tenants_dir, fx) = multi_tenant_app(&["u"]).await;
+            let shared = dir.path().join("shared.sqlite");
+            let registry_db = dir.path().join("registry.sqlite");
+            let database_id = {
+                let reg = dumpstar_db::open_registry(&registry_db).unwrap();
+                dumpstar_db::registry::lookup(&reg, "u")
+                    .unwrap()
+                    .unwrap()
+                    .database_id
+            };
+            let state = AppState {
+                tenants: Arc::new(test_tenants(tenants_dir, shared, &registry_db)),
+                registry: Arc::new(Default::default()),
+                flags: Arc::new(Vec::new()),
+                data_dir: Arc::new(dir.path().to_path_buf()),
+                oidc: None,
+                access: Some(fx.access.clone()),
+                mcp: None,
+                metrics: metrics::Metrics::disabled(),
+            };
+            let count = |state: AppState, id: String| async move {
+                tenant::as_tenant(
+                    &id,
+                    blocking_read(&state, |c| {
+                        Ok(c.query_row("SELECT count(*) FROM collection", [], |r| {
+                            r.get::<_, i64>(0)
+                        })?)
+                    }),
+                )
+                .await
+            };
+            // Warm the tenant: its connections are open and its paths known.
+            count(state.clone(), database_id.clone()).await.unwrap();
+
+            let slow = |state: AppState, id: String, write: bool| {
+                tokio::spawn(async move {
+                    let sleep = |_c: &mut Connection| -> Result<(), DbError> {
+                        std::thread::sleep(std::time::Duration::from_secs(3));
+                        Ok(())
+                    };
+                    if write {
+                        tenant::as_tenant(&id, blocking(&state, sleep)).await
+                    } else {
+                        tenant::as_tenant(&id, blocking_read(&state, sleep)).await
+                    }
+                })
+            };
+            let slow_read = slow(state.clone(), database_id.clone(), false);
+            let slow_write = slow(state.clone(), database_id.clone(), true);
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+            let started = std::time::Instant::now();
+            assert_eq!(count(state.clone(), database_id.clone()).await.unwrap(), 0);
+            assert!(
+                started.elapsed() < std::time::Duration::from_secs(1),
+                "a read waited {:?} behind a slow request",
+                started.elapsed()
+            );
+            slow_read.await.unwrap().unwrap();
+            slow_write.await.unwrap().unwrap();
         }
 
         /// Tenant A creates a row in every tenant-owned resource the API

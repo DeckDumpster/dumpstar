@@ -14,7 +14,7 @@ use dumpstar_db::decks::{
     self, Deck, DeckEdit, DeckLineState, NewDeck, SetLines, ShortLine, Validation,
 };
 
-use crate::{AppError, AppState, blocking};
+use crate::{AppError, AppState, blocking, blocking_read};
 
 /// Build the deck routes (mounted under `/api`).
 pub fn routes() -> Router<AppState> {
@@ -37,7 +37,7 @@ async fn lines(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<LinesBody>, AppError> {
-    let lines = blocking(&state, move |c| {
+    let lines = blocking_read(&state, move |c| {
         decks::get(c, id)?.ok_or_else(|| DbError::NotFound(format!("deck {id}")))?;
         decks::line_states(c, id)
     })
@@ -111,7 +111,7 @@ async fn validate(
     Path(id): Path<i64>,
 ) -> Result<Json<Validation>, AppError> {
     Ok(Json(
-        blocking(&state, move |c| decks::validate(c, id)).await?,
+        blocking_read(&state, move |c| decks::validate(c, id)).await?,
     ))
 }
 
@@ -133,7 +133,7 @@ async fn counts(
             .collect()
     });
     Ok(Json(
-        blocking(&state, move |c| decks::card_counts(c, ids.as_deref())).await?,
+        blocking_read(&state, move |c| decks::card_counts(c, ids.as_deref())).await?,
     ))
 }
 
@@ -146,7 +146,7 @@ struct DeckDetail {
 }
 
 async fn list(State(state): State<AppState>) -> Result<Json<Vec<Deck>>, AppError> {
-    Ok(Json(blocking(&state, |c| decks::list(c)).await?))
+    Ok(Json(blocking_read(&state, |c| decks::list(c)).await?))
 }
 
 async fn create(
@@ -165,7 +165,7 @@ async fn detail(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<DeckDetail>, AppError> {
-    let detail = blocking(&state, move |c| {
+    let detail = blocking_read(&state, move |c| {
         let deck = decks::get(c, id)?.ok_or_else(|| DbError::NotFound(format!("deck {id}")))?;
         let cards = collection::list_by_deck(c, id)?;
         Ok(DeckDetail { deck, cards })

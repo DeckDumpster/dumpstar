@@ -8,7 +8,7 @@ use serde::Deserialize;
 use dumpstar_db::DbError;
 use dumpstar_db::cards::{self, CardDetail, PriceSeries};
 
-use crate::{AppError, AppState, blocking};
+use crate::{AppError, AppState, blocking_read};
 
 /// Build the card-lookup routes (mounted under `/api`).
 pub fn routes() -> Router<AppState> {
@@ -31,7 +31,7 @@ async fn lookup(
     number: String,
     variant: Option<String>,
 ) -> Result<Json<CardDetail>, AppError> {
-    let detail = blocking(state, move |c| {
+    let detail = blocking_read(state, move |c| {
         cards::get_card_detail_variant(c, &set, &number, variant.as_deref())?
             .ok_or_else(|| DbError::NotFound(format!("card {set}/{number}")))
     })
@@ -56,7 +56,7 @@ async fn card_prices(
     Path((set, number)): Path<(String, String)>,
     Query(q): Query<VariantQuery>,
 ) -> Result<Json<Vec<PriceSeries>>, AppError> {
-    let series = blocking(&state, move |c| {
+    let series = blocking_read(&state, move |c| {
         cards::get_card_prices_variant(c, &set, &number, q.variant.as_deref())
     })
     .await?;

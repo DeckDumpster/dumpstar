@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use dumpstar_db::DbError;
 use dumpstar_db::orders::{self, NewOrder, Order, OrderDetail, OrderLine};
 
-use crate::{AppError, AppState, blocking};
+use crate::{AppError, AppState, blocking, blocking_read};
 
 /// Build the order routes (mounted under `/api`).
 pub fn routes() -> Router<AppState> {
@@ -33,7 +33,7 @@ struct Received {
 }
 
 async fn list(State(state): State<AppState>) -> Result<Json<Vec<Order>>, AppError> {
-    Ok(Json(blocking(&state, |c| orders::list(c)).await?))
+    Ok(Json(blocking_read(&state, |c| orders::list(c)).await?))
 }
 
 async fn create(
@@ -52,7 +52,7 @@ async fn detail(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<OrderDetail>, AppError> {
-    let detail = blocking(&state, move |c| {
+    let detail = blocking_read(&state, move |c| {
         orders::get_detail(c, id)?.ok_or_else(|| DbError::NotFound(format!("order {id}")))
     })
     .await?;

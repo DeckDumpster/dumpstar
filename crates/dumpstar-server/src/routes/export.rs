@@ -6,7 +6,7 @@ use axum::http::header;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 
-use crate::{AppError, AppState, blocking};
+use crate::{AppError, AppState, blocking_read};
 
 /// Build the export routes (mounted under `/api`).
 pub fn routes() -> Router<AppState> {
@@ -24,13 +24,13 @@ pub fn routes() -> Router<AppState> {
 
 /// Stream the collection as a ManaBox-shaped CSV download.
 async fn export_csv(State(state): State<AppState>) -> Result<Response, AppError> {
-    let csv = blocking(&state, |c| dumpstar_db::export::manabox_csv(c)).await?;
+    let csv = blocking_read(&state, |c| dumpstar_db::export::manabox_csv(c)).await?;
     Ok(csv_download(csv, "dumpstar-collection.csv"))
 }
 
 /// Stream owned single cards as a Collectr-shaped CSV download.
 async fn export_collectr_singles(State(state): State<AppState>) -> Result<Response, AppError> {
-    let csv = blocking(&state, |c| {
+    let csv = blocking_read(&state, |c| {
         dumpstar_db::collectr_export::collectr_singles_csv(c)
     })
     .await?;
@@ -39,7 +39,7 @@ async fn export_collectr_singles(State(state): State<AppState>) -> Result<Respon
 
 /// Stream owned sealed products as a Collectr-shaped CSV download.
 async fn export_collectr_sealed(State(state): State<AppState>) -> Result<Response, AppError> {
-    let csv = blocking(&state, |c| {
+    let csv = blocking_read(&state, |c| {
         dumpstar_db::collectr_export::collectr_sealed_csv(c)
     })
     .await?;
@@ -48,7 +48,7 @@ async fn export_collectr_sealed(State(state): State<AppState>) -> Result<Respons
 
 /// Stream the whole user database as a versioned JSON envelope download.
 async fn export_json(State(state): State<AppState>) -> Result<Response, AppError> {
-    let json = blocking(&state, |c| dumpstar_db::json_backup::export(c)).await?;
+    let json = blocking_read(&state, |c| dumpstar_db::json_backup::export(c)).await?;
     Ok((
         [
             (

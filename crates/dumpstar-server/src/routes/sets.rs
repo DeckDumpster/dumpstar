@@ -11,7 +11,7 @@ use dumpstar_db::binder::{self, BinderPage, BinderQuery};
 use dumpstar_db::search_meta::{self, RarityMark};
 use dumpstar_db::sets::{self, SetAnalytics, SetSummary};
 
-use crate::{AppError, AppState, blocking};
+use crate::{AppError, AppState, blocking_read};
 
 /// Build the set-catalog routes (mounted under `/api`).
 pub fn routes() -> Router<AppState> {
@@ -25,12 +25,12 @@ pub fn routes() -> Router<AppState> {
 /// The official rarity marks the catalog apply stored.
 async fn rarities(State(state): State<AppState>) -> Result<Json<Vec<RarityMark>>, AppError> {
     Ok(Json(
-        blocking(&state, |c| search_meta::load_rarity_marks(c)).await?,
+        blocking_read(&state, |c| search_meta::load_rarity_marks(c)).await?,
     ))
 }
 
 async fn list(State(state): State<AppState>) -> Result<Json<Vec<SetSummary>>, AppError> {
-    let mut summaries = blocking(&state, |c| sets::list_sets(c)).await?;
+    let mut summaries = blocking_read(&state, |c| sets::list_sets(c)).await?;
     for s in &mut summaries {
         let art = art::resolve(&state.art_dir(), &s.set_code);
         s.logo_url = art.logo_url;
@@ -43,7 +43,7 @@ async fn analytics(
     State(state): State<AppState>,
     Path(code): Path<String>,
 ) -> Result<Json<SetAnalytics>, AppError> {
-    let stats = blocking(&state, move |c| {
+    let stats = blocking_read(&state, move |c| {
         sets::analytics(c, &code)?.ok_or_else(|| DbError::NotFound(format!("set {code}")))
     })
     .await?;
@@ -80,7 +80,7 @@ async fn binder_page(
         search: p.q.unwrap_or_default(),
         filter: p.filter.unwrap_or_else(|| "all".into()),
     };
-    let mut page = blocking(&state, move |c| {
+    let mut page = blocking_read(&state, move |c| {
         binder::get_binder_page(c, &code, &query)?
             .ok_or_else(|| DbError::NotFound(format!("set {code}")))
     })

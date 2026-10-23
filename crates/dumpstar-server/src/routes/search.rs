@@ -36,7 +36,7 @@ use serde::{Deserialize, Serialize};
 use dumpstar_core::query::parse;
 use dumpstar_db::search;
 
-use crate::{AppError, AppState, blocking};
+use crate::{AppError, AppState, blocking_read};
 
 /// Mounted inside the `/collection` nest → `/api/collection/search`.
 pub fn collection_routes() -> Router<AppState> {
@@ -190,7 +190,7 @@ async fn collection_search(
         search::Slice::Cursor { .. } => crate::metrics::Paging::Cursor,
         search::Slice::All => crate::metrics::Paging::All,
     };
-    let (page, t) = blocking(&state, move |c| {
+    let (page, t) = blocking_read(&state, move |c| {
         search::search_page_timed(c, &compiled, slice)
     })
     .await?;

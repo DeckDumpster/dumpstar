@@ -20,11 +20,11 @@ variable "instance" {
 
 variable "hostname" {
   type        = string
-  description = "Public hostname: star.dumpster.cards for prod, env-N.test.dumpster.cards for a slot."
+  description = "Public hostname: star.dumpster.cards for prod, env-N.dumpster.cards for a slot."
 
   validation {
-    condition     = var.hostname == (var.instance == "prod" ? "star.dumpster.cards" : "${var.instance}.test.dumpster.cards")
-    error_message = "hostname must be star.dumpster.cards for prod, or <instance>.test.dumpster.cards for a slot"
+    condition     = var.hostname == (var.instance == "prod" ? "star.dumpster.cards" : "${var.instance}.dumpster.cards")
+    error_message = "hostname must be star.dumpster.cards for prod, or <instance>.dumpster.cards for a slot: exactly one label below the zone, because Cloudflare Universal SSL covers only *.dumpster.cards and issues no certificate for a two-label name such as env-N.test.dumpster.cards"
   }
 }
 

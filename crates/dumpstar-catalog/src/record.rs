@@ -106,6 +106,9 @@ pub struct CardRecord {
     /// The card's keywords, with the value the keyword carries (Raid 2).
     #[serde(default)]
     pub keywords: Vec<KeywordRecord>,
+    /// What the card produces, consumes and requires (sp-iz2vmf).
+    #[serde(default)]
+    pub mechanics: Vec<crate::mechanics::MechanicRecord>,
     /// A unique card: only one copy of it may be in play at a time.
     #[serde(default)]
     pub unique: bool,

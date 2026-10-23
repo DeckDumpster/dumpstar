@@ -24,6 +24,7 @@ pub mod formats;
 pub mod images;
 pub mod job;
 pub mod landing;
+pub mod mechanics;
 pub mod official;
 pub mod record;
 pub mod search;

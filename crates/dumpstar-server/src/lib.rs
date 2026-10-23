@@ -30,6 +30,7 @@ mod digest;
 pub mod drain;
 mod mcp;
 mod metrics;
+mod reqlog;
 mod routes;
 
 use dumpster_kit_mcp_auth::{McpAuth, McpAuthConfig};
@@ -313,6 +314,9 @@ async fn session_tenant(
         Ok(id) if user.email.is_empty() => id,
         _ => tenants.resolve_session(&user)?,
     };
+    if let Some(slot) = req.extensions().get::<reqlog::TenantSlot>() {
+        slot.set(id.as_str());
+    }
     Ok(SESSION_TENANT.scope(id, next.run(req)).await)
 }
 
@@ -496,6 +500,8 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
         ))
         // Outermost, so it sees the final response of every route above.
         .layer(compression())
+        // Outside everything: logs every request on completion, and while it runs once slow.
+        .layer(middleware::from_fn(reqlog::http))
 }
 
 /// Everything `dumpstar serve` needs to stand the HTTP app up.
@@ -534,6 +540,7 @@ const MCP_BYPASS_PATHS: [&str; 2] = ["/mcp", "/.well-known/oauth-protected-resou
 /// catalog (`dumpstar setup` not run) fails at startup rather than on the
 /// first request.
 pub async fn serve(cfg: ServeConfig) -> anyhow::Result<()> {
+    reqlog::init_from_env();
     // Idempotent shared-catalog convergence on startup. `dumpstar setup` and
     // the nightly `dumpstar-lake-derive shared` normally own shared schema —
     // the refresh used to be on that list and is not since pd-lunn, because

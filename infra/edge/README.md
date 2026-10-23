@@ -2,7 +2,7 @@
 
 Terraform for what stands between a browser and a dumpstar origin, per instance, from the design
 "Disposable test environments from any build": prod (`star.dumpster.cards`) and the
-pre-provisioned test slots `env-1..env-3` (`env-N.test.dumpster.cards`). Each instance is its own
+pre-provisioned test slots `env-1..env-3` (`env-N.dumpster.cards`). Each instance is its own
 **workspace** with its own state (`env:/<instance>/dumpstar/edge/terraform.tfstate`), so a slot
 applies and destroys alone.
 

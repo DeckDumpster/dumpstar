@@ -19,7 +19,7 @@ mock_provider "random" {}
 variables {
   deploy_role_arn       = "arn:aws:iam::123456789012:role/terraform-deploy"
   instance              = "env-2"
-  hostname              = "env-2.test.dumpster.cards"
+  hostname              = "env-2.dumpster.cards"
   cloudflare_account_id = "acct"
   cloudflare_zone_id    = "zone"
   access_team_name      = "team"
@@ -37,7 +37,7 @@ run "tunnel_ingress_routes_the_hostname_then_404s" {
   }
   assert {
     condition = (
-      cloudflare_zero_trust_tunnel_cloudflared_config.this["env-2"].config.ingress[0].hostname == "env-2.test.dumpster.cards" &&
+      cloudflare_zero_trust_tunnel_cloudflared_config.this["env-2"].config.ingress[0].hostname == "env-2.dumpster.cards" &&
       cloudflare_zero_trust_tunnel_cloudflared_config.this["env-2"].config.ingress[1].service == "http_status:404"
     )
     error_message = "ingress must route the instance hostname and end in a catch-all 404"
@@ -48,7 +48,7 @@ run "dns_is_a_proxied_cname_to_the_tunnel" {
   command = plan
 
   assert {
-    condition     = cloudflare_dns_record.this["env-2"].type == "CNAME" && cloudflare_dns_record.this["env-2"].proxied && cloudflare_dns_record.this["env-2"].name == "env-2.test.dumpster.cards"
+    condition     = cloudflare_dns_record.this["env-2"].type == "CNAME" && cloudflare_dns_record.this["env-2"].proxied && cloudflare_dns_record.this["env-2"].name == "env-2.dumpster.cards"
     error_message = "DNS must be a proxied CNAME on the instance hostname"
   }
 }
@@ -57,7 +57,7 @@ run "access_app_requires_the_group_on_the_hostname" {
   command = plan
 
   assert {
-    condition     = cloudflare_zero_trust_access_application.this["env-2"].domain == "env-2.test.dumpster.cards" && cloudflare_zero_trust_access_application.this["env-2"].type == "self_hosted"
+    condition     = cloudflare_zero_trust_access_application.this["env-2"].domain == "env-2.dumpster.cards" && cloudflare_zero_trust_access_application.this["env-2"].type == "self_hosted"
     error_message = "the Access application covers exactly the instance hostname"
   }
   assert {
@@ -74,7 +74,7 @@ run "pocketid_client_calls_back_to_the_hostname_and_is_group_limited" {
   command = plan
 
   assert {
-    condition     = pocketid_client.this["env-2"].callback_urls == tolist(["https://env-2.test.dumpster.cards/auth/callback"])
+    condition     = pocketid_client.this["env-2"].callback_urls == tolist(["https://env-2.dumpster.cards/auth/callback"])
     error_message = "the callback is the instance's own"
   }
   assert {
@@ -120,11 +120,21 @@ run "a_slot_cannot_take_another_instances_hostname" {
   expect_failures = [var.hostname]
 }
 
+run "a_two_label_slot_hostname_is_refused" {
+  command = plan
+
+  variables {
+    hostname = "env-2.test.dumpster.cards"
+  }
+
+  expect_failures = [var.hostname]
+}
+
 run "unknown_hostname_is_refused" {
   command = plan
 
   variables {
-    hostname = "env-9.test.dumpster.cards"
+    hostname = "env-9.dumpster.cards"
   }
 
   expect_failures = [var.hostname]

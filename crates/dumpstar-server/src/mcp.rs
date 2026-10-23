@@ -19,6 +19,7 @@ use dumpster_kit_tenancy::tenant::TenantId;
 use rusqlite::{Connection, OptionalExtension};
 use serde_json::{Value, json};
 
+use crate::dbpool;
 use dumpstar_core::deck::{DeckEntry, Zone};
 use dumpstar_core::query::{KeywordRegistry, parse};
 use dumpstar_db::DbError;
@@ -714,11 +715,10 @@ pub(crate) fn search_cards_value(
 }
 
 impl DumpstarTools {
-    fn with_conn<T>(
+    fn tenant_writer(
         &self,
         ctx: &ToolContext,
-        f: impl FnOnce(&mut Connection) -> Result<T, ToolError>,
-    ) -> Result<T, ToolError> {
+    ) -> Result<(TenantId, Arc<Mutex<Connection>>), ToolError> {
         let id = self
             .ids
             .0
@@ -731,18 +731,41 @@ impl DumpstarTools {
             .tenants
             .connection(&id)
             .map_err(|e| ToolError::Internal(e.to_string()))?;
+        Ok((id, conn))
+    }
+
+    /// A write: takes the tenant's one writer connection, so writes stay serialised.
+    fn with_conn<T>(
+        &self,
+        ctx: &ToolContext,
+        tool: &str,
+        f: impl FnOnce(&mut Connection) -> Result<T, ToolError>,
+    ) -> Result<T, ToolError> {
+        let (_, conn) = self.tenant_writer(ctx)?;
         let mut guard = conn.lock().unwrap_or_else(|e| e.into_inner());
-        f(&mut guard)
+        dbpool::bounded(&mut guard, tool, f, ToolError::Failed)
+    }
+
+    /// A read: its own read-only connection, so it neither waits for nor blocks any other call.
+    fn with_read<T>(
+        &self,
+        ctx: &ToolContext,
+        tool: &str,
+        f: impl FnOnce(&mut Connection) -> Result<T, ToolError>,
+    ) -> Result<T, ToolError> {
+        let (id, writer) = self.tenant_writer(ctx)?;
+        let mut reader = dbpool::checkout(&id, &writer).map_err(db_err)?;
+        dbpool::bounded(&mut reader, tool, f, ToolError::Failed)
     }
 
     fn search_cards(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
-        self.with_conn(ctx, |c| {
+        self.with_read(ctx, "search_cards", |c| {
             search_cards_value(c, &self.registry, &self.flags, &self.keywords, args)
         })
     }
 
     fn get_card(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
-        self.with_conn(ctx, |c| {
+        self.with_read(ctx, "get_card", |c| {
             let (set, number, variant) = match arg_str(args, "id") {
                 Some(given) => {
                     let card_id = resolve_card_id(c, given)?;
@@ -795,7 +818,7 @@ impl DumpstarTools {
     }
 
     fn collection_summary(&self, ctx: &ToolContext) -> Result<Value, ToolError> {
-        self.with_conn(ctx, |c| {
+        self.with_read(ctx, "collection_summary", |c| {
             let counts = decks::card_counts(c, None).map_err(db_err)?;
             let decks = decks::list(c).map_err(db_err)?;
             let mut groups: Vec<&str> = decks.iter().filter_map(|d| d.group.as_deref()).collect();
@@ -815,7 +838,7 @@ impl DumpstarTools {
 
     fn list_decks(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
         let (group, format) = (arg_str(args, "group"), arg_str(args, "format"));
-        self.with_conn(ctx, |c| {
+        self.with_read(ctx, "list_decks", |c| {
             let decks: Vec<_> = decks::list(c)
                 .map_err(db_err)?
                 .into_iter()
@@ -828,7 +851,7 @@ impl DumpstarTools {
 
     fn get_deck(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
         let id = arg_id(args, "id")?;
-        self.with_conn(ctx, |c| deck_response(c, id))
+        self.with_read(ctx, "get_deck", |c| deck_response(c, id))
     }
 
     fn create_deck(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
@@ -841,7 +864,7 @@ impl DumpstarTools {
             notes: arg_str(args, "notes").map(String::from),
             ..Default::default()
         };
-        self.with_conn(ctx, |c| {
+        self.with_conn(ctx, "create_deck", |c| {
             let id = decks::create(c, &new).map_err(db_err)?;
             let deck = decks::get(c, id).map_err(db_err)?;
             Ok(json!({ "deck": deck }))
@@ -881,7 +904,7 @@ impl DumpstarTools {
             group: field("group")?,
             notes: field("notes")?,
         };
-        self.with_conn(ctx, |c| {
+        self.with_conn(ctx, "update_deck", |c| {
             if !decks::patch(c, id, &patch).map_err(db_err)? {
                 return Err(failed(format!("not found: deck {id}")));
             }
@@ -919,7 +942,7 @@ impl DumpstarTools {
                 zone,
             });
         }
-        self.with_conn(ctx, |c| {
+        self.with_conn(ctx, "set_deck_lines", |c| {
             for l in &mut lines {
                 l.card_id = resolve_card_id(c, &l.card_id)?;
             }
@@ -938,14 +961,14 @@ impl DumpstarTools {
 
     fn release_deck(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
         let id = arg_id(args, "id")?;
-        self.with_conn(ctx, |c| {
+        self.with_conn(ctx, "release_deck", |c| {
             Ok(json!({ "released": decks::release(c, id).map_err(db_err)? }))
         })
     }
 
     fn delete_deck(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
         let id = arg_id(args, "id")?;
-        self.with_conn(ctx, |c| {
+        self.with_conn(ctx, "delete_deck", |c| {
             if decks::delete(c, id).map_err(db_err)? {
                 Ok(json!({ "deleted": id }))
             } else {
@@ -956,7 +979,7 @@ impl DumpstarTools {
 
     fn validate_deck(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
         let id = arg_id(args, "id")?;
-        self.with_conn(ctx, |c| {
+        self.with_read(ctx, "validate_deck", |c| {
             let v = decks::validate(c, id).map_err(db_err)?;
             Ok(json!({
                 "sanctioned": v.format_id.is_some(),

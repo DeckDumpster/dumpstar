@@ -9,7 +9,7 @@ use serde::Deserialize;
 use dumpstar_db::DbError;
 use dumpstar_db::wishlist::{self, NewWish, WishEdit, WishlistEntry};
 
-use crate::{AppError, AppState, blocking};
+use crate::{AppError, AppState, blocking, blocking_read};
 
 /// Build the wishlist routes (mounted under `/api`).
 pub fn routes() -> Router<AppState> {
@@ -30,7 +30,7 @@ async fn list(
 ) -> Result<Json<Vec<WishlistEntry>>, AppError> {
     let include = p.include_fulfilled.unwrap_or(false);
     Ok(Json(
-        blocking(&state, move |c| wishlist::list(c, include)).await?,
+        blocking_read(&state, move |c| wishlist::list(c, include)).await?,
     ))
 }
 

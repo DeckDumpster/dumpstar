@@ -8,7 +8,7 @@ use serde::Deserialize;
 use dumpstar_db::DbError;
 use dumpstar_db::batches::{self, Batch, BatchDetail, NewBatch};
 
-use crate::{AppError, AppState, blocking};
+use crate::{AppError, AppState, blocking, blocking_read};
 
 /// Build the batch routes (mounted under `/api`).
 pub fn routes() -> Router<AppState> {
@@ -38,7 +38,7 @@ async fn list(
 ) -> Result<Json<Vec<Batch>>, AppError> {
     let limit = p.limit.unwrap_or(0).max(0);
     Ok(Json(
-        blocking(&state, move |c| batches::list(c, limit)).await?,
+        blocking_read(&state, move |c| batches::list(c, limit)).await?,
     ))
 }
 
@@ -46,7 +46,7 @@ async fn detail(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<BatchDetail>, AppError> {
-    let detail = blocking(&state, move |c| {
+    let detail = blocking_read(&state, move |c| {
         batches::get_detail(c, id)?.ok_or_else(|| DbError::NotFound(format!("batch {id}")))
     })
     .await?;

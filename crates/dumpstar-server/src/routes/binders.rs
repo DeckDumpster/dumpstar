@@ -10,7 +10,7 @@ use dumpstar_db::DbError;
 use dumpstar_db::binders::{self, Binder, BinderEdit, NewBinder};
 use dumpstar_db::collection::{self, CollectionRow};
 
-use crate::{AppError, AppState, blocking};
+use crate::{AppError, AppState, blocking, blocking_read};
 
 /// Build the binder routes (mounted under `/api`).
 pub fn routes() -> Router<AppState> {
@@ -28,7 +28,7 @@ struct BinderDetail {
 }
 
 async fn list(State(state): State<AppState>) -> Result<Json<Vec<Binder>>, AppError> {
-    Ok(Json(blocking(&state, |c| binders::list(c)).await?))
+    Ok(Json(blocking_read(&state, |c| binders::list(c)).await?))
 }
 
 async fn create(
@@ -47,7 +47,7 @@ async fn detail(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<BinderDetail>, AppError> {
-    let detail = blocking(&state, move |c| {
+    let detail = blocking_read(&state, move |c| {
         let binder =
             binders::get(c, id)?.ok_or_else(|| DbError::NotFound(format!("binder {id}")))?;
         let cards = collection::list_by_binder(c, id)?;

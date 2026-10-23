@@ -42,7 +42,7 @@ struct CollectrSelectedRequest {
     park_unmatched: bool,
 }
 
-use crate::{AppError, AppState, blocking};
+use crate::{AppError, AppState, blocking, blocking_read};
 
 /// Build the import routes (mounted under `/api`).
 pub fn routes() -> Router<AppState> {
@@ -82,7 +82,7 @@ async fn preview(
     Json(req): Json<ImportRequest>,
 ) -> Result<Json<ResolutionReport>, AppError> {
     let format = ImportFormat::parse(&req.format)?;
-    let report = blocking(&state, move |c| import::preview(c, format, &req.content)).await?;
+    let report = blocking_read(&state, move |c| import::preview(c, format, &req.content)).await?;
     Ok(Json(report))
 }
 
@@ -145,7 +145,7 @@ async fn preview_collectr(
     State(state): State<AppState>,
     Json(req): Json<ImportRequest>,
 ) -> Result<Json<CombinedReport>, AppError> {
-    let report = blocking(&state, move |c| import::preview_collectr(c, &req.content)).await?;
+    let report = blocking_read(&state, move |c| import::preview_collectr(c, &req.content)).await?;
     Ok(Json(report))
 }
 
@@ -190,7 +190,7 @@ pub struct UnresolvedResolveResult {
 async fn list_unresolved(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<UnresolvedRow>>, AppError> {
-    let rows = blocking(&state, move |c| unresolved::list_open(c)).await?;
+    let rows = blocking_read(&state, move |c| unresolved::list_open(c)).await?;
     Ok(Json(rows))
 }
 

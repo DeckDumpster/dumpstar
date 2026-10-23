@@ -14,7 +14,7 @@ use serde_json::{Value, json};
 
 use dumpstar_db::decks;
 
-use crate::{AppError, AppState, blocking, mcp};
+use crate::{AppError, AppState, blocking_read, mcp};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -48,7 +48,7 @@ async fn list(
     State(state): State<AppState>,
     Query(p): Query<ListParams>,
 ) -> Result<Json<Value>, AppError> {
-    let decks = blocking(&state, move |c| decks::list(c)).await?;
+    let decks = blocking_read(&state, move |c| decks::list(c)).await?;
     let decks: Vec<_> = decks
         .into_iter()
         .filter(|d| {
@@ -66,7 +66,7 @@ async fn list(
 }
 
 async fn deck(State(state): State<AppState>, Path(id): Path<i64>) -> Result<Json<Value>, AppError> {
-    let out = blocking(&state, move |c| Ok(mcp::deck_response(c, id))).await?;
+    let out = blocking_read(&state, move |c| Ok(mcp::deck_response(c, id))).await?;
     Ok(Json(out.map_err(tool_error)?))
 }
 
@@ -97,7 +97,7 @@ async fn search(
         "owned_only": p.owned_only, "expand_printings": p.expand_printings,
     });
     let (registry, flags) = (state.registry.clone(), state.flags.clone());
-    let out = blocking(&state, move |c| {
+    let out = blocking_read(&state, move |c| {
         Ok(mcp::search_cards_value(
             c,
             &registry,

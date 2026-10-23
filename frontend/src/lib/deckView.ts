@@ -13,6 +13,11 @@ export type DeckLine = {
 	cost: number | null;
 	aspects: string[];
 	image: string | null;
+	/** The deployed side of a leader printing. */
+	back: string | null;
+	type: string | null;
+	setCode: string;
+	number: string;
 	href: string;
 	printingId: string;
 	finish: string;
@@ -72,7 +77,7 @@ function groupLabel(c: CollectionRow): string {
 }
 
 export function buildDeckView(cards: CollectionRow[]): DeckView {
-	const lines = new Map<string, DeckLine & { type: string | null; arenas: string }>();
+	const lines = new Map<string, DeckLine & { arenas: string }>();
 	for (const c of cards) {
 		const key = `${c.printing_id}|${c.finish}|${c.condition}`;
 		const have = lines.get(key);
@@ -88,6 +93,9 @@ export function buildDeckView(cards: CollectionRow[]): DeckView {
 			cost: c.cost,
 			aspects: list(c.aspects),
 			image: c.image_url,
+			back: c.back_image_url,
+			setCode: c.set_code,
+			number: c.number,
 			href: copyHref(c),
 			printingId: c.printing_id,
 			finish: c.finish,

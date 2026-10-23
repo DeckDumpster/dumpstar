@@ -265,12 +265,24 @@ cmd_up() {
 	ENV_TMP="$tmp"
 	render_slot "$slot" "$tmp/render"
 
+	local snap_gb root_gb
+	snap_gb="$(aws_ ec2 describe-images --image-ids "$DUMPSTAR_ENV_AMI" \
+		--query 'Images[0].BlockDeviceMappings[?DeviceName==`/dev/sda1`]|[0].Ebs.VolumeSize' --output text)"
+	case "$snap_gb" in '' | None | *[!0-9]*) die "up: cannot read the root snapshot size of $DUMPSTAR_ENV_AMI (got '$snap_gb')" ;; esac
+	root_gb="${DUMPSTAR_ENV_ROOT_GB:-60}"
+	if [ -n "${DUMPSTAR_ENV_ROOT_GB:-}" ]; then
+		[ "$root_gb" -ge "$snap_gb" ] 2>/dev/null ||
+			die "up: DUMPSTAR_ENV_ROOT_GB=$root_gb is smaller than the ${snap_gb} GB root snapshot of $DUMPSTAR_ENV_AMI"
+	elif [ "$snap_gb" -gt "$root_gb" ]; then
+		root_gb="$snap_gb"
+	fi
+
 	local owner="${DUMPSTAR_ENV_OWNER:-${USER:-unknown}}"
 	local tags="{Key=${DUMPSTAR_ENV_POOL_TAG%%=*},Value=${DUMPSTAR_ENV_POOL_TAG#*=}},{Key=Name,Value=dumpstar-$slot},{Key=dumpstar-env:slot,Value=$slot},{Key=dumpstar-env:owner,Value=$owner},{Key=dumpstar-env:build,Value=${image}},{Key=dumpstar-env:last-activity,Value=$t0}"
 	id="$(aws_ ec2 run-instances --image-id "$DUMPSTAR_ENV_AMI" --instance-type "$DUMPSTAR_ENV_INSTANCE_TYPE" \
 		--subnet-id "$DUMPSTAR_ENV_SUBNET" --security-group-ids "$DUMPSTAR_ENV_SECURITY_GROUP" \
 		--iam-instance-profile "Name=$DUMPSTAR_ENV_INSTANCE_PROFILE" --count 1 \
-		--block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=60,VolumeType=gp3,DeleteOnTermination=true}' \
+		--block-device-mappings "DeviceName=/dev/sda1,Ebs={VolumeSize=$root_gb,VolumeType=gp3,DeleteOnTermination=true}" \
 		--tag-specifications "ResourceType=instance,Tags=[$tags]" "ResourceType=volume,Tags=[$tags]" \
 		--query 'Instances[0].InstanceId' --output text)"
 	# Two ups can pick the same slot: the earlier launch keeps it, the later gives itself back.

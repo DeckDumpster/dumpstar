@@ -28,11 +28,15 @@ use crate::search_meta::SearchFlag;
 // Scalar subqueries reused across the SELECT list and predicates.
 // Per CARD, across its printings — the same thing the `available_count` field
 // reports (sp-hnps8p).
-const AVAILABLE_COUNT_SUBQ: &str = "SELECT COUNT(*) FROM collection c \
-     JOIN printings cp ON cp.printing_id = c.printing_id \
+// CROSS JOIN pins the loop order: the card's printings by `idx_printings_card`, then
+// their copies by `idx_collection_printing`. Left to itself, SQLite without `ANALYZE` (the
+// production catalog has none) walks `collection` once per candidate row, which took minutes
+// for a bare `avail>=0` (sp-qwc0ua).
+const AVAILABLE_COUNT_SUBQ: &str = "SELECT COUNT(*) FROM printings cp \
+     CROSS JOIN collection c ON c.printing_id = cp.printing_id \
      WHERE cp.card_id = p.card_id AND c.deck_id IS NULL";
-const CARD_OWNED_COUNT_SUBQ: &str = "SELECT COUNT(*) FROM collection c \
-     JOIN printings cp ON cp.printing_id = c.printing_id \
+const CARD_OWNED_COUNT_SUBQ: &str = "SELECT COUNT(*) FROM printings cp \
+     CROSS JOIN collection c ON c.printing_id = cp.printing_id \
      WHERE cp.card_id = p.card_id";
 const OWNED_COUNT_SUBQ: &str =
     "SELECT COUNT(*) FROM collection c WHERE c.printing_id = p.printing_id";
@@ -812,9 +816,13 @@ fn compile_comparison(
             // <SET>-<number>, the form the tools speak; a zero-padded catalog number
             // (005) matches its plain form (5), as `get_card` resolves it.
             let (set, number) = value.split_once('-').unwrap_or((value, ""));
-            let frag = "(cd.card_id = ? COLLATE NOCASE OR EXISTS (SELECT 1 FROM printings ip \
-                 WHERE ip.card_id = cd.card_id AND ip.set_code = ? COLLATE NOCASE \
-                   AND (ip.number = ? OR ltrim(ip.number, '0') = ltrim(?, '0'))))"
+            // The card ids are resolved once, then probed through `p.card_id`, which SQLite
+            // pushes into both arms of the printings union and answers from `idx_printings_card`
+            // — a per-row test on `cd` would visit every printing in the catalog (sp-qwc0ua).
+            let frag = "p.card_id IN (SELECT card_id FROM cards WHERE card_id = ? COLLATE NOCASE \
+                 UNION SELECT ip.card_id FROM printings ip \
+                  WHERE ip.set_code IN (SELECT set_code FROM sets WHERE set_code = ? COLLATE NOCASE) \
+                    AND (ip.number = ? OR ltrim(ip.number, '0') = ltrim(?, '0')))"
                 .to_string();
             let params = vec![text(value), text(set), text(number), text(number)];
             if matches!(op, Op::Ne) {
@@ -3711,5 +3719,100 @@ mod tests {
              became index-satisfied, take it off SORTS_THAT_STILL_SORT in this \
              commit; if one regressed, it is a performance bug"
         );
+    }
+
+    /// A catalog and collection the size of the real ones (sp-qwc0ua): 20,000
+    /// cards, three printings each, and 1,400 owned copies.
+    fn prod_size_fixture() -> Fix {
+        let dir = tempfile::tempdir().unwrap();
+        let shared = dir.path().join("shared.sqlite");
+        {
+            let mut c = open_shared(&shared).unwrap();
+            search_meta::reconcile(&mut c).unwrap();
+            testkit::set_on(&c, "SOR", "Spark of Rebellion", "2024-03-08");
+            for k in 0..59 {
+                testkit::set_on(&c, &format!("X{k:02}"), "Filler", "2024-06-01");
+            }
+            c.execute_batch(
+                "WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < 19999)
+                 INSERT INTO cards (card_id, name, card_type) SELECT 'sor-' || i, 'Card ' || i, 'Unit' FROM n;
+                 WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < 19999),
+                      v(variant) AS (VALUES ('Standard'), ('Hyperspace'), ('Showcase'))
+                 INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish)
+                   SELECT 'sor-' || i || '-' || variant, 'sor-' || i,
+                          CASE WHEN i < 300 THEN 'SOR' ELSE printf('X%02d', i % 59) END,
+                          CAST(i AS TEXT), variant, 'Normal'
+                     FROM n, v;
+                 ",
+            )
+            .unwrap();
+        }
+        let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
+        conn.execute_batch(
+            "WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < 1399)
+             INSERT INTO collection (printing_id, condition, language, acquired_at, source, status)
+               SELECT 'sor-' || (i * 13) || '-Standard', 'Near Mint', 'English', '2025-01-01',
+                      'manual_id', 'owned' FROM n;
+             ",
+        )
+        .unwrap();
+        let registry = search_meta::load_registry(&conn).unwrap();
+        let flags = search_meta::load_flags(&conn).unwrap();
+        Fix {
+            _dir: dir,
+            shared,
+            conn,
+            registry,
+            flags,
+        }
+    }
+
+    /// `id:<x> avail>=0` is what swu-cube's `allocate` sends for every pick. The
+    /// availability count is correlated on the card, so it must be answered by
+    /// the printings and collection indexes: a plan that scans `collection` (or
+    /// `printings`) inside the subquery runs it once per catalog printing, which
+    /// took longer than the 30s request bound on the real data. Asserted on the
+    /// plan, not a timer (law-no-wall-clock-budgets-in-the-corpus).
+    #[test]
+    fn availability_filters_never_scan_inside_the_per_card_count() {
+        let f = prod_size_fixture();
+        for q in [
+            "avail>=0",
+            "id:SOR-130",
+            "avail>=0 name:\"Card 130\"",
+            "id:SOR-130 avail>=0",
+            "avail>=1 id:SOR-130",
+            "id:SOR-130 owned>=0",
+            "id:SOR-130 or id:SOR-5 avail<=0",
+        ] {
+            for per_card in [true, false] {
+                let mut c = f.compile(q);
+                c.set_catalog_wide(true);
+                if per_card {
+                    c.set_one_per_card();
+                }
+                let sql = build_full_sql(&c, Some((250, 0)));
+                let mut params = c.params.clone();
+                params.push(Value::Integer(250));
+                params.push(Value::Integer(0));
+                let mut stmt = f
+                    .conn
+                    .prepare(&format!("EXPLAIN QUERY PLAN {sql}"))
+                    .unwrap();
+                let plan: Vec<String> = stmt
+                    .query_map(params_from_iter(params.iter()), |r| r.get::<_, String>(3))
+                    .unwrap()
+                    .collect::<rusqlite::Result<_>>()
+                    .unwrap();
+                let scans: Vec<&String> = plan
+                    .iter()
+                    .filter(|l| l.starts_with("SCAN c") || l.contains("idx_collection_deck"))
+                    .collect();
+                assert!(
+                    scans.is_empty(),
+                    "{q} (per_card={per_card}): the availability count scans: {scans:?}\n{plan:#?}"
+                );
+            }
+        }
     }
 }

@@ -10,6 +10,18 @@
 	}: { view: DeckView; busy?: boolean; onRemove?: (copyId: number) => void } = $props();
 
 	let preview = $state<DeckLine | null>(null);
+	let open = $state<DeckLine | null>(null);
+	// The modal is loaded on first use, so a deck page that never opens one never pays for it.
+	let Modal = $state<typeof import('./CardModal.svelte').default | null>(null);
+	$effect(() => {
+		if (open && !Modal) import('./CardModal.svelte').then((m) => (Modal = m.default));
+	});
+	// One slot: the hovered line, else the deck's first leader.
+	const shown = $derived(preview ?? view.leaders[0] ?? null);
+	const isLeader = $derived(shown?.type === 'Leader');
+	const isBase = $derived(shown?.type === 'Base');
+	// A leader previews its deployed side; a base is turned so its title reads on the left.
+	const shownImage = $derived(shown ? (isLeader ? (shown.back ?? shown.image) : shown.image) : null);
 	const peak = $derived(Math.max(1, ...view.curve));
 
 	function show(l: DeckLine) {
@@ -34,7 +46,15 @@
 			>
 				<span class="qty">{l.qty}×</span>
 				<CostMark cost={l.cost} />
-				<a class="name" href={l.href}>{l.name}</a>
+				<a
+						class="name"
+						href={l.href}
+						onclick={(e) => {
+							if (e.ctrlKey || e.metaKey || e.shiftKey || e.button) return;
+							e.preventDefault();
+							open = l;
+						}}>{l.name}</a
+					>
 				<span class="asp">
 					{#each l.aspects as a (a)}<AspectIcon name={a} size="1.1em" />{/each}
 				</span>
@@ -51,18 +71,24 @@
 {/snippet}
 
 <div class="deck">
-	<aside class="pinned" aria-label="Leader">
-		{#each view.leaders as l (l.key)}
-			<figure class="pin" data-printing={l.printingId} data-condition={l.condition}>
-				<a href={l.href}>
-					{#if l.image}<img src={l.image} alt={l.name} />{:else}<span class="noart">{l.name}</span>{/if}
-				</a>
-				<figcaption>{l.name}</figcaption>
-			</figure>
-		{/each}
-		<div class="preview" aria-hidden="true">
-			{#if preview?.image}<img src={preview.image} alt="" />{/if}
-		</div>
+	<aside class="pinned" aria-label="Card preview">
+		<button
+			type="button"
+			class="preview"
+			data-slot="preview"
+			data-card={shown?.printingId}
+			data-side={isLeader && shown?.back ? 'back' : 'front'}
+			data-rotate={isBase ? 'landscape' : undefined}
+			aria-label={shown ? `Open ${shown.name}` : 'No card to preview'}
+			disabled={!shown}
+			onclick={() => shown && (open = shown)}
+		>
+			{#if shownImage}
+				<img src={shownImage} alt={shown?.name ?? ''} />
+			{:else if shown}
+				<span class="noart">{shown.name}</span>
+			{/if}
+		</button>
 	</aside>
 
 	<div class="lists">
@@ -84,11 +110,21 @@
 		</section>
 
 		<div class="groups">
-		{#if view.leaders.length || view.bases.length}
-			<section class="group" aria-label="Leader and base">
-				<h2>Leader and base <span class="count">{view.leaders.length + view.bases.length}</span></h2>
+		{#if view.leaders.length}
+			<section class="group" aria-label="Leader">
+				<h2>Leader <span class="count">{view.leaders.length}</span></h2>
 				<ul>
-					{#each [...view.leaders, ...view.bases] as l (l.key)}
+					{#each view.leaders as l (l.key)}
+						{@render row(l)}
+					{/each}
+				</ul>
+			</section>
+		{/if}
+		{#if view.bases.length}
+			<section class="group" aria-label="Base">
+				<h2>Base <span class="count">{view.bases.length}</span></h2>
+				<ul>
+					{#each view.bases as l (l.key)}
 						{@render row(l)}
 					{/each}
 				</ul>
@@ -109,6 +145,10 @@
 	</div>
 </div>
 
+{#if open && Modal}
+	<Modal setCode={open.setCode} number={open.number} onClose={() => (open = null)} />
+{/if}
+
 <style>
 	.deck {
 		display: grid;
@@ -124,20 +164,6 @@
 		flex-direction: column;
 		gap: var(--space-2);
 	}
-	.pin {
-		margin: 0;
-	}
-	.pin img,
-	.preview img {
-		display: block;
-		width: 100%;
-		height: auto;
-		border-radius: var(--radius-xl);
-	}
-	.pin figcaption {
-		font-size: var(--text-sm);
-		color: var(--color-text-subtle);
-	}
 	.noart {
 		display: block;
 		padding: var(--space-4);
@@ -145,8 +171,32 @@
 		border-radius: var(--radius-xl);
 	}
 	.preview {
-		width: 60%;
-		align-self: center;
+		position: relative;
+		display: block;
+		width: 70%;
+		margin: 0 auto;
+		padding: 0;
+		border: 0;
+		background: none;
+		cursor: pointer;
+	}
+	.preview img {
+		display: block;
+		width: 100%;
+		height: auto;
+		border-radius: var(--radius-xl);
+	}
+	/* Bases are printed landscape: turned a quarter turn, title on the left. */
+	.preview[data-rotate='landscape'] {
+		aspect-ratio: 5 / 7;
+	}
+	.preview[data-rotate='landscape'] img {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		width: 140%;
+		max-width: none;
+		transform: translate(-50%, -50%) rotate(-90deg);
 	}
 	.lists {
 		min-width: 0;
@@ -249,20 +299,12 @@
 		.deck {
 			grid-template-columns: minmax(0, 1fr);
 		}
-		.pinned {
-			position: static;
-			flex-direction: row;
-			flex-wrap: wrap;
-		}
-		.pin {
-			flex: 1 1 45%;
-			min-width: 0;
-		}
 		.preview {
 			position: fixed;
 			right: var(--space-2);
 			bottom: var(--space-2);
 			width: 40vw;
+			margin: 0;
 			z-index: 10;
 		}
 	}

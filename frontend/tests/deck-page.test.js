@@ -50,20 +50,51 @@ test('each line links to its printing at its condition', () => {
 	assert.match(html, /data-condition="Near Mint"/);
 });
 
-test('leader and base are lines of their own section before the type groups', () => {
-	const html = markup(DeckLines, { view: buildDeckView(cards) });
-	const sec = html.indexOf('aria-label="Leader and base"');
-	assert.ok(sec > 0 && sec < html.indexOf('Ground Units'));
-	assert.ok(html.lastIndexOf('data-printing="p-Luke"') > sec);
-	assert.ok(html.indexOf('data-printing="p-Echo Base"') > sec);
+const src = readFileSync(new URL('../src/lib/components/DeckLines.svelte', import.meta.url), 'utf8');
+const pack = [...cards.slice(0, 2), row({ name: 'Jump Base', card_type: 'Base', cost: null, aspects: '[]', arenas: null }), ...cards.slice(2)];
+const slotCount = (/** @type {string} */ h) => (h.match(/data-slot="preview"/g) ?? []).length;
+
+test('leader and base are separate sections before the type groups', () => {
+	const html = markup(DeckLines, { view: buildDeckView(pack) });
+	const lead = html.indexOf('aria-label="Leader"');
+	const base = html.indexOf('aria-label="Base"');
+	assert.ok(lead > 0 && base > lead && base < html.indexOf('Ground Units'));
+	assert.ok(!html.includes('Leader and base'));
+	assert.ok(html.lastIndexOf('data-printing="p-Luke"') > lead && html.lastIndexOf('data-printing="p-Luke"') < base);
+	assert.ok(html.indexOf('data-printing="p-Echo Base"') > base);
+	assert.ok(html.indexOf('data-printing="p-Jump Base"') > base);
 });
 
-test('the preview follows the leader art in the pane', () => {
-	const html = markup(DeckLines, { view: buildDeckView(cards) });
-	const img = html.indexOf('src="https://img.test/Luke.png"');
-	const prev = html.indexOf('class="preview');
-	assert.ok(img > 0 && prev > img);
-	assert.ok(prev < html.indexOf('aria-label="Deck summary"'));
+test('a line name opens the modal without navigating', () => {
+	assert.match(src, /class="name"[\s\S]*?preventDefault\(\);\s*open = l;/);
+	assert.match(src, /<Modal setCode=\{open\.setCode\} number=\{open\.number\}/);
+});
+
+test('the pane holds exactly one card image, the leader when idle', () => {
+	const html = markup(DeckLines, { view: buildDeckView(pack) });
+	const pane = html.slice(html.indexOf('aria-label="Card preview"'), html.indexOf('aria-label="Deck summary"'));
+	assert.equal((pane.match(/<img/g) ?? []).length, 1);
+	assert.equal(slotCount(html), 1);
+	assert.ok(pane.includes('src="https://img.test/Luke.png"'));
+});
+
+test('a leader previews its back side', () => {
+	const v = buildDeckView([row({ name: 'Luke', card_type: 'Leader', back_image_url: 'https://img.test/Luke-back.png' }), ...cards.slice(2)]);
+	const html = markup(DeckLines, { view: v });
+	assert.ok(html.includes('src="https://img.test/Luke-back.png"'));
+	assert.ok(!html.includes('src="https://img.test/Luke.png"'));
+	assert.match(html, /data-side="back"/);
+});
+
+test('a base preview carries the landscape rotation', () => {
+	assert.match(src, /data-rotate=\{isBase \? 'landscape' : undefined\}/);
+	assert.match(src, /\[data-rotate='landscape'\] img\s*\{[^}]*rotate\(-90deg\)/);
+	const html = markup(DeckLines, { view: buildDeckView([row({ name: 'Echo Base', card_type: 'Base', cost: null }), ...cards.slice(2)]) });
+	assert.equal((html.match(/data-rotate/g) ?? []).length, 0, 'idle slot with no leader shows nothing rotated');
+});
+
+test('clicking the slot opens the modal for the shown card', () => {
+	assert.match(src, /class="preview"[\s\S]*?onclick=\{\(\) => shown && \(open = shown\)\}/);
 });
 
 test('groups flow into columns when there is room', () => {

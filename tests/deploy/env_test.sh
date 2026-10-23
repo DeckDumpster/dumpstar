@@ -206,6 +206,19 @@ bash "$ENV" up --image "tree:$TREE" >/dev/null
 STUB_SSM_DENY=1 timeout 60 bash "$ENV" down env-1 >/dev/null 2>&1 && ok "down with a denied stop succeeds" || bad "down with a denied stop succeeds"
 check "down with a denied stop leaves no VM" 0 "$(live)"
 
+# 8. Every remote script parses under dash, which is what AWS-RunShellScript runs (sp-dt1lnh).
+if command -v dash >/dev/null; then
+	nscripts=0; badscripts=0
+	while IFS= read -r line; do
+		nscripts=$((nscripts + 1))
+		jq -r '.Parameters.commands[0]' <<<"$line" >"$WORK/remote.sh"
+		dash -n "$WORK/remote.sh" 2>"$WORK/dash.err" || { badscripts=$((badscripts + 1)); cat "$WORK/dash.err"; }
+	done <"$STUB/ssm.log"
+	[ "$nscripts" -gt 0 ] && [ "$badscripts" -eq 0 ] && ok "every remote script passes dash -n ($nscripts)" || bad "every remote script passes dash -n ($badscripts of $nscripts failed)"
+else
+	bad "dash is required to check the remote scripts"
+fi
+
 # 2. No Terraform.
 [ ! -e "$WORK/terraform.called" ] && ok "no verb ran Terraform" || { bad "a verb ran Terraform"; cat "$WORK/terraform.called"; }
 

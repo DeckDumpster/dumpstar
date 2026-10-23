@@ -1106,6 +1106,14 @@ impl ToolProvider for DumpstarTools {
     }
 
     fn call(&self, ctx: &ToolContext, name: &str, args: Value) -> Result<Value, ToolError> {
+        crate::reqlog::tool(&ctx.tenant, name, &args.clone(), || {
+            self.dispatch(ctx, name, args)
+        })
+    }
+}
+
+impl DumpstarTools {
+    fn dispatch(&self, ctx: &ToolContext, name: &str, args: Value) -> Result<Value, ToolError> {
         match name {
             "search_cards" => self.search_cards(ctx, &args),
             "get_card" => self.get_card(ctx, &args),

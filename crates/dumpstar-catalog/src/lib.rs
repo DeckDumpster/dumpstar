@@ -20,6 +20,7 @@ pub mod check;
 pub mod crosswalk;
 mod error;
 pub mod fetch;
+pub mod filing;
 pub mod formats;
 pub mod images;
 pub mod job;

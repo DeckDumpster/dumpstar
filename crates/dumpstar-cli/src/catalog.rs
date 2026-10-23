@@ -231,6 +231,20 @@ pub fn check(args: CatalogCheckArgs) -> anyhow::Result<()> {
     for a in &alarms {
         println!("ALARM {} {}: {}", a.kind, a.key, a.detail);
     }
+    let filings = dumpstar_db::dumpstar_home()?.join("filings");
+    let findings = check::mechanic_findings(catalog.conn())?;
+    match dumpstar_catalog::filing::file(&filings, &findings)? {
+        Some(f) => println!(
+            "filed {:?}: {} unmatched mechanic phrase(s) -> {}/outbox",
+            f.action,
+            f.findings.len(),
+            filings.display()
+        ),
+        None => println!(
+            "mechanic vocabulary: {} finding(s), none new",
+            findings.len()
+        ),
+    }
     let art_dir = dumpstar_db::dumpstar_home()?.join("art");
     let art_cov = dumpstar_catalog::art::coverage(&art_dir, &dumpstar_catalog::art::sources());
     println!("{}", art_cov.line());

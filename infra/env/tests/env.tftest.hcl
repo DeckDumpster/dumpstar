@@ -78,3 +78,48 @@ run "replica_prefix_is_never_all_of_prod" {
   }
   expect_failures = [var.replica_prefix]
 }
+
+run "operator_trust_names_only_spira_concierge" {
+  command = plan
+
+  assert {
+    condition     = jsondecode(aws_iam_role.operator.assume_role_policy).Statement[0].Principal == { AWS = "arn:aws:iam::123456789012:role/spira-concierge" } && length(jsondecode(aws_iam_role.operator.assume_role_policy).Statement) == 1
+    error_message = "only spira-concierge may assume dumpstar-env-operator"
+  }
+}
+
+run "operator_passrole_is_limited_to_the_vm_role" {
+  command = plan
+
+  assert {
+    condition = length([for s in jsondecode(aws_iam_role_policy.operator.policy).Statement : s if contains(s.Action, "iam:PassRole")]) == 1 && alltrue([for s in jsondecode(aws_iam_role_policy.operator.policy).Statement :
+    s.Resource == [aws_iam_role.env.arn] && s.Condition.StringEquals["iam:PassedToService"] == "ec2.amazonaws.com" if contains(s.Action, "iam:PassRole")])
+    error_message = "PassRole: dumpstar-env-vm only, to ec2.amazonaws.com"
+  }
+}
+
+run "operator_mutations_carry_the_slot_tag_condition" {
+  command = plan
+
+  # Exempt: the ENI and image/subnet/SG launch resources (untaggable, bound by their own
+  # conditions or ARNs), create-time tagging, PassRole, and the AWS-owned SSM document.
+  assert {
+    condition = alltrue([for s in jsondecode(aws_iam_role_policy.operator.policy).Statement :
+      contains(keys(try(s.Condition, {})), "Null") || contains(["LaunchNetworkInterface", "LaunchFromEnvImage", "LaunchIntoEnvSubnet", "LaunchWithEnvSecurityGroup", "TagOnCreate", "PassVmRole", "RunShellScriptDocument", "Observe"], s.Sid)
+    ])
+    error_message = "every mutating statement must carry the dumpstar-env:slot Null condition"
+  }
+
+  assert {
+    condition = alltrue([for s in jsondecode(aws_iam_role_policy.operator.policy).Statement :
+      contains(["ec2:TerminateInstances", "ec2:StopInstances", "ec2:DeleteVolume", "ssm:SendCommand"], s.Action[0]) && s.Sid != "RunShellScriptDocument" ? contains(keys(s.Condition.Null), "ec2:ResourceTag/dumpstar-env:slot") : true
+    ])
+    error_message = "terminate, stop, delete-volume and send-command act only on slot-tagged resources"
+  }
+
+  assert {
+    condition = alltrue([for s in jsondecode(aws_iam_role_policy.operator.policy).Statement :
+    s.Condition.StringEquals["ec2:CreateAction"] == "RunInstances" if s.Sid == "TagOnCreate"])
+    error_message = "CreateTags on create is limited to RunInstances"
+  }
+}

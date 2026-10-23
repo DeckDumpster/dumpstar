@@ -9,6 +9,7 @@ use dumpstar_core::deck::{
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::error::{DbError, Result};
+use crate::natsort::natural_cmp;
 
 const COLS: &str = "d.id, d.name, d.description, d.format, d.owner, d.state, \
      d.sleeve_color, d.storage_location, d.notes, d.created_at, d.updated_at, \
@@ -117,11 +118,13 @@ pub fn get(conn: &Connection, id: i64) -> Result<Option<Deck>> {
         .optional()?)
 }
 
-/// List decks, alphabetically.
+/// List decks in natural name order (`Pack 2` before `Pack 10`), ties by id.
 pub fn list(conn: &Connection) -> Result<Vec<Deck>> {
-    let mut stmt = conn.prepare(&format!("SELECT {COLS} FROM decks d ORDER BY d.name"))?;
+    let mut stmt = conn.prepare(&format!("SELECT {COLS} FROM decks d ORDER BY d.id"))?;
     let rows = stmt.query_map([], from_row)?;
-    Ok(rows.collect::<rusqlite::Result<_>>()?)
+    let mut decks: Vec<Deck> = rows.collect::<rusqlite::Result<_>>()?;
+    decks.sort_by(|a, b| natural_cmp(&a.name, &b.name).then(a.id.cmp(&b.id)));
+    Ok(decks)
 }
 
 /// Update editable fields. Returns whether a row changed.
@@ -299,11 +302,11 @@ pub fn holders(conn: &Connection, card_ids: &[String]) -> Result<HashMap<String,
            JOIN shared.printings p ON p.printing_id = c.printing_id \
            JOIN decks d ON d.id = c.deck_id \
           WHERE p.card_id = ?1 AND c.status = 'owned' \
-          GROUP BY d.id ORDER BY d.name, d.id",
+          GROUP BY d.id ORDER BY d.id",
     )?;
     let mut out = HashMap::new();
     for id in card_ids {
-        let holds: Vec<DeckHold> = stmt
+        let mut holds: Vec<DeckHold> = stmt
             .query_map([id], |r| {
                 Ok(DeckHold {
                     id: r.get(0)?,
@@ -312,6 +315,7 @@ pub fn holders(conn: &Connection, card_ids: &[String]) -> Result<HashMap<String,
                 })
             })?
             .collect::<rusqlite::Result<_>>()?;
+        holds.sort_by(|a, b| natural_cmp(&a.name, &b.name).then(a.id.cmp(&b.id)));
         out.insert(id.clone(), holds);
     }
     Ok(out)
@@ -704,6 +708,23 @@ mod tests {
         open_shared(&shared).unwrap();
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         (dir, conn)
+    }
+
+    #[test]
+    fn list_orders_names_naturally() {
+        let (_d, conn) = conn();
+        for name in ["Pack 1", "Pack 10", "Pack 2"] {
+            create(
+                &conn,
+                &NewDeck {
+                    name: name.into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        }
+        let names: Vec<String> = list(&conn).unwrap().into_iter().map(|d| d.name).collect();
+        assert_eq!(names, ["Pack 1", "Pack 2", "Pack 10"]);
     }
 
     #[test]

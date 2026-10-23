@@ -3,6 +3,7 @@
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::error::Result;
+use crate::natsort::natural_cmp;
 
 const COLS: &str = "b.id, b.name, b.description, b.color, b.binder_type, \
      b.pocket_size, b.storage_location, b.created_at, b.updated_at, \
@@ -97,11 +98,13 @@ pub fn get(conn: &Connection, id: i64) -> Result<Option<Binder>> {
         .optional()?)
 }
 
-/// List binders, alphabetically.
+/// List binders in natural name order (`Binder 2` before `Binder 10`), ties by id.
 pub fn list(conn: &Connection) -> Result<Vec<Binder>> {
-    let mut stmt = conn.prepare(&format!("SELECT {COLS} FROM binders b ORDER BY b.name"))?;
+    let mut stmt = conn.prepare(&format!("SELECT {COLS} FROM binders b ORDER BY b.id"))?;
     let rows = stmt.query_map([], from_row)?;
-    Ok(rows.collect::<rusqlite::Result<_>>()?)
+    let mut binders: Vec<Binder> = rows.collect::<rusqlite::Result<_>>()?;
+    binders.sort_by(|a, b| natural_cmp(&a.name, &b.name).then(a.id.cmp(&b.id)));
+    Ok(binders)
 }
 
 /// Update editable fields. Returns whether a row changed.

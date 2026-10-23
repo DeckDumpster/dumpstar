@@ -23,6 +23,7 @@ pub mod export;
 pub mod import;
 pub mod json_backup;
 pub mod manual_prices;
+pub mod natsort;
 pub mod orders;
 pub mod outbox;
 pub mod prices;

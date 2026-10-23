@@ -44,7 +44,9 @@ svc="$1" op="$2"; shift 2
 args="$*"
 next() { local n; n=$(($(cat "$STUB/seq") + 1)); echo "$n" >"$STUB/seq"; echo "$n"; }
 case "$svc $op" in
+"ec2 describe-images") echo "${STUB_AMI_SNAPSHOT_GB:-8}" ;;
 "ec2 run-instances")
+	sed -E 's/.*VolumeSize=([0-9]+).*/\1/' <<<"$args" >"$STUB/last-root-gb"
 	n="$(next)"; id="i-$(printf '%08d' "$n")"
 	tags="$(sed -E 's/.*ResourceType=instance,Tags=\[([^]]*)\].*/\1/' <<<"$args" | sed -E 's/\},\{/}\n{/g' |
 		sed -E 's/\{Key=([^,]*),Value=(.*)\}/\1\t\2/' | jq -Rn '[inputs | split("\t") | {key: .[0], value: .[1]}] | from_entries')"
@@ -123,6 +125,18 @@ grep -q 'edge share [0-9]*s' <<<"$out" && ok "up records the edge share" || bad 
 id1="$(basename "$(ls "$STUB"/instances/*.json | head -1)" .json)"
 check "edge share is a tag on the VM" 1 "$(jq '.tags | has("dumpstar-env:edge-seconds")' "$STUB/instances/$id1.json" | grep -c true)"
 check "the launch carries the pool tag the policy demands" round "$(jq -r '.tags["spill:owner"]' "$STUB/instances/$id1.json")"
+
+cp "$STUB/ledger" "$STUB/ledger.keep"; cp "$STUB/ssm.log" "$STUB/ssm.keep"
+check "the root volume holds the default floor" 60 "$(cat "$STUB/last-root-gb")"
+STUB_AMI_SNAPSHOT_GB=64 bash "$ENV" up --image "tree:$TREE2" --name env-3 >/dev/null 2>&1 || bad "a 64 GB snapshot AMI launches"
+check "the root volume is at least the AMI snapshot (64)" 64 "$(cat "$STUB/last-root-gb")"
+bash "$ENV" down env-3 >/dev/null 2>&1 || true
+n_before="$(ls "$STUB/instances" | wc -l)"
+refused="$(STUB_AMI_SNAPSHOT_GB=64 DUMPSTAR_ENV_ROOT_GB=60 bash "$ENV" up --image "tree:$TREE2" --name env-3 2>&1)" && bad "a root smaller than the snapshot is refused" || ok "a root smaller than the snapshot is refused"
+grep -q '60.*64' <<<"$refused" && ok "the refusal names both sizes" || bad "the refusal names both sizes"
+check "the refusal precedes any create call" "$n_before" "$(ls "$STUB/instances" | wc -l)"
+# The probe launch above is not part of the walk below: later counts read the ledger and ssm log.
+cp "$STUB/ledger.keep" "$STUB/ledger"; cp "$STUB/ssm.keep" "$STUB/ssm.log"
 
 out2="$(bash "$ENV" up --image "tree:$TREE" 2>&1)" && grep -q 'env-2.test' <<<"$out2" && ok "a second up takes the next slot" || bad "a second up takes the next slot"
 bash "$ENV" up --image "tree:$TREE" --name env-1 >/dev/null 2>&1 && bad "a taken name is refused" || ok "a taken name is refused"

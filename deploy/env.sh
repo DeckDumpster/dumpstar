@@ -169,6 +169,8 @@ ssm_run() {
 	script+="mkdir -p /tmp/dumpstar-env-render && echo '$(tar -C "$render" -czf - . | base64 -w0)' | base64 -d | tar -xzf - -C /tmp/dumpstar-env-render"$'\n'
 	script+="export DUMPSTAR_ENV_RENDER=/tmp/dumpstar-env-render"$'\n'
 	script+="$(cat "$SCRIPT_DIR/env-vm.sh")"
+	# AWS-RunShellScript runs under /bin/sh (dash): the bash script travels as a heredoc into a file.
+	script="cat >/tmp/dumpstar-env-run.sh <<'DUMPSTAR_ENV_SSM_EOF'"$'\n'"$script"$'\n'"DUMPSTAR_ENV_SSM_EOF"$'\n'"exec bash /tmp/dumpstar-env-run.sh"
 	cmd="$(jq -n --arg s "$script" --arg id "$id" \
 		'{InstanceIds: [$id], DocumentName: "AWS-RunShellScript", TimeoutSeconds: 600, Parameters: {commands: [$s]}}')"
 	cid="$(aws_ ssm send-command --cli-input-json "$cmd" --query Command.CommandId --output text)" || return 1

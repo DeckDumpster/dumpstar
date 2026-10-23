@@ -96,6 +96,8 @@ const ADDITIVE_COLUMNS: &[(&str, &str, &str)] = &[
     ("cards", "keywords", "TEXT NOT NULL DEFAULT '[]'"),
     ("cards", "is_unique", "INTEGER NOT NULL DEFAULT 0"),
     ("cards", "epic_action", "TEXT"),
+    // The mechanics a card produces, consumes and requires (sp-iz2vmf).
+    ("cards", "mechanics", "TEXT NOT NULL DEFAULT '[]'"),
 ];
 
 /// Add every [`ADDITIVE_COLUMNS`] entry a populated table lacks. Tables that do

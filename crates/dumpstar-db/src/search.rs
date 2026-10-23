@@ -832,6 +832,9 @@ fn compile_comparison(
         "keyword" => keyword_match(op, value, false, false),
         "unconditional_keyword" => keyword_match(op, value, false, true),
         "grants" => keyword_match(op, value, true, false),
+        "makes" => mechanic_match(op, value, &["produces"]),
+        "uses" => mechanic_match(op, value, &["consumes"]),
+        "needs" => mechanic_match(op, value, &["requires"]),
 
         // --- numeric ---
         "cost" => numeric("cd.cost", op, value, Some("cd.cost IS NOT NULL")),
@@ -1037,6 +1040,27 @@ fn keyword_match(
     }
     sql.push(')');
     let frag = (sql, params);
+    if matches!(op, Op::Ne) {
+        negate(frag)
+    } else {
+        frag
+    }
+}
+
+/// `makes:force`, `uses:force`, `needs:shield`: the card has a mechanic of that
+/// name in one of `roles` (sp-iz2vmf). `!=` negates.
+fn mechanic_match(op: Op, val: &str, roles: &[&str]) -> (String, Vec<Value>) {
+    let marks = vec!["?"; roles.len()].join(",");
+    let mut params = vec![text(val.trim())];
+    params.extend(roles.iter().map(|r| text(*r)));
+    let frag = (
+        format!(
+            "EXISTS (SELECT 1 FROM json_each(cd.mechanics) \
+             WHERE json_extract(value, '$.name') = ? COLLATE NOCASE \
+               AND json_extract(value, '$.role') IN ({marks}))"
+        ),
+        params,
+    );
     if matches!(op, Op::Ne) {
         negate(frag)
     } else {
@@ -1252,6 +1276,10 @@ fn has_flag(value: &str) -> (String, Vec<Value>) {
         "text" => "cd.rules_text IS NOT NULL AND cd.rules_text != ''",
         "epic" => "cd.epic_action IS NOT NULL AND cd.epic_action != ''",
         "keywords" => "cd.keywords != '[]'",
+        "dependency" => {
+            "EXISTS (SELECT 1 FROM json_each(cd.mechanics) \
+             WHERE json_extract(value, '$.role') IN ('consumes','requires'))"
+        }
         "subtitle" => "cd.subtitle IS NOT NULL AND cd.subtitle != ''",
         "artist" => "p.artist IS NOT NULL AND p.artist != ''",
         _ => "1=0 /* unknown has: flag */",
@@ -1846,6 +1874,29 @@ mod tests {
         }
         assert_eq!(f.ids("k:sentinel"), vec!["luke-foil"]);
         assert_eq!(f.ids("grants:sentinel"), vec!["falcon-std"]);
+    }
+
+    #[test]
+    fn mechanics_terms_split_makers_users_and_needers() {
+        let f = fixture();
+        {
+            let c = open_shared(&f.shared).unwrap();
+            c.execute_batch(
+                r#"UPDATE cards SET mechanics='[{"name":"force","role":"produces","optional":false}]' WHERE card_id='luke';
+                   UPDATE cards SET mechanics='[{"name":"force","role":"consumes","side":"front","optional":false},{"name":"shield","role":"requires","optional":false}]' WHERE card_id='falcon';"#,
+            )
+            .unwrap();
+        }
+        assert_eq!(f.ids("makes:force"), vec!["luke-foil"]);
+        assert_eq!(f.ids("uses:force"), vec!["falcon-std"]);
+        assert!(f.ids("uses:shield").is_empty());
+        assert_eq!(f.ids("needs:shield"), vec!["falcon-std"]);
+        assert_eq!(f.ids("has:dependency"), vec!["falcon-std"]);
+        assert!(!f.ids("makes:force").contains(&"falcon-std".to_string()));
+        assert!(
+            !f.ids("makes:force uses:force")
+                .contains(&"luke-foil".to_string())
+        );
     }
 
     #[test]

@@ -131,7 +131,8 @@ const DERIVATIONS: &[(&str, u32)] = &[
     // (sp-td6hi1).
     // 14: Fortify is a known keyword; a card that only mentions Raid or Restore
     // owes no number; the alarms of an earlier derivation are cleared (sp-h41oq8).
-    (swu::SRC_OFFICIAL, 14),
+    // 15: cards.mechanics (sp-iz2vmf).
+    (swu::SRC_OFFICIAL, 15),
 ];
 
 pub fn derivation_version(source: &str) -> u32 {
@@ -340,10 +341,11 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
         "keywords",
         "is_unique",
         "epic_action",
+        "mechanics",
     ];
     let sql = format!(
-        "INSERT INTO cards (card_id, name, subtitle, card_type, cost, power, hp, aspects, traits, arenas, rules_text, keywords, is_unique, epic_action)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)
+        "INSERT INTO cards (card_id, name, subtitle, card_type, cost, power, hp, aspects, traits, arenas, rules_text, keywords, is_unique, epic_action, mechanics)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)
          ON CONFLICT(card_id) DO UPDATE SET {}
          WHERE {}",
         cols.iter().map(|c| format!("{c}=excluded.{c}")).collect::<Vec<_>>().join(", "),
@@ -368,6 +370,7 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
                 serde_json::to_string(&c.keywords)?,
                 c.unique,
                 c.epic_action,
+                serde_json::to_string(&c.mechanics)?,
             ],
         )?;
         if changed > 0 {

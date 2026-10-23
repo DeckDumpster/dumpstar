@@ -180,3 +180,34 @@ run "an_empty_secret_value_refuses_the_plan" {
 
   expect_failures = [aws_secretsmanager_secret_version.edge]
 }
+
+run "the_mcp_audience_is_registered_as_a_pocketid_api" {
+  command = plan
+
+  assert {
+    condition     = terraform_data.mcp_api["env-2"].input.audience == "https://env-2.dumpster.cards/mcp"
+    error_message = "the slot's MCP audience must be registered in Pocket ID as an API"
+  }
+  assert {
+    condition     = !terraform_data.mcp_api["env-2"].input.keep
+    error_message = "a slot's API entry is removed with its edge"
+  }
+  assert {
+    condition     = strcontains(file("${path.module}/pocketid-api.sh"), "cimd-access") && strcontains(file("${path.module}/pocketid-api.sh"), "\"enabled\":true")
+    error_message = "the registration must allow CIMD clients"
+  }
+}
+
+run "prod_adopts_its_mcp_api_and_never_removes_it" {
+  command = plan
+
+  variables {
+    instance = "prod"
+    hostname = "star.dumpster.cards"
+  }
+
+  assert {
+    condition     = terraform_data.mcp_api["prod"].input.audience == "https://star.dumpster.cards/mcp" && terraform_data.mcp_api["prod"].input.keep
+    error_message = "prod's audience is the hand-made one and is kept on destroy"
+  }
+}

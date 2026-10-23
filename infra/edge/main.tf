@@ -125,3 +125,30 @@ resource "aws_secretsmanager_secret_version" "edge" {
     }
   }
 }
+
+# --- Pocket ID API for the MCP audience ------------------------------------------------------
+# Pocket ID rejects an OAuth `resource` that is not a registered API ("The 'resource' or 'scope'
+# parameter is invalid"), and Trozz/pocketid 2.4.2 has no resource type for one. The smallest
+# mechanism that keeps it in Terraform is a terraform_data that runs pocketid-api.sh against
+# Pocket ID's /api/apis. The script adopts an API already registered for the audience, so prod's
+# hand-made entry (2026-10-20) is never duplicated; and prod's is never removed on destroy
+# (keep = true), only a slot's. It reads POCKETID_API_TOKEN from the environment.
+
+resource "terraform_data" "mcp_api" {
+  for_each = local.keys
+  input = {
+    base_url = var.pocketid_url
+    audience = "https://${var.hostname}/mcp"
+    name     = "dumpstar MCP${each.key == "prod" ? "" : " ${each.key}"}"
+    keep     = each.key == "prod"
+  }
+
+  provisioner "local-exec" {
+    command = "bash '${path.module}/pocketid-api.sh' ensure '${self.input.base_url}' '${self.input.audience}' '${self.input.name}'"
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = self.input.keep ? "echo 'pocketid-api.sh: keeping ${self.input.audience}'" : "bash '${path.module}/pocketid-api.sh' remove '${self.input.base_url}' '${self.input.audience}' '${self.input.name}'"
+  }
+}

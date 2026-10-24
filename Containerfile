@@ -26,6 +26,7 @@ WORKDIR /app
 # Workspace manifests, sources, and the embedded seed data
 # (data/*.json is pulled in at compile time via include_str!).
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY .cargo/ .cargo/
 COPY crates/ crates/
 COPY data/ data/
 
@@ -119,7 +120,7 @@ ARG CARGO_TARGET_CACHE_SCOPE=unscoped
 # below is an empty directory and the release build simply compiles cold.
 # SCCACHE_WEBDAV_ENDPOINT is the store, empty meaning "no cache".
 ARG SCCACHE_WEBDAV_ENDPOINT=
-ENV DUMPSTAR_SOURCES="Cargo.toml Cargo.lock rust-toolchain.toml crates data"
+ENV DUMPSTAR_SOURCES="Cargo.toml Cargo.lock rust-toolchain.toml .cargo crates data"
 RUN --mount=type=bind,from=sccache-bin,source=/,target=/opt/sccache-ctx \
     --mount=type=bind,source=deploy/sccache-probe.sh,target=/opt/sccache-probe.sh \
     --mount=type=cache,target=/usr/local/cargo/registry \

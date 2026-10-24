@@ -132,7 +132,10 @@ const DERIVATIONS: &[(&str, u32)] = &[
     // 14: Fortify is a known keyword; a card that only mentions Raid or Restore
     // owes no number; the alarms of an earlier derivation are cleared (sp-h41oq8).
     // 15: cards.mechanics (sp-iz2vmf).
-    (swu::SRC_OFFICIAL, 15),
+    // 16: Weakness and Credit tokens, distributing tokens, "Experience or Shield
+    // token", named token units, "that many", having taken the initiative, and
+    // the Force trait are classified (sp-mlmq3w).
+    (swu::SRC_OFFICIAL, 16),
 ];
 
 pub fn derivation_version(source: &str) -> u32 {

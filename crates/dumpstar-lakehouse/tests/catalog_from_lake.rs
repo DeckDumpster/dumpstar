@@ -94,6 +94,16 @@ fn start_upstream(official: bool) -> FakeUpstream {
     }
     FakeUpstream::start(move |target, _n| {
         let decoded = target.replace("%5B", "[").replace("%5D", "]");
+        // The publishers' image hosts, folded onto this one by
+        // DUMPSTAR_PICTURE_BASE_URL: every picture is bytes that name its path,
+        // so a picture stored under the wrong name is a different file.
+        let bare = decoded.split(['?', '#']).next().unwrap_or(&decoded);
+        if ["png", "jpg", "jpeg", "webp"]
+            .iter()
+            .any(|e| bare.ends_with(&format!(".{e}")))
+        {
+            return Reply::png(format!("picture {bare}").into_bytes());
+        }
         if decoded.starts_with("/api/cards") {
             if !official {
                 return Reply::status(503, r#"{"error":"official is down"}"#);
@@ -160,11 +170,12 @@ impl Harness {
         unsafe {
             std::env::set_var("DUMPSTAR_TCGCSV_BASE_URL", self.upstream.base_url());
             std::env::set_var("DUMPSTAR_OFFICIAL_BASE_URL", self.upstream.base_url());
+            std::env::set_var("DUMPSTAR_PICTURE_BASE_URL", self.upstream.base_url());
         }
         guard
     }
 
-    /// What `catalog-apply --swu` ran, minus the images: the reference.
+    /// What `catalog-apply --swu` ran, minus the pictures: the reference.
     fn legacy_online(&self, db: &Path) {
         // The open converges the catalog; the apply job then opens its own
         // connection, exactly as the CLI did.
@@ -203,6 +214,30 @@ impl Harness {
         dumpstar_db::converge_shared(&mut conn).unwrap();
     }
 
+    /// What `catalog-apply --assets` ran: the reference for the pictures. The
+    /// publishers' hosts are folded onto the fixture upstream the way
+    /// `DUMPSTAR_PICTURE_BASE_URL` folds them for the lake's landing.
+    fn legacy_pictures(&self, db: &Path, into: &Path) {
+        let fold = Folded {
+            http: HttpFetch::new(Duration::ZERO).unwrap(),
+            base: self.upstream.base_url(),
+        };
+        dumpstar_catalog::art::fetch(
+            &into.join("art"),
+            &fold,
+            chrono::NaiveDate::from_ymd_opt(2026, 10, 13).unwrap(),
+            &dumpstar_catalog::art::sources(),
+        )
+        .unwrap();
+        dumpstar_catalog::images::fetch_pending(
+            &Catalog::open_writer(db).unwrap(),
+            &fold,
+            &into.join("sealed-images"),
+            "2026-10-13",
+        )
+        .unwrap();
+    }
+
     /// The landing unit: `dumpstar data refresh`.
     fn land(&self) -> anyhow::Result<()> {
         let _guard = self.point_env_at_upstream();
@@ -230,6 +265,7 @@ impl Harness {
             .env("DUMPSTAR_LAKE_DIR", self.raw())
             .env("DUMPSTAR_TCGCSV_BASE_URL", self.upstream.base_url())
             .env("DUMPSTAR_OFFICIAL_BASE_URL", self.upstream.base_url())
+            .env("DUMPSTAR_PICTURE_BASE_URL", self.upstream.base_url())
             .env("DUMPSTAR_LAKE_ENV", self.root.join("no-such-lake.env"))
             .output()
             .unwrap()
@@ -278,6 +314,7 @@ fn the_catalog_derived_from_the_lake_is_row_identical_to_the_online_apply() {
     let offline = h.db("offline");
 
     h.legacy_online(&online);
+    h.legacy_pictures(&online, &h.root.join("reference"));
     h.land().expect("the landing run");
     let out = h.derive(&offline);
     assert!(out.status.success(), "derive failed:\n{}", text(&out));
@@ -371,4 +408,88 @@ fn a_derivation_bump_rederives_from_raw() {
         scalar::<i64>(&db, "SELECT COUNT(*) FROM cards WHERE mechanics != '[]'") > 0,
         "the cards were not re-derived from raw"
     );
+}
+
+/// A fetch that asks the fixture upstream for a publisher's URL path.
+struct Folded {
+    http: HttpFetch,
+    base: String,
+}
+
+impl dumpstar_catalog::fetch::Fetch for Folded {
+    fn get(&self, url: &str) -> dumpstar_catalog::Result<Vec<u8>> {
+        let (_, rest) = url.split_once("://").unwrap();
+        let path = &rest[rest.find('/').unwrap()..];
+        self.http.get(&format!("{}{path}", self.base))
+    }
+}
+
+/// Every file under `dir` by relative path, with its bytes.
+fn files(dir: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
+    let mut out = std::collections::BTreeMap::new();
+    for e in std::fs::read_dir(dir).unwrap() {
+        let e = e.unwrap();
+        let name = e.file_name().to_string_lossy().into_owned();
+        if e.path().is_file() && name != "manifest.json" {
+            out.insert(name, std::fs::read(e.path()).unwrap());
+        }
+    }
+    out
+}
+
+/// **sp-m1fuer's acceptance.** The set art and sealed pictures the derive
+/// replays from the lake are the ones the online `--assets` job fetched: the
+/// same files, byte for byte, and the derive asked no upstream for them.
+#[test]
+fn the_pictures_replayed_from_the_lake_are_those_the_online_job_fetched() {
+    let h = Harness::start(true);
+    let online = h.db("online");
+    let offline = h.db("offline");
+
+    h.legacy_online(&online);
+    let reference = h.root.join("reference");
+    h.legacy_pictures(&online, &reference);
+    let want_art = files(&reference.join("art"));
+    let want_sealed = files(&reference.join("sealed-images"));
+    assert!(want_art.len() > 30, "{} set art files", want_art.len());
+    assert!(!want_sealed.is_empty(), "no sealed pictures to compare");
+
+    h.land().expect("the landing run");
+    let landed = h.upstream.requests().len();
+    let out = h.derive(&offline);
+    assert!(out.status.success(), "derive failed:\n{}", text(&out));
+    assert_eq!(
+        h.upstream.requests().len(),
+        landed,
+        "the derive sent a request to the upstream"
+    );
+
+    assert_eq!(files(&h.root.join("art")), want_art, "set art");
+    assert_eq!(
+        files(&h.root.join("sealed-images")),
+        want_sealed,
+        "sealed pictures"
+    );
+    assert_eq!(
+        scalar::<i64>(
+            &offline,
+            "SELECT COUNT(*) FROM sealed_images WHERE retrieved_on IS NULL"
+        ),
+        0
+    );
+}
+
+/// A night with no pictures landed still derives the catalog, and says so.
+#[test]
+fn a_partition_without_pictures_still_derives_the_catalog() {
+    let h = Harness::start(true);
+    h.land().expect("the landing run");
+    let assets = h.raw().join("raw/source=swu-assets");
+    assert!(assets.is_dir(), "the landing run landed no pictures");
+    std::fs::remove_dir_all(assets).unwrap();
+    let db = h.db("offline");
+    let out = h.derive(&db);
+    assert!(out.status.success(), "{}", text(&out));
+    assert!(text(&out).contains("no pictures landed"), "{}", text(&out));
+    assert!(scalar::<i64>(&db, "SELECT COUNT(*) FROM printings") > 500);
 }

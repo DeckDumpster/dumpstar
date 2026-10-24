@@ -2,10 +2,13 @@
 //! `dumpstar catalog-check`, the alarm check run by another.
 //!
 //! Since sp-6i11rn the catalog is derived OFFLINE from the lake's `raw/`
-//! (`dumpstar data refresh` lands, `dumpstar-lake-derive shared` derives), and
-//! the timer runs `--assets`: the set art and sealed-product pictures, fetched
-//! from the publishers' image hosts into the data directory. It reaches neither
-//! the official card API nor tcgcsv.
+//! (`dumpstar data refresh` lands, `dumpstar-lake-derive shared` derives). Since
+//! sp-m1fuer the set art and sealed-product pictures come the same way: landed
+//! in the lake (`source=swu-assets`) and replayed into the data directory by
+//! the derive, so the prod container fetches no upstream at all.
+//!
+//! `--assets` is the legacy online picture fetch, kept as the rollback of that
+//! cutover for a week and then deleted with the unit that ran it.
 //!
 //! `--swu` is the legacy online path — fetch → land → apply, against
 //! `shared.sqlite`, the official API crawl (at most one a day) and then the
@@ -44,8 +47,9 @@ pub struct CatalogApplyArgs {
     /// the rollback.
     #[arg(long, conflicts_with = "assets")]
     swu: bool,
-    /// Fetch the set art and sealed-product pictures only. No catalog payload
-    /// is fetched or applied.
+    /// The legacy online picture fetch: the set art and sealed-product pictures
+    /// from the publishers' image hosts. The derive replays them from the lake
+    /// now; this is the rollback. No catalog payload is fetched or applied.
     #[arg(long)]
     assets: bool,
     /// Origin of the official API (test-tier).

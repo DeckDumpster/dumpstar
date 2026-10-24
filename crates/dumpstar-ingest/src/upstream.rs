@@ -28,6 +28,11 @@ pub const ENV_TCGCSV_BASE_URL: &str = "DUMPSTAR_TCGCSV_BASE_URL";
 /// The official Star Wars: Unlimited card API's origin. Test-tier; see the module docs.
 pub const ENV_OFFICIAL_BASE_URL: &str = "DUMPSTAR_OFFICIAL_BASE_URL";
 
+/// Where the set art and sealed-product pictures are fetched from instead of the
+/// publishers' image hosts: every picture URL keeps its path and query and takes
+/// this origin. Test-tier; see the module docs.
+pub const ENV_PICTURE_BASE_URL: &str = "DUMPSTAR_PICTURE_BASE_URL";
+
 /// `default`, unless `env` names somewhere else to look.
 ///
 /// A set-but-empty variable is not an origin, and taking it as one would build

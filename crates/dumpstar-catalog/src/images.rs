@@ -34,7 +34,17 @@ impl ImageReport {
     }
 }
 
-fn extension(url: &str) -> &str {
+/// The picture URL of every sealed product in a tcgcsv `products` payload, as
+/// `(label, url)`: what the offline landing unit fetches into the lake.
+pub fn urls_of_products(payload: &[u8]) -> Result<Vec<(String, String)>> {
+    Ok(crate::tcgcsv::parse_sealed_images(payload)?
+        .into_iter()
+        .map(|(id, url)| (id.to_string(), url))
+        .collect())
+}
+
+/// The image extension the store names a file by.
+pub fn extension(url: &str) -> &str {
     let name = url.split(['?', '#']).next().unwrap_or(url);
     match name.rsplit_once('.').map(|(_, e)| e) {
         Some(e) if matches!(e, "jpg" | "jpeg" | "png" | "webp") => e,

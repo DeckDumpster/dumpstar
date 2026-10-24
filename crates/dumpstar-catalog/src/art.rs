@@ -132,6 +132,21 @@ pub fn fetch(
     Ok(report)
 }
 
+/// Every listed asset's source URL, `(<set>/<kind>, url)`: what the offline
+/// landing unit fetches into the lake (the derive replays them through
+/// [`fetch`]).
+pub fn urls(list: &[SetSources]) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for set in list {
+        for (kind, src) in [("logo", &set.logo), ("crop", &set.crop)] {
+            if let Some(src) = src {
+                out.push((format!("{}/{kind}", set.set_code), src.source_url.clone()));
+            }
+        }
+    }
+    out
+}
+
 /// What a set-art store holds against what the list promises.
 #[derive(Debug, Default, PartialEq)]
 pub struct Coverage {

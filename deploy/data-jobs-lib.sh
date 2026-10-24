@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Run the data jobs a deploy's change affects (sp-g20aoh).
 #
-# The catalog and the prices are written by timers (catalog-sync 21:00 UTC,
-# prices 07:00), so a deployed fix to the crosswalk or the price derivation
+# The catalog and the prices are written by timers (refresh 06:00 lands the
+# upstreams in the lake, derive 07:00 builds shared.sqlite from them, catalog-sync
+# 08:00 fetches the pictures, prices 07:00), so a deployed fix to the crosswalk or the price derivation
 # showed no effect for up to a day: sp-9uiu2z deployed at 09:40Z and CST/10002
 # was still unpriced at 17:30Z. A deploy that changes what those jobs compute
 # runs them itself, once, after the service restarts.
@@ -44,8 +45,12 @@ dumpstar_record_deployed_sha() {
     git -C "$repo" rev-parse HEAD >"$file" 2>/dev/null || true
 }
 
-# dumpstar_data_jobs_run <instance>: catalog-apply, then prices. Each is its
-# systemd unit, so the run is journaled exactly as the timer's would be.
+# dumpstar_data_jobs_run <instance>: land the upstreams, derive the catalog from
+# what landed, fetch the pictures, then prices (sp-6i11rn: the catalog is derived
+# from the lake's raw, so a change to what it derives is proven by landing and
+# deriving, not by an online apply). Each is its systemd unit, so the run is
+# journaled exactly as the timer's would be. A box with no lake configured skips
+# the first two by their own ConditionPathExists.
 # dumpstar_lake_installed lives in lake-lib.sh; deploy.sh sources it, data-jobs.sh may not.
 if ! declare -F dumpstar_lake_installed >/dev/null; then
     # shellcheck source=deploy/lake-lib.sh
@@ -53,7 +58,7 @@ if ! declare -F dumpstar_lake_installed >/dev/null; then
 fi
 dumpstar_data_jobs_run() {
     local instance="$1" unit
-    for unit in "dumpstar-catalog-sync@${instance}.service" "dumpstar-prices@${instance}.service"; do
+    for unit in "dumpstar-refresh@${instance}.service" "dumpstar-derive@${instance}.service" "dumpstar-catalog-sync@${instance}.service" "dumpstar-prices@${instance}.service"; do
         # The prices unit is a lake job; an instance with no lakehouse has nothing
         # for it to run (deploy.sh skips the lake image for the same reason).
         if [ "$unit" = "dumpstar-prices@${instance}.service" ] && ! dumpstar_lake_installed "$instance"; then

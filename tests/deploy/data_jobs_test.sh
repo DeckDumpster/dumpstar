@@ -3,7 +3,7 @@
 # covers: deploy/data-jobs.sh deploy/data-jobs-lib.sh
 # tests/deploy/data_jobs_test.sh — deploy.sh runs the data jobs a change affects
 # (sp-g20aoh). Hermetic: a scratch git repo and a stub systemctl.
-#   §1 a commit touching crates/dumpstar-catalog runs catalog-apply then prices, once, and logs both
+#   §1 a commit touching crates/dumpstar-catalog lands, derives, fetches pictures, then prices, once, and logs both
 #   §2 a commit touching only frontend runs neither
 #   §3 no recorded sha, or a failed job, runs / is retried; the sha is recorded only on success
 #   §4 the dispatch workflow runs data-jobs.sh on the prod runner
@@ -43,8 +43,8 @@ echo "==> §1 catalog change runs both, once"
 commit README.md; deploy_step >/dev/null
 commit crates/dumpstar-catalog/src/crosswalk.rs
 deploy_step >"$scratch/out"
-check "catalog-apply then prices" "[ \"\$(paste -sd' ' '$STUB_LOG')\" = '--wait dumpstar-catalog-sync@t.service --wait dumpstar-prices@t.service' ]"
-check "both logged" "grep -q 'catalog-sync@t.service: done' '$scratch/out' && grep -q 'prices@t.service: done' '$scratch/out'"
+check "land, derive, pictures, then prices" "[ \"\$(paste -sd' ' '$STUB_LOG')\" = '--wait dumpstar-refresh@t.service --wait dumpstar-derive@t.service --wait dumpstar-catalog-sync@t.service --wait dumpstar-prices@t.service' ]"
+check "all logged" "grep -q 'refresh@t.service: done' '$scratch/out' && grep -q 'derive@t.service: done' '$scratch/out' && grep -q 'catalog-sync@t.service: done' '$scratch/out' && grep -q 'prices@t.service: done' '$scratch/out'"
 deploy_step >/dev/null
 check "redeploying the same sha runs nothing" "[ ! -s '$STUB_LOG' ]"
 
@@ -52,20 +52,20 @@ echo "==> §2 frontend-only runs neither"
 commit frontend/src/app.html; deploy_step >/dev/null
 check "no job started" "[ ! -s '$STUB_LOG' ]"
 commit data/remedial/x.json; deploy_step >/dev/null
-check "remedial data runs both" "[ \$(wc -l <'$STUB_LOG') -eq 2 ]"
+check "remedial data runs them all" "[ \$(wc -l <'$STUB_LOG') -eq 4 ]"
 
 echo "==> §3 first deploy and failure"
 rm -rf "$XDG_STATE_HOME"; deploy_step >/dev/null
-check "no recorded sha runs" "[ \$(wc -l <'$STUB_LOG') -eq 2 ]"
+check "no recorded sha runs" "[ \$(wc -l <'$STUB_LOG') -eq 4 ]"
 commit crates/dumpstar-catalog/src/a.rs
 STUB_FAIL=1 deploy_step >/dev/null 2>&1 && bad=1 || bad=0
 check "a failed job fails the step" "[ $bad = 0 ]"
 deploy_step >/dev/null
-check "the failed run is retried" "[ \$(wc -l <'$STUB_LOG') -eq 2 ]"
+check "the failed run is retried" "[ \$(wc -l <'$STUB_LOG') -eq 4 ]"
 
-echo "==> §5 no lakehouse: catalog-sync runs, the lake prices job is skipped"
+echo "==> §5 no lakehouse: the catalog jobs run, the lake prices job is skipped"
 : >"$STUB_LOG"; STUB_NO_LAKE=1 dumpstar_data_jobs_run t >"$scratch/out5"
-check "only catalog-sync started" "[ \"\$(paste -sd' ' '$STUB_LOG')\" = '--wait dumpstar-catalog-sync@t.service' ]"
+check "only the catalog jobs started" "[ \"\$(paste -sd' ' '$STUB_LOG')\" = '--wait dumpstar-refresh@t.service --wait dumpstar-derive@t.service --wait dumpstar-catalog-sync@t.service' ]"
 check "the skip is said" "grep -q 'prices@t.service: no lakehouse installed' '$scratch/out5'"
 
 echo "==> §4 dispatch workflow"

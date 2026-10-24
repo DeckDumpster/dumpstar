@@ -1,10 +1,13 @@
 [Unit]
-Description=Daily Dumpstar SWU catalog and price sync (%i)
+Description=Daily Dumpstar SWU set art and sealed-product pictures (%i)
 
 [Timer]
-# tcgcsv refreshes around 20:00 UTC (its own FAQ); one hour of slack. The
-# check timer below treats a day as due at 22:00 UTC, an hour after this starts.
-OnCalendar=*-*-* 21:00:00 UTC
+# 08:00 is DERIVED from dumpstar-derive@.timer, not guessed at: the derive starts
+# at 07:00 and may take most of an hour (it replays ~80 payloads and walks ~10k
+# printings), and the pictures it names are the ones this job fetches. The
+# ordering dependency in the .service is the guarantee; this only decides when
+# the day's work is asked for.
+OnCalendar=*-*-* 08:00:00 UTC
 RandomizedDelaySec=120
 Persistent=true
 

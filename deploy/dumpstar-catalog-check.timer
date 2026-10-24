@@ -3,7 +3,8 @@ Description=Hourly Dumpstar SWU catalog alarm check (%i)
 
 [Timer]
 # Hourly, so a skipped price day is reported within an hour of becoming due
-# (22:00 UTC, see PRICES_DUE_HOUR_UTC in dumpstar-catalog's check.rs). It reads
+# (08:00 UTC the morning after, once the 07:00 derive has had its hour; see
+# PRICES_DUE_HOUR_UTC in dumpstar-catalog's check.rs). It reads
 # the catalog and writes nothing, so it cannot starve the box.
 OnCalendar=*-*-* *:30:00 UTC
 Persistent=true

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run catalog-apply then the price build on an instance now, rather than at the
+# Land and derive the catalog, fetch the pictures, then the price build on an instance now, rather than at the
 # next timer (sp-g20aoh). The on-demand half of deploy.sh's post-deploy jobs;
 # .github/workflows/data-jobs.yml runs it on the prod runner.
 #

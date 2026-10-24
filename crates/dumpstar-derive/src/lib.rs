@@ -84,6 +84,35 @@ pub const CARDS: Dataset = Dataset::new("cards");
 /// every price payload of the run describes.
 pub const LAST_UPDATED: Dataset = Dataset::new("last-updated");
 
+/// `source=swu-assets` — the pictures the site serves itself: set logos and
+/// art crops, and sealed-product images, fetched from the publishers' image
+/// hosts by the landing unit (sp-m1fuer). The online container fetches none.
+pub const ASSETS: Source = Source::new("swu-assets");
+/// `dataset=set-art` — one binary part per listed set logo or art crop.
+pub const SET_ART: Dataset = Dataset::new("set-art");
+/// `dataset=sealed-images` — one binary part per sealed product's picture.
+pub const SEALED_IMAGES: Dataset = Dataset::new("sealed-images");
+
+/// What a derive needs of the pictures: neither. A set with no art shows its
+/// name and a sealed product shows no picture, and `catalog-check` alarms both;
+/// a night whose picture hosts were down must not cost a catalog. An incomplete
+/// run is read as far as it goes — a picture it lacks is reported per asset.
+pub const ASSETS_TABLE: Requirements<'static> = Requirements {
+    rows: &[
+        Requirement {
+            source: ASSETS,
+            dataset: SET_ART,
+            need: Need::Optional,
+        },
+        Requirement {
+            source: ASSETS,
+            dataset: SEALED_IMAGES,
+            need: Need::Optional,
+        },
+    ],
+    incomplete: Incomplete::Partial,
+};
+
 /// What a derive needs of the TCGCSV half: all of it, an incomplete run a
 /// refusal. A price is a fact about one day that there is no asking for later.
 pub const TCGCSV_TABLE: Requirements<'static> = Requirements {
@@ -161,6 +190,21 @@ pub struct Report {
     pub applied: usize,
     /// Payloads whose content was already applied and so skipped.
     pub skipped: usize,
+    /// Pictures stored into the data directory this run (set art, then sealed
+    /// products); empty when the partition held no pictures.
+    pub pictures: Pictures,
+}
+
+/// What replaying a partition's pictures into the data directory did.
+#[derive(Debug, Default, Clone)]
+pub struct Pictures {
+    /// Whether the partition held any picture dataset at all.
+    pub present: bool,
+    pub set_art_fetched: usize,
+    pub set_art_already: usize,
+    pub sealed_stored: usize,
+    /// One line per asset the partition could not supply.
+    pub failed: Vec<String>,
 }
 
 /// The one door to the network for the catalog's adapters: a
@@ -171,6 +215,12 @@ pub struct Report {
 pub struct WireFetch {
     http: reqwest::blocking::Client,
     wire: Wire,
+    /// The dataset a URL that is no catalog payload is a picture of, when this
+    /// fetch is for pictures.
+    pictures: Option<Dataset>,
+    /// [`upstream::ENV_PICTURE_BASE_URL`], when set: the origin picture URLs are
+    /// requested from (and replayed under) in place of the publishers' own.
+    picture_base: Option<String>,
 }
 
 impl WireFetch {
@@ -181,8 +231,70 @@ impl WireFetch {
                 .timeout(std::time::Duration::from_secs(120))
                 .build()?,
             wire,
+            pictures: None,
+            picture_base: None,
         })
     }
+
+    /// Also answer picture URLs, landing them under `dataset` of
+    /// [`ASSETS`].
+    pub fn for_pictures(mut self, dataset: Dataset) -> Self {
+        self.pictures = Some(dataset);
+        self.picture_base = picture_base();
+        self
+    }
+
+    /// The URL a picture is requested by: the publisher's, or the same path
+    /// under the test-tier origin. Landing and replaying go through this one
+    /// function, so both key the same URL.
+    fn picture_url(&self, url: &str) -> String {
+        let Some(base) = &self.picture_base else {
+            return url.to_string();
+        };
+        let path = url
+            .split_once("://")
+            .and_then(|(_, rest)| rest.find('/').map(|i| &rest[i..]))
+            .unwrap_or("");
+        format!("{base}{path}")
+    }
+}
+
+/// The test-tier override of the picture hosts, announced like the other
+/// origins; `None` — the only way prod runs — leaves every URL as listed.
+fn picture_base() -> Option<String> {
+    std::env::var(upstream::ENV_PICTURE_BASE_URL)
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .map(|_| {
+            upstream::base_url(
+                upstream::ENV_PICTURE_BASE_URL,
+                "the publishers' image hosts",
+            )
+        })
+}
+
+/// Whether the night's pictures are landed. Always, unless the catalog's
+/// upstreams are pointed at fixtures and the pictures are not: the listed
+/// picture hosts are the real internet, which no fixture run may reach.
+fn land_pictures_enabled() -> bool {
+    let set = |k| std::env::var(k).is_ok_and(|v| !v.trim().is_empty());
+    set(upstream::ENV_PICTURE_BASE_URL)
+        || !(set(upstream::ENV_TCGCSV_BASE_URL) || set(upstream::ENV_OFFICIAL_BASE_URL))
+}
+
+/// The media type of a picture, by its URL's extension. Landing names the part
+/// by it; a replay looks the part up by URL and does not care.
+fn picture_format(url: &str) -> PartFormat {
+    let path = url.split(['?', '#']).next().unwrap_or(url);
+    PartFormat::Bin(match path.rsplit_once('.').map(|(_, e)| e) {
+        Some("png") => "image/png",
+        Some("jpg" | "jpeg") => "image/jpeg",
+        Some("webp") => "image/webp",
+        Some("gif") => "image/gif",
+        Some("avif") => "image/avif",
+        Some("svg") => "image/svg+xml",
+        _ => "application/octet-stream",
+    })
 }
 
 /// Which landed dataset a catalog URL belongs to.
@@ -203,12 +315,17 @@ fn dataset_of(url: &str) -> Option<(Source, Dataset, PartFormat)> {
 impl Fetch for WireFetch {
     fn get(&self, url: &str) -> dumpstar_catalog::Result<Vec<u8>> {
         let (source, dataset, format) = dataset_of(url)
+            .or_else(|| {
+                self.pictures
+                    .map(|dataset| (ASSETS, dataset, picture_format(url)))
+            })
             .ok_or_else(|| CatalogError::Source(format!("{url}: not a landed catalog dataset")))?;
         // A replayed response reaches no upstream, so there is nothing to be
         // polite to.
         if !self.wire.is_replaying() {
             std::thread::sleep(std::time::Duration::from_millis(250));
         }
+        let url = &self.picture_url(url);
         landing::fetch_bytes(
             &self.http,
             self.http.get(url),
@@ -276,15 +393,22 @@ fn payloads(
 
 /// Derive the shared catalog from the partition `options` replays.
 ///
-/// Equivalent to [`derive_with`] with the official crawl required.
+/// Equivalent to [`derive_with`] with the official crawl required and no
+/// pictures.
 pub fn derive(conn: &mut Connection, options: &Options<'_>) -> anyhow::Result<Report> {
-    derive_with(conn, options, true)
+    derive_with(conn, options, true, false)
 }
 
 /// Derive the shared catalog; `official` says whether the partition holds the
 /// official crawl. Without it the night derives the TCGCSV half alone — the
 /// catalog's cards are as old as the last night that had one — and the caller
 /// reports that.
+///
+/// `pictures` says whether the partition holds [`ASSETS`]: when it does, the
+/// set art and the sealed-product pictures are replayed from it into
+/// `<data_dir>/art` and `<data_dir>/sealed-images`, where the server serves them
+/// — the online container fetches none (sp-m1fuer). A picture the partition
+/// lacks is reported in [`Report::pictures`], never a failed derive.
 ///
 /// The derivation touches the SHARED catalog and nothing else — no tenant
 /// database is opened, let alone written. tests/refresh/tenant_bytes.sh is the
@@ -298,6 +422,7 @@ pub fn derive_with(
     conn: &mut Connection,
     options: &Options<'_>,
     official: bool,
+    pictures: bool,
 ) -> anyhow::Result<Report> {
     // The search query language metadata seeded from data/search_*.json. The
     // read-write open this connection came from reconciled it
@@ -331,7 +456,12 @@ pub fn derive_with(
     // ours and take it back whatever happens.
     let owned = std::mem::replace(conn, Connection::open_in_memory()?);
     let mut catalog = Catalog::from_connection(owned);
-    let result = apply_all(&mut catalog, options, &payloads);
+    let result = apply_all(&mut catalog, options, &payloads).and_then(|mut report| {
+        if pictures {
+            report.pictures = replay_pictures(&catalog, options)?;
+        }
+        Ok(report)
+    });
     *conn = catalog.into_connection();
     let mut report = result?;
     // What the open converged before a single payload existed, converged again
@@ -340,6 +470,44 @@ pub fn derive_with(
     report.printings =
         conn.query_row("SELECT count(*) FROM printings", [], |r| r.get::<_, i64>(0))? as usize;
     Ok(report)
+}
+
+/// Replay the partition's pictures into the data directory through the same
+/// stores the online `catalog-apply --assets` filled: [`dumpstar_catalog::art`]
+/// and [`dumpstar_catalog::images`], over a [`WireFetch`] that can only answer
+/// from `raw/`. Which sealed pictures are wanted is the `sealed_images` rows the
+/// apply just wrote.
+fn replay_pictures(catalog: &Catalog, options: &Options<'_>) -> anyhow::Result<Pictures> {
+    let today = options.clock.observed_date().to_string();
+    let date = chrono::NaiveDate::parse_from_str(&today, "%Y-%m-%d")?;
+    let mut out = Pictures {
+        present: true,
+        ..Pictures::default()
+    };
+
+    let art = WireFetch::new(options.wire())?.for_pictures(SET_ART);
+    let r = dumpstar_catalog::art::fetch(
+        &options.data_dir.join("art"),
+        &art,
+        date,
+        &dumpstar_catalog::art::sources(),
+    )?;
+    out.set_art_fetched = r.fetched;
+    out.set_art_already = r.already;
+    out.failed
+        .extend(r.failed.into_iter().map(|f| format!("set art {f}")));
+
+    let sealed = WireFetch::new(options.wire())?.for_pictures(SEALED_IMAGES);
+    let r = dumpstar_catalog::images::fetch_pending(
+        catalog,
+        &sealed,
+        &options.data_dir.join("sealed-images"),
+        &today,
+    )?;
+    out.sealed_stored = r.stored;
+    out.failed
+        .extend(r.failed.into_iter().map(|f| format!("sealed image {f}")));
+    Ok(out)
 }
 
 fn apply_all(
@@ -397,7 +565,7 @@ pub fn land(options: &Options<'_>) -> anyhow::Result<Report> {
         last_updated: None,
     })
     .fetch()
-    .map(|p| println!("  {} TCGCSV payload(s) landed", p.len()))
+    .inspect(|p| println!("  {} TCGCSV payload(s) landed", p.len()))
     .map_err(anyhow::Error::new);
 
     println!("Landing the official card pages...");
@@ -411,6 +579,13 @@ pub fn land(options: &Options<'_>) -> anyhow::Result<Report> {
     .fetch()
     .map(|p| println!("  {} official payload(s) landed", p.len()))
     .map_err(anyhow::Error::new);
+
+    if options.landing.is_some() && land_pictures_enabled() {
+        land_pictures(
+            options,
+            tcgcsv.as_ref().map(Vec::as_slice).unwrap_or_default(),
+        )?;
+    }
 
     if let Some(landing) = &options.landing {
         // A dead official API must not cost the night's prices, and a landing
@@ -430,4 +605,46 @@ pub fn land(options: &Options<'_>) -> anyhow::Result<Report> {
     tcgcsv?;
     official?;
     Ok(report)
+}
+
+/// Land the pictures the site serves itself: every listed set logo and art
+/// crop, and the picture of every sealed product in the `products` payloads
+/// just landed. A picture that does not fetch is recorded in its dataset's
+/// manifest (which makes that dataset incomplete) and warned about; it never
+/// fails the night, because a derive reads an incomplete picture run as far as
+/// it goes and `catalog-check` alarms what is still missing.
+fn land_pictures(
+    options: &Options<'_>,
+    tcgcsv: &[dumpstar_catalog::RawPayload],
+) -> anyhow::Result<()> {
+    let mut sealed = Vec::new();
+    for p in tcgcsv {
+        let path = p.url.split(['?', '#']).next().unwrap_or(&p.url);
+        if path.rsplit('/').next() == Some("products") {
+            sealed.extend(dumpstar_catalog::images::urls_of_products(&p.bytes)?);
+        }
+    }
+    let set_art = dumpstar_catalog::art::urls(&dumpstar_catalog::art::sources());
+    for (dataset, urls) in [(SET_ART, set_art), (SEALED_IMAGES, sealed)] {
+        println!("Landing {} {dataset} picture(s)...", urls.len());
+        let fetch = WireFetch::new(options.wire())?.for_pictures(dataset);
+        let mut failed = 0;
+        for (label, url) in urls {
+            match fetch.get(&url) {
+                Ok(b) if !b.is_empty() => {}
+                Ok(_) => {
+                    failed += 1;
+                    eprintln!("WARN: {dataset} {label}: empty body");
+                }
+                Err(e) => {
+                    failed += 1;
+                    eprintln!("WARN: {dataset} {label}: {e}");
+                }
+            }
+        }
+        if failed > 0 {
+            println!("  {failed} {dataset} picture(s) did not land");
+        }
+    }
+    Ok(())
 }

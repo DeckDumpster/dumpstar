@@ -31,6 +31,11 @@
 //! left. So that comparison can no longer be run at all: there is no second
 //! builder to diff against, which was the point of deleting one.
 //!
+//! It also replays the partition's pictures — set art and sealed-product
+//! images, landed by `dumpstar data refresh` — into `<data-dir>/art` and
+//! `<data-dir>/sealed-images`, which the server serves; the online container
+//! fetches none (sp-m1fuer).
+//!
 //! ## What it refuses
 //!
 //! - a date whose partition was never landed, or landed incompletely — it
@@ -181,6 +186,29 @@ fn shared(args: SharedArgs) -> anyhow::Result<()> {
             false
         }
     };
+    // The pictures are the other optional half: a night whose picture hosts were
+    // down still derives its catalog, and a set with no art shows its name.
+    let pictures = match partition::choose(&zone, &args.ingest_date, &dumpstar_derive::ASSETS_TABLE)
+    {
+        Ok(p) if !p.chosen.is_empty() => {
+            plan.chosen.extend(p.chosen);
+            true
+        }
+        Ok(_) => {
+            eprintln!(
+                "!! no pictures landed for {} — set art and sealed pictures keep what the data directory holds",
+                args.ingest_date
+            );
+            false
+        }
+        Err(e) => {
+            eprintln!(
+                "!! the pictures for {} are not usable ({e:#}) — set art and sealed pictures keep what the data directory holds",
+                args.ingest_date
+            );
+            false
+        }
+    };
     let clock = partition::clock_of(&plan.chosen, &args.ingest_date)?;
     println!(
         "  clock {} (observed {}) — recovered from the run's manifests, not read here",
@@ -208,7 +236,18 @@ fn shared(args: SharedArgs) -> anyhow::Result<()> {
             replay: Some(replay.clone() as Arc<dyn dumpstar_ingest::landing::ReplaySource>),
         },
         official,
+        pictures,
     )?;
+    if report.pictures.present {
+        let p = &report.pictures;
+        println!(
+            "  pictures from raw/: set art {} new, {} already stored; sealed {} stored",
+            p.set_art_fetched, p.set_art_already, p.sealed_stored
+        );
+        for f in &p.failed {
+            eprintln!("!! picture not in the partition: {f}");
+        }
+    }
 
     // Provenance: `raw_derivation.complete` carries each dataset's own answer.
     // Not written when the run failed outright, because there is then no

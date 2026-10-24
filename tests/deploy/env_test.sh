@@ -261,7 +261,7 @@ grep -q 'setup' <<<"$script" && ok "up builds the catalog" || bad "up builds the
 (unset DUMPSTAR_ENV_CONCIERGE_DB; bash "$ENV" up --image "tree:$TREE" >/dev/null 2>&1) && bad "no concierge database id is refused" || ok "no concierge database id is refused"
 
 # 9. A catalog-less slot is not ready (sp-0a1juj): env-vm.sh's catalog check against a stubbed podman.
-grep -q 'catalog-apply --swu' <<<"$script" && ok "up builds the catalog with catalog-apply" || bad "up builds the catalog with catalog-apply"
+grep -q 'catalog-apply --fake' <<<"$script" && ok "up builds the slot catalog with catalog-apply --fake" || bad "up builds the slot catalog with catalog-apply --fake"
 printf '#!/usr/bin/env bash\necho "${STUB_CARDS:-0}"\n' >"$BIN/podman"; chmod +x "$BIN/podman"
 catalog_verb() { DUMPSTAR_ENV_VERB=catalog DUMPSTAR_ENV_SLOT=env-1 bash "$REPO_DIR/deploy/env-vm.sh" 2>&1; }
 cat_out="$(STUB_CARDS=0 catalog_verb)" && bad "an empty catalog fails up" || ok "an empty catalog fails up"

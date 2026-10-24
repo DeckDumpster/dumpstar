@@ -8,7 +8,7 @@
 //! the same acquisition `dumpstar data refresh` runs nightly.
 //!
 //! The Star Wars: Unlimited catalog itself is filled by `dumpstar catalog-apply`
-//! (`--swu` live, `--fake` for the test tiers); setup writes no card rows.
+//! (derived from the lake, `--fake` for the test tiers); setup writes no card rows.
 
 use std::path::PathBuf;
 

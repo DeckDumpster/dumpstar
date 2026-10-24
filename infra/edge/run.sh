@@ -9,6 +9,9 @@ verb="${2:?plan|apply|import-plan}"
 shift 2
 cd "$(dirname "$0")"
 [ -f "$inst.tfvars" ] || { echo "run.sh: no such instance: $inst" >&2; exit 1; }
+# Providers are downloaded once into a persistent cache, not into every working copy.
+export TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/terraform/plugin-cache}"
+mkdir -p "$TF_PLUGIN_CACHE_DIR"
 terraform init -input=false -reconfigure -backend-config=backend.tfvars >/dev/null
 terraform workspace select -or-create "$inst" >/dev/null
 args=(-var-file=common.tfvars -var-file="$inst.tfvars")

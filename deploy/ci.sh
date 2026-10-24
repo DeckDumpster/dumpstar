@@ -815,6 +815,9 @@ if tier lint; then
     step "No pipeline into grep -q, which inverts under pipefail (tests/ci/grepq_test.sh)"
     bash "$REPO_DIR/tests/ci/grepq_test.sh"
 
+    step "habits.toml parses and matches CI (tests/ci/habits_test.sh)"
+    bash "$REPO_DIR/tests/ci/habits_test.sh"
+
     step "Terraform backend takes assume_role, not a top-level role_arn (tests/ci/tf_backend_test.sh)"
     bash "$REPO_DIR/tests/ci/tf_backend_test.sh"
 

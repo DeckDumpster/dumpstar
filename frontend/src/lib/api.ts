@@ -1,7 +1,7 @@
 // Typed wrappers over the Dumpstar JSON API. Types are generated from
 // the Rust structs by ts-rs (see frontend/src/lib/types/).
 
-import { sessionFetch } from './session';
+import { sessionFetch } from './session.ts';
 import type { CollectionRow } from './types/CollectionRow';
 import type { SearchPage } from './types/SearchPage';
 import type { SearchVocabulary } from './types/SearchVocabulary';

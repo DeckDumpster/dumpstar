@@ -1,3 +1,4 @@
+// @ts-nocheck — stubs a minimal window.location
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { api } from "../src/lib/api.ts";

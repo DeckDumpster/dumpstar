@@ -1,6 +1,7 @@
 // Typed wrappers over the Dumpstar JSON API. Types are generated from
 // the Rust structs by ts-rs (see frontend/src/lib/types/).
 
+import { sessionFetch } from './session';
 import type { CollectionRow } from './types/CollectionRow';
 import type { SearchPage } from './types/SearchPage';
 import type { SearchVocabulary } from './types/SearchVocabulary';
@@ -71,7 +72,7 @@ export class ApiError extends Error {
 }
 
 async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
-	const res = await fetch(url, { signal });
+	const res = await sessionFetch(url, { signal });
 	if (!res.ok) {
 		throw new ApiError(res, 'GET', url);
 	}
@@ -80,7 +81,7 @@ async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
 
 /** POST/PUT/DELETE with an optional JSON body. 204 responses yield undefined. */
 async function send<T>(method: string, url: string, body?: unknown): Promise<T> {
-	const res = await fetch(url, {
+	const res = await sessionFetch(url, {
 		method,
 		headers: body !== undefined ? { 'content-type': 'application/json' } : {},
 		body: body !== undefined ? JSON.stringify(body) : undefined
@@ -140,7 +141,7 @@ export const api = {
 		if (includeUnowned) params.set('include_unowned', '1');
 		if (limit !== undefined) params.set('limit', String(limit));
 		if (offset !== undefined) params.set('offset', String(offset));
-		const res = await fetch(`/api/collection/search?${params.toString()}`);
+		const res = await sessionFetch(`/api/collection/search?${params.toString()}`);
 		if (res.status === 400) {
 			const body = (await res.json()) as { error: string; position?: number };
 			// A query-syntax error carries the caret offset; a paging complaint

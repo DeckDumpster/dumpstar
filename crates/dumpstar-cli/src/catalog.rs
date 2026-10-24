@@ -10,11 +10,9 @@
 //! `--assets` is the legacy online picture fetch, kept as the rollback of that
 //! cutover for a week and then deleted with the unit that ran it.
 //!
-//! `--swu` is the legacy online path — fetch → land → apply, against
-//! `shared.sqlite`, the official API crawl (at most one a day) and then the
-//! tcgcsv prices — kept runnable as the rollback of that cutover, until a
-//! nightly cycle from the lake has been verified on prod. A dead official API
-//! still lets prices through there; the job still exits non-zero for it.
+//!
+//! The online `--swu` catalog path is gone (sp-8wfhil): the catalog is fed only
+//! from the lake.
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -22,10 +20,6 @@ use std::time::Duration;
 use chrono::Utc;
 use clap::Args;
 use dumpstar_catalog::fetch::HttpFetch;
-use dumpstar_catalog::swu::{
-    KEY_OFFICIAL_CRAWLED_ON, KEY_OFFICIAL_SINCE, KEY_TCGCSV_LAST_UPDATED, OFFICIAL_BASE,
-    OfficialSource, TCGCSV_BASE, TcgcsvSource,
-};
 use dumpstar_catalog::{Catalog, CatalogSource, FakeSource, check, job};
 
 /// The pause between two calls to an upstream.
@@ -40,27 +34,16 @@ pub struct CatalogApplyArgs {
     #[arg(long)]
     raw_dir: Option<PathBuf>,
     /// Use the built-in hand-written fake catalog.
-    #[arg(long, conflicts_with_all = ["swu", "assets"])]
-    fake: bool,
-    /// The legacy online path: fetch the official catalog and the tcgcsv prices
-    /// and apply them here. The catalog is derived from the lake now; this is
-    /// the rollback.
     #[arg(long, conflicts_with = "assets")]
-    swu: bool,
+    fake: bool,
     /// The legacy online picture fetch: the set art and sealed-product pictures
     /// from the publishers' image hosts. The derive replays them from the lake
     /// now; this is the rollback. No catalog payload is fetched or applied.
     #[arg(long)]
     assets: bool,
-    /// Origin of the official API (test-tier).
-    #[arg(long, default_value = OFFICIAL_BASE)]
-    official_base: String,
     /// Sealed-product image store (default: ~/.dumpstar/sealed-images).
     #[arg(long)]
     image_dir: Option<PathBuf>,
-    /// Origin of tcgcsv (test-tier).
-    #[arg(long, default_value = TCGCSV_BASE)]
-    tcgcsv_base: String,
 }
 
 #[derive(Args)]
@@ -183,8 +166,8 @@ fn fetch_assets(
 
 pub fn run(args: CatalogApplyArgs) -> anyhow::Result<()> {
     anyhow::ensure!(
-        args.fake || args.swu || args.assets,
-        "choose --assets (pictures), --swu (the legacy online catalog) or --fake"
+        args.fake || args.assets,
+        "choose --assets (pictures) or --fake; the catalog itself is derived from the lake"
     );
     let shared = shared_path(args.shared_db)?;
     let raw = match args.raw_dir {
@@ -200,41 +183,7 @@ pub fn run(args: CatalogApplyArgs) -> anyhow::Result<()> {
         anyhow::ensure!(failed.is_empty(), "failed: {}", failed.join(", "));
         return Ok(());
     }
-    if Catalog::open_writer(&shared)?.rejoin_if_stale()? {
-        println!("crosswalk: the join changed since this catalog was joined; re-joined");
-    }
-    let reapplied = Catalog::open_writer(&shared)?.reapply_landed(&raw)?;
-    if reapplied > 0 {
-        println!("derivation changed: re-applied {reapplied} landed payloads");
-    }
-    let http = HttpFetch::new(PAUSE)?;
-    let state = |key: &str| -> anyhow::Result<Option<String>> {
-        Ok(Catalog::open_writer(&shared)?.sync_state(key)?)
-    };
-    let mut failed = Vec::new();
-    let official = OfficialSource {
-        http: &http,
-        base: args.official_base,
-        since: state(KEY_OFFICIAL_SINCE)?,
-        crawled_on: state(KEY_OFFICIAL_CRAWLED_ON)?,
-        today: Utc::now().format("%Y-%m-%d").to_string(),
-    };
-    if let Err(e) = run_source("official", &official, &raw, &shared) {
-        eprintln!("official: {e:#}");
-        failed.push("official");
-    }
-    let tcgcsv = TcgcsvSource {
-        http: &http,
-        base: args.tcgcsv_base,
-        last_updated: state(KEY_TCGCSV_LAST_UPDATED)?,
-    };
-    if let Err(e) = run_source("tcgcsv", &tcgcsv, &raw, &shared) {
-        eprintln!("tcgcsv: {e:#}");
-        failed.push("tcgcsv");
-    }
-    failed.extend(fetch_assets(&http, args.image_dir, &shared)?);
-    anyhow::ensure!(failed.is_empty(), "failed: {}", failed.join(", "));
-    Ok(())
+    unreachable!("clap and the ensure above leave one of --fake, --assets")
 }
 
 /// Print every open alarm and fail when there is one. A timer runs this with

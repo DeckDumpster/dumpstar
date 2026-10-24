@@ -16,10 +16,26 @@ pub const CONSUMES: &str = "consumes";
 pub const REQUIRES: &str = "requires";
 
 /// The named mechanics. Token units are `token_unit:<name>`, outside this list.
-pub const NAMES: &[&str] = &["force", "experience", "shield", "advantage", "initiative"];
+pub const NAMES: &[&str] = &[
+    "force",
+    "experience",
+    "shield",
+    "advantage",
+    "initiative",
+    "weakness",
+    "credit",
+];
 
 /// The tokens that are an upgrade-like marker on a unit, not a unit themselves.
-const MARKER_TOKENS: &[&str] = &["experience", "shield", "advantage"];
+const MARKER_TOKENS: &[&str] = &["experience", "shield", "advantage", "weakness", "credit"];
+
+/// Token units that are named without being created ("a friendly Battle Droid
+/// token"): (words, name).
+const NAMED_TOKEN_UNITS: &[(&str, &str)] = &[
+    ("battle droid", "battle_droid"),
+    ("clone trooper", "clone_trooper"),
+    ("x-wing", "x_wing"),
+];
 
 /// One mechanic of a card. `role` is `produces` (supplies it), `consumes`
 /// (spends it) or `requires` (checks it without spending). `optional` is true
@@ -134,6 +150,23 @@ fn scan(line: &str) -> Vec<(String, &'static str, bool)> {
                 }
             }
         }
+        // "an Experience or Shield token": the first name is a mention too.
+        for at in find_phrase(line, &format!("{name} or")) {
+            if let Some(role) = role_before(&line[..at]) {
+                out.push(((*name).into(), role, false));
+            }
+        }
+    }
+    for (words, id) in NAMED_TOKEN_UNITS {
+        for noun in [format!("{words} token"), format!("{words} tokens")] {
+            for at in find_phrase(line, &noun) {
+                // Creating one is the `create` rule below.
+                if role_before(&line[..at]) != Some(PRODUCES) {
+                    let role = role_before(&line[..at]).unwrap_or(REQUIRES);
+                    out.push((format!("token_unit:{id}"), role, false));
+                }
+            }
+        }
     }
 
     for phrase in [
@@ -147,6 +180,9 @@ fn scan(line: &str) -> Vec<(String, &'static str, bool)> {
         }
     }
     for phrase in [
+        "has taken the initiative",
+        "have taken the initiative",
+        "taken the initiative",
         "has the initiative",
         "have the initiative",
         "had the initiative",
@@ -169,8 +205,10 @@ fn scan(line: &str) -> Vec<(String, &'static str, bool)> {
             .iter()
             .copied()
             .skip_while(|w| {
-                matches!(*w, "a" | "an" | "one" | "two" | "three" | "four" | "five")
-                    || w.chars().all(|c| c.is_ascii_digit())
+                matches!(
+                    *w,
+                    "a" | "an" | "one" | "two" | "three" | "four" | "five" | "that" | "many"
+                ) || w.chars().all(|c| c.is_ascii_digit())
             })
             .collect();
         if name.is_empty() || name.len() > 3 || MARKER_TOKENS.contains(&name.join(" ").as_str()) {
@@ -193,7 +231,7 @@ pub fn unmatched_terms(rules: Option<&str>, have: &[MechanicRecord]) -> Vec<Stri
         have.iter().any(|m| {
             m.name
                 .strip_prefix("token_unit:")
-                .is_some_and(|n| n.ends_with(w))
+                .is_some_and(|n| n.ends_with(&w.replace('-', "_")))
         })
     };
     let mut out: Vec<String> = Vec::new();
@@ -218,7 +256,12 @@ pub fn unmatched_terms(rules: Option<&str>, have: &[MechanicRecord]) -> Vec<Stri
             ("advantage", "advantage"),
         ] {
             if !has(name) {
-                find_phrase(&lower, term).for_each(&mut note);
+                find_phrase(&lower, term)
+                    .filter(|&at| {
+                        name != "force"
+                            || !lower[at + term.len()..].trim_start().starts_with("trait")
+                    })
+                    .for_each(&mut note);
             }
         }
         for noun in ["token", "tokens"] {
@@ -247,9 +290,11 @@ fn role_before(before: &str) -> Option<&'static str> {
         .next()
         .unwrap_or(before);
     words(clause).iter().rev().find_map(|w| match *w {
-        "give" | "gives" | "giving" | "create" | "creates" => Some(PRODUCES),
+        "give" | "gives" | "giving" | "create" | "creates" | "distribute" | "distributes" => {
+            Some(PRODUCES)
+        }
         "with" | "has" | "have" | "without" => Some(REQUIRES),
-        "remove" | "removes" | "defeat" | "defeats" => Some(CONSUMES),
+        "remove" | "removes" | "defeat" | "defeats" | "control" => Some(CONSUMES),
         _ => None,
     })
 }
@@ -383,6 +428,75 @@ mod tests {
             "When Played: Take the initiative.",
             "When Played: Use the Force (lose your Force token).",
             "Create a Battle Droid token.",
+        ] {
+            let have = mechanics_of(Some("Unit"), Some(text));
+            assert!(unmatched_terms(Some(text), &have).is_empty(), "{text}");
+        }
+    }
+
+    /// Each phrase of sp-mlmq3w: (rules text, a stored mechanic it must yield).
+    #[test]
+    fn mechanic_vocabulary_wording_is_classified() {
+        let cases: &[(&str, &str)] = &[
+            // unit-token names spelled with a hyphen, and "that many"
+            ("When Played: Create an X-Wing token.", "token_unit:x_wing"),
+            ("Create 2 X-Wing tokens.", "token_unit:x_wing"),
+            (
+                "Create that many Clone Trooper tokens. Each opponent creates that many Battle Droid tokens.",
+                "token_unit:clone_trooper",
+            ),
+            (
+                "When Defeated: Attach this upgrade to a friendly Battle Droid token.",
+                "token_unit:battle_droid",
+            ),
+            // Weakness and Credit tokens
+            ("Give a Weakness token to a unit.", "weakness"),
+            ("Give 2 Weakness tokens to it.", "weakness"),
+            ("Defeat any number of friendly Credit tokens.", "credit"),
+            ("You may defeat an enemy Credit token.", "credit"),
+            ("Create a Credit token.", "credit"),
+            (
+                "On Attack: Take control of an enemy Credit token.",
+                "credit",
+            ),
+            // distributing tokens
+            (
+                "Distribute up to 5 Advantage tokens among other friendly units.",
+                "advantage",
+            ),
+            (
+                "Distribute up to 3 Weakness tokens among any number of units.",
+                "weakness",
+            ),
+            // "Experience or Shield token"
+            (
+                "Give an Experience or Shield token to a unit, or create a Credit token.",
+                "experience",
+            ),
+            // having taken the initiative
+            (
+                "If no player has taken the initiative this phase, you may ready an enemy unit.",
+                "initiative",
+            ),
+        ];
+        for (text, name) in cases {
+            let have = mechanics_of(Some("Unit"), Some(text));
+            assert!(have.iter().any(|m| m.name == *name), "{text}: {have:?}");
+            assert!(unmatched_terms(Some(text), &have).is_empty(), "{text}");
+        }
+    }
+
+    #[test]
+    fn a_named_token_with_no_verb_is_not_unmatched() {
+        let text = "Enemy Credit tokens lose all abilities.";
+        assert!(unmatched_terms(Some(text), &[]).is_empty());
+    }
+
+    #[test]
+    fn the_force_trait_is_not_the_force() {
+        for text in [
+            "Attached unit loses the Force trait and all abilities except for Grit.",
+            "On Attack: Each enemy unit loses the Force trait for this phase.",
         ] {
             let have = mechanics_of(Some("Unit"), Some(text));
             assert!(unmatched_terms(Some(text), &have).is_empty(), "{text}");

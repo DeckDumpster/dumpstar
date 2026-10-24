@@ -1,4 +1,5 @@
 <script lang="ts" module>
+	import { sessionFetch } from "$lib/session";
 	// Set code -> the official logo served from /art, read once from /api/sets.
 	// A set with no retrieved logo is simply absent, and its code stands in.
 	let logos = $state<Record<string, string>>({});
@@ -7,7 +8,7 @@
 	function loadSetLogos() {
 		if (started) return;
 		started = true;
-		fetch('/api/sets')
+		sessionFetch('/api/sets')
 			.then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
 			.then((sets: { set_code: string; logo_url?: string | null }[]) => {
 				const next: Record<string, string> = {};

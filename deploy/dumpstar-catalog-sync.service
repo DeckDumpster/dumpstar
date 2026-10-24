@@ -20,13 +20,6 @@ Description=Dumpstar SWU set art and sealed-product pictures (%i): retired, roll
 # the pictures — set art and sealed-product images from the publishers' image
 # hosts, into the data directory — which need the sealed_images rows that derive
 # writes, so this runs after it. Nothing in the request path does any of this.
-#
-# ROLLBACK of the cutover (reversible until a nightly cycle from the lake has been
-# verified on prod): `systemctl --user edit dumpstar-catalog-sync@%i`, set
-# ExecStart= to the legacy online job —
-#   ExecStart=/bin/sh -c 'exec podman exec systemd-dumpstar-%i dumpstar catalog-apply --swu'
-# — and disable dumpstar-refresh@%i.timer and dumpstar-derive@%i.timer, so two
-# builders never write one catalog.
 After=network-online.target
 After=dumpstar-derive@%i.service
 Wants=network-online.target

@@ -54,10 +54,10 @@ restore_tenant() {
 		restore -integrity-check full -o "/data/tenants/$id.sqlite" "$DUMPSTAR_ENV_CONCIERGE_REPLICA"
 }
 
-# The catalog is built from the same upstream sources as prod's nightly refresh.
+# The slot has no lake, so its catalog is the built-in fake one; prod's is derived from the lake.
 catalog_build() {
 	podman run --rm --network host -v "dumpstar-${slot}-data:/data:Z" -e DUMPSTAR_HOME=/data --entrypoint dumpstar \
-		"localhost/dumpstar:${slot}" catalog-apply --swu
+		"localhost/dumpstar:${slot}" catalog-apply --fake
 }
 
 # fill_data: the slot's volume holds the concierge tenant and a catalog, and nothing else. The

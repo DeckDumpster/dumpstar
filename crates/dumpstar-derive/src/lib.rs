@@ -43,7 +43,7 @@
 //! dataset=cards`, `source=tcgcsv dataset=groups|products|prices|last-updated`);
 //! [`derive`] replays it through the **same** [`OfficialSource`] and
 //! [`TcgcsvSource`] adapters, and applies every payload with the same
-//! `dumpstar_catalog::apply` the online `catalog-apply --swu` used to run
+//! `dumpstar_catalog::apply` the removed online `catalog-apply --swu` used to run
 //! (sp-6i11rn: relocated, not rewritten). The adapters only ever fetch through
 //! a [`WireFetch`], so landing and replaying are two settings of one function.
 //!

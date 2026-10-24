@@ -26,7 +26,7 @@ dumpstar_image_ensure() {
 	case "$STUB_MODE" in
 	ok) return 0 ;;
 	fail) return 1 ;;
-	hang) sleep 30 & wait ;;
+	hang) sleep 3 & wait ;;
 	esac
 }
 STUB

@@ -6,6 +6,9 @@ set -euo pipefail
 verb="${1:?usage: run.sh <plan|apply|output>}"
 shift
 cd "$(dirname "$0")"
+# Providers are downloaded once into a persistent cache, not into every working copy.
+export TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/terraform/plugin-cache}"
+mkdir -p "$TF_PLUGIN_CACHE_DIR"
 terraform init -input=false -reconfigure -backend-config=backend.tfvars >/dev/null
 case "$verb" in
 plan) terraform plan -var-file=common.tfvars "$@" ;;

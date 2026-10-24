@@ -125,17 +125,18 @@ dumpstar_local_tree() {
 # tags tree-<sha>-local. The tree is exported with git archive, so the build sees that
 # tree and nothing else in the checkout.
 dumpstar_local_image_build() {
-	local dir="$1" tree="$2" ref src rc
+	local dir="$1" tree="$2" ref src
 	ref="$(dumpstar_local_image_ref "$tree")"
 	src="$(mktemp -d)"
-	git -C "$dir" archive "$tree" | tar -x -C "$src" || { rm -rf "$src"; return 1; }
+	# The subshell owns the temp copy: its EXIT trap removes it on success, failure and signal.
 	(
+		trap 'rm -rf "$src"' EXIT
+		trap 'exit 143' TERM
+		trap 'exit 130' INT
+		git -C "$dir" archive "$tree" | tar -x -C "$src" || exit 1
 		unset DUMPSTAR_PREBUILT_IMAGE
 		# shellcheck source=deploy/image-lib.sh
 		. "$(dirname "${BASH_SOURCE[0]}")/image-lib.sh"
 		dumpstar_image_ensure "$ref" "$src" >&2
 	)
-	rc=$?
-	rm -rf "$src"
-	return $rc
 }

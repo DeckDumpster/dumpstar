@@ -1,46 +1,52 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
 import AspectIcon from '../src/lib/components/AspectIcon.svelte';
-import { ASPECTS } from '../src/lib/aspects.ts';
+import { ASPECTS, aspectOf } from '../src/lib/aspects.ts';
 import { markup } from './support/render.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '../..');
-const setDir = join(repo, 'data/remedial/aspects');
-/** @type {{ aspects: { name: string, file: string, source_url: string, retrieved: string, colour: string, sort_value: number }[] }} */
-const manifest = JSON.parse(readFileSync(join(setDir, 'manifest.json'), 'utf8'));
+const CDN = 'https://cdn.starwarsunlimited.com/';
 
 test('a Vigilance/Heroism leader shows both official icons with their names as alt text', () => {
 	const html = ['Vigilance', 'Heroism'].map((name) => markup(AspectIcon, { name })).join('');
-	assert.match(html, /<img[^>]*src="\/aspects\/icon_vigilance_[^"]+\.png"[^>]*alt="Vigilance"/);
-	assert.match(html, /<img[^>]*src="\/aspects\/icon_heroism_[^"]+\.png"[^>]*alt="Heroism"/);
+	assert.match(html, /<img[^>]*src="https:\/\/cdn\.starwarsunlimited\.com\/+xxxsmall_SWH_Aspects_Vigilance_[^"]+\.png"[^>]*alt="Vigilance"/);
+	assert.match(html, /<img[^>]*src="https:\/\/cdn\.starwarsunlimited\.com\/+xxxsmall_SWH_Aspects_Heroism_[^"]+\.png"[^>]*alt="Heroism"/);
 	assert.match(html, /title="Heroism"/);
 });
 
-test('a name the manifest lacks falls back to its text', () => {
+test('every aspect icon src and srcset point at the publisher CDN', () => {
+	assert.equal(ASPECTS.length, 6);
+	for (const a of ASPECTS) {
+		const html = markup(AspectIcon, { name: a.name });
+		const src = html.match(/ src="([^"]+)"/)?.[1] ?? '';
+		const srcset = html.match(/ srcset="([^"]+)"/)?.[1] ?? '';
+		assert.ok(src.startsWith(CDN), `${a.name}: ${src}`);
+		const urls = srcset.split(',').map((e) => e.trim().split(' ')[0]);
+		assert.equal(urls.length, 3, a.name);
+		for (const u of urls) assert.ok(u.startsWith(CDN) && u.includes(a.base), `${a.name}: ${u}`);
+		assert.match(srcset, /149w.*199w.*248w/);
+	}
+});
+
+test('no aspect PNG is in the repository or served by the app', () => {
+	assert.ok(!existsSync(join(repo, 'data/remedial/aspects')));
+	assert.ok(!existsSync(join(here, '../static/aspects')));
+	assert.ok(!existsSync(join(here, '../scripts/sync-aspects.js')));
+	assert.doesNotMatch(readFileSync(join(repo, 'crates/dumpstar-server/src/lib.rs'), 'utf8'), /"\/aspects"/);
+});
+
+test('a name the set lacks falls back to its text', () => {
 	assert.match(markup(AspectIcon, { name: 'Neutral' }), /Neutral/);
 	assert.doesNotMatch(markup(AspectIcon, { name: 'Neutral' }), /<img/);
 });
 
-test('the manifest lists the aspects in the official order', () => {
+test('the set lists the aspects in the official order', () => {
 	assert.deepEqual(ASPECTS.map((a) => a.sort_value), [1, 5, 10, 15, 20, 25]);
-});
-
-test('every manifest row has its file, source url, retrieval date, colour and sort value', () => {
-	for (const a of manifest.aspects) {
-		assert.ok(existsSync(join(setDir, a.file)), `${a.name}: ${a.file} missing`);
-		assert.ok(statSync(join(setDir, a.file)).size > 0);
-		assert.match(a.source_url, /^https:\/\/cdn\.starwarsunlimited\.com\/.+\.png$/);
-		assert.match(a.retrieved, /^\d{4}-\d{2}-\d{2}$/);
-		assert.match(a.colour, /^#[0-9a-f]{6}$/);
-		assert.equal(typeof a.sort_value, 'number');
-	}
-	const pngs = readdirSync(setDir).filter((f) => f.endsWith('.png'));
-	assert.deepEqual(pngs.sort(), manifest.aspects.map((a) => a.file).sort());
 });
 
 test('every aspect in the catalog has an icon and a manifest row', () => {
@@ -56,16 +62,11 @@ test('every aspect in the catalog has an icon and a manifest row', () => {
 	const fake = JSON.parse(readFileSync(join(repo, 'crates/dumpstar-catalog/fake/swu-fake.json'), 'utf8'));
 	for (const c of fake.cards) for (const a of c.aspects) catalog.add(a);
 	assert.ok(catalog.size >= 6, `catalog aspects: ${[...catalog]}`);
-	const known = new Map(manifest.aspects.map((a) => [a.name, a]));
-	for (const name of catalog) {
-		const row = known.get(name);
-		assert.ok(row, `${name} has no manifest row`);
-		assert.ok(existsSync(join(setDir, row.file)), `${name} has no icon`);
-	}
+	for (const name of catalog) assert.ok(aspectOf(name), `${name} has no aspect row`);
 });
 
 test('no source file outside the manifest loader names an aspect colour', () => {
-	const colours = manifest.aspects.map((a) => a.colour.toLowerCase());
+	const colours = ASPECTS.map((a) => a.colour.toLowerCase());
 	const loader = join(here, '../src/lib/aspects.ts');
 	/** @type {string[]} */
 	const offenders = [];

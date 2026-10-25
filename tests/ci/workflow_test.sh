@@ -11,6 +11,8 @@
 #   * the VM comes from DeckDumpster/ephemeral-ci/provision@v2 with
 #     `spill-after-seconds: '60'`, and goes away through teardown@v2 under
 #     `if: always()` — a cancelled or failed run otherwise leaves the VM running.
+#   * every provision call passes `spill-market: ${{ vars.SPILL_MARKET }}` (the org spot
+#     switch; a composite action cannot read vars) unless a `# spill-market pinned:` comment says why.
 #   * the job the merge queue reads is named `gate`.
 #   * ci.yml, deploy.yml and data-jobs.yml are the only workflows; deploy.yml's own shape is held
 #     by tests/ci/deploy_workflow_test.sh.
@@ -35,6 +37,11 @@ problems() {
     [ "$(grep -c -E '^ +if: always\(\)' <<<"$body")" -gt 0 ] \
         || echo "teardown does not run under if: always()"
     has '^  gate:' || echo "no job named gate"
+    # every provision call follows the org spot switch, or pins a market with a comment saying why
+    if [ "$(grep -c -E 'ephemeral-ci/provision@' "$wf")" -gt "$(grep -c -E '^ +spill-market: +\$\{\{ *vars\.SPILL_MARKET *\}\}' "$wf")" ] \
+        && ! grep -q -E '^ +# spill-market pinned:' "$wf"; then
+        echo "a provision call lacks spill-market: \${{ vars.SPILL_MARKET }}"
+    fi
     return 0
 }
 
@@ -70,6 +77,9 @@ expect "a teardown that skips failed runs" "if: always()" "$scratch/teardown.yml
 
 sed 's|DeckDumpster/ephemeral-ci/provision@v2|DeckDumpster/ephemeral-ci/provision@v1|' "$wf" >"$scratch/pin.yml"
 expect "an unpinned provision" "provision@v2" "$scratch/pin.yml"
+
+grep -v 'spill-market:' "$wf" >"$scratch/market.yml"
+expect "a provision call without spill-market" "spill-market" "$scratch/market.yml"
 
 echo "==> §2 the real workflow"
 out="$(problems "$wf")"

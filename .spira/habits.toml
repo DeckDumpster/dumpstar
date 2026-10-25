@@ -1,18 +1,13 @@
-# Habits: checks the builder aeon's PostToolUse dispatcher runs on each edited
-# file and feeds back to the agent (brain wiki/projects/spira/designs/
-# habit-hooks-2026-10-23.md). tests/ci/habits_test.sh holds this file to CI.
-# Only rustfmt has a CI counterpart today; the others are advisory and say so.
+# Habit hooks (spira habits, sp-rguztt): after every edit a builder aeon makes in this repo, each
+# habit whose glob matches the edited file runs and its findings are fed back to the aeon —
+# feedback only, never a block. [[stop]] entries run once when the aeon ends its session.
 
-# CI counterpart: `cargo fmt --check` (deploy/ci.sh, lint tier). Same rustfmt,
-# edition 2024 from Cargo.toml [workspace.package].
 [[habit]]
 name = "rustfmt"
 glob = "**/*.rs"
 run = "rustfmt --check --edition 2024 {file}"
 budget_ms = 1500
 
-# CI counterpart: none (no complexity gate in deploy/ci.sh). Advisory: report
-# any function with cognitive complexity above 20.
 [[habit]]
 name = "complexity"
 glob = "**/*.rs"
@@ -20,18 +15,13 @@ run = "rust-code-analysis-cli -m -O json -p {file}"
 threshold = "cognitive > 20 per function"
 budget_ms = 2000
 
-# CI counterpart: none runs shellcheck as a gate; deploy/ci.sh only carries
-# `# shellcheck source=` directives for it. Advisory.
 [[habit]]
 name = "shellcheck"
 glob = "**/*.sh"
 run = "shellcheck -f gcc {file}"
 budget_ms = 1500
 
-# CI counterpart: none (frontend/package.json has no prettier; CI runs
-# `npm test` and `npm run check`). Advisory; npx --no-install never fetches.
-[[habit]]
-name = "prettier"
-glob = "frontend/src/**/*.{ts,svelte}"
-run = "npx --no-install prettier --check {file}"
-budget_ms = 2500
+[[stop]]
+name = "clippy"
+run = "cargo clippy -p {crate} --message-format short"
+budget_ms = 150000

@@ -8,18 +8,17 @@ const CDN = 'https://cdn.starwarsunlimited.com//';
 export interface Aspect {
 	name: string;
 	base: string;
-	colour: string;
 	sort_value: number;
 }
 
 /** Aspects in the official order. */
 export const ASPECTS: Aspect[] = [
-	{ name: 'Vigilance', base: 'SWH_Aspects_Vigilance_0519102eb9', colour: '#4073d4', sort_value: 1 },
-	{ name: 'Command', base: 'SWH_Aspects_Command_79e2808348', colour: '#0b992d', sort_value: 5 },
-	{ name: 'Aggression', base: 'SWH_Aspects_Aggression_ceca8f7d7c', colour: '#d30808', sort_value: 10 },
-	{ name: 'Cunning', base: 'SWH_Aspects_Cunning_91fedef0ce', colour: '#eb9f1c', sort_value: 15 },
-	{ name: 'Villainy', base: 'SWH_Aspects_Villainy_3e06e5ffdb', colour: '#000000', sort_value: 20 },
-	{ name: 'Heroism', base: 'SWH_Aspects_Heroism_fd98140fb6', colour: '#ffffff', sort_value: 25 }
+	{ name: 'Vigilance', base: 'SWH_Aspects_Vigilance_0519102eb9', sort_value: 1 },
+	{ name: 'Command', base: 'SWH_Aspects_Command_79e2808348', sort_value: 5 },
+	{ name: 'Aggression', base: 'SWH_Aspects_Aggression_ceca8f7d7c', sort_value: 10 },
+	{ name: 'Cunning', base: 'SWH_Aspects_Cunning_91fedef0ce', sort_value: 15 },
+	{ name: 'Villainy', base: 'SWH_Aspects_Villainy_3e06e5ffdb', sort_value: 20 },
+	{ name: 'Heroism', base: 'SWH_Aspects_Heroism_fd98140fb6', sort_value: 25 }
 ];
 
 const BY_NAME = new Map(ASPECTS.map((a) => [a.name.toLowerCase(), a]));

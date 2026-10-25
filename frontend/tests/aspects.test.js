@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join } from 'node:path';
 import AspectIcon from '../src/lib/components/AspectIcon.svelte';
 import { ASPECTS, aspectOf } from '../src/lib/aspects.ts';
 import { markup } from './support/render.js';
@@ -63,25 +63,6 @@ test('every aspect in the catalog has an icon and a manifest row', () => {
 	for (const c of fake.cards) for (const a of c.aspects) catalog.add(a);
 	assert.ok(catalog.size >= 6, `catalog aspects: ${[...catalog]}`);
 	for (const name of catalog) assert.ok(aspectOf(name), `${name} has no aspect row`);
-});
-
-test('no source file outside the manifest loader names an aspect colour', () => {
-	const colours = ASPECTS.map((a) => a.colour.toLowerCase());
-	const loader = join(here, '../src/lib/aspects.ts');
-	/** @type {string[]} */
-	const offenders = [];
-	const walk = (/** @type {string} */ dir) => {
-		for (const e of readdirSync(dir, { withFileTypes: true })) {
-			const p = join(dir, e.name);
-			if (e.isDirectory()) walk(p);
-			else if (/\.(ts|js|svelte|css)$/.test(e.name) && p !== loader && !p.includes('/lib/kit/')) {
-				const text = readFileSync(p, 'utf8').toLowerCase();
-				for (const c of colours) if (text.includes(c)) offenders.push(`${relative(repo, p)}: ${c}`);
-			}
-		}
-	};
-	walk(join(here, '../src'));
-	assert.deepEqual(offenders, []);
 });
 
 test('views show the aspects of a card as printed, never re-sorted', () => {

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { aspectOf, aspectIconUrl } from '$lib/aspects';
+	import { aspectOf, aspectIconUrl, aspectIconSrcset } from '$lib/aspects';
 
 	let { name, size = '1.25em' }: { name: string; size?: string } = $props();
 	const aspect = $derived(aspectOf(name));
@@ -9,10 +9,12 @@
 	<img
 		class="aspect-icon"
 		src={aspectIconUrl(aspect)}
+		srcset={aspectIconSrcset(aspect)}
+		sizes={size}
 		alt={aspect.name}
 		title={aspect.name}
-		width="150"
-		height="150"
+		width="149"
+		height="149"
 		style:width={size}
 		style:height={size}
 	/>

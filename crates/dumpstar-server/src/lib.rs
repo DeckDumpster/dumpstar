@@ -502,9 +502,6 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
         // pipeline's symbols phase. Lives on the data volume so it
         // rebuilds from upstream alongside shared.sqlite, not in the
         // baked-in image static dir.
-        // The official aspect icons, copied from data/remedial/aspects/ into
-        // the static build.
-        .nest_service("/aspects", ServeDir::new(static_dir.join("aspects")))
         // Official set logos and art crops, retrieved once by the catalog job
         // into the data volume (dumpstar_catalog::art) — never the publisher's
         // CDN at page load.

@@ -43,7 +43,7 @@ for n in 1 7 20; do
     : >"$PODMAN_CALLS"
     urls=(); for i in $(seq "$n"); do urls+=("s3://b/t$i"); done
     ltx_prefetch "${urls[@]}"
-    ok=0; for u in "${urls[@]}"; do ltx_list "$u" w | grep -q "$u" && ok=$((ok+1)); done
+    ok=0; for u in "${urls[@]}"; do out="$(ltx_list "$u" w)"; grep -q "$u" <<<"$out" && ok=$((ok+1)); done
     check "$n tenants: one container start" 1 "$(wc -l <"$PODMAN_CALLS")"
     check "$n tenants: every listing served" "$n" "$ok"
 done

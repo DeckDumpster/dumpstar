@@ -471,8 +471,8 @@ const RENAMED_FILES_NOTE: &str = "\nBACKUPS: these files were RENAMED, so each o
      prefix and starts its recovery window at this moment. The old prefixes keep\n\
      everything they had — restore from them by URL (deploy/TENANTS.md).\n\
      Start the sidecar and CHECK IT IS ADVANCING, not merely active:\n\
-   \x20 journalctl --user -u dumpstar-litestream-<instance> | grep 'replica sync'\n\
-     txid.replica must be non-zero and converging on txid.db (pd-1717).";
+   \x20 bash deploy/backup-check.sh <instance>\n\
+     The replica must be non-zero and in correspondence with the local LTX position.";
 
 /// `dumpstar tenant list` — the registry as a table, plus anything on disk the
 /// registry cannot account for.

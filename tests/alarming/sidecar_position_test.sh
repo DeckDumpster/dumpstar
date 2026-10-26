@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# tier: T1
+# covers: tests/alarming/sidecar_position_test.sh deploy/backup-check.sh
 # sidecar_position — the tenant's replica position, measured and not read from a
 # log (sp-ksml54).
 #

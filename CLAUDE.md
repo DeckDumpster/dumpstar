@@ -109,3 +109,12 @@ replay implementation carries `// covers: <its intent's UC id>`. The lint tier r
 lint` and `orphans`: a use case with no covering suite, or whose last cover a change deleted, fails by
 name. A new intent needs `plan.sh assign` then `generate` and `report`. The binary is Spira's
 `test-plan` (`$SPIRA_TEST_PLAN_BIN`, or on PATH).
+
+## Litestream sidecar
+
+The sidecar logs at `info`. `deploy/backup-check.sh::sidecar_position` measures both sides
+itself (S3's LTX listing against Litestream's local `tenants/.<db>-litestream/ltx/`) and reads
+no log, because 0.5.17 moved the `replica sync` line to DEBUG and ~700 MB/day of it filled the
+host's syslog (sp-7bc4jc, ported from pokedumpster sp-ksml54).
+`tests/alarming/sidecar_position_test.sh` is the log-free check; `tests/litestream/image_pin_test.sh`
+forbids debug/trace and any log read.

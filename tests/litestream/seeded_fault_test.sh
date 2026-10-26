@@ -63,13 +63,13 @@ control_handle_url() { printf 's3://b/pfx/%s.sqlite' "$1"; }
 	&& verdict ok "control arm: handle-derived naming reaches the predecessor's replica (old bug reproduced)" \
 	|| verdict bad "control arm no longer reproduces the old bug"
 
-probe_yml() { # 0 when dir mode + watch + registry path entry + snapshot + debug
+probe_yml() { # 0 when dir mode + watch + registry path entry + snapshot + info
 	local f="$1/deploy/litestream.yml"
 	grep -Eq '^[[:space:]]*-[[:space:]]+dir:' "$f" \
 		&& grep -Eq '^[[:space:]]*watch:[[:space:]]*true' "$f" \
 		&& grep -Eq '^[[:space:]]*-[[:space:]]+path:[[:space:]]*\$\{LITESTREAM_REGISTRY_DB\}' "$f" \
 		&& grep -Eq '^snapshot:' "$f" \
-		&& grep -Eq '^[[:space:]]*level:[[:space:]]*debug' "$f"
+		&& grep -Eq '^[[:space:]]*level:[[:space:]]*info' "$f"
 }
 
 probe_stall() { # 0 when the correspondence matrix (incl. the stalled case) passes

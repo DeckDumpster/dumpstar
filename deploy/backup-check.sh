@@ -182,8 +182,63 @@ SIDECAR_CTR="${DUMPSTAR_BACKUP_SIDECAR_CTR:-systemd-dumpstar-litestream-${INSTAN
 # `-level all` is load-bearing: `ltx` defaults to level 0, and level 0 gets
 # compacted away into higher levels. A database nobody has written to today
 # would list nothing at level 0 and read as dead when it is merely idle.
+#
+# ONE CONTAINER FOR ALL OF THEM (sp-gpnbrp). A container start costs ~40s here, and
+# listing per tenant made wall time linear in tenants: 7 tenants crossed the
+# unit's 300s limit and paged DOWN with every backup fresh. ltx_prefetch lists
+# every URL it is given inside a single container, in parallel, into LTX_CACHE;
+# ltx_list answers from that cache and falls back to a container of its own only
+# for a URL that was never prefetched.
+LTX_CACHE=""
+ltx_cache_key() { printf '%s' "$1" | cksum | tr -d ' \n'; }
+ltx_prefetch() { # ltx_prefetch <replica-url>...
+    [ $# -gt 0 ] || return 0
+    LTX_CACHE="$(mktemp -d)"
+    trap 'rm -rf "$LTX_CACHE"' EXIT
+    local raw line url="" key=""
+    raw="$(podman run --rm --user 0:0 \
+        -v "${CONF_DIR}/aws/config:/aws/config:ro" \
+        --secret "dumpstar-${INSTANCE}-backup-s3,type=mount,target=/aws/credentials" \
+        -e AWS_CONFIG_FILE=/aws/config \
+        -e AWS_SHARED_CREDENTIALS_FILE=/aws/credentials \
+        -e AWS_PROFILE="${AWS_PROFILE:-dumpstar}" \
+        --entrypoint sh "$LS_IMG" -c '
+            d=$(mktemp -d); i=0
+            for u in "$@"; do
+                i=$((i+1))
+                ( litestream ltx -level all "$u" >"$d/$i.out" 2>&1; echo $? >"$d/$i.rc" ) &
+            done
+            wait
+            i=0
+            for u in "$@"; do
+                i=$((i+1))
+                echo "@@@BEGIN $u"
+                cat "$d/$i.out"
+                echo "@@@RC $(cat "$d/$i.rc")"
+            done' sh "$@" 2>&1)" || true
+    while IFS= read -r line; do
+        case "$line" in
+            "@@@BEGIN "*) url="${line#@@@BEGIN }"; key="$(ltx_cache_key "$url")"; : >"$LTX_CACHE/$key.out" ;;
+            "@@@RC "*) [ -n "$url" ] && printf '%s' "${line#@@@RC }" >"$LTX_CACHE/$key.rc"; url="" ;;
+            *) [ -n "$url" ] && printf '%s\n' "$line" >>"$LTX_CACHE/$key.out" ;;
+        esac
+    done <<<"$raw"
+    return 0
+}
 ltx_list() {
-    local url="$1" what="$2" out
+    local url="$1" what="$2" out key
+    if [ -n "$LTX_CACHE" ]; then
+        key="$(ltx_cache_key "$url")"
+        if [ -f "$LTX_CACHE/$key.rc" ]; then
+            out="$(cat "$LTX_CACHE/$key.out")"
+            if [ "$(cat "$LTX_CACHE/$key.rc")" != 0 ]; then
+                echo "backup-check: ${what}: litestream ltx failed (creds/network/S3): $(printf '%s' "$out" | tail -n1)" >&2
+                return 1
+            fi
+            printf '%s\n' "$out"
+            return 0
+        fi
+    fi
     out="$(podman run --rm --user 0:0 \
         -v "${CONF_DIR}/aws/config:/aws/config:ro" \
         --secret "dumpstar-${INSTANCE}-backup-s3,type=mount,target=/aws/credentials" \
@@ -674,6 +729,13 @@ judge_freshness() {
 # replica that stopped advancing IS the alarm there.
 [ -n "$MOUNTPOINT" ] || stale "data volume '${VOLUME}' not found — cannot check the user registry"
 REGISTRY_FILE="${MOUNTPOINT}/registry.sqlite"
+# One container lists the registry's replica and every tenant's (sp-gpnbrp).
+PREFETCH_URLS=()
+if url="$(registry_replica_url 2>/dev/null)"; then PREFETCH_URLS+=("$url"); fi
+for TENANT in "${TENANTS[@]}"; do
+    if url="$(tenant_replica_url "$TENANT" 2>/dev/null)"; then PREFETCH_URLS+=("$url"); fi
+done
+ltx_prefetch "${PREFETCH_URLS[@]}"
 REGISTRY_URL="$(registry_replica_url)" \
     || stale "could not derive the registry replica URL — run deploy/setup.sh ${INSTANCE} to backfill litestream.env"
 REGISTRY_REPLICA_TXID="$(ltx_max_txid "$REGISTRY_URL" "the user registry")" \

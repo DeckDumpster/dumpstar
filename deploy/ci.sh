@@ -704,6 +704,11 @@ if tier lint; then
     step "Backup correspondence (tests/alarming/backup_correspondence_test.sh)"
     bash "$REPO_DIR/tests/alarming/backup_correspondence_test.sh"
 
+    # The check lists every replica in one container start, not one per tenant
+    # (sp-gpnbrp): wall time must not grow with tenant count.
+    step "Backup listing (tests/alarming/backup_listing_test.sh)"
+    bash "$REPO_DIR/tests/alarming/backup_listing_test.sh"
+
     # A layer that fires and says nothing: this proves what Layer 2 pushes is
     # readable — the causal line first, no OCI metadata, no systemd boilerplate —
     # against journal tails captured from the real units (pd-pwk8).

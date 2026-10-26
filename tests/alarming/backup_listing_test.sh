@@ -23,6 +23,7 @@ cat >"$TMP/bin/podman" <<'STUB'
 echo run >>"$PODMAN_CALLS"
 # args after the lone "sh" operand are the replica urls
 while [ "$1" != sh ]; do shift; done; shift
+echo "@@@STATUS"; echo '[{"status":"ok","txid":"00000000000000ab"}]'; echo "@@@STATUSRC 0"
 for u in "$@"; do
     echo "@@@BEGIN $u"
     case "$u" in
@@ -37,7 +38,7 @@ export PATH="$TMP/bin:$PATH" PODMAN_CALLS="$TMP/calls"
 eval "$(awk '/^ltx_cache_key\(\)/' "$SRC")"
 eval "$(awk '/^ltx_prefetch\(\) \{/,/^\}/' "$SRC")"
 eval "$(awk '/^ltx_list\(\) \{/,/^\}/' "$SRC")"
-CONF_DIR=/x INSTANCE=t LS_IMG=img
+CONF_DIR=/x INSTANCE=t LS_IMG=img MOUNTPOINT=/m SCRIPT_DIR=/s PREFETCH_STATUS_DB=
 
 for n in 1 7 20; do
     : >"$PODMAN_CALLS"
@@ -47,6 +48,14 @@ for n in 1 7 20; do
     check "$n tenants: one container start" 1 "$(wc -l <"$PODMAN_CALLS")"
     check "$n tenants: every listing served" "$n" "$ok"
 done
+
+eval "$(awk '/^local_position\(\) \{/,/^\}/' "$SRC")"
+PREFETCH_STATUS_DB=/data/registry.sqlite
+: >"$PODMAN_CALLS"
+ltx_prefetch s3://b/a s3://b/b
+local_position /data/registry.sqlite reg
+check "registry status rides the same container" 1 "$(wc -l <"$PODMAN_CALLS")"
+check "registry status parsed from cache" "ok 00000000000000ab" "$LOCAL_STATE $LOCAL_TXID"
 
 ltx_prefetch s3://b/good s3://b/bad
 check "a failing listing stays a failure" 1 "$(ltx_list s3://b/bad w >/dev/null 2>&1; echo $?)"

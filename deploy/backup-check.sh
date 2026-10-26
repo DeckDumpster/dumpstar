@@ -191,12 +191,24 @@ SIDECAR_CTR="${DUMPSTAR_BACKUP_SIDECAR_CTR:-systemd-dumpstar-litestream-${INSTAN
 # for a URL that was never prefetched.
 LTX_CACHE=""
 ltx_cache_key() { printf '%s' "$1" | cksum | tr -d ' \n'; }
+# The same container also answers `litestream status -json` for PREFETCH_STATUS_DB
+# (the registry), so the whole check starts exactly one container (sp-ha2gnk).
+PREFETCH_STATUS_DB=""
+STATUS_CACHE_OUT=""
+STATUS_CACHE_RC=""
 ltx_prefetch() { # ltx_prefetch <replica-url>...
     [ $# -gt 0 ] || return 0
     LTX_CACHE="$(mktemp -d)"
     trap 'rm -rf "$LTX_CACHE"' EXIT
-    local raw line url="" key=""
+    local raw line url="" key="" in_status=0 status_buf=""
     raw="$(podman run --rm --user 0:0 \
+        -v "${MOUNTPOINT}:/data:ro" \
+        -v "${SCRIPT_DIR}/litestream.yml:/etc/litestream.yml:ro" \
+        -e LITESTREAM_TENANTS_DIR -e LITESTREAM_REGISTRY_DB \
+        -e LITESTREAM_S3_BUCKET -e LITESTREAM_S3_PATH \
+        -e LITESTREAM_S3_REGISTRY_PATH -e LITESTREAM_S3_REGION \
+        -e LITESTREAM_S3_ENDPOINT \
+        -e STATUS_DB="$PREFETCH_STATUS_DB" \
         -v "${CONF_DIR}/aws/config:/aws/config:ro" \
         --secret "dumpstar-${INSTANCE}-backup-s3,type=mount,target=/aws/credentials" \
         -e AWS_CONFIG_FILE=/aws/config \
@@ -209,6 +221,11 @@ ltx_prefetch() { # ltx_prefetch <replica-url>...
                 ( litestream ltx -level all "$u" >"$d/$i.out" 2>&1; echo $? >"$d/$i.rc" ) &
             done
             wait
+            if [ -n "$STATUS_DB" ]; then
+                echo "@@@STATUS"
+                litestream status -json "$STATUS_DB" 2>&1
+                echo "@@@STATUSRC $?"
+            fi
             i=0
             for u in "$@"; do
                 i=$((i+1))
@@ -217,6 +234,11 @@ ltx_prefetch() { # ltx_prefetch <replica-url>...
                 echo "@@@RC $(cat "$d/$i.rc")"
             done' sh "$@" 2>&1)" || true
     while IFS= read -r line; do
+        case "$line" in
+            "@@@STATUS") in_status=1; status_buf=""; continue ;;
+            "@@@STATUSRC "*) in_status=0; STATUS_CACHE_OUT="$status_buf"; STATUS_CACHE_RC="${line#@@@STATUSRC }"; continue ;;
+        esac
+        if [ "$in_status" = 1 ]; then status_buf+="$line"$'\n'; continue; fi
         case "$line" in
             "@@@BEGIN "*) url="${line#@@@BEGIN }"; key="$(ltx_cache_key "$url")"; : >"$LTX_CACHE/$key.out" ;;
             "@@@RC "*) [ -n "$url" ] && printf '%s' "${line#@@@RC }" >"$LTX_CACHE/$key.rc"; url="" ;;
@@ -313,6 +335,13 @@ local_position() {
     local db="$1" what="$2" out
     LOCAL_STATE=""
     LOCAL_TXID=""
+    if [ -n "$STATUS_CACHE_RC" ] && [ "$db" = "$PREFETCH_STATUS_DB" ]; then
+        out="$STATUS_CACHE_OUT"
+        if [ "$STATUS_CACHE_RC" != 0 ]; then
+            echo "backup-check: ${what}: litestream status failed: $(printf '%s' "$out" | tail -n1)" >&2
+            return 1
+        fi
+    else
     out="$(podman run --rm --user 0:0 \
         -v "${MOUNTPOINT}:/data:ro" \
         -v "${SCRIPT_DIR}/litestream.yml:/etc/litestream.yml:ro" \
@@ -324,6 +353,7 @@ local_position() {
         echo "backup-check: ${what}: litestream status failed: $(printf '%s' "$out" | tail -n1)" >&2
         return 1
     }
+    fi
 
     LOCAL_STATE="$(printf '%s\n' "$out" \
         | grep -oE '"status"[[:space:]]*:[[:space:]]*"[^"]*"' \
@@ -390,15 +420,23 @@ local_position() {
 SIDE_REPLICA=""
 SIDE_DB=""
 SIDE_AGE=""
+SIDE_LINES=""
 sidecar_position() {
     local base="$1" line ts_iso ts_epoch
     SIDE_REPLICA=""; SIDE_DB=""; SIDE_AGE=""
 
     # Bounded lookback so a rolled journal cannot resurrect a stale position, and
     # so the query stays cheap at ~86k lines/day/db.
-    line="$(podman logs --since "${SIDECAR_LOOKBACK}" "$SIDECAR_CTR" 2>&1 \
-            | grep -F "msg=\"replica sync\"" | grep -F "db=${base}" \
-            | tail -n1 || true)"
+    # One read of the journal for every tenant, newest line per database: the
+    # sidecar logs a line per database per second, and reading six hours of it
+    # once per tenant was the CPU cost that scaled with tenants (sp-ha2gnk).
+    if [ "${SIDE_FRESH:-0}" = 1 ] || [ -z "$SIDE_LINES" ]; then
+        SIDE_LINES="$(podman logs --since "${SIDECAR_LOOKBACK}" "$SIDECAR_CTR" 2>&1 \
+            | grep -F "msg=\"replica sync\"" \
+            | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^db=/) last[$i] = $0 } END { for (k in last) print last[k] }' || true)"
+        SIDE_FRESH=0
+    fi
+    line="$(printf '%s\n' "$SIDE_LINES" | grep -F "db=${base} " | tail -n1 || true)"
     [ -n "$line" ] || return 1
 
     SIDE_REPLICA="$(printf '%s' "$line" | sed -n 's/.*txid\.replica=\([0-9a-fA-F]\{16\}\).*/\1/p' | tr 'A-F' 'a-f')"
@@ -735,7 +773,10 @@ if url="$(registry_replica_url 2>/dev/null)"; then PREFETCH_URLS+=("$url"); fi
 for TENANT in "${TENANTS[@]}"; do
     if url="$(tenant_replica_url "$TENANT" 2>/dev/null)"; then PREFETCH_URLS+=("$url"); fi
 done
+PREFETCH_STATUS_DB="$(registry_db_path)"
+PHASE_T0=$SECONDS
 ltx_prefetch "${PREFETCH_URLS[@]}"
+echo "backup-check: timing prefetch=$(( SECONDS - PHASE_T0 ))s (one container: ${#PREFETCH_URLS[@]} listings + registry status)"
 REGISTRY_URL="$(registry_replica_url)" \
     || stale "could not derive the registry replica URL — run deploy/setup.sh ${INSTANCE} to backfill litestream.env"
 REGISTRY_REPLICA_TXID="$(ltx_max_txid "$REGISTRY_URL" "the user registry")" \
@@ -865,6 +906,7 @@ case "$LOCAL_STATE" in
         ;;
 esac
 
+echo "backup-check: timing registry-done=${SECONDS}s"
 # --- Query S3 for each tenant's replica (read-only) ------------------------
 # Mirrors restore-litestream.sh's invocation: assume-role profile + bootstrap
 # secret, region pinned in the derived replica URL. A read/list op — so broken
@@ -879,6 +921,7 @@ for TENANT in "${TENANTS[@]}"; do
 done
 
 # --- Everything passed: ping the monitor + record the marker ---------------
+echo "backup-check: timing total=${SECONDS}s tenants=${#TENANTS[@]}"
 mark_fresh
 if [ -z "$PING" ]; then
     echo "backup-check: OK — the registry corresponds + ${#TENANTS[@]} tenant(s) fresh; no monitor to ping" \

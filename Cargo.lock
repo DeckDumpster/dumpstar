@@ -1371,6 +1371,8 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "dumpstar-core",
+ "dumpster-kit-catalog",
+ "dumpster-kit-tcgcsv",
  "flate2",
  "hex",
  "reqwest",
@@ -1379,6 +1381,19 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "dumpster-kit-catalog"
+version = "0.1.8"
+source = "sparse+http://ubuntu-mini-0.tailb4a728.ts.net:3000/api/packages/rgantt/cargo/"
+checksum = "5cbb0f8d83b8735be5f4c7e37c28230a178751f749605f11b06dac5bad89ac0a"
+dependencies = [
+ "dumpster-kit-tcgcsv",
+ "hex",
+ "rusqlite",
+ "sha2 0.10.9",
  "thiserror",
 ]
 

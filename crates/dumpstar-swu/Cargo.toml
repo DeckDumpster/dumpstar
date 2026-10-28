@@ -16,6 +16,8 @@ sha2.workspace = true
 hex.workspace = true
 reqwest.workspace = true
 flate2.workspace = true
+dumpster-kit-catalog.workspace = true
+dumpster-kit-tcgcsv.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

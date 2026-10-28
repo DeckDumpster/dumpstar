@@ -22,6 +22,7 @@ mod error;
 pub mod fetch;
 pub mod filing;
 pub mod formats;
+pub mod game;
 pub mod images;
 pub mod job;
 pub mod landing;
@@ -39,4 +40,5 @@ pub use catalog::{
     reset_if_legacy,
 };
 pub use error::{CatalogError, Result};
+pub use game::Swu;
 pub use source::{CatalogSource, FakeSource, RawPayload};

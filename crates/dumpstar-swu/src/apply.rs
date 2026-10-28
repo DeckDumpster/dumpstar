@@ -311,6 +311,17 @@ pub fn apply_at(
 }
 
 fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
+    apply_payload_in(tx, p, false)
+}
+
+/// The kit-owned layout (`kit`): the crosswalk goes to the kit's
+/// `printing_source_id` (column `sub_type`), and prices are the kit's to record,
+/// so the payload's price rows are not touched.
+pub(crate) fn apply_payload_in(
+    tx: &Transaction,
+    p: &CatalogPayload,
+    kit: bool,
+) -> Result<ApplyReport> {
     let mut r = ApplyReport::default();
 
     let sql = format!(
@@ -429,10 +440,17 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
         cols.iter().map(|c| format!("{c}=excluded.{c}")).collect::<Vec<_>>().join(", "),
         differs(&cols)
     );
-    let xw = "INSERT INTO printing_source_id (source, source_id, sub_type_name, printing_id)
+    let xw = if kit {
+        "INSERT INTO printing_source_id (source, source_id, sub_type, printing_id)
+              VALUES (?1,?2,?3,?4)
+              ON CONFLICT(source, source_id, sub_type) DO UPDATE SET printing_id=excluded.printing_id
+              WHERE printing_id IS NOT excluded.printing_id"
+    } else {
+        "INSERT INTO printing_source_id (source, source_id, sub_type_name, printing_id)
               VALUES (?1,?2,?3,?4)
               ON CONFLICT(source, source_id, sub_type_name) DO UPDATE SET printing_id=excluded.printing_id
-              WHERE printing_id IS NOT excluded.printing_id";
+              WHERE printing_id IS NOT excluded.printing_id"
+    };
     for pr in &p.printings {
         r.printings += tx.execute(
             &sql,
@@ -453,7 +471,8 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
         if let Some(uid) = &pr.official_card_uid {
             r.crosswalk += tx.execute(xw, params!["official", uid, pr.finish, pr.printing_id])?;
         }
-        if let (Some(pid), Some(sub)) = (pr.tcgcsv_product_id, &pr.tcgcsv_sub_type_name) {
+        if let (false, Some(pid), Some(sub)) = (kit, pr.tcgcsv_product_id, &pr.tcgcsv_sub_type_name)
+        {
             r.crosswalk +=
                 tx.execute(xw, params!["tcgcsv", pid.to_string(), sub, pr.printing_id])?;
         }
@@ -496,6 +515,9 @@ fn apply_payload(tx: &Transaction, p: &CatalogPayload) -> Result<ApplyReport> {
     // A product is linked under the sub type its prices arrive as, which the
     // join cannot know before the first day it is priced: join again once a
     // sub type is new, so that day's prices land on the link they belong to.
+    if kit {
+        return Ok(r);
+    }
     let mut new_sub_type = false;
     for pr in &p.prices {
         new_sub_type |= tx.execute(

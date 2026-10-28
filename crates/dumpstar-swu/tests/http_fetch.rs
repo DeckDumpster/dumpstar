@@ -6,7 +6,7 @@ use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use dumpstar_catalog::fetch::{Fetch, HttpFetch, USER_AGENT};
+use dumpstar_swu::fetch::{Fetch, HttpFetch, USER_AGENT};
 use flate2::{Compression, write::GzEncoder};
 
 fn serve(n: usize) -> (String, Arc<Mutex<Vec<String>>>, std::thread::JoinHandle<()>) {

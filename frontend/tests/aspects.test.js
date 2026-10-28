@@ -59,7 +59,7 @@ test('every aspect in the catalog has an icon and a manifest row', () => {
 			for (const r of c.attributes?.aspects?.data ?? []) catalog.add(r.attributes.name);
 		}
 	}
-	const fake = JSON.parse(readFileSync(join(repo, 'crates/dumpstar-catalog/fake/swu-fake.json'), 'utf8'));
+	const fake = JSON.parse(readFileSync(join(repo, 'crates/dumpstar-swu/fake/swu-fake.json'), 'utf8'));
 	for (const c of fake.cards) for (const a of c.aspects) catalog.add(a);
 	assert.ok(catalog.size >= 6, `catalog aspects: ${[...catalog]}`);
 	for (const name of catalog) assert.ok(aspectOf(name), `${name} has no aspect row`);

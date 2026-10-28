@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/dumpstar-catalog",
+    "crates/dumpstar-swu",
     "crates/dumpstar-cli",
     "crates/dumpstar-core",
     "crates/dumpstar-db",
@@ -22,7 +22,7 @@ repository = "https://github.com/DeckDumpster/dumpstar"
 
 [workspace.dependencies]
 # Internal crates
-dumpstar-catalog = { path = "crates/dumpstar-catalog" }
+dumpstar-swu = { path = "crates/dumpstar-swu" }
 dumpstar-core = { path = "crates/dumpstar-core" }
 dumpstar-db = { path = "crates/dumpstar-db" }
 dumpstar-derive = { path = "crates/dumpstar-derive" }
@@ -33,6 +33,7 @@ dumpstar-ship = { path = "crates/dumpstar-ship" }
 
 # The shared kit, from the tailnet registry by semver range; Cargo.lock pins the exact release.
 dumpster-kit-tcgcsv = { version = "0.1", registry = "tailnet" }
+dumpster-kit-catalog = { version = "0.1", registry = "tailnet" }
 dumpster-kit-tenancy = { version = "0.1", registry = "tailnet" }
 dumpster-kit-lake = { version = "0.1", registry = "tailnet" }
 dumpster-kit-keys = { version = "0.1", registry = "tailnet" }

@@ -6,7 +6,7 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-dumpstar-catalog.workspace = true
+dumpstar-swu.workspace = true
 dumpstar-db.workspace = true
 dumpstar-ingest.workspace = true
 dumpster-kit-lake.workspace = true

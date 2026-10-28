@@ -111,8 +111,8 @@ pub fn open_shared_with_patience(path: &Path, patience: Duration) -> Result<Conn
     schema_version::gate(&conn, schema_version::Shared)?;
     // A catalog written by the Pokémon-shaped schema this project was forked
     // with is emptied, not migrated: it is derived data (sp-r7w5xi).
-    if dumpstar_catalog::reset_if_legacy(&conn).map_err(|e| match e {
-        dumpstar_catalog::CatalogError::Sqlite(e) => crate::DbError::Sqlite(e),
+    if dumpstar_swu::reset_if_legacy(&conn).map_err(|e| match e {
+        dumpstar_swu::CatalogError::Sqlite(e) => crate::DbError::Sqlite(e),
         other => crate::DbError::Conflict(other.to_string()),
     })? {
         println!(
@@ -133,7 +133,7 @@ pub fn open_shared_with_patience(path: &Path, patience: Duration) -> Result<Conn
 /// fingerprint can lie, and the two being adjacent is what makes the drift
 /// gate a thing somebody is likely to run into.
 fn converge(conn: &mut Connection) -> Result<()> {
-    conn.execute_batch(dumpstar_catalog::SCHEMA)?;
+    conn.execute_batch(dumpstar_swu::SCHEMA)?;
     conn.execute_batch(SCHEMA_OVERLAY)?;
     backfill_sealed(conn)?;
     // The search query language's metadata (keywords, rarity ranks,
@@ -1394,7 +1394,7 @@ mod tests {
     fn legacy_pokemon_catalog(path: &Path) {
         let conn = Connection::open(path).unwrap();
         conn.execute_batch("PRAGMA journal_mode = WAL;").unwrap();
-        conn.execute_batch(dumpstar_catalog::LEGACY_SHAPE_DDL)
+        conn.execute_batch(dumpstar_swu::LEGACY_SHAPE_DDL)
             .unwrap();
         conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)")
             .unwrap();
@@ -1411,7 +1411,7 @@ mod tests {
         assert_eq!(file_user_version(&path), 2);
 
         let conn = open_shared(&path).unwrap();
-        for gone in dumpstar_catalog::LEGACY_ONLY_OBJECTS {
+        for gone in dumpstar_swu::LEGACY_ONLY_OBJECTS {
             assert!(!has_table(&conn, gone), "{gone} survived the rebuild");
         }
         let cols: Vec<String> = conn
@@ -1426,7 +1426,7 @@ mod tests {
             "not the SWU cards table"
         );
         assert!(
-            !dumpstar_catalog::is_legacy(&conn).unwrap(),
+            !dumpstar_swu::is_legacy(&conn).unwrap(),
             "a legacy column survived"
         );
         assert_eq!(count(&conn, "sets"), 0, "the legacy rows are emptied");

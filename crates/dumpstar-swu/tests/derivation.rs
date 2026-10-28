@@ -2,11 +2,11 @@
 //! already applied, from the raw already landed (sp-boex8e).
 
 use chrono::{TimeZone, Utc};
-use dumpstar_catalog::Catalog;
-use dumpstar_catalog::apply::apply_at;
-use dumpstar_catalog::landing::land;
-use dumpstar_catalog::source::RawPayload;
-use dumpstar_catalog::swu::SRC_PRODUCTS;
+use dumpstar_swu::Catalog;
+use dumpstar_swu::apply::apply_at;
+use dumpstar_swu::landing::land;
+use dumpstar_swu::source::RawPayload;
+use dumpstar_swu::swu::SRC_PRODUCTS;
 
 fn images(c: &Catalog) -> i64 {
     c.conn()
@@ -66,7 +66,7 @@ fn a_text_catalog_without_keywords_or_epic_actions_alarms() {
             )
             .unwrap();
     }
-    let a = dumpstar_catalog::check::missing_structured_text(c.conn()).unwrap();
+    let a = dumpstar_swu::check::missing_structured_text(c.conn()).unwrap();
     assert_eq!(a.len(), 1, "{a:?}");
     c.conn()
         .execute(
@@ -75,7 +75,7 @@ fn a_text_catalog_without_keywords_or_epic_actions_alarms() {
         )
         .unwrap();
     assert!(
-        dumpstar_catalog::check::missing_structured_text(c.conn())
+        dumpstar_swu::check::missing_structured_text(c.conn())
             .unwrap()
             .is_empty()
     );
@@ -109,7 +109,7 @@ fn repeated_or_missing_rules_text_is_flagged() {
             )
             .unwrap();
     }
-    let a = dumpstar_catalog::check::suspect_rules_text(c.conn()).unwrap();
+    let a = dumpstar_swu::check::suspect_rules_text(c.conn()).unwrap();
     let keys: Vec<(&str, &str)> = a
         .iter()
         .map(|r| (r.kind.as_str(), r.key.as_str()))
@@ -153,7 +153,7 @@ fn a_keyword_with_a_number_in_the_text_but_null_value_is_flagged() {
             )
             .unwrap();
     }
-    let a = dumpstar_catalog::check::keyword_number_missing(c.conn()).unwrap();
+    let a = dumpstar_swu::check::keyword_number_missing(c.conn()).unwrap();
     let keys: Vec<(&str, &str)> = a
         .iter()
         .map(|r| (r.kind.as_str(), r.key.as_str()))
@@ -178,7 +178,7 @@ fn a_keyword_in_the_text_but_not_in_the_keywords_is_flagged() {
             )
             .unwrap();
     }
-    let a = dumpstar_catalog::check::keyword_missing_from_keywords(c.conn()).unwrap();
+    let a = dumpstar_swu::check::keyword_missing_from_keywords(c.conn()).unwrap();
     let keys: Vec<(&str, &str)> = a
         .iter()
         .map(|r| (r.kind.as_str(), r.key.as_str()))
@@ -197,9 +197,9 @@ fn reapplying_records_the_derivation_version_in_force() {
     c.reapply_landed(&dir.path().join("raw")).unwrap();
     assert!(c.derivation_versions().unwrap().contains(&(
         "official".to_string(),
-        dumpstar_catalog::apply::derivation_version("official")
+        dumpstar_swu::apply::derivation_version("official")
     )));
-    assert!(dumpstar_catalog::apply::derivation_version("official") >= 8);
+    assert!(dumpstar_swu::apply::derivation_version("official") >= 8);
 }
 
 #[test]
@@ -222,7 +222,7 @@ fn a_mechanic_like_phrase_the_derivation_missed_is_flagged() {
             )
             .unwrap();
     }
-    let a = dumpstar_catalog::check::mechanic_unmatched(c.conn()).unwrap();
+    let a = dumpstar_swu::check::mechanic_unmatched(c.conn()).unwrap();
     let keys: Vec<(&str, &str)> = a
         .iter()
         .map(|r| (r.kind.as_str(), r.key.as_str()))
@@ -232,7 +232,7 @@ fn a_mechanic_like_phrase_the_derivation_missed_is_flagged() {
 
 #[test]
 fn an_unmatched_phrase_files_once_and_never_fails_the_check() {
-    use dumpstar_catalog::filing::{Action, file};
+    use dumpstar_swu::filing::{Action, file};
     let dir = tempfile::tempdir().unwrap();
     let c = Catalog::open_writer(&dir.path().join("shared.sqlite")).unwrap();
     c.conn()
@@ -241,9 +241,9 @@ fn an_unmatched_phrase_files_once_and_never_fails_the_check() {
             [],
         )
         .unwrap();
-    let report = dumpstar_catalog::check::run_report(c.conn(), chrono::Utc::now()).unwrap();
+    let report = dumpstar_swu::check::run_report(c.conn(), chrono::Utc::now()).unwrap();
     assert!(report.open.iter().all(|a| a.kind != "mechanic_unmatched"));
-    let findings = dumpstar_catalog::check::mechanic_findings(c.conn()).unwrap();
+    let findings = dumpstar_swu::check::mechanic_findings(c.conn()).unwrap();
     let out = dir.path().join("filings");
     let first = file(&out, &findings).unwrap().expect("one filing");
     assert_eq!(first.action, Action::Open);
@@ -259,7 +259,7 @@ fn an_unmatched_phrase_files_once_and_never_fails_the_check() {
 
 #[test]
 fn a_later_finding_appends_to_the_open_bead() {
-    use dumpstar_catalog::filing::{Action, Finding, State, plan};
+    use dumpstar_swu::filing::{Action, Finding, State, plan};
     let f = |id: &str| Finding {
         card_id: id.into(),
         rules_text: "x".into(),

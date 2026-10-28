@@ -84,10 +84,7 @@ use crate::error::Result;
 /// harmless; it is called out only so nobody reads a changed hash as a bug.
 pub(crate) fn inputs() -> Vec<(&'static str, &'static str)> {
     vec![
-        (
-            "crates/dumpstar-catalog/src/schema.sql",
-            dumpstar_catalog::SCHEMA,
-        ),
+        ("crates/dumpstar-swu/src/schema.sql", dumpstar_swu::SCHEMA),
         (
             "crates/dumpstar-db/src/schema_shared.sql",
             crate::connection::SCHEMA_OVERLAY,
@@ -266,7 +263,7 @@ mod tests {
         // The catalog crate's schema is embedded there, not here.
         for path in hashed
             .into_iter()
-            .filter(|p| !p.starts_with("crates/dumpstar-catalog/"))
+            .filter(|p| !p.starts_with("crates/dumpstar-swu/"))
         {
             assert!(
                 found.contains(&path.to_string()),

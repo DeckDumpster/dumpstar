@@ -1,4 +1,4 @@
-//! `dumpstar-catalog` — the Star Wars: Unlimited catalog seam.
+//! `dumpstar-swu` — the Star Wars: Unlimited catalog seam.
 //!
 //! A [`CatalogSource`] yields one raw payload per fetch; [`landing::land`]
 //! writes it to disk with its URL, time and SHA-256 *before* anything parses

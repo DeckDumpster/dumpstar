@@ -37,13 +37,13 @@
 //!
 //! ## Where the catalog is
 //!
-//! The Star Wars: Unlimited catalog is `dumpstar-catalog`'s: the official card
+//! The Star Wars: Unlimited catalog is `dumpstar-swu`'s: the official card
 //! API crawl and the TCGCSV groups, products, prices and `last-updated.txt`
 //! stamp. [`land`] fetches all of it into `raw/` (`source=official
 //! dataset=cards`, `source=tcgcsv dataset=groups|products|prices|last-updated`);
 //! [`derive`] replays it through the **same** [`OfficialSource`] and
 //! [`TcgcsvSource`] adapters, and applies every payload with the same
-//! `dumpstar_catalog::apply` the removed online `catalog-apply --swu` used to run
+//! `dumpstar_swu::apply` the removed online `catalog-apply --swu` used to run
 //! (sp-6i11rn: relocated, not rewritten). The adapters only ever fetch through
 //! a [`WireFetch`], so landing and replaying are two settings of one function.
 //!
@@ -61,14 +61,14 @@ use std::sync::Arc;
 
 use rusqlite::Connection;
 
-use dumpstar_catalog::CatalogError;
-use dumpstar_catalog::apply::apply;
-use dumpstar_catalog::fetch::{Fetch, USER_AGENT};
-use dumpstar_catalog::landing::{Provenance, sha256_hex};
-use dumpstar_catalog::swu::{OFFICIAL_BASE, OfficialSource, TCGCSV_BASE, TcgcsvSource};
-use dumpstar_catalog::{Catalog, CatalogSource};
 use dumpstar_ingest::landing::{self, ReplaySource, Wire};
 use dumpstar_ingest::upstream;
+use dumpstar_swu::CatalogError;
+use dumpstar_swu::apply::apply;
+use dumpstar_swu::fetch::{Fetch, USER_AGENT};
+use dumpstar_swu::landing::{Provenance, sha256_hex};
+use dumpstar_swu::swu::{OFFICIAL_BASE, OfficialSource, TCGCSV_BASE, TcgcsvSource};
+use dumpstar_swu::{Catalog, CatalogSource};
 use dumpster_kit_lake::{Dataset, PartFormat, RawLanding, Source};
 use dumpster_kit_lakehouse::partition::{Incomplete, Need, Requirement, Requirements};
 
@@ -208,7 +208,7 @@ pub struct Pictures {
 }
 
 /// The one door to the network for the catalog's adapters: a
-/// [`dumpstar_catalog::fetch::Fetch`] that goes through
+/// [`dumpstar_swu::fetch::Fetch`] that goes through
 /// [`landing::fetch_bytes`], so retry, raw landing and replay apply to every
 /// request the official and TCGCSV sources make. A replaying wire reaches no
 /// upstream at all.
@@ -313,7 +313,7 @@ fn dataset_of(url: &str) -> Option<(Source, Dataset, PartFormat)> {
 }
 
 impl Fetch for WireFetch {
-    fn get(&self, url: &str) -> dumpstar_catalog::Result<Vec<u8>> {
+    fn get(&self, url: &str) -> dumpstar_swu::Result<Vec<u8>> {
         let (source, dataset, format) = dataset_of(url)
             .or_else(|| {
                 self.pictures
@@ -357,7 +357,7 @@ fn origins() -> (String, String) {
 fn payloads(
     options: &Options<'_>,
     official: bool,
-) -> anyhow::Result<(Vec<dumpstar_catalog::RawPayload>, Option<anyhow::Error>)> {
+) -> anyhow::Result<(Vec<dumpstar_swu::RawPayload>, Option<anyhow::Error>)> {
     let (official_base, tcgcsv_base) = origins();
     let fetch = WireFetch::new(options.wire())?;
     let mut out = Vec::new();
@@ -473,8 +473,8 @@ pub fn derive_with(
 }
 
 /// Replay the partition's pictures into the data directory through the same
-/// stores the online `catalog-apply --assets` filled: [`dumpstar_catalog::art`]
-/// and [`dumpstar_catalog::images`], over a [`WireFetch`] that can only answer
+/// stores the online `catalog-apply --assets` filled: [`dumpstar_swu::art`]
+/// and [`dumpstar_swu::images`], over a [`WireFetch`] that can only answer
 /// from `raw/`. Which sealed pictures are wanted is the `sealed_images` rows the
 /// apply just wrote.
 fn replay_pictures(catalog: &Catalog, options: &Options<'_>) -> anyhow::Result<Pictures> {
@@ -486,11 +486,11 @@ fn replay_pictures(catalog: &Catalog, options: &Options<'_>) -> anyhow::Result<P
     };
 
     let art = WireFetch::new(options.wire())?.for_pictures(SET_ART);
-    let r = dumpstar_catalog::art::fetch(
+    let r = dumpstar_swu::art::fetch(
         &options.data_dir.join("art"),
         &art,
         date,
-        &dumpstar_catalog::art::sources(),
+        &dumpstar_swu::art::sources(),
     )?;
     out.set_art_fetched = r.fetched;
     out.set_art_already = r.already;
@@ -498,7 +498,7 @@ fn replay_pictures(catalog: &Catalog, options: &Options<'_>) -> anyhow::Result<P
         .extend(r.failed.into_iter().map(|f| format!("set art {f}")));
 
     let sealed = WireFetch::new(options.wire())?.for_pictures(SEALED_IMAGES);
-    let r = dumpstar_catalog::images::fetch_pending(
+    let r = dumpstar_swu::images::fetch_pending(
         catalog,
         &sealed,
         &options.data_dir.join("sealed-images"),
@@ -513,7 +513,7 @@ fn replay_pictures(catalog: &Catalog, options: &Options<'_>) -> anyhow::Result<P
 fn apply_all(
     catalog: &mut Catalog,
     options: &Options<'_>,
-    payloads: &[dumpstar_catalog::RawPayload],
+    payloads: &[dumpstar_swu::RawPayload],
 ) -> anyhow::Result<Report> {
     let mut report = Report::default();
     if catalog.rejoin_if_stale()? {
@@ -613,18 +613,15 @@ pub fn land(options: &Options<'_>) -> anyhow::Result<Report> {
 /// manifest (which makes that dataset incomplete) and warned about; it never
 /// fails the night, because a derive reads an incomplete picture run as far as
 /// it goes and `catalog-check` alarms what is still missing.
-fn land_pictures(
-    options: &Options<'_>,
-    tcgcsv: &[dumpstar_catalog::RawPayload],
-) -> anyhow::Result<()> {
+fn land_pictures(options: &Options<'_>, tcgcsv: &[dumpstar_swu::RawPayload]) -> anyhow::Result<()> {
     let mut sealed = Vec::new();
     for p in tcgcsv {
         let path = p.url.split(['?', '#']).next().unwrap_or(&p.url);
         if path.rsplit('/').next() == Some("products") {
-            sealed.extend(dumpstar_catalog::images::urls_of_products(&p.bytes)?);
+            sealed.extend(dumpstar_swu::images::urls_of_products(&p.bytes)?);
         }
     }
-    let set_art = dumpstar_catalog::art::urls(&dumpstar_catalog::art::sources());
+    let set_art = dumpstar_swu::art::urls(&dumpstar_swu::art::sources());
     for (dataset, urls) in [(SET_ART, set_art), (SEALED_IMAGES, sealed)] {
         println!("Landing {} {dataset} picture(s)...", urls.len());
         let fetch = WireFetch::new(options.wire())?.for_pictures(dataset);

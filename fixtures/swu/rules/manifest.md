@@ -1,7 +1,7 @@
 # SWU rules documents
 
 Retrieved 2026-10-13 (UTC). Never edit these; re-retrieve instead. The format data in
-`crates/dumpstar-catalog/data/formats.json` cites them and
+`crates/dumpstar-swu/data/formats.json` cites them and
 `crates/dumpstar-core/tests/rules_citations.rs` checks every citation against the text.
 
 | File | source_url | Shows |

@@ -773,8 +773,7 @@ fn a_refresh_stores_each_sealed_products_picture_locally_with_its_source() {
     let pics = Pictures {
         asked: RefCell::new(vec![]),
     };
-    let report =
-        dumpstar_swu::images::fetch_pending(&c, &pics, dir.path(), "2026-10-13").unwrap();
+    let report = dumpstar_swu::images::fetch_pending(&c, &pics, dir.path(), "2026-10-13").unwrap();
     assert!(report.failed.is_empty(), "{:?}", report.failed);
     for id in &ids {
         let file = dir.path().join(format!("{id}.jpg"));
@@ -803,8 +802,7 @@ fn a_refresh_stores_each_sealed_products_picture_locally_with_its_source() {
         "card products have no sealed picture"
     );
 
-    let again =
-        dumpstar_swu::images::fetch_pending(&c, &pics, dir.path(), "2026-10-14").unwrap();
+    let again = dumpstar_swu::images::fetch_pending(&c, &pics, dir.path(), "2026-10-14").unwrap();
     assert_eq!(again.stored, 0, "a stored picture is not fetched again");
     assert_eq!(pics.asked.borrow().len(), report.stored);
 }
@@ -824,8 +822,7 @@ fn a_forbidden_sealed_picture_is_reported_and_alarmed_not_fatal() {
     let (e, _) = loaded();
     let c = Catalog::open_writer(&e.db).unwrap();
     let dir = tempfile::tempdir().unwrap();
-    let r =
-        dumpstar_swu::images::fetch_pending(&c, &Forbidden, dir.path(), "2026-10-16").unwrap();
+    let r = dumpstar_swu::images::fetch_pending(&c, &Forbidden, dir.path(), "2026-10-16").unwrap();
     assert!(!r.failed.is_empty());
     assert!(
         r.coverage_line().contains("403 Forbidden"),

@@ -1394,8 +1394,7 @@ mod tests {
     fn legacy_pokemon_catalog(path: &Path) {
         let conn = Connection::open(path).unwrap();
         conn.execute_batch("PRAGMA journal_mode = WAL;").unwrap();
-        conn.execute_batch(dumpstar_swu::LEGACY_SHAPE_DDL)
-            .unwrap();
+        conn.execute_batch(dumpstar_swu::LEGACY_SHAPE_DDL).unwrap();
         conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)")
             .unwrap();
     }

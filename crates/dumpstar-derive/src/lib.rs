@@ -61,14 +61,14 @@ use std::sync::Arc;
 
 use rusqlite::Connection;
 
+use dumpstar_ingest::landing::{self, ReplaySource, Wire};
+use dumpstar_ingest::upstream;
 use dumpstar_swu::CatalogError;
 use dumpstar_swu::apply::apply;
 use dumpstar_swu::fetch::{Fetch, USER_AGENT};
 use dumpstar_swu::landing::{Provenance, sha256_hex};
 use dumpstar_swu::swu::{OFFICIAL_BASE, OfficialSource, TCGCSV_BASE, TcgcsvSource};
 use dumpstar_swu::{Catalog, CatalogSource};
-use dumpstar_ingest::landing::{self, ReplaySource, Wire};
-use dumpstar_ingest::upstream;
 use dumpster_kit_lake::{Dataset, PartFormat, RawLanding, Source};
 use dumpster_kit_lakehouse::partition::{Incomplete, Need, Requirement, Requirements};
 
@@ -613,10 +613,7 @@ pub fn land(options: &Options<'_>) -> anyhow::Result<Report> {
 /// manifest (which makes that dataset incomplete) and warned about; it never
 /// fails the night, because a derive reads an incomplete picture run as far as
 /// it goes and `catalog-check` alarms what is still missing.
-fn land_pictures(
-    options: &Options<'_>,
-    tcgcsv: &[dumpstar_swu::RawPayload],
-) -> anyhow::Result<()> {
+fn land_pictures(options: &Options<'_>, tcgcsv: &[dumpstar_swu::RawPayload]) -> anyhow::Result<()> {
     let mut sealed = Vec::new();
     for p in tcgcsv {
         let path = p.url.split(['?', '#']).next().unwrap_or(&p.url);

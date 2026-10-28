@@ -84,10 +84,7 @@ use crate::error::Result;
 /// harmless; it is called out only so nobody reads a changed hash as a bug.
 pub(crate) fn inputs() -> Vec<(&'static str, &'static str)> {
     vec![
-        (
-            "crates/dumpstar-swu/src/schema.sql",
-            dumpstar_swu::SCHEMA,
-        ),
+        ("crates/dumpstar-swu/src/schema.sql", dumpstar_swu::SCHEMA),
         (
             "crates/dumpstar-db/src/schema_shared.sql",
             crate::connection::SCHEMA_OVERLAY,

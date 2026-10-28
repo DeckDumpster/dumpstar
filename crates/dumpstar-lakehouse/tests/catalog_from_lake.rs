@@ -24,11 +24,11 @@ use std::process::{Command, Output};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use dumpstar_derive::DeriveClock;
 use dumpstar_swu::Catalog;
 use dumpstar_swu::fetch::HttpFetch;
 use dumpstar_swu::job::run_once;
 use dumpstar_swu::swu::{OfficialSource, TcgcsvSource};
-use dumpstar_derive::DeriveClock;
 use dumpster_kit_lake::{DirStore, RawLanding};
 use support::{FakeUpstream, Reply};
 

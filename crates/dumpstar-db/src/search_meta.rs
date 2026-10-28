@@ -31,7 +31,7 @@ pub fn keywords_json() -> String {
 pub(crate) fn keywords_seed() -> String {
     KEYWORDS_SEED.replace(
         "{{KEYWORDS}}",
-        &dumpstar_catalog::official::KNOWN_KEYWORDS.join(", "),
+        &dumpstar_swu::official::KNOWN_KEYWORDS.join(", "),
     )
 }
 // `rarities.json` ranks the Star Wars: Unlimited tiers (Common through
@@ -361,7 +361,7 @@ mod tests {
             .find(|k| k.canonical == "keyword")
             .and_then(|k| k.help.clone())
             .unwrap();
-        for k in dumpstar_catalog::official::KNOWN_KEYWORDS {
+        for k in dumpstar_swu::official::KNOWN_KEYWORDS {
             assert!(help.contains(k), "{k} missing from {help}");
         }
         assert!(help.contains("Support") && help.contains("Plot"));

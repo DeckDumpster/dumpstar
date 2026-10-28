@@ -4,7 +4,7 @@
 //! Produces two SQLite files in `--out` (default `tests/ui/fixtures`):
 //!
 //! * `shared.sqlite` — immutable catalog (sets, cards, printings, prices,
-//!   formats, sealed products): the one SWU model, `dumpstar_catalog::SCHEMA`
+//!   formats, sealed products): the one SWU model, `dumpstar_swu::SCHEMA`
 //!   plus dumpstar-db's overlay, as `open_shared` creates it.
 //! * `collection.sqlite` — per-user mutable data (binders, decks, batches,
 //!   orders, sealed, wishlist, views, collection).
@@ -1186,7 +1186,7 @@ fn seed_catalog(conn: &Connection) -> anyhow::Result<()> {
     // Formats come from the catalog crate's own data, so the fixture's rules
     // are the real ones; a few legality rows are the fixture's invention, to
     // give the legality checker something to say.
-    for f in dumpstar_catalog::formats::builtin_formats() {
+    for f in dumpstar_swu::formats::builtin_formats() {
         conn.execute(
             "INSERT INTO formats (format_id, name) VALUES (?1, ?2)",
             rusqlite::params![f.format_id, f.name],

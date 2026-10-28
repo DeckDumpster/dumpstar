@@ -2,10 +2,10 @@
 //! (the printed order); other printings list them by aspect id and must not
 //! reorder them (sp-mmro2r).
 
-use dumpstar_catalog::Catalog;
-use dumpstar_catalog::apply::apply;
-use dumpstar_catalog::landing::Provenance;
-use dumpstar_catalog::official;
+use dumpstar_swu::Catalog;
+use dumpstar_swu::apply::apply;
+use dumpstar_swu::landing::Provenance;
+use dumpstar_swu::official;
 use serde_json::{Value, json};
 
 fn aspect(id: i64, name: &str) -> Value {

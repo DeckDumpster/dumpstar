@@ -5,11 +5,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use chrono::{TimeZone, Utc};
-use dumpstar_catalog::apply::apply;
-use dumpstar_catalog::job::run_once;
-use dumpstar_catalog::landing::{Provenance, land, sha256_hex};
-use dumpstar_catalog::source::{FAKE_CATALOG, FAKE_URL};
-use dumpstar_catalog::{Catalog, FakeSource};
+use dumpstar_swu::apply::apply;
+use dumpstar_swu::job::run_once;
+use dumpstar_swu::landing::{Provenance, land, sha256_hex};
+use dumpstar_swu::source::{FAKE_CATALOG, FAKE_URL};
+use dumpstar_swu::{Catalog, FakeSource};
 use rusqlite::Connection;
 
 fn now() -> chrono::DateTime<Utc> {
@@ -152,9 +152,9 @@ fn raw_payload_is_on_disk_with_hash_and_provenance_before_apply() {
 #[test]
 fn a_payload_that_fails_to_parse_is_still_landed() {
     struct Bad;
-    impl dumpstar_catalog::CatalogSource for Bad {
-        fn fetch(&self) -> dumpstar_catalog::Result<Vec<dumpstar_catalog::RawPayload>> {
-            Ok(vec![dumpstar_catalog::RawPayload {
+    impl dumpstar_swu::CatalogSource for Bad {
+        fn fetch(&self) -> dumpstar_swu::Result<Vec<dumpstar_swu::RawPayload>> {
+            Ok(vec![dumpstar_swu::RawPayload {
                 source: "fake".into(),
                 url: "fake://bad".into(),
                 bytes: b"not json".to_vec(),
@@ -317,7 +317,7 @@ fn no_request_handler_opens_the_catalog_for_writing() {
                     Some(i) => &text[..i],
                     None => &text,
                 };
-                if src.contains("dumpstar_catalog")
+                if src.contains("dumpstar_swu")
                     && ["open_writer", "apply", "run_once", "job::"]
                         .iter()
                         .any(|w| src.contains(w))
@@ -336,7 +336,7 @@ fn no_request_handler_opens_the_catalog_for_writing() {
 #[test]
 fn landing_twice_keeps_the_first_provenance() {
     let e = env();
-    let p = dumpstar_catalog::RawPayload {
+    let p = dumpstar_swu::RawPayload {
         source: "fake".into(),
         url: "fake://x".into(),
         bytes: b"{}".to_vec(),

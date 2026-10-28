@@ -8,7 +8,7 @@
 
 pub mod app;
 /// The set-art store reader, re-exported so the server reads art through the db crate.
-pub use dumpstar_catalog::art;
+pub use dumpstar_swu::art;
 pub mod batches;
 pub mod binder;
 pub mod binders;

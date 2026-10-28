@@ -1,5 +1,5 @@
 [package]
-name = "dumpstar-catalog"
+name = "dumpstar-swu"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

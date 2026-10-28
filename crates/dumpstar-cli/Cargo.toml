@@ -20,7 +20,7 @@ required-features = ["test-jwks"]
 test-jwks = ["dep:dumpster-kit-tenancy", "dep:serde_json"]
 
 [dependencies]
-dumpstar-catalog.workspace = true
+dumpstar-swu.workspace = true
 dumpstar-core.workspace = true
 dumpstar-db.workspace = true
 dumpstar-derive.workspace = true

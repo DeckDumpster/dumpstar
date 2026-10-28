@@ -11,7 +11,7 @@
 # Sourced by deploy.sh; deploy/data-jobs.sh is the on-demand entry point.
 
 # Paths whose change alters what catalog-apply or the price build writes.
-DUMPSTAR_DATA_JOBS_PATHS='^(crates/dumpstar-catalog/|crates/dumpstar-ingest/|crates/dumpstar-derive/|crates/dumpstar-lakehouse/|data/remedial/|lake/|deploy/prices\.sh$|deploy/dumpstar-(catalog-sync|prices)\.service$)'
+DUMPSTAR_DATA_JOBS_PATHS='^(crates/dumpstar-swu/|crates/dumpstar-ingest/|crates/dumpstar-derive/|crates/dumpstar-lakehouse/|data/remedial/|lake/|deploy/prices\.sh$|deploy/dumpstar-(catalog-sync|prices)\.service$)'
 
 dumpstar_deployed_sha_file() {
     echo "${XDG_STATE_HOME:-$HOME/.local/state}/dumpstar/${1}.deployed-sha"

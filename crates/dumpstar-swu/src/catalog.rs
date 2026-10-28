@@ -125,7 +125,7 @@ pub fn add_missing_columns(conn: &Connection) -> Result<Vec<String>> {
     for (table, column, decl) in ADDITIVE_COLUMNS {
         if table_exists.exists([table])? && !has_column.exists([table, column])? {
             conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} {decl}"))?;
-            eprintln!("dumpstar-catalog: added column {table}.{column} in place (data kept)");
+            eprintln!("dumpstar-swu: added column {table}.{column} in place (data kept)");
             added.push(format!("{table}.{column}"));
         }
     }
@@ -165,7 +165,7 @@ pub fn reset_if_legacy(conn: &Connection) -> Result<bool> {
         return Ok(false);
     }
     eprintln!(
-        "dumpstar-catalog: WARNING: the catalog holds a legacy card model or an old table \
+        "dumpstar-swu: WARNING: the catalog holds a legacy card model or an old table \
          shape; DROPPING EVERY TABLE (rebuilt only by the next catalog-apply)"
     );
     // (kind, name), kind being the DROP keyword: a virtual table is listed as

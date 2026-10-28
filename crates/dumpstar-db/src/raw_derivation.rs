@@ -124,7 +124,7 @@ mod tests {
 
     fn catalog() -> Connection {
         let mut conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch(dumpstar_catalog::SCHEMA).unwrap();
+        conn.execute_batch(dumpstar_swu::SCHEMA).unwrap();
         conn.execute_batch(include_str!("schema_shared.sql"))
             .unwrap();
         conn.transaction().unwrap().commit().unwrap();

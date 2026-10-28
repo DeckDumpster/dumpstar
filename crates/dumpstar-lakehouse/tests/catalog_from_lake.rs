@@ -24,10 +24,10 @@ use std::process::{Command, Output};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use dumpstar_catalog::Catalog;
-use dumpstar_catalog::fetch::HttpFetch;
-use dumpstar_catalog::job::run_once;
-use dumpstar_catalog::swu::{OfficialSource, TcgcsvSource};
+use dumpstar_swu::Catalog;
+use dumpstar_swu::fetch::HttpFetch;
+use dumpstar_swu::job::run_once;
+use dumpstar_swu::swu::{OfficialSource, TcgcsvSource};
 use dumpstar_derive::DeriveClock;
 use dumpster_kit_lake::{DirStore, RawLanding};
 use support::{FakeUpstream, Reply};
@@ -222,14 +222,14 @@ impl Harness {
             http: HttpFetch::new(Duration::ZERO).unwrap(),
             base: self.upstream.base_url(),
         };
-        dumpstar_catalog::art::fetch(
+        dumpstar_swu::art::fetch(
             &into.join("art"),
             &fold,
             chrono::NaiveDate::from_ymd_opt(2026, 10, 13).unwrap(),
-            &dumpstar_catalog::art::sources(),
+            &dumpstar_swu::art::sources(),
         )
         .unwrap();
-        dumpstar_catalog::images::fetch_pending(
+        dumpstar_swu::images::fetch_pending(
             &Catalog::open_writer(db).unwrap(),
             &fold,
             &into.join("sealed-images"),
@@ -416,8 +416,8 @@ struct Folded {
     base: String,
 }
 
-impl dumpstar_catalog::fetch::Fetch for Folded {
-    fn get(&self, url: &str) -> dumpstar_catalog::Result<Vec<u8>> {
+impl dumpstar_swu::fetch::Fetch for Folded {
+    fn get(&self, url: &str) -> dumpstar_swu::Result<Vec<u8>> {
         let (_, rest) = url.split_once("://").unwrap();
         let path = &rest[rest.find('/').unwrap()..];
         self.http.get(&format!("{}{path}", self.base))

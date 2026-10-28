@@ -1,5 +1,5 @@
 -- What dumpstar-db layers on top of the SWU catalog schema
--- (crates/dumpstar-catalog/src/schema.sql — the one card model). Applied on
+-- (crates/dumpstar-swu/src/schema.sql — the one card model). Applied on
 -- every read-write open of shared.sqlite, after the catalog schema.
 --
 -- Nothing here describes a card: sets, cards, printings, prices, formats and
@@ -7,7 +7,7 @@
 -- language's registry, the views the application reads sealed products
 -- through, and the two provenance tables. A shared.sqlite written by the
 -- Pokémon-shaped schema this project was forked with is emptied by
--- `dumpstar_catalog::reset_if_legacy` before either is applied.
+-- `dumpstar_swu::reset_if_legacy` before either is applied.
 
 -- ---------------------------------------------------------------------
 -- Search query language metadata (data-model-is-the-product; decision D1/D2).
@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS sealed_products (
 CREATE INDEX IF NOT EXISTS idx_sealed_products_set      ON sealed_products(set_code);
 CREATE INDEX IF NOT EXISTS idx_sealed_products_category ON sealed_products(category);
 
--- `sealed_prices` itself is the catalog's (dumpstar-catalog schema.sql): the apply
+-- `sealed_prices` itself is the catalog's (dumpstar-swu schema.sql): the apply
 -- job writes it.
 CREATE INDEX IF NOT EXISTS idx_sealed_prices_product ON sealed_prices(tcgplayer_product_id);
 CREATE INDEX IF NOT EXISTS idx_sealed_prices_date    ON sealed_prices(observed_at);

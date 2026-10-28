@@ -30,7 +30,7 @@ base64 = "0.22"
 dumpster-kit-tenancy = { workspace = true, features = ["testing"] }
 dumpster-kit-conformance.workspace = true
 dumpster-kit-oidc = { workspace = true, features = ["testing"] }
-dumpstar-catalog.workspace = true
+dumpstar-swu.workspace = true
 chrono.workspace = true
 tempfile.workspace = true
 serde_json.workspace = true

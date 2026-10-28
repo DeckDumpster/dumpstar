@@ -11,10 +11,10 @@ catalog, tenancy and the shared kit arrive in later rows.
 | | |
 | --- | --- |
 | `crates/dumpstar-core` | domain types, the collection search query parser, importers |
-| `crates/dumpstar-db` | SQLite schemas — `shared.sqlite` is `dumpstar-catalog`'s `schema.sql` plus the overlay `schema_shared.sql`, tenants are `schema_user.sql` — and the queries and seeds over them |
-| `crates/dumpstar-catalog` | the SWU catalog seam: `schema.sql`, record types, raw landing, idempotent apply, the fake source, the apply; the official-API and tcgcsv adapters (`swu`, `official`, `tcgcsv`), the join (`crosswalk`, `groups.tsv`), alarms (`check`, `catalog-check`; `accepted_alarms.tsv` lists the hand-triaged alarms it passes, one row per kind and key with its reason) |
+| `crates/dumpstar-db` | SQLite schemas — `shared.sqlite` is `dumpstar-swu`'s `schema.sql` plus the overlay `schema_shared.sql`, tenants are `schema_user.sql` — and the queries and seeds over them |
+| `crates/dumpstar-swu` | the SWU catalog seam: `schema.sql`, record types, raw landing, idempotent apply, the fake source, the apply; the official-API and tcgcsv adapters (`swu`, `official`, `tcgcsv`), the join (`crosswalk`, `groups.tsv`), alarms (`check`, `catalog-check`; `accepted_alarms.tsv` lists the hand-triaged alarms it passes, one row per kind and key with its reason) |
 | `crates/dumpstar-ingest` | the transport for the kit's TCGCSV client (`dumpster-kit-tcgcsv`, pinned by rev in the workspace `Cargo.toml`; category 79, Star Wars: Unlimited), retry, raw landing wire |
-| `crates/dumpstar-derive`, `-lakehouse` | the site's land/derive entry points and the `dumpstar-lake-derive` binary, over `dumpster-kit-lake`/`-derive`/`-lakehouse`. **The catalog is derived here, offline, from the lake's `raw/`** (sp-6i11rn): `dumpstar data refresh` lands the official card pages and tcgcsv (`source=official dataset=cards`; `source=tcgcsv dataset=groups|products|prices|last-updated`), `dumpstar-lake-derive shared --ingest-date D` replays them through the same `OfficialSource`/`TcgcsvSource` adapters and `dumpstar-catalog`'s apply into `shared.sqlite` (exit 2: the official crawl was absent that night, prices still derived). Set art and sealed pictures ride the same way (sp-m1fuer): `data refresh` lands each as a binary part (`source=swu-assets dataset=set-art|sealed-images`) and the derive replays them into `$DUMPSTAR_HOME/art` and `sealed-images/`. The prod container never fetches the official API, tcgcsv or an image host; `catalog-apply --assets` is the legacy online picture path, kept as the rollback (`--swu` is gone, sp-8wfhil) (the `catalog-sync` unit now does nothing) |
+| `crates/dumpstar-derive`, `-lakehouse` | the site's land/derive entry points and the `dumpstar-lake-derive` binary, over `dumpster-kit-lake`/`-derive`/`-lakehouse`. **The catalog is derived here, offline, from the lake's `raw/`** (sp-6i11rn): `dumpstar data refresh` lands the official card pages and tcgcsv (`source=official dataset=cards`; `source=tcgcsv dataset=groups|products|prices|last-updated`), `dumpstar-lake-derive shared --ingest-date D` replays them through the same `OfficialSource`/`TcgcsvSource` adapters and `dumpstar-swu`'s apply into `shared.sqlite` (exit 2: the official crawl was absent that night, prices still derived). Set art and sealed pictures ride the same way (sp-m1fuer): `data refresh` lands each as a binary part (`source=swu-assets dataset=set-art|sealed-images`) and the derive replays them into `$DUMPSTAR_HOME/art` and `sealed-images/`. The prod container never fetches the official API, tcgcsv or an image host; `catalog-apply --assets` is the legacy online picture path, kept as the rollback (`--swu` is gone, sp-8wfhil) (the `catalog-sync` unit now does nothing) |
 | `crates/dumpstar-ship`, `-erase` | the `DUMPSTAR` bindings and operator binaries over the kit's `-keys`, `-ship`, `-erase`; the raw landing zone, key custody, shipper, deletion and replay themselves are the kit's (`dumpster-kit-*` pinned in the workspace `Cargo.toml`) |
 | `crates/dumpstar-server`, `-cli` | the HTTP server and the `dumpstar` binary |
 | `frontend/` | SvelteKit (Svelte 5, adapter-static). Tokens and ui primitives are dumpster-kit's, vendored at the revision `frontend/kit.lock` pins into `src/lib/kit/` (`scripts/kit-sync.sh <kit checkout>` bumps it; `tests/kit-pin.test.js` fails on drift); dumpstar's own theme is `src/lib/styles/theme.css` |
@@ -22,14 +22,14 @@ catalog, tenancy and the shared kit arrive in later rows.
 | `fixtures/swu/` | verbatim captures of the SWU data sources (official API, tcgcsv) and, in `rules/`, the retrieved Comprehensive Rules the format data cites |
 
 **One card model.** `shared.sqlite` holds the Star Wars: Unlimited catalog and
-nothing else: `dumpstar-catalog/src/schema.sql` (sets, cards, printings, the
+nothing else: `dumpstar-swu/src/schema.sql` (sets, cards, printings, the
 crosswalk, prices, formats, the FTS index) with `dumpstar-db`'s overlay on top
 (search registry, sealed products). A card belongs to no set; a *printing*
 carries set, collector number, variant (Standard, Hyperspace, Showcase, Promo)
 and finish (Normal, Foil), and (set, number, finish) names one. Collection,
 deck, binder, wishlist and sealed rows reference `printing_id` / `card_id` from
 it. A `shared.sqlite` written by the Pokémon-shaped schema this repository was
-forked with is detected (`dumpstar_catalog::reset_if_legacy`) and emptied on the
+forked with is detected (`dumpstar_swu::reset_if_legacy`) and emptied on the
 next read-write open or catalog derive; a column the schema merely gains is added in place (`ADDITIVE_COLUMNS`), never by a reset (sp-0mjd2y), and a deploy fails and restores if sets/cards/printings counts change by more than 5%. The legacy file is derived data, tenant files are
 other files and are never touched.
 

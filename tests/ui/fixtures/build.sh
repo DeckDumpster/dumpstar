@@ -19,7 +19,7 @@ cache_root="${DUMPSTAR_FIXTURE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/dumpstar-f
 key="$(
     cd "$root"
     {
-        find crates/dumpstar-cli/src crates/dumpstar-catalog/src crates/dumpstar-db/src \
+        find crates/dumpstar-cli/src crates/dumpstar-swu/src crates/dumpstar-db/src \
             -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum
         sha256sum Cargo.lock tests/ui/fixtures/build.sh
     } | sha256sum | cut -c1-16

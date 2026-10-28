@@ -47,8 +47,8 @@ pub struct Filing {
 }
 
 const ACCEPTANCE: &str = "## Build\n\
-Extend crates/dumpstar-catalog/src/mechanics.rs to classify the phrases listed below; \
-bump the official derivation_version in crates/dumpstar-catalog/src/apply.rs so every \
+Extend crates/dumpstar-swu/src/mechanics.rs to classify the phrases listed below; \
+bump the official derivation_version in crates/dumpstar-swu/src/apply.rs so every \
 card re-derives on the next run; add a fixture test per phrase, seen red first. \
 Acceptance: the next catalog-check reports none of these cards.\n";
 

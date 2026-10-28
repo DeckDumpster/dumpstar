@@ -1180,35 +1180,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "dumpstar-catalog"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "dumpstar-core",
- "flate2",
- "hex",
- "reqwest",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "thiserror",
-]
-
-[[package]]
 name = "dumpstar-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
  "clap",
- "dumpstar-catalog",
  "dumpstar-core",
  "dumpstar-db",
  "dumpstar-derive",
  "dumpstar-ingest",
  "dumpstar-server",
+ "dumpstar-swu",
  "dumpster-kit-keys",
  "dumpster-kit-lake",
  "dumpster-kit-tenancy",
@@ -1236,8 +1219,8 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "csv",
- "dumpstar-catalog",
  "dumpstar-core",
+ "dumpstar-swu",
  "dumpster-kit-conformance",
  "dumpster-kit-keys",
  "dumpster-kit-ship",
@@ -1259,9 +1242,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "dumpstar-catalog",
  "dumpstar-db",
  "dumpstar-ingest",
+ "dumpstar-swu",
  "dumpster-kit-derive",
  "dumpster-kit-lake",
  "dumpster-kit-lakehouse",
@@ -1317,10 +1300,10 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
- "dumpstar-catalog",
  "dumpstar-db",
  "dumpstar-derive",
  "dumpstar-ingest",
+ "dumpstar-swu",
  "dumpster-kit-lake",
  "dumpster-kit-lakehouse",
  "flate2",
@@ -1342,9 +1325,9 @@ dependencies = [
  "base64",
  "brotli",
  "chrono",
- "dumpstar-catalog",
  "dumpstar-core",
  "dumpstar-db",
+ "dumpstar-swu",
  "dumpster-kit-conformance",
  "dumpster-kit-mcp",
  "dumpster-kit-mcp-auth",
@@ -1380,6 +1363,23 @@ dependencies = [
  "rusqlite",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "dumpstar-swu"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dumpstar-core",
+ "flate2",
+ "hex",
+ "reqwest",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]

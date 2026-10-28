@@ -10,12 +10,12 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, TimeZone, Utc};
-use dumpstar_catalog::crosswalk::{Extra, OfficialPrinting, Remedial, join, join_with};
-use dumpstar_catalog::fetch::Fetch;
-use dumpstar_catalog::job::run_once;
-use dumpstar_catalog::swu::{OfficialSource, TcgcsvSource};
-use dumpstar_catalog::tcgcsv::{GroupInfo, GroupKind, ProductRecord};
-use dumpstar_catalog::{Catalog, check};
+use dumpstar_swu::crosswalk::{Extra, OfficialPrinting, Remedial, join, join_with};
+use dumpstar_swu::fetch::Fetch;
+use dumpstar_swu::job::run_once;
+use dumpstar_swu::swu::{OfficialSource, TcgcsvSource};
+use dumpstar_swu::tcgcsv::{GroupInfo, GroupKind, ProductRecord};
+use dumpstar_swu::{Catalog, check};
 use rusqlite::Connection;
 
 const MAIN_SETS: [&str; 6] = ["JTL", "LOF", "SEC", "LAW", "ASH", "HMW"];
@@ -49,7 +49,7 @@ struct Recorded {
 }
 
 impl Fetch for Recorded {
-    fn get(&self, url: &str) -> dumpstar_catalog::Result<Vec<u8>> {
+    fn get(&self, url: &str) -> dumpstar_swu::Result<Vec<u8>> {
         if let Some(rest) = url.split("pagination[page]=").nth(1) {
             let n: usize = rest.split('&').next().unwrap().parse().unwrap();
             return Ok(self.official_pages[n - 1].clone());
@@ -325,7 +325,7 @@ fn a_printing_the_rules_cannot_place_is_resolved_by_the_remedial_crosswalk() {
 
 #[test]
 fn every_row_of_the_remedial_crosswalk_names_a_source_and_a_reason() {
-    let table = dumpstar_catalog::crosswalk::remedial_table();
+    let table = dumpstar_swu::crosswalk::remedial_table();
     assert!(!table.is_empty());
     for r in &table {
         assert!(!r.source.is_empty() && !r.reason.is_empty(), "{r:?}");
@@ -342,7 +342,7 @@ fn every_row_of_the_remedial_crosswalk_names_a_source_and_a_reason() {
 /// no join runs (sp-ogwa3i).
 #[test]
 fn a_catalog_joined_by_older_code_is_rejoined_and_repriced_on_the_next_sync() {
-    use dumpstar_catalog::swu::KEY_TCGCSV_LAST_UPDATED;
+    use dumpstar_swu::swu::KEY_TCGCSV_LAST_UPDATED;
     let l = loaded();
     {
         let c = Catalog::open_writer(&l.db).unwrap();

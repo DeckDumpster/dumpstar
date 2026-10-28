@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use crate::error::{CatalogError, Result};
 
-pub const USER_AGENT: &str = "dumpstar-catalog/0.1 (+https://star.dumpster.cards)";
+pub const USER_AGENT: &str = "dumpstar-swu/0.1 (+https://star.dumpster.cards)";
 
 pub trait Fetch {
     fn get(&self, url: &str) -> Result<Vec<u8>>;

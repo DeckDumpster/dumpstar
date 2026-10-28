@@ -7,10 +7,10 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, TimeZone, Utc};
-use dumpstar_catalog::fetch::Fetch;
-use dumpstar_catalog::job::{JobReport, run_once};
-use dumpstar_catalog::swu::{OfficialSource, TcgcsvSource};
-use dumpstar_catalog::{Catalog, check, official};
+use dumpstar_swu::fetch::Fetch;
+use dumpstar_swu::job::{JobReport, run_once};
+use dumpstar_swu::swu::{OfficialSource, TcgcsvSource};
+use dumpstar_swu::{Catalog, check, official};
 use rusqlite::Connection;
 use serde_json::{Value, json};
 
@@ -132,7 +132,7 @@ fn keywords_survive_apply() {
     let dir = tempfile::tempdir().unwrap();
     let mut cat = Catalog::open_writer(&dir.path().join("c.sqlite")).unwrap();
     let bytes = raw;
-    let prov = dumpstar_catalog::landing::Provenance {
+    let prov = dumpstar_swu::landing::Provenance {
         source: "official".into(),
         url: "test://keywords".into(),
         fetched_at: at(1, 0).to_rfc3339(),
@@ -140,7 +140,7 @@ fn keywords_survive_apply() {
         bytes: 0,
         as_of: None,
     };
-    dumpstar_catalog::apply::apply(&mut cat, &bytes, &prov).unwrap();
+    dumpstar_swu::apply::apply(&mut cat, &bytes, &prov).unwrap();
     let (kw, uniq): (String, bool) = cat
         .conn()
         .query_row("SELECT keywords, is_unique FROM cards", [], |r| {
@@ -166,7 +166,7 @@ struct Recorded {
 }
 
 impl Fetch for Recorded {
-    fn get(&self, url: &str) -> dumpstar_catalog::Result<Vec<u8>> {
+    fn get(&self, url: &str) -> dumpstar_swu::Result<Vec<u8>> {
         self.asked.borrow_mut().push(url.to_string());
         if let Some(rest) = url.split("pagination[page]=").nth(1) {
             let n: usize = rest.split('&').next().unwrap().parse().unwrap();
@@ -532,7 +532,7 @@ fn the_official_urls_are_the_prescribed_query() {
     ] {
         assert!(u.contains(want), "{want} missing from {u}");
     }
-    assert!(dumpstar_catalog::fetch::USER_AGENT.contains("dumpstar"));
+    assert!(dumpstar_swu::fetch::USER_AGENT.contains("dumpstar"));
 }
 
 // ---- prices and the join ---------------------------------------------------
@@ -741,7 +741,7 @@ struct Pictures {
 }
 
 impl Fetch for Pictures {
-    fn get(&self, url: &str) -> dumpstar_catalog::Result<Vec<u8>> {
+    fn get(&self, url: &str) -> dumpstar_swu::Result<Vec<u8>> {
         self.asked.borrow_mut().push(url.to_string());
         Ok(format!("jpeg bytes of {url}").into_bytes())
     }
@@ -774,7 +774,7 @@ fn a_refresh_stores_each_sealed_products_picture_locally_with_its_source() {
         asked: RefCell::new(vec![]),
     };
     let report =
-        dumpstar_catalog::images::fetch_pending(&c, &pics, dir.path(), "2026-10-13").unwrap();
+        dumpstar_swu::images::fetch_pending(&c, &pics, dir.path(), "2026-10-13").unwrap();
     assert!(report.failed.is_empty(), "{:?}", report.failed);
     for id in &ids {
         let file = dir.path().join(format!("{id}.jpg"));
@@ -804,7 +804,7 @@ fn a_refresh_stores_each_sealed_products_picture_locally_with_its_source() {
     );
 
     let again =
-        dumpstar_catalog::images::fetch_pending(&c, &pics, dir.path(), "2026-10-14").unwrap();
+        dumpstar_swu::images::fetch_pending(&c, &pics, dir.path(), "2026-10-14").unwrap();
     assert_eq!(again.stored, 0, "a stored picture is not fetched again");
     assert_eq!(pics.asked.borrow().len(), report.stored);
 }
@@ -812,8 +812,8 @@ fn a_refresh_stores_each_sealed_products_picture_locally_with_its_source() {
 struct Forbidden;
 
 impl Fetch for Forbidden {
-    fn get(&self, url: &str) -> dumpstar_catalog::Result<Vec<u8>> {
-        Err(dumpstar_catalog::CatalogError::Source(format!(
+    fn get(&self, url: &str) -> dumpstar_swu::Result<Vec<u8>> {
+        Err(dumpstar_swu::CatalogError::Source(format!(
             "source: {url}: HTTP 403 Forbidden"
         )))
     }
@@ -825,14 +825,14 @@ fn a_forbidden_sealed_picture_is_reported_and_alarmed_not_fatal() {
     let c = Catalog::open_writer(&e.db).unwrap();
     let dir = tempfile::tempdir().unwrap();
     let r =
-        dumpstar_catalog::images::fetch_pending(&c, &Forbidden, dir.path(), "2026-10-16").unwrap();
+        dumpstar_swu::images::fetch_pending(&c, &Forbidden, dir.path(), "2026-10-16").unwrap();
     assert!(!r.failed.is_empty());
     assert!(
         r.coverage_line().contains("403 Forbidden"),
         "{}",
         r.coverage_line()
     );
-    let alarms = dumpstar_catalog::check::missing_sealed_images(c.conn()).unwrap();
+    let alarms = dumpstar_swu::check::missing_sealed_images(c.conn()).unwrap();
     assert_eq!(
         alarms.len(),
         1,
@@ -1043,8 +1043,8 @@ fn a_thin_price_day_raises_a_coverage_alarm() {
 
 #[test]
 fn two_printings_sharing_set_number_variant_name_and_finish_both_apply() {
-    use dumpstar_catalog::apply::apply;
-    use dumpstar_catalog::landing::{Provenance, sha256_hex};
+    use dumpstar_swu::apply::apply;
+    use dumpstar_swu::landing::{Provenance, sha256_hex};
     let bytes = read("off-sec-shared-standard.json");
     let dir = tempfile::tempdir().unwrap();
     let mut catalog = Catalog::open_writer(&dir.path().join("shared.sqlite")).unwrap();
@@ -1238,19 +1238,19 @@ fn every_inline_icon_in_the_styled_text_has_a_manifest_entry() {
 
 #[test]
 fn the_apply_job_stores_the_styled_text_and_updates_it_in_place() {
-    use dumpstar_catalog::landing::Provenance;
+    use dumpstar_swu::landing::Provenance;
     let e = env();
     let mut catalog = Catalog::open_writer(&e.db).unwrap();
     let bytes = read("off-single-uid.json");
     let prov = |sha: &str| Provenance {
-        source: dumpstar_catalog::swu::SRC_OFFICIAL.into(),
+        source: dumpstar_swu::swu::SRC_OFFICIAL.into(),
         url: "https://official.test/x".into(),
         fetched_at: "2026-10-15T00:00:00Z".into(),
         sha256: sha.into(),
         bytes: 1,
         as_of: None,
     };
-    dumpstar_catalog::apply::apply(&mut catalog, &bytes, &prov("a")).unwrap();
+    dumpstar_swu::apply::apply(&mut catalog, &bytes, &prov("a")).unwrap();
     let html: String = catalog
         .conn()
         .query_row("SELECT html FROM card_text_styled", [], |r| r.get(0))
@@ -1259,7 +1259,7 @@ fn the_apply_job_stores_the_styled_text_and_updates_it_in_place() {
     let edited = String::from_utf8(bytes)
         .unwrap()
         .replace("Shield token", "Shield tokens");
-    dumpstar_catalog::apply::apply(&mut catalog, edited.as_bytes(), &prov("b")).unwrap();
+    dumpstar_swu::apply::apply(&mut catalog, edited.as_bytes(), &prov("b")).unwrap();
     assert_eq!(
         count(catalog.conn(), "SELECT COUNT(*) FROM card_text_styled"),
         1
@@ -1534,11 +1534,11 @@ fn the_two_real_misfiled_hyperspace_printings_stay_in_sorp_and_foil_scans_stay_o
     {
         let mut w = Catalog::open_writer(&e.db).unwrap();
         let n = w
-            .reapply_landed_at(&e.raw, dumpstar_catalog::swu::SRC_OFFICIAL, 99)
+            .reapply_landed_at(&e.raw, dumpstar_swu::swu::SRC_OFFICIAL, 99)
             .unwrap();
         assert!(n > 0, "nothing was re-derived");
         let again = w
-            .reapply_landed_at(&e.raw, dumpstar_catalog::swu::SRC_OFFICIAL, 99)
+            .reapply_landed_at(&e.raw, dumpstar_swu::swu::SRC_OFFICIAL, 99)
             .unwrap();
         assert_eq!(again, 0);
     }
@@ -1599,8 +1599,8 @@ fn weekly_play_set() -> Vec<u8> {
 }
 
 fn apply_weekly_play_set() -> (tempfile::TempDir, Catalog) {
-    use dumpstar_catalog::apply::apply;
-    use dumpstar_catalog::landing::{Provenance, sha256_hex};
+    use dumpstar_swu::apply::apply;
+    use dumpstar_swu::landing::{Provenance, sha256_hex};
     let bytes = weekly_play_set();
     let dir = tempfile::tempdir().unwrap();
     let mut catalog = Catalog::open_writer(&dir.path().join("shared.sqlite")).unwrap();
@@ -1690,8 +1690,8 @@ fn main_set_variants() -> Vec<u8> {
 }
 
 fn apply_bytes(bytes: Vec<u8>) -> (tempfile::TempDir, Catalog) {
-    use dumpstar_catalog::apply::apply;
-    use dumpstar_catalog::landing::{Provenance, sha256_hex};
+    use dumpstar_swu::apply::apply;
+    use dumpstar_swu::landing::{Provenance, sha256_hex};
     let dir = tempfile::tempdir().unwrap();
     let mut catalog = Catalog::open_writer(&dir.path().join("shared.sqlite")).unwrap();
     let prov = Provenance {

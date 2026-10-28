@@ -503,7 +503,7 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
         // rebuilds from upstream alongside shared.sqlite, not in the
         // baked-in image static dir.
         // Official set logos and art crops, retrieved once by the catalog job
-        // into the data volume (dumpstar_catalog::art) — never the publisher's
+        // into the data volume (dumpstar_swu::art) — never the publisher's
         // CDN at page load.
         .nest_service("/art", ServeDir::new(data_dir.join("art")))
         // The official inline game icons, copied from data/remedial/
@@ -1202,16 +1202,16 @@ mod tests {
 
         // Retrieve a crop the way the catalog job does, then read it back.
         struct One;
-        impl dumpstar_catalog::fetch::Fetch for One {
-            fn get(&self, _: &str) -> dumpstar_catalog::Result<Vec<u8>> {
+        impl dumpstar_swu::fetch::Fetch for One {
+            fn get(&self, _: &str) -> dumpstar_swu::Result<Vec<u8>> {
                 Ok(b"PNG".to_vec())
             }
         }
-        let list = dumpstar_catalog::art::sources()
+        let list = dumpstar_swu::art::sources()
             .into_iter()
             .filter(|s| s.set_code == "SOR")
             .collect::<Vec<_>>();
-        dumpstar_catalog::art::fetch(
+        dumpstar_swu::art::fetch(
             &dir.path().join("art"),
             &One,
             chrono::NaiveDate::from_ymd_opt(2026, 10, 15).unwrap(),
@@ -1667,11 +1667,11 @@ mod tests {
             if legacy {
                 rusqlite::Connection::open(&shared)
                     .unwrap()
-                    .execute_batch(dumpstar_catalog::LEGACY_SHAPE_DDL)
+                    .execute_batch(dumpstar_swu::LEGACY_SHAPE_DDL)
                     .unwrap();
             }
-            dumpstar_catalog::job::run_once(
-                &dumpstar_catalog::FakeSource,
+            dumpstar_swu::job::run_once(
+                &dumpstar_swu::FakeSource,
                 &dir.path().join("raw"),
                 &shared,
                 chrono::Utc::now(),

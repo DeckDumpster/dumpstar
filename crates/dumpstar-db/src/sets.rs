@@ -67,7 +67,7 @@ pub fn list_sets(conn: &Connection) -> Result<Vec<SetSummary>> {
     })?;
     let mut sets: Vec<SetSummary> = rows.collect::<rusqlite::Result<_>>()?;
     // Stable: within a category the newest-first order of the query holds.
-    sets.sort_by_key(|s| dumpstar_catalog::set_categories::category_rank(s.category.as_deref()));
+    sets.sort_by_key(|s| dumpstar_swu::set_categories::category_rank(s.category.as_deref()));
     Ok(sets)
 }
 
@@ -390,7 +390,7 @@ mod tests {
             testkit::set_on(&c, "SHD", "Shadows of the Galaxy", "2024-07-12");
             testkit::set_on(&c, "ZZZ", "Unmapped", "2026-01-01");
             for code in ["JTLP", "SOR", "SHD"] {
-                let cat = dumpstar_catalog::set_categories::category_for(code).unwrap();
+                let cat = dumpstar_swu::set_categories::category_for(code).unwrap();
                 c.execute(
                     "UPDATE sets SET category = ?2 WHERE set_code = ?1",
                     rusqlite::params![code, cat],

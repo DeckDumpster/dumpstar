@@ -7,7 +7,7 @@ authors.workspace = true
 
 [dependencies]
 dumpstar-core.workspace = true
-dumpstar-catalog.workspace = true
+dumpstar-swu.workspace = true
 rusqlite.workspace = true
 dumpster-kit-tenancy.workspace = true
 dumpster-kit-keys.workspace = true

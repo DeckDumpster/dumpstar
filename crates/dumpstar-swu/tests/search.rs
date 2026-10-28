@@ -1,9 +1,9 @@
 //! Acceptance for catalog search (design row S11).
 
 use chrono::{TimeZone, Utc};
-use dumpstar_catalog::job::run_once;
-use dumpstar_catalog::search::{QueryError, SearchError, search};
-use dumpstar_catalog::{Catalog, FakeSource};
+use dumpstar_swu::job::run_once;
+use dumpstar_swu::search::{QueryError, SearchError, search};
+use dumpstar_swu::{Catalog, FakeSource};
 
 fn built() -> (tempfile::TempDir, std::path::PathBuf) {
     let dir = tempfile::tempdir().unwrap();

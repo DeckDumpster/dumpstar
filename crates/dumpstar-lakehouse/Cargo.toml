@@ -21,7 +21,7 @@ anyhow.workspace = true
 chrono.workspace = true
 
 [dev-dependencies]
-dumpstar-catalog.workspace = true
+dumpstar-swu.workspace = true
 # row_identical.rs pulls in dumpstar-ingest/tests/support/mod.rs by path, which
 # re-exports from dumpstar_ingest::test_upstream — that module is gated behind
 # the test-support feature and is absent without it.

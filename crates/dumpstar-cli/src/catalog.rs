@@ -19,8 +19,8 @@ use std::time::Duration;
 
 use chrono::Utc;
 use clap::Args;
-use dumpstar_catalog::fetch::HttpFetch;
-use dumpstar_catalog::{Catalog, CatalogSource, FakeSource, check, job};
+use dumpstar_swu::fetch::HttpFetch;
+use dumpstar_swu::{Catalog, CatalogSource, FakeSource, check, job};
 
 /// The pause between two calls to an upstream.
 const PAUSE: Duration = Duration::from_millis(250);
@@ -80,7 +80,7 @@ fn run_source(
     }
     print_coverage(shared, name == "tcgcsv")?;
     // Format rules are data from the retrieved rules documents, not a payload.
-    let mut catalog = dumpstar_catalog::Catalog::open_writer(shared)?;
+    let mut catalog = dumpstar_swu::Catalog::open_writer(shared)?;
     println!("formats seeded: {} rows changed", catalog.seed_formats()?);
     Ok(())
 }
@@ -119,11 +119,11 @@ fn fetch_assets(
     // store; no page ever reaches the publisher's CDN. A miss leaves the set
     // showing its name, so it is reported but does not fail the job.
     let art_dir = dumpstar_db::dumpstar_home()?.join("art");
-    match dumpstar_catalog::art::fetch(
+    match dumpstar_swu::art::fetch(
         &art_dir,
         http,
         Utc::now().date_naive(),
-        &dumpstar_catalog::art::sources(),
+        &dumpstar_swu::art::sources(),
     ) {
         Ok(r) => {
             println!("set art: fetched {} already {}", r.fetched, r.already);
@@ -133,7 +133,7 @@ fn fetch_assets(
         }
         Err(e) => eprintln!("set art: {e:#}"),
     }
-    let art_cov = dumpstar_catalog::art::coverage(&art_dir, &dumpstar_catalog::art::sources());
+    let art_cov = dumpstar_swu::art::coverage(&art_dir, &dumpstar_swu::art::sources());
     println!("{}", art_cov.line());
     if !art_cov.missing.is_empty() {
         eprintln!("ALARM set-art: missing {}", art_cov.missing.join(", "));
@@ -146,7 +146,7 @@ fn fetch_assets(
     match Catalog::open_writer(shared)
         .map_err(anyhow::Error::from)
         .and_then(|c| {
-            Ok(dumpstar_catalog::images::fetch_pending(
+            Ok(dumpstar_swu::images::fetch_pending(
                 &c,
                 http,
                 &images,
@@ -221,7 +221,7 @@ pub fn check(args: CatalogCheckArgs) -> anyhow::Result<()> {
     }
     let filings = dumpstar_db::dumpstar_home()?.join("filings");
     let findings = check::mechanic_findings(catalog.conn())?;
-    match dumpstar_catalog::filing::file(&filings, &findings)? {
+    match dumpstar_swu::filing::file(&filings, &findings)? {
         Some(f) => println!(
             "filed {:?}: {} unmatched mechanic phrase(s) -> {}/outbox",
             f.action,
@@ -234,7 +234,7 @@ pub fn check(args: CatalogCheckArgs) -> anyhow::Result<()> {
         ),
     }
     let art_dir = dumpstar_db::dumpstar_home()?.join("art");
-    let art_cov = dumpstar_catalog::art::coverage(&art_dir, &dumpstar_catalog::art::sources());
+    let art_cov = dumpstar_swu::art::coverage(&art_dir, &dumpstar_swu::art::sources());
     println!("{}", art_cov.line());
     for m in &art_cov.missing {
         println!("ALARM set-art {m}: listed in set_art.json, not in the art store");

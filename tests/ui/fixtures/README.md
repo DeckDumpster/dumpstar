@@ -15,7 +15,7 @@ collection.
 ## Building
 
 The databases are **not committed** — a binary two branches both regenerate
-cannot be merged. They are built from the text sources (`dumpstar-catalog`'s
+cannot be merged. They are built from the text sources (`dumpstar-swu`'s
 `schema.sql`, `dumpstar-db`'s overlay and seeds, and the seeder in
 `crates/dumpstar-cli/src/fixture.rs`):
 

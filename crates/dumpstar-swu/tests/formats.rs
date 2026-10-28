@@ -7,9 +7,9 @@
 use std::collections::HashMap;
 use std::io::Read;
 
-use dumpstar_catalog::Catalog;
-use dumpstar_catalog::formats::builtin_formats;
 use dumpstar_core::deck::{DeckEntry, Violation, Zone, check_deck};
+use dumpstar_swu::Catalog;
+use dumpstar_swu::formats::builtin_formats;
 use rusqlite::params;
 
 const BANNED_IN: &[&str] = &["premier", "eternal", "twin_suns", "limited"];

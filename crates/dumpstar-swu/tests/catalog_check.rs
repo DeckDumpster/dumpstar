@@ -3,7 +3,7 @@
 //! accepted alarm is exactly the one the table names.
 
 use chrono::{TimeZone, Utc};
-use dumpstar_catalog::{Catalog, check};
+use dumpstar_swu::{Catalog, check};
 
 fn catalog() -> (tempfile::TempDir, Catalog) {
     let dir = tempfile::tempdir().unwrap();
@@ -11,7 +11,7 @@ fn catalog() -> (tempfile::TempDir, Catalog) {
     (dir, c)
 }
 
-fn kinds(a: Vec<dumpstar_catalog::record::AlarmRecord>) -> Vec<(String, String)> {
+fn kinds(a: Vec<dumpstar_swu::record::AlarmRecord>) -> Vec<(String, String)> {
     a.into_iter().map(|a| (a.kind, a.key)).collect()
 }
 

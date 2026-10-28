@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use dumpstar_catalog::art;
+use dumpstar_swu::art;
 
 fn manifest_codes() -> BTreeSet<String> {
     art::sources().into_iter().map(|s| s.set_code).collect()
@@ -124,8 +124,8 @@ fn every_set_has_a_banner_crop_or_says_why_not() {
 fn fetching_the_manifest_stores_a_crop_for_every_set_that_lists_one() {
     use chrono::NaiveDate;
     struct Ok_;
-    impl dumpstar_catalog::fetch::Fetch for Ok_ {
-        fn get(&self, _: &str) -> dumpstar_catalog::Result<Vec<u8>> {
+    impl dumpstar_swu::fetch::Fetch for Ok_ {
+        fn get(&self, _: &str) -> dumpstar_swu::Result<Vec<u8>> {
             Ok(b"png".to_vec())
         }
     }

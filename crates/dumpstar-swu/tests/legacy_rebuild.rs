@@ -1,15 +1,15 @@
 //! A `shared.sqlite` written by the Pokémon-shaped schema dumpstar was forked
 //! with is detected and rebuilt, not failed on (sp-r7w5xi).
 
-use dumpstar_catalog::job::run_once;
-use dumpstar_catalog::{Catalog, FakeSource};
+use dumpstar_swu::job::run_once;
+use dumpstar_swu::{Catalog, FakeSource};
 use rusqlite::Connection;
 
 fn legacy_file(dir: &std::path::Path) -> std::path::PathBuf {
     let path = dir.join("shared.sqlite");
     Connection::open(&path)
         .unwrap()
-        .execute_batch(dumpstar_catalog::LEGACY_SHAPE_DDL)
+        .execute_batch(dumpstar_swu::LEGACY_SHAPE_DDL)
         .unwrap();
     path
 }
@@ -18,7 +18,7 @@ fn legacy_file(dir: &std::path::Path) -> std::path::PathBuf {
 fn open_writer_rebuilds_a_legacy_shaped_file() {
     let dir = tempfile::tempdir().unwrap();
     let path = legacy_file(dir.path());
-    assert!(dumpstar_catalog::is_legacy(&Connection::open(&path).unwrap()).unwrap());
+    assert!(dumpstar_swu::is_legacy(&Connection::open(&path).unwrap()).unwrap());
 
     let catalog = Catalog::open_writer(&path).unwrap();
     assert!(catalog.rebuilt_legacy);
@@ -31,12 +31,12 @@ fn open_writer_rebuilds_a_legacy_shaped_file() {
         .map(|r| r.unwrap())
         .collect();
     assert!(cols.contains(&"aspects".to_string()));
-    assert!(!dumpstar_catalog::is_legacy(conn).unwrap());
+    assert!(!dumpstar_swu::is_legacy(conn).unwrap());
     let gone: i64 = conn
         .query_row(
             &format!(
                 "SELECT count(*) FROM sqlite_master WHERE name IN ({})",
-                dumpstar_catalog::LEGACY_ONLY_OBJECTS
+                dumpstar_swu::LEGACY_ONLY_OBJECTS
                     .iter()
                     .map(|n| format!("'{n}'"))
                     .collect::<Vec<_>>()
@@ -99,7 +99,7 @@ fn a_file_from_the_swu_schema_before_variant_code_is_rebuilt() {
         .unwrap()
         .execute_batch(PRE_VARIANT_CODE_PRINTINGS)
         .unwrap();
-    assert!(dumpstar_catalog::is_legacy(&Connection::open(&path).unwrap()).unwrap());
+    assert!(dumpstar_swu::is_legacy(&Connection::open(&path).unwrap()).unwrap());
 
     let catalog = Catalog::open_writer(&path).unwrap();
     assert!(catalog.rebuilt_legacy);
@@ -112,7 +112,7 @@ fn a_file_from_the_swu_schema_before_variant_code_is_rebuilt() {
         )
         .unwrap();
     assert!(has_code);
-    assert!(!dumpstar_catalog::is_legacy(catalog.conn()).unwrap());
+    assert!(!dumpstar_swu::is_legacy(catalog.conn()).unwrap());
     drop(catalog);
     assert!(!Catalog::open_writer(&path).unwrap().rebuilt_legacy);
 }
@@ -138,7 +138,7 @@ fn a_populated_catalog_missing_a_new_column_keeps_its_rows() {
         let conn = Connection::open(&path).unwrap();
         conn.execute_batch("ALTER TABLE sets DROP COLUMN category")
             .unwrap();
-        assert!(!dumpstar_catalog::is_legacy(&conn).unwrap());
+        assert!(!dumpstar_swu::is_legacy(&conn).unwrap());
         ["sets", "cards", "printings"]
             .iter()
             .map(|t| count(&conn, t))

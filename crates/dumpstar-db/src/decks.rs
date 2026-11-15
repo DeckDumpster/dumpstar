@@ -1054,7 +1054,7 @@ mod tests {
 
     #[test]
     fn a_card_in_main_and_sideboard_shows_the_same_copies_on_both_lines() {
-        let (_d, _s, _u, conn, a, _b) = stocked(2);
+        let (_d, _s, _u, conn, a, _b) = stocked(4);
         let both = [
             line("C1", 2),
             Line {
@@ -1069,7 +1069,7 @@ mod tests {
         ));
         let states = line_states(&conn, a).unwrap();
         assert_eq!(states.len(), 2);
-        assert_eq!(states[0].copies.len(), 2);
+        assert_eq!(states[0].copies.len(), 4);
         for s in &states {
             assert_eq!(s.reserved as usize, s.copies.len());
             assert_eq!(
@@ -1103,7 +1103,7 @@ mod tests {
 
     #[test]
     fn a_binder_copy_is_used_last_and_leaves_its_binder() {
-        let (_d, _s, _u, conn, a, _b) = stocked(2);
+        let (_d, _s, _u, conn, a, _b) = stocked(4);
         conn.execute(
             "INSERT INTO binders (name, created_at, updated_at) VALUES ('T','x','x')",
             [],

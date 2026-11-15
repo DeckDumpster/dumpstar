@@ -974,6 +974,16 @@ impl DumpstarTools {
         })
     }
 
+    fn swap_deck_copy(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
+        let id = arg_id(args, "id")?;
+        let out_copy = arg_id(args, "out_copy_id")?;
+        let in_copy = arg_id(args, "in_copy_id")?;
+        self.with_conn(ctx, "swap_deck_copy", |c| {
+            decks::swap_copy(c, id, out_copy, in_copy).map_err(db_err)?;
+            deck_response(c, id)
+        })
+    }
+
     fn delete_deck(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
         let id = arg_id(args, "id")?;
         self.with_conn(ctx, "delete_deck", |c| {
@@ -1225,6 +1235,18 @@ impl ToolProvider for DumpstarTools {
                 schema(json!({"id": id}), &["id"]),
             ),
             def(
+                "swap_deck_copy",
+                "Free one copy the deck holds and reserve a free copy of the same card in its place, atomically. Refused, changing nothing, if the cards differ, the out copy is not in the deck, or the in copy is held by a deck or not owned. Lines are unchanged.".into(),
+                schema(
+                    json!({
+                        "id": id,
+                        "out_copy_id": {"type": "integer", "description": "Collection copy id the deck holds now (get_card lists copies)"},
+                        "in_copy_id": {"type": "integer", "description": "Free owned copy id of the same card to reserve instead"},
+                    }),
+                    &["id", "out_copy_id", "in_copy_id"],
+                ),
+            ),
+            def(
                 "delete_deck",
                 "Delete the deck. Its copies are freed, never deleted.".into(),
                 schema(json!({"id": id}), &["id"]),
@@ -1306,6 +1328,7 @@ impl DumpstarTools {
             "update_deck" => self.update_deck(ctx, &args),
             "set_deck_lines" => self.set_deck_lines(ctx, &args),
             "release_deck" => self.release_deck(ctx, &args),
+            "swap_deck_copy" => self.swap_deck_copy(ctx, &args),
             "delete_deck" => self.delete_deck(ctx, &args),
             "validate_deck" => self.validate_deck(ctx, &args),
             "list_groups" => self.list_groups(ctx),

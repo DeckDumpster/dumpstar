@@ -3595,6 +3595,13 @@ mod tests {
             );
             assert_eq!(got["cards"]["SOR-1"]["card"]["in_decks"][0]["id"], deck);
             assert!(got["missing"].as_array().unwrap().is_empty());
+            // Two given forms of one reserved card both carry its deck holders.
+            let both = site
+                .tool(&alice, "get_cards", json!({"ids": ["SOR-1", "sor-001"]}))
+                .await
+                .unwrap();
+            assert_eq!(both["cards"]["sor-001"], both["cards"]["SOR-1"]);
+            assert_eq!(both["cards"]["sor-001"]["card"]["in_decks"][0]["id"], deck);
         }
 
         #[tokio::test]
@@ -3617,6 +3624,7 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(got["cards"]["sor-001"], got["cards"]["SOR-1"]);
+            assert_eq!(got["cards"]["sor-001"]["card"]["id"], "SOR-1");
             for bad in [json!({}), json!({"ids": "SOR-1"}), json!({"ids": [1]})] {
                 // Refused by the tool, or by the kit's schema check before it (no result).
                 let r = site.tool(&alice, "get_cards", bad.clone()).await;
@@ -3693,7 +3701,15 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(got["cards"].as_object().unwrap().len(), 400);
-            for _ in 0..119 {
+            // One unit so far (the batch) plus this get_card; 118 more fill the window of 120.
+            // The size that the kit's default 256 KiB cap refuses; the raised cap admits it.
+            assert!(got.to_string().len() > 262_144);
+            let one = site
+                .tool(&alice, "get_card", json!({"id": "SOR-250"}))
+                .await
+                .unwrap();
+            assert_eq!(got["cards"]["SOR-250"], one);
+            for _ in 0..118 {
                 site.tool(&alice, "get_card", json!({"id": "SOR-100"}))
                     .await
                     .unwrap();

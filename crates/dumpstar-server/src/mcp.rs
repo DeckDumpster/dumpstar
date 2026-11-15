@@ -398,6 +398,16 @@ fn display_id(conn: &Connection, card_id: &str) -> Result<String, ToolError> {
 /// Accepts the documented `<SET>-<number>` and the older internal forms (`n:<slug>`, bare
 /// numeric ids) and returns the catalog's own card id.
 fn resolve_card_id(conn: &Connection, given: &str) -> Result<String, ToolError> {
+    find_card_id(conn, given)?.ok_or_else(|| {
+        failed(format!(
+            "no card '{}'; ids look like SOR-5 (<SET>-<number>), search_cards finds them",
+            given.trim()
+        ))
+    })
+}
+
+/// [`resolve_card_id`], with `None` for an id that names no card.
+fn find_card_id(conn: &Connection, given: &str) -> Result<Option<String>, ToolError> {
     let given = given.trim();
     let known = conn
         .query_row(
@@ -407,8 +417,8 @@ fn resolve_card_id(conn: &Connection, given: &str) -> Result<String, ToolError> 
         )
         .optional()
         .map_err(|e| db_err(e.into()))?;
-    if let Some(id) = known {
-        return Ok(id);
+    if known.is_some() {
+        return Ok(known);
     }
     if let Some((set, number)) = given.split_once('-') {
         let sql = format!(
@@ -419,13 +429,11 @@ fn resolve_card_id(conn: &Connection, given: &str) -> Result<String, ToolError> 
             .query_row(&sql, [set, number], |r| r.get::<_, String>(0))
             .optional()
             .map_err(|e| db_err(e.into()))?;
-        if let Some(id) = found {
-            return Ok(id);
+        if found.is_some() {
+            return Ok(found);
         }
     }
-    Err(failed(format!(
-        "no card '{given}'; ids look like SOR-5 (<SET>-<number>), search_cards finds them"
-    )))
+    Ok(None)
 }
 
 /// The `get_deck` response for deck `id`; `update_deck` echoes the same shape.
@@ -687,12 +695,17 @@ fn card_details(c: &Connection, details: &[cards::CardDetail]) -> Result<Vec<Val
     let ids: Vec<String> = details.iter().map(|d| d.card.card_id.clone()).collect();
     let counts = counts_for(c, &ids)?;
     let structured = structured_for(c, &ids)?;
-    let mut holders = holders_for(c, &ids)?;
+    let holders = holders_for(c, &ids)?;
     details
         .iter()
         .map(|detail| {
             let mut card = card_object_from(c, &detail.card, &counts, &structured)?;
-            card["in_decks"] = json!(holders.remove(&detail.card.card_id).unwrap_or_default());
+            card["in_decks"] = json!(
+                holders
+                    .get(&detail.card.card_id)
+                    .cloned()
+                    .unwrap_or_default()
+            );
             Ok(json!({
                 "card": card,
                 "printings": detail.printings.iter().map(|p| json!({
@@ -874,8 +887,8 @@ impl DumpstarTools {
             let mut details = Vec::new();
             let mut missing = Vec::new();
             for given in ids {
-                let resolved = match resolve_card_id(c, given) {
-                    Ok(id) => c
+                let resolved = match find_card_id(c, given)? {
+                    Some(id) => c
                         .query_row(
                             &format!("SELECT set_code, number, variant FROM shared.printings WHERE card_id = ?1 {CANONICAL_PRINTING}"),
                             [&id],
@@ -889,9 +902,7 @@ impl DumpstarTools {
                         )
                         .optional()
                         .map_err(|e| db_err(e.into()))?,
-                    // `resolve_card_id` fails only for an id it cannot find.
-                    Err(ToolError::Failed(m)) if m.starts_with("no card ") => None,
-                    Err(e) => return Err(e),
+                    None => None,
                 };
                 let detail = match resolved {
                     Some((set, number, variant)) => {

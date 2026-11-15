@@ -1028,6 +1028,11 @@ mod tests {
                 .unwrap()
         };
         let log_before = logs(&conn);
+        let updated_before: String = conn
+            .query_row("SELECT updated_at FROM decks WHERE id = ?1", [a], |r| {
+                r.get(0)
+            })
+            .unwrap();
 
         swap_copy(&conn, a, out, free).unwrap();
 
@@ -1041,9 +1046,90 @@ mod tests {
         assert_eq!(logs(&conn), log_before + 2);
         assert_eq!(entries(&conn, a).unwrap(), lines_before);
 
+        let (note, from_deck, to_deck): (String, Option<i64>, Option<i64>) = conn
+            .query_row(
+                "SELECT note, from_deck_id, to_deck_id FROM movement_log WHERE collection_id = ?1 ORDER BY id DESC LIMIT 1",
+                [out],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            (note.as_str(), from_deck, to_deck),
+            ("swapped out by swap_deck_copy", Some(a), None)
+        );
+        let (note, from_deck, to_deck): (String, Option<i64>, Option<i64>) = conn
+            .query_row(
+                "SELECT note, from_deck_id, to_deck_id FROM movement_log WHERE collection_id = ?1 ORDER BY id DESC LIMIT 1",
+                [free],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            (note.as_str(), from_deck, to_deck),
+            ("swapped in by swap_deck_copy", None, Some(a))
+        );
+        let updated: String = conn
+            .query_row("SELECT updated_at FROM decks WHERE id = ?1", [a], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_ne!(updated, updated_before);
+
         // The same lines keep the swapped-in copy and do not take the old one back.
         set_lines(&conn, a, &[line("C1", 1)]).unwrap();
         assert_eq!((held(out), held(free)), (None, Some(a)));
+    }
+
+    #[test]
+    fn swap_copy_takes_a_binder_copy_out_of_its_binder_and_refuses_one_not_owned() {
+        let (_d, conn, a, _b) = stocked_with_c2();
+        set_lines(&conn, a, &[line("C1", 1)]).unwrap();
+        let out: i64 = conn
+            .query_row("SELECT id FROM collection WHERE deck_id = ?1", [a], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        let free: i64 = conn
+            .query_row(
+                "SELECT id FROM collection WHERE deck_id IS NULL AND id <= 3 ORDER BY id",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let sold: i64 = conn
+            .query_row(
+                "SELECT id FROM collection WHERE deck_id IS NULL AND id <= 3 AND id <> ?1",
+                [free],
+                |r| r.get(0),
+            )
+            .unwrap();
+        conn.execute(
+            "INSERT INTO binders (id, name, created_at, updated_at) VALUES (7, 'B', 'x', 'x')",
+            [],
+        )
+        .unwrap();
+        conn.execute("UPDATE collection SET binder_id = 7 WHERE id = ?1", [free])
+            .unwrap();
+        conn.execute(
+            "UPDATE collection SET status = 'sold' WHERE id = ?1",
+            [sold],
+        )
+        .unwrap();
+
+        let err = swap_copy(&conn, a, out, sold).unwrap_err();
+        assert!(matches!(err, DbError::Conflict(_)), "{err:?}");
+        assert_eq!(deck_ids(&conn)[(out - 1) as usize], Some(a));
+
+        swap_copy(&conn, a, out, free).unwrap();
+        let (binder, from_binder): (Option<i64>, Option<i64>) = conn
+            .query_row(
+                "SELECT c.binder_id, (SELECT from_binder_id FROM movement_log WHERE collection_id = c.id ORDER BY id DESC LIMIT 1) \
+                 FROM collection c WHERE c.id = ?1",
+                [free],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((binder, from_binder), (None, Some(7)));
     }
 
     #[test]

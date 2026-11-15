@@ -2186,6 +2186,11 @@ mod tests {
         #[tokio::test]
         async fn swap_deck_copy_moves_a_reservation_and_refuses_bad_pairings() {
             let mut site = Site::with_catalog(&["alice", "bob"], SECOND_CARD).await;
+            site.sign_in(member("bob@example.com")).await;
+            for _ in 0..3 {
+                let r = site.send("POST", "/api/collection", Some(ADD_CARD)).await;
+                assert_eq!(r.status(), StatusCode::CREATED);
+            }
             site.sign_in(member("alice@example.com")).await;
             for body in [
                 ADD_CARD,
@@ -2272,7 +2277,8 @@ mod tests {
                     "{why}"
                 );
             }
-            // Another tenant cannot swap alice's copy ids into a deck of theirs.
+            // Another tenant cannot swap alice's copy ids into a deck of theirs, even
+            // when bob owns copies that carry the same ids (seeded above).
             let bob_deck = site
                 .tool(
                     &bob,

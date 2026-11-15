@@ -333,6 +333,19 @@ pub struct DeckLineState {
     pub qty: u32,
     /// Copies of this card (all zones) the deck holds now.
     pub reserved: u32,
+    /// Those copies, one per `reserved`, in collection order: which printing and finish.
+    pub copies: Vec<HeldCopy>,
+}
+
+/// One physical copy a deck holds, with the printing it is.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct HeldCopy {
+    pub copy_id: i64,
+    pub printing_id: String,
+    pub set: String,
+    pub number: String,
+    pub variant: String,
+    pub finish: String,
 }
 
 /// Copies owned, held by decks and free, for one game card.
@@ -546,21 +559,40 @@ pub(crate) fn release_in(conn: &Connection, deck_id: i64) -> Result<u32> {
 
 /// A deck's lines with the copies backing each card.
 pub fn line_states(conn: &Connection, deck_id: i64) -> Result<Vec<DeckLineState>> {
-    let mut held = conn.prepare(
-        "SELECT p.card_id, count(*) FROM collection c \
+    let mut stmt = conn.prepare(
+        "SELECT p.card_id, c.id, p.printing_id, p.set_code, p.number, p.variant, p.finish \
+           FROM collection c \
            JOIN shared.printings p ON p.printing_id = c.printing_id \
-          WHERE c.deck_id = ?1 GROUP BY p.card_id",
+          WHERE c.deck_id = ?1 ORDER BY c.id",
     )?;
-    let held: HashMap<String, u32> = held
-        .query_map([deck_id], |r| Ok((r.get(0)?, r.get(1)?)))?
-        .collect::<rusqlite::Result<_>>()?;
+    let mut held: HashMap<String, Vec<HeldCopy>> = HashMap::new();
+    for row in stmt.query_map([deck_id], |r| {
+        Ok((
+            r.get::<_, String>(0)?,
+            HeldCopy {
+                copy_id: r.get(1)?,
+                printing_id: r.get(2)?,
+                set: r.get(3)?,
+                number: r.get(4)?,
+                variant: r.get(5)?,
+                finish: r.get(6)?,
+            },
+        ))
+    })? {
+        let (card_id, copy) = row?;
+        held.entry(card_id).or_default().push(copy);
+    }
     Ok(entries(conn, deck_id)?
         .into_iter()
-        .map(|e| DeckLineState {
-            reserved: held.get(&e.card_id).copied().unwrap_or(0),
-            card_id: e.card_id,
-            zone: e.zone,
-            qty: e.qty,
+        .map(|e| {
+            let copies = held.get(&e.card_id).cloned().unwrap_or_default();
+            DeckLineState {
+                reserved: copies.len() as u32,
+                copies,
+                card_id: e.card_id,
+                zone: e.zone,
+                qty: e.qty,
+            }
         })
         .collect())
 }
@@ -972,6 +1004,52 @@ mod tests {
             set_lines(&conn, b, &both).unwrap(),
             SetLines::Short(_)
         ));
+    }
+
+    #[test]
+    fn line_states_name_the_reserved_copies_with_their_finish() {
+        let (_d, shared, _u, conn, a, _b) = stocked(1);
+        {
+            let c = open_shared(&shared).unwrap();
+            crate::testkit::printing(&c, "C1-foil", "C1", "SOR", "1", "Hyperspace", "Foil");
+        }
+        conn.execute(
+            "INSERT INTO collection (printing_id, acquired_at, source) VALUES ('C1-foil','2026-10-13','manual_id')",
+            [],
+        )
+        .unwrap();
+        assert!(matches!(
+            set_lines(&conn, a, &[line("C1", 2)]).unwrap(),
+            SetLines::Set { .. }
+        ));
+        let ids: Vec<i64> = conn
+            .prepare("SELECT id FROM collection WHERE deck_id = ?1 ORDER BY id")
+            .unwrap()
+            .query_map([a], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        let l = &line_states(&conn, a).unwrap()[0];
+        assert_eq!(l.reserved, 2);
+        assert_eq!(l.copies.iter().map(|c| c.copy_id).collect::<Vec<_>>(), ids);
+        let got: Vec<(&str, &str, &str)> = l
+            .copies
+            .iter()
+            .map(|c| {
+                (
+                    c.printing_id.as_str(),
+                    c.variant.as_str(),
+                    c.finish.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("C1-std", "Standard", "Normal"),
+                ("C1-foil", "Hyperspace", "Foil")
+            ]
+        );
     }
 
     #[test]

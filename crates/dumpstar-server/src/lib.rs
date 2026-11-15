@@ -3523,6 +3523,25 @@ mod tests {
                 .find(|c| c["id"] == "SOR-1")
                 .expect("SOR-1 in get_deck cards");
             assert_eq!(in_deck["in_decks"], row["in_decks"]);
+            let card_copies = got["copies"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|c| c["deck_id"] == a)
+                .collect::<Vec<_>>();
+            let lines = deck["lines"].as_array().unwrap();
+            assert!(!lines.is_empty());
+            for l in lines {
+                let held = l["copies"].as_array().expect("line lists its copies");
+                assert_eq!(held.len() as u64, l["reserved"].as_u64().unwrap());
+                let key = |c: &Value| (c["copy_id"].clone(), c["printing_id"].clone());
+                assert_eq!(
+                    held.iter().map(key).collect::<Vec<_>>(),
+                    card_copies.iter().map(|c| key(c)).collect::<Vec<_>>()
+                );
+                assert!(held.iter().all(|c| c["finish"].is_string()));
+            }
+            assert_eq!(set["lines"][0]["copies"], lines[0]["copies"]);
             let summary = site
                 .tool(&alice, "collection_summary", json!({}))
                 .await

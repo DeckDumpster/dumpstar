@@ -2181,6 +2181,138 @@ mod tests {
             assert_eq!(s, StatusCode::OK, "{body}");
         }
 
+        /// sp-3250cy: swap_deck_copy moves one reservation between two copies of a card,
+        /// refuses (changing nothing) the three bad pairings, and cannot reach another tenant's copies.
+        #[tokio::test]
+        async fn swap_deck_copy_moves_a_reservation_and_refuses_bad_pairings() {
+            let mut site = Site::with_catalog(&["alice", "bob"], SECOND_CARD).await;
+            site.sign_in(member("bob@example.com")).await;
+            for _ in 0..3 {
+                let r = site.send("POST", "/api/collection", Some(ADD_CARD)).await;
+                assert_eq!(r.status(), StatusCode::CREATED);
+            }
+            site.sign_in(member("alice@example.com")).await;
+            for body in [
+                ADD_CARD,
+                ADD_CARD,
+                r#"{"printing_id":"SOR-2-normal","source":"manual_id"}"#,
+            ] {
+                let r = site.send("POST", "/api/collection", Some(body)).await;
+                assert_eq!(r.status(), StatusCode::CREATED);
+            }
+            let alice = site.token_for("alice@example.com");
+            let bob = site.token_for("bob@example.com");
+            let mk = |n: &'static str| {
+                let (site, alice) = (&site, &alice);
+                async move {
+                    site.tool(
+                        alice,
+                        "create_deck",
+                        json!({"name": n, "format": "Jumpstart"}),
+                    )
+                    .await
+                    .unwrap()["deck"]["id"]
+                        .as_i64()
+                        .unwrap()
+                }
+            };
+            let (a, b) = (mk("Pack 1").await, mk("Pack 2").await);
+            site.tool(
+                &alice,
+                "set_deck_lines",
+                json!({"id": a, "lines": [{"card_id": "SOR-1", "qty": 1}]}),
+            )
+            .await
+            .unwrap();
+            site.tool(
+                &alice,
+                "set_deck_lines",
+                json!({"id": b, "lines": [{"card_id": "SOR-2", "qty": 1}]}),
+            )
+            .await
+            .unwrap();
+            // (copy id, deck id) for a card's copies.
+            let copies = |card: &'static str| {
+                let (site, alice) = (&site, &alice);
+                async move {
+                    let c = site
+                        .tool(alice, "get_card", json!({"id": card}))
+                        .await
+                        .unwrap();
+                    c["copies"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|x| (x["copy_id"].as_i64().unwrap(), x["deck_id"].as_i64()))
+                        .collect::<Vec<_>>()
+                }
+            };
+            let luke = copies("SOR-1").await;
+            let held = luke.iter().find(|c| c.1 == Some(a)).unwrap().0;
+            let free = luke.iter().find(|c| c.1.is_none()).unwrap().0;
+            let han = copies("SOR-2").await[0].0;
+            let before = (copies("SOR-1").await, copies("SOR-2").await);
+
+            for (args, why) in [
+                (
+                    json!({"id": a, "out_copy_id": held, "in_copy_id": han}),
+                    "different card",
+                ),
+                (
+                    json!({"id": a, "out_copy_id": free, "in_copy_id": held}),
+                    "out not in deck",
+                ),
+                (
+                    json!({"id": b, "out_copy_id": han, "in_copy_id": held}),
+                    "in held by a deck",
+                ),
+            ] {
+                assert!(
+                    site.tool(&alice, "swap_deck_copy", args).await.is_err(),
+                    "{why}"
+                );
+                assert_eq!(
+                    (copies("SOR-1").await, copies("SOR-2").await),
+                    before,
+                    "{why}"
+                );
+            }
+            // Another tenant cannot swap alice's copy ids into a deck of theirs, even
+            // when bob owns copies that carry the same ids (seeded above).
+            let bob_deck = site
+                .tool(
+                    &bob,
+                    "create_deck",
+                    json!({"name": "Bob", "format": "Jumpstart"}),
+                )
+                .await
+                .unwrap()["deck"]["id"]
+                .as_i64()
+                .unwrap();
+            assert!(
+                site.tool(
+                    &bob,
+                    "swap_deck_copy",
+                    json!({"id": bob_deck, "out_copy_id": held, "in_copy_id": free}),
+                )
+                .await
+                .is_err()
+            );
+            assert_eq!(copies("SOR-1").await, before.0);
+
+            let deck = site
+                .tool(
+                    &alice,
+                    "swap_deck_copy",
+                    json!({"id": a, "out_copy_id": held, "in_copy_id": free}),
+                )
+                .await
+                .unwrap();
+            assert_eq!(deck["deck"]["id"], a);
+            let after = copies("SOR-1").await;
+            assert!(after.contains(&(held, None)) && after.contains(&(free, Some(a))));
+        }
+
         /// An unbound email is a 403 and does not create a database.
         #[tokio::test]
         async fn an_unbound_email_is_a_403_and_creates_nothing() {

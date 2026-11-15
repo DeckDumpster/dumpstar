@@ -3523,24 +3523,40 @@ mod tests {
                 .find(|c| c["id"] == "SOR-1")
                 .expect("SOR-1 in get_deck cards");
             assert_eq!(in_deck["in_decks"], row["in_decks"]);
-            let card_copies = got["copies"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .filter(|c| c["deck_id"] == a)
-                .collect::<Vec<_>>();
             let lines = deck["lines"].as_array().unwrap();
             assert!(!lines.is_empty());
             for l in lines {
-                let held = l["copies"].as_array().expect("line lists its copies");
-                assert_eq!(held.len() as u64, l["reserved"].as_u64().unwrap());
+                let card = site
+                    .tool(&alice, "get_card", json!({"id": l["card_id"]}))
+                    .await
+                    .unwrap();
                 let key = |c: &Value| (c["copy_id"].clone(), c["printing_id"].clone());
-                assert_eq!(
-                    held.iter().map(key).collect::<Vec<_>>(),
-                    card_copies.iter().map(|c| key(c)).collect::<Vec<_>>()
-                );
-                assert!(held.iter().all(|c| c["finish"].is_string()));
+                let want: Vec<_> = card["copies"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter(|c| c["deck_id"] == a)
+                    .map(key)
+                    .collect();
+                let held = l["copies"].as_array().expect("line lists its copies");
+                assert_eq!(held.iter().map(key).collect::<Vec<_>>(), want);
+                assert_eq!(held.len() as u64, l["reserved"].as_u64().unwrap());
+                for c in held {
+                    assert_eq!(c["finish"], "Normal");
+                    assert!(c["set"].is_string() && c["number"].is_string());
+                    assert!(c["variant"].is_string());
+                }
             }
+            // `copies` is not part of the digest: it holds with them stripped.
+            let mut bare = deck["lines"].clone();
+            for l in bare.as_array_mut().unwrap() {
+                l.as_object_mut().unwrap().remove("copies");
+            }
+            assert_eq!(
+                digest::lines_digest(&bare, &deck["cards"]).as_deref(),
+                deck["lines_digest"].as_str()
+            );
+            digest::verify_digest(&deck).unwrap();
             assert_eq!(set["lines"][0]["copies"], lines[0]["copies"]);
             let summary = site
                 .tool(&alice, "collection_summary", json!({}))

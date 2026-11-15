@@ -524,6 +524,83 @@ pub fn set_lines(conn: &Connection, deck_id: i64, lines: &[Line]) -> Result<SetL
     })
 }
 
+/// Free `out_copy`, which the deck holds, and reserve `in_copy`, a free owned
+/// copy of the same card, in its place. The deck's lines are untouched. Either
+/// both moves happen or, on refusal, neither.
+pub fn swap_copy(conn: &Connection, deck_id: i64, out_copy: i64, in_copy: i64) -> Result<()> {
+    type Row = (Option<i64>, String, Option<i64>, String);
+    immediate(conn, |conn| {
+        require_deck(conn, deck_id)?;
+        let read = |id: i64| -> Result<Row> {
+            conn.query_row(
+                "SELECT c.deck_id, c.status, c.binder_id, p.card_id FROM collection c \
+                   JOIN shared.printings p ON p.printing_id = c.printing_id \
+                  WHERE c.id = ?1",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .map_err(|e| match e {
+                rusqlite::Error::QueryReturnedNoRows => DbError::NotFound(format!("copy {id}")),
+                e => e.into(),
+            })
+        };
+        let (out_deck, _, _, out_card) = read(out_copy)?;
+        let (in_deck, in_status, in_binder, in_card) = read(in_copy)?;
+        if out_deck != Some(deck_id) {
+            return Err(DbError::Conflict(format!(
+                "copy {out_copy} is not in deck {deck_id}"
+            )));
+        }
+        if in_status != "owned" {
+            return Err(DbError::Conflict(format!(
+                "copy {in_copy} is not owned (status {in_status})"
+            )));
+        }
+        if let Some(held) = in_deck {
+            let name: String = conn
+                .query_row("SELECT name FROM decks WHERE id = ?1", [held], |r| r.get(0))
+                .unwrap_or_default();
+            return Err(DbError::Conflict(format!(
+                "copy {in_copy} is held by deck '{name}' (id {held})"
+            )));
+        }
+        if out_card != in_card {
+            return Err(DbError::Conflict(format!(
+                "copy {out_copy} is {out_card} but copy {in_copy} is {in_card}: a swap needs the same card"
+            )));
+        }
+        conn.execute(
+            "UPDATE collection SET deck_id = NULL WHERE id = ?1",
+            [out_copy],
+        )?;
+        conn.execute(
+            "UPDATE collection SET deck_id = ?2, binder_id = NULL WHERE id = ?1",
+            params![in_copy, deck_id],
+        )?;
+        log_move(
+            conn,
+            out_copy,
+            Some(deck_id),
+            None,
+            None,
+            "swapped out by swap_deck_copy",
+        )?;
+        log_move(
+            conn,
+            in_copy,
+            None,
+            Some(deck_id),
+            in_binder,
+            "swapped in by swap_deck_copy",
+        )?;
+        conn.execute(
+            "UPDATE decks SET updated_at = ?2 WHERE id = ?1",
+            params![deck_id, crate::clock::now_rfc3339()],
+        )?;
+        Ok(())
+    })
+}
+
 /// Free every copy a deck holds, keeping its lines. Returns how many copies
 /// were freed.
 pub fn release(conn: &Connection, deck_id: i64) -> Result<u32> {
@@ -902,6 +979,114 @@ mod tests {
         card_counts(conn, Some(&["C1".to_string()]))
             .unwrap()
             .remove(0)
+    }
+
+    /// `stocked(3)` plus a second card C2 with one owned copy; copy ids of C1 are 1..=3, C2's is 4.
+    fn stocked_with_c2() -> (tempfile::TempDir, Connection, i64, i64) {
+        let (d, shared, _u, conn, a, b) = stocked(3);
+        {
+            let c = open_shared(&shared).unwrap();
+            crate::testkit::card(&c, "C2", "Card Two");
+            crate::testkit::printing(&c, "C2-std", "C2", "SOR", "2", "Standard", "Normal");
+        }
+        conn.execute(
+            "INSERT INTO collection (printing_id, acquired_at, source) VALUES ('C2-std','2026-10-13','manual_id')",
+            [],
+        )
+        .unwrap();
+        (d, conn, a, b)
+    }
+
+    fn deck_ids(conn: &Connection) -> Vec<Option<i64>> {
+        conn.prepare("SELECT deck_id FROM collection ORDER BY id")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap()
+    }
+
+    #[test]
+    fn swap_copy_moves_the_reservation_and_leaves_the_lines() {
+        let (_d, conn, a, _b) = stocked_with_c2();
+        set_lines(&conn, a, &[line("C1", 1)]).unwrap();
+        let out: i64 = conn
+            .query_row("SELECT id FROM collection WHERE deck_id = ?1", [a], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        let free: i64 = conn
+            .query_row(
+                "SELECT id FROM collection WHERE deck_id IS NULL AND id <= 3",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let lines_before = entries(&conn, a).unwrap();
+        let logs = |c: &Connection| -> i64 {
+            c.query_row("SELECT COUNT(*) FROM movement_log", [], |r| r.get(0))
+                .unwrap()
+        };
+        let log_before = logs(&conn);
+
+        swap_copy(&conn, a, out, free).unwrap();
+
+        let held = |id: i64| -> Option<i64> {
+            conn.query_row("SELECT deck_id FROM collection WHERE id = ?1", [id], |r| {
+                r.get(0)
+            })
+            .unwrap()
+        };
+        assert_eq!((held(out), held(free)), (None, Some(a)));
+        assert_eq!(logs(&conn), log_before + 2);
+        assert_eq!(entries(&conn, a).unwrap(), lines_before);
+
+        // The same lines keep the swapped-in copy and do not take the old one back.
+        set_lines(&conn, a, &[line("C1", 1)]).unwrap();
+        assert_eq!((held(out), held(free)), (None, Some(a)));
+    }
+
+    #[test]
+    fn swap_copy_refusals_change_nothing() {
+        let (_d, conn, a, b) = stocked_with_c2();
+        set_lines(&conn, a, &[line("C1", 1)]).unwrap();
+        set_lines(&conn, b, &[line("C1", 1)]).unwrap();
+        let in_a: i64 = conn
+            .query_row("SELECT id FROM collection WHERE deck_id = ?1", [a], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        let in_b: i64 = conn
+            .query_row("SELECT id FROM collection WHERE deck_id = ?1", [b], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        let free: i64 = conn
+            .query_row(
+                "SELECT id FROM collection WHERE deck_id IS NULL AND id <= 3",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let before = deck_ids(&conn);
+        for (out, inn) in [
+            (in_a, 4),
+            (free, free),
+            (in_b, free),
+            (in_a, in_b),
+            (in_a, 99),
+        ] {
+            let err = swap_copy(&conn, a, out, inn).unwrap_err();
+            assert!(
+                matches!(err, DbError::Conflict(_) | DbError::NotFound(_)),
+                "{out}->{inn}: {err:?}"
+            );
+            assert_eq!(deck_ids(&conn), before, "{out}->{inn}");
+        }
+        assert!(matches!(
+            swap_copy(&conn, 999, in_a, free),
+            Err(DbError::NotFound(_))
+        ));
     }
 
     #[test]

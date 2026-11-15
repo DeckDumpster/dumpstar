@@ -1053,6 +1053,37 @@ mod tests {
     }
 
     #[test]
+    fn a_card_in_main_and_sideboard_shows_the_same_copies_on_both_lines() {
+        let (_d, _s, _u, conn, a, _b) = stocked(2);
+        let both = [
+            line("C1", 2),
+            Line {
+                card_id: "C1".into(),
+                zone: Zone::Sideboard,
+                qty: 2,
+            },
+        ];
+        assert!(matches!(
+            set_lines(&conn, a, &both).unwrap(),
+            SetLines::Set { .. }
+        ));
+        let states = line_states(&conn, a).unwrap();
+        assert_eq!(states.len(), 2);
+        assert_eq!(states[0].copies.len(), 2);
+        for s in &states {
+            assert_eq!(s.reserved as usize, s.copies.len());
+            assert_eq!(
+                s.copies.iter().map(|c| c.copy_id).collect::<Vec<_>>(),
+                states[0]
+                    .copies
+                    .iter()
+                    .map(|c| c.copy_id)
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
     fn release_and_delete_free_the_copies() {
         let (_d, _s, _u, conn, a, b) = stocked(2);
         set_lines(&conn, a, &[line("C1", 1)]).unwrap();

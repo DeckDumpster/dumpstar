@@ -1168,7 +1168,7 @@ impl ToolProvider for DumpstarTools {
             ),
             def(
                 "get_deck",
-                "One deck and its lines, each with the copies it reserves, and under cards the full card object of every line keyed by card id (as get_card returns it), so the result is a self-contained pack document. `lines_digest` is the SHA-256 (lowercase hex) of the lines and their card objects in canonical form: one row per line, sorted, of `card_id<TAB>qty<TAB>reserved` then the card's name, subtitle, type, rarity, cost, game.hp, game.epic_action, game.aspects and game.arenas as compact JSON (arrays sorted), each row ending in LF (zone is not included; the field list is DIGEST_CARD_FIELDS in src/digest.rs); a client recomputes it and refuses a file whose lines or cards were altered in copying.".into(),
+                "One deck and its lines, each with `reserved` (a count) and `copies`, the physical copies it reserves ({copy_id, printing_id, set, number, variant, finish}; per card across zones), so a pull list needs no get_card, and under cards the full card object of every line keyed by card id (as get_card returns it), so the result is a self-contained pack document. `lines_digest` is the SHA-256 (lowercase hex) of the lines and their card objects in canonical form: one row per line, sorted, of `card_id<TAB>qty<TAB>reserved` then the card's name, subtitle, type, rarity, cost, game.hp, game.epic_action, game.aspects and game.arenas as compact JSON (arrays sorted), each row ending in LF (zone is not included; the field list is DIGEST_CARD_FIELDS in src/digest.rs); a client recomputes it and refuses a file whose lines or cards were altered in copying.".into(),
                 schema(json!({"id": id}), &["id"]),
             ),
             def(
@@ -1202,7 +1202,7 @@ impl ToolProvider for DumpstarTools {
             ),
             def(
                 "set_deck_lines",
-                "Replace the deck's lines in one transaction and reserve an owned copy for every card. A copy in another deck is never taken. If any card lacks enough free copies nothing changes and the short lines are returned.".into(),
+                "Replace the deck's lines in one transaction and reserve an owned copy for every card. A copy in another deck is never taken. Each echoed line carries `copies` ({copy_id, printing_id, set, number, variant, finish}) as get_deck does. If any card lacks enough free copies nothing changes and the short lines are returned.".into(),
                 schema(
                     json!({
                         "id": id,

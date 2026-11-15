@@ -3557,7 +3557,11 @@ mod tests {
                 deck["lines_digest"].as_str()
             );
             digest::verify_digest(&deck).unwrap();
-            assert_eq!(set["lines"][0]["copies"], lines[0]["copies"]);
+            let echoed = set["lines"].as_array().unwrap();
+            assert_eq!(echoed.len(), lines.len());
+            for (e, l) in echoed.iter().zip(lines) {
+                assert_eq!(e["copies"], l["copies"]);
+            }
             let summary = site
                 .tool(&alice, "collection_summary", json!({}))
                 .await

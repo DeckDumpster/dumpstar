@@ -1103,7 +1103,7 @@ mod tests {
 
     #[test]
     fn a_binder_copy_is_used_last_and_leaves_its_binder() {
-        let (_d, _s, _u, conn, a, _b) = stocked(4);
+        let (_d, _s, _u, conn, a, _b) = stocked(2);
         conn.execute(
             "INSERT INTO binders (name, created_at, updated_at) VALUES ('T','x','x')",
             [],

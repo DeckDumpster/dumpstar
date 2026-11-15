@@ -482,7 +482,10 @@ fn app(state: AppState, static_dir: PathBuf, data_dir: PathBuf) -> Router {
             "dumpstar",
             m.tools.clone(),
             m.resolver.clone(),
-            dumpster_kit_mcp::Limits::default(),
+            dumpster_kit_mcp::Limits {
+                max_result_bytes: MCP_MAX_RESULT_BYTES,
+                ..dumpster_kit_mcp::Limits::default()
+            },
             &m.telemetry,
         )
         .layer(middleware::from_fn_with_state(
@@ -590,6 +593,9 @@ pub struct ServeConfig {
 /// Paths the browser sign-in gate lets through when `/mcp` is served: the endpoint itself
 /// (which validates its own bearer token) and the protected-resource metadata clients read first.
 const MCP_BYPASS_PATHS: [&str; 2] = ["/mcp", "/.well-known/oauth-protected-resource"];
+
+/// The largest `/mcp` tool result: a 500-card `get_cards` outgrows the kit's 256 KiB default.
+const MCP_MAX_RESULT_BYTES: usize = 4 * 1024 * 1024;
 
 /// Start the HTTP server. The shared catalog is opened up front — so a missing
 /// catalog (`dumpstar setup` not run) fails at startup rather than on the
@@ -3340,6 +3346,18 @@ mod tests {
             }
 
             async fn rpc(&self, token: &str, method: &str, params: Value) -> Value {
+                let (status, v) = self.rpc_raw(token, method, params).await;
+                assert_eq!(status, StatusCode::OK);
+                v
+            }
+
+            /// As [`Site::rpc`], with the HTTP status, for a refusal that is not a 200.
+            async fn rpc_raw(
+                &self,
+                token: &str,
+                method: &str,
+                params: Value,
+            ) -> (StatusCode, Value) {
                 let req = Request::builder()
                     .method("POST")
                     .uri("/mcp")
@@ -3351,8 +3369,11 @@ mod tests {
                     ))
                     .unwrap();
                 let resp = self.router.clone().oneshot(req).await.unwrap();
-                assert_eq!(resp.status(), StatusCode::OK);
-                serde_json::from_str(&body_string(resp).await).unwrap()
+                let status = resp.status();
+                (
+                    status,
+                    serde_json::from_str(&body_string(resp).await).unwrap(),
+                )
             }
 
             /// A tool's structured result, or its error text.
@@ -3519,6 +3540,172 @@ mod tests {
                 .await;
             let err = short.unwrap_err();
             assert!(err.contains("SOR-12"), "{err}");
+        }
+
+        const THIRD_CARD: &str = "INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
+               VALUES ('SOR-1-hyper', 'SOR-1', 'SOR', '101', 'Hyperspace', 'Normal');";
+
+        /// sp-n99pud: `get_cards` returns, for each id, exactly what `get_card` returns.
+        #[tokio::test]
+        async fn get_cards_returns_what_get_card_returns_for_each_id() {
+            let mut site =
+                Site::with_catalog(&["alice"], &format!("{SECOND_CARD}{THIRD_CARD}")).await;
+            site.sign_in(member("alice@example.com")).await;
+            for body in [
+                ADD_CARD,
+                r#"{"printing_id":"SOR-1-hyper","source":"manual_id"}"#,
+                r#"{"printing_id":"SOR-2-normal","source":"manual_id"}"#,
+            ] {
+                let r = site.send("POST", "/api/collection", Some(body)).await;
+                assert_eq!(r.status(), StatusCode::CREATED);
+            }
+            let alice = site.token_for("alice@example.com");
+            let deck = site
+                .tool(
+                    &alice,
+                    "create_deck",
+                    json!({"name": "P", "format": "Jumpstart"}),
+                )
+                .await
+                .unwrap()["deck"]["id"]
+                .as_i64()
+                .unwrap();
+            site.tool(
+                &alice,
+                "set_deck_lines",
+                json!({"id": deck, "lines": [{"card_id": "SOR-1", "qty": 1}]}),
+            )
+            .await
+            .unwrap();
+            let ids = ["SOR-1", "SOR-2"];
+            let got = site
+                .tool(&alice, "get_cards", json!({"ids": ids}))
+                .await
+                .unwrap();
+            for id in ids {
+                let one = site
+                    .tool(&alice, "get_card", json!({"id": id}))
+                    .await
+                    .unwrap();
+                assert_eq!(got["cards"][id], one, "{id}");
+            }
+            assert_eq!(
+                got["cards"]["SOR-1"]["printings"].as_array().unwrap().len(),
+                2
+            );
+            assert_eq!(got["cards"]["SOR-1"]["card"]["in_decks"][0]["id"], deck);
+            assert!(got["missing"].as_array().unwrap().is_empty());
+        }
+
+        #[tokio::test]
+        async fn get_cards_lists_unknown_ids_as_missing_dedups_and_keys_ids_as_given() {
+            let site = Site::with_catalog(&["alice"], "").await;
+            let alice = site.token_for("alice@example.com");
+            let got = site
+                .tool(
+                    &alice,
+                    "get_cards",
+                    json!({"ids": ["SOR-1", "NOPE-999", "SOR-1"]}),
+                )
+                .await
+                .unwrap();
+            assert_eq!(got["cards"].as_object().unwrap().len(), 1);
+            assert!(got["cards"]["SOR-1"]["card"].is_object());
+            assert_eq!(got["missing"], json!(["NOPE-999"]));
+            let got = site
+                .tool(&alice, "get_cards", json!({"ids": ["SOR-1", "sor-001"]}))
+                .await
+                .unwrap();
+            assert_eq!(got["cards"]["sor-001"], got["cards"]["SOR-1"]);
+            for bad in [json!({}), json!({"ids": "SOR-1"}), json!({"ids": [1]})] {
+                // Refused by the tool, or by the kit's schema check before it (no result).
+                let r = site.tool(&alice, "get_cards", bad.clone()).await;
+                assert!(
+                    r.is_err() || r.as_ref().is_ok_and(Value::is_null),
+                    "{bad}: {r:?}"
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn get_cards_refuses_more_than_500_ids_naming_the_cap() {
+            let site = Site::with_catalog(&["alice"], "").await;
+            let alice = site.token_for("alice@example.com");
+            let ids: Vec<String> = (0..501).map(|i| format!("SOR-{i}")).collect();
+            let err = site
+                .tool(&alice, "get_cards", json!({"ids": ids}))
+                .await
+                .unwrap_err();
+            assert!(err.contains("500"), "{err}");
+        }
+
+        #[tokio::test]
+        async fn get_cards_carries_only_the_callers_copies() {
+            let mut site = Site::with_catalog(&["alice", "bob"], "").await;
+            site.sign_in(member("alice@example.com")).await;
+            site.send("POST", "/api/collection", Some(ADD_CARD)).await;
+            site.sign_in(member("bob@example.com")).await;
+            for _ in 0..3 {
+                site.send("POST", "/api/collection", Some(ADD_CARD)).await;
+            }
+            let alice = site.token_for("alice@example.com");
+            let got = site
+                .tool(&alice, "get_cards", json!({"ids": ["SOR-1"]}))
+                .await
+                .unwrap();
+            let e = &got["cards"]["SOR-1"];
+            assert_eq!(e["copies"].as_array().unwrap().len(), 1);
+            assert_eq!(e["card"]["owned_count"], 1);
+        }
+
+        /// 400 cards with two printings and a copy each: one call, under the raised result cap,
+        /// and one unit of the grant's rate limit (120 a minute).
+        #[tokio::test]
+        async fn get_cards_reads_400_cards_in_one_call_and_one_rate_unit() {
+            let rules = "x".repeat(300);
+            let mut sql = String::new();
+            for i in 100..500 {
+                sql.push_str(&format!(
+                    "INSERT INTO cards (card_id, name, card_type, rules_text) \
+                       VALUES ('SOR-{i}', 'Card {i}', 'Unit', '{rules}'); \
+                     INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
+                       VALUES ('p{i}', 'SOR-{i}', 'SOR', '{i}', 'Standard', 'Normal'), \
+                              ('h{i}', 'SOR-{i}', 'SOR', '{}', 'Hyperspace', 'Normal'); ",
+                    i + 1000
+                ));
+            }
+            let mut site = Site::with_catalog(&["alice"], &sql).await;
+            site.sign_in(member("alice@example.com")).await;
+            for i in 100..500 {
+                let r = site
+                    .send(
+                        "POST",
+                        "/api/collection",
+                        Some(&format!(r#"{{"printing_id":"p{i}","source":"manual_id"}}"#)),
+                    )
+                    .await;
+                assert_eq!(r.status(), StatusCode::CREATED);
+            }
+            let alice = site.token_for("alice@example.com");
+            let ids: Vec<String> = (100..500).map(|i| format!("SOR-{i}")).collect();
+            let got = site
+                .tool(&alice, "get_cards", json!({"ids": ids}))
+                .await
+                .unwrap();
+            assert_eq!(got["cards"].as_object().unwrap().len(), 400);
+            for _ in 0..119 {
+                site.tool(&alice, "get_card", json!({"id": "SOR-100"}))
+                    .await
+                    .unwrap();
+            }
+            let refused = site
+                .rpc_raw(
+                    &alice,
+                    "tools/call",
+                    json!({"name": "get_card", "arguments": {"id": "SOR-100"}}),
+                )
+                .await;
+            assert_eq!(refused.1["error"]["code"], -32029, "{}", refused.1);
         }
 
         /// A bearer token opens `/api` (sp-t5m86j) but nothing else the browser gate guards.

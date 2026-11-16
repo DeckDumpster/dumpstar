@@ -3615,6 +3615,21 @@ mod tests {
                 .unwrap_err();
             assert!(err.contains("printing_id"), "{err}");
             assert_eq!(held(&site, &alice).await, before);
+            for bad in [json!("Bogus"), json!(""), json!(1)] {
+                let err = set(json!([{"card_id": "SOR-1", "qty": 1, "finish": bad}]))
+                    .await
+                    .unwrap_err();
+                assert!(err.contains("finish"), "{err}");
+            }
+            assert_eq!(held(&site, &alice).await, before);
+            // A finish selector reserves only that finish.
+            set(json!([{"card_id": "SOR-1", "qty": 1, "finish": "Foil"}]))
+                .await
+                .unwrap();
+            for (printing, deck_id) in held(&site, &alice).await {
+                assert_eq!(deck_id == json!(deck), printing == "SOR-1-foil");
+            }
+            set(json!([])).await.unwrap();
             // A named printing reserves exactly it.
             set(json!([{"card_id": "SOR-1", "qty": 1, "printing_id": "SOR-1-foil"}]))
                 .await

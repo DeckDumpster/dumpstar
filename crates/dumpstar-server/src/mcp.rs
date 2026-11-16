@@ -1048,9 +1048,18 @@ impl DumpstarTools {
                     return Err(failed(format!("zone must be main or sideboard, not '{z}'")));
                 }
             };
+            let selector = |key: &str| -> Result<Option<&str>, ToolError> {
+                match l.get(key) {
+                    None | Some(Value::Null) => Ok(None),
+                    Some(Value::String(s)) if !s.is_empty() => Ok(Some(s.as_str())),
+                    Some(_) => Err(failed(format!(
+                        "'{key}' must be a non-empty string (line for '{card_id}')"
+                    ))),
+                }
+            };
             let pick = Pick {
-                printing_id: arg_str(l, "printing_id").map(String::from),
-                finish: match arg_str(l, "finish") {
+                printing_id: selector("printing_id")?.map(String::from),
+                finish: match selector("finish")? {
                     None => None,
                     Some(f @ ("Normal" | "Foil")) => Some(f.to_string()),
                     Some(f) => {
@@ -1059,7 +1068,7 @@ impl DumpstarTools {
                         )));
                     }
                 },
-                variant: arg_str(l, "variant").map(String::from),
+                variant: selector("variant")?.map(String::from),
             };
             if pick.printing_id.is_some() && (pick.finish.is_some() || pick.variant.is_some()) {
                 return Err(failed(format!(

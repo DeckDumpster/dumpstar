@@ -272,8 +272,56 @@ pub fn owned_missing(conn: &Connection, deck_id: i64) -> Result<Vec<OwnedLine>> 
     Ok(dumpstar_core::deck::owned_missing(&lines, &owned))
 }
 
+/// Which printings of a card a line may be filled from. The default names
+/// nothing: any owned copy of the card will do.
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Pick {
+    pub printing_id: Option<String>,
+    pub finish: Option<String>,
+    pub variant: Option<String>,
+}
+
+impl Pick {
+    /// 0 for a named printing, then finish and variant together, then one of
+    /// them, then nothing: demands are filled in this order so a narrow one
+    /// is never starved by a broad one.
+    fn specificity(&self) -> u8 {
+        if self.printing_id.is_some() {
+            0
+        } else {
+            match (self.finish.is_some(), self.variant.is_some()) {
+                (true, true) => 1,
+                (false, false) => 3,
+                _ => 2,
+            }
+        }
+    }
+
+    fn matches(&self, printing: &str, finish: &str, variant: &str) -> bool {
+        self.printing_id.as_deref().is_none_or(|p| p == printing)
+            && self.finish.as_deref().is_none_or(|f| f == finish)
+            && self.variant.as_deref().is_none_or(|v| v == variant)
+    }
+
+    /// The selector as prose, e.g. `Foil Hyperspace`; empty when none.
+    fn label(&self) -> String {
+        [&self.printing_id, &self.finish, &self.variant]
+            .into_iter()
+            .flatten()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+}
+
 /// One line the caller asks a deck to hold.
-pub type Line = DeckEntry;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Line {
+    pub card_id: String,
+    pub zone: Zone,
+    pub qty: u32,
+    pub pick: Pick,
+}
 
 /// A line the deck could not reserve: `needed` copies of the card were asked
 /// for and only `available` could be had. `reserved_elsewhere` is how many of
@@ -285,6 +333,13 @@ pub struct ShortLine {
     pub owned: u32,
     pub reserved_elsewhere: u32,
     pub available: u32,
+    /// The selector this line asked for, when it asked for one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub printing_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub finish: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub variant: Option<String>,
     /// The other decks holding the owned copies, with how many each holds.
     pub held_by: Vec<DeckHold>,
     /// The next step, naming the decks to free the card from.
@@ -424,30 +479,42 @@ fn log_move(
 /// nothing changes and every short line is returned.
 pub fn set_lines(conn: &Connection, deck_id: i64, lines: &[Line]) -> Result<SetLines> {
     let mut merged: std::collections::BTreeMap<(String, Zone), u32> = Default::default();
+    // Per card, the copies wanted for each selector.
+    let mut demands: std::collections::BTreeMap<&str, std::collections::BTreeMap<&Pick, u32>> =
+        Default::default();
     for l in lines {
         if l.qty == 0 {
             continue;
         }
         *merged.entry((l.card_id.clone(), l.zone)).or_default() += l.qty;
-    }
-    let mut needs: std::collections::BTreeMap<&str, u32> = Default::default();
-    for ((card, _), q) in &merged {
-        *needs.entry(card).or_default() += q;
+        *demands
+            .entry(&l.card_id)
+            .or_default()
+            .entry(&l.pick)
+            .or_default() += l.qty;
     }
     immediate(conn, |conn| {
         require_deck(conn, deck_id)?;
         let mut owned_stmt = conn.prepare(
-            "SELECT c.id, c.deck_id, c.binder_id FROM collection c \
+            "SELECT c.id, c.deck_id, c.binder_id, p.printing_id, p.finish, p.variant FROM collection c \
                JOIN shared.printings p ON p.printing_id = c.printing_id \
               WHERE p.card_id = ?1 AND c.status = 'owned' \
               ORDER BY (c.deck_id IS ?2) DESC, (c.binder_id IS NULL) DESC, c.id",
         )?;
+        type Row = (i64, Option<i64>, Option<i64>, String, String, String);
         let mut keep: Vec<(i64, Option<i64>, Option<i64>)> = Vec::new();
         let mut short = Vec::new();
-        for (card, need) in &needs {
-            let rows: Vec<(i64, Option<i64>, Option<i64>)> = owned_stmt
+        for (card, picks) in &demands {
+            let rows: Vec<Row> = owned_stmt
                 .query_map(params![card, deck_id], |r| {
-                    Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+                    Ok((
+                        r.get(0)?,
+                        r.get(1)?,
+                        r.get(2)?,
+                        r.get(3)?,
+                        r.get(4)?,
+                        r.get(5)?,
+                    ))
                 })?
                 .collect::<rusqlite::Result<_>>()?;
             let owned = rows.len() as u32;
@@ -455,11 +522,29 @@ pub fn set_lines(conn: &Connection, deck_id: i64, lines: &[Line]) -> Result<SetL
                 .iter()
                 .filter(|r| r.1.is_some_and(|d| d != deck_id))
                 .count() as u32;
-            let usable: Vec<_> = rows
+            let usable: Vec<Row> = rows
                 .into_iter()
                 .filter(|r| r.1.is_none() || r.1 == Some(deck_id))
                 .collect();
-            if (usable.len() as u32) < *need {
+            let mut taken = vec![false; usable.len()];
+            let mut order: Vec<(&&Pick, &u32)> = picks.iter().collect();
+            order.sort_by_key(|(p, _)| p.specificity());
+            for (pick, need) in order {
+                let mut got = 0;
+                for (i, r) in usable.iter().enumerate() {
+                    if got == *need {
+                        break;
+                    }
+                    if !taken[i] && pick.matches(&r.3, &r.4, &r.5) {
+                        taken[i] = true;
+                        got += 1;
+                        keep.push((r.0, r.1, r.2));
+                    }
+                }
+                if got == *need {
+                    continue;
+                }
+                let label = pick.label();
                 let held_by: Vec<DeckHold> = holders(conn, &[(*card).to_string()])?
                     .remove(*card)
                     .unwrap_or_default()
@@ -467,17 +552,24 @@ pub fn set_lines(conn: &Connection, deck_id: i64, lines: &[Line]) -> Result<SetL
                     .filter(|h| h.id != deck_id)
                     .collect();
                 let hint = if held_by.is_empty() {
-                    format!(
-                        "own {} more or lower the quantity",
-                        need - usable.len() as u32
-                    )
+                    let kind = if label.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" {label}")
+                    };
+                    format!("own {} more{kind} or lower the quantity", need - got)
                 } else {
                     let names: Vec<String> = held_by
                         .iter()
                         .map(|h| format!("'{}' (id {}, qty {})", h.name, h.id, h.qty))
                         .collect();
+                    let wanted = if label.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" ({label} wanted)")
+                    };
                     format!(
-                        "{card} has {owned} {}, held by deck {}: substitute a card, or remove it from the holding deck with set_deck_lines",
+                        "{card} has {owned} {}{wanted}, held by deck {}: substitute a card, or remove it from the holding deck with set_deck_lines",
                         if owned == 1 { "copy" } else { "copies" },
                         names.join(", ")
                     )
@@ -487,12 +579,13 @@ pub fn set_lines(conn: &Connection, deck_id: i64, lines: &[Line]) -> Result<SetL
                     needed: *need,
                     owned,
                     reserved_elsewhere: elsewhere,
-                    available: usable.len() as u32,
+                    available: got,
+                    printing_id: pick.printing_id.clone(),
+                    finish: pick.finish.clone(),
+                    variant: pick.variant.clone(),
                     held_by,
                     hint,
                 });
-            } else {
-                keep.extend(usable.into_iter().take(*need as usize));
             }
         }
         if !short.is_empty() {
@@ -1004,6 +1097,7 @@ mod tests {
             card_id: card.into(),
             zone: Zone::Main,
             qty,
+            pick: Pick::default(),
         }
     }
 
@@ -1207,6 +1301,135 @@ mod tests {
         ));
     }
 
+    fn pick_line(qty: u32, printing: Option<&str>, finish: Option<&str>) -> Line {
+        Line {
+            pick: Pick {
+                printing_id: printing.map(Into::into),
+                finish: finish.map(Into::into),
+                variant: None,
+            },
+            ..line("C1", qty)
+        }
+    }
+
+    /// `stocked(2)` (Normal copies 1 and 2) plus a Foil printing `C1-foil` with one owned copy, id 3.
+    fn stocked_with_foil() -> (Connection, i64, i64) {
+        let (d, shared, _u, conn, a, b) = stocked(2);
+        std::mem::forget(d);
+        crate::testkit::printing(
+            &open_shared(&shared).unwrap(),
+            "C1-foil",
+            "C1",
+            "SOR",
+            "1",
+            "Standard",
+            "Foil",
+        );
+        conn.execute(
+            "INSERT INTO collection (printing_id, acquired_at, source) VALUES ('C1-foil','2026-10-13','manual_id')",
+            [],
+        )
+        .unwrap();
+        (conn, a, b)
+    }
+
+    fn held_ids(conn: &Connection, deck: i64) -> Vec<i64> {
+        conn.prepare("SELECT id FROM collection WHERE deck_id = ?1 ORDER BY id")
+            .unwrap()
+            .query_map([deck], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap()
+    }
+
+    #[test]
+    fn one_card_on_two_lines_reserves_the_foil_and_a_normal_copy() {
+        let (conn, a, _b) = stocked_with_foil();
+        let lines = [
+            pick_line(1, Some("C1-foil"), None),
+            pick_line(1, None, Some("Normal")),
+        ];
+        assert_eq!(
+            set_lines(&conn, a, &lines).unwrap(),
+            SetLines::Set { reserved: 2 }
+        );
+        assert_eq!(held_ids(&conn, a), vec![1, 3]);
+    }
+
+    #[test]
+    fn finish_and_variant_together_match_only_that_printing_and_name_both_when_short() {
+        let (_d, shared, _u, conn, a, _b) = stocked(2);
+        crate::testkit::printing(
+            &open_shared(&shared).unwrap(),
+            "C1-hs-foil",
+            "C1",
+            "SOR",
+            "1h",
+            "Hyperspace",
+            "Foil",
+        );
+        conn.execute(
+            "INSERT INTO collection (printing_id, acquired_at, source) VALUES ('C1-hs-foil','2026-10-13','manual_id')",
+            [],
+        )
+        .unwrap();
+        let pick = |finish: &str, variant: &str, qty| Line {
+            pick: Pick {
+                printing_id: None,
+                finish: Some(finish.into()),
+                variant: Some(variant.into()),
+            },
+            ..line("C1", qty)
+        };
+        assert_eq!(
+            set_lines(&conn, a, &[pick("Foil", "Hyperspace", 1)]).unwrap(),
+            SetLines::Set { reserved: 1 }
+        );
+        assert_eq!(held_ids(&conn, a), vec![3]);
+        let SetLines::Short(short) = set_lines(&conn, a, &[pick("Foil", "Hyperspace", 2)]).unwrap()
+        else {
+            panic!("expected short")
+        };
+        assert_eq!(short[0].variant.as_deref(), Some("Hyperspace"));
+        assert_eq!(short[0].finish.as_deref(), Some("Foil"));
+        assert_eq!(short[0].available, 1);
+    }
+
+    #[test]
+    fn a_selector_with_too_few_matching_copies_refuses_and_moves_nothing() {
+        let (conn, a, _b) = stocked_with_foil();
+        let before = deck_ids(&conn);
+        let r = set_lines(&conn, a, &[pick_line(2, None, Some("Foil"))]).unwrap();
+        let SetLines::Short(short) = r else {
+            panic!("expected short")
+        };
+        assert_eq!(short.len(), 1);
+        assert_eq!(short[0].finish.as_deref(), Some("Foil"));
+        assert_eq!(short[0].printing_id, None);
+        assert_eq!((short[0].needed, short[0].available), (2, 1));
+        assert_eq!(short[0].hint, "own 1 more Foil or lower the quantity");
+        assert_eq!(deck_ids(&conn), before);
+    }
+
+    #[test]
+    fn rerunning_set_lines_keeps_the_copies_the_deck_already_holds() {
+        let (conn, a, b) = stocked_with_foil();
+        // B takes copy 1, A gets 2 and the foil 3; B then lets go, leaving a
+        // free Normal copy with a lower id than the one A holds.
+        set_lines(&conn, b, &[line("C1", 1)]).unwrap();
+        let lines = [
+            pick_line(1, Some("C1-foil"), None),
+            pick_line(1, None, Some("Normal")),
+        ];
+        set_lines(&conn, a, &lines).unwrap();
+        set_lines(&conn, b, &[]).unwrap();
+        assert_eq!(held_ids(&conn, a), vec![2, 3]);
+        set_lines(&conn, a, &lines).unwrap();
+        assert_eq!(held_ids(&conn, a), vec![2, 3]);
+        set_lines(&conn, a, &[line("C1", 2)]).unwrap();
+        assert_eq!(held_ids(&conn, a), vec![2, 3]);
+    }
+
     #[test]
     fn set_lines_reserves_and_refuses_over_reservation_naming_the_line() {
         let (_d, _s, _u, conn, a, b) = stocked(3);
@@ -1231,6 +1454,9 @@ mod tests {
                 owned: 3,
                 reserved_elsewhere: 2,
                 available: 1,
+                printing_id: None,
+                finish: None,
+                variant: None,
                 held_by: vec![DeckHold {
                     id: a,
                     name: "A".into(),
@@ -1269,6 +1495,7 @@ mod tests {
                 card_id: "C1".into(),
                 zone: Zone::Sideboard,
                 qty: 2,
+                pick: Pick::default(),
             },
         ];
         assert!(matches!(
@@ -1332,6 +1559,7 @@ mod tests {
                 card_id: "C1".into(),
                 zone: Zone::Sideboard,
                 qty: 2,
+                pick: Pick::default(),
             },
         ];
         assert!(matches!(

@@ -3626,6 +3626,7 @@ mod tests {
                     "only the Foil is held: {printing} {deck_id}"
                 );
             }
+        }
 
         const THIRD_CARD: &str = "INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
                VALUES ('SOR-1-hyper', 'SOR-1', 'SOR', '101', 'Hyperspace', 'Normal');";

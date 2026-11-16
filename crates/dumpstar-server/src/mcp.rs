@@ -20,12 +20,12 @@ use rusqlite::{Connection, OptionalExtension};
 use serde_json::{Value, json};
 
 use crate::dbpool;
-use dumpstar_core::deck::{DeckEntry, Zone};
+use dumpstar_core::deck::Zone;
 use dumpstar_core::query::{KeywordRegistry, parse};
 use dumpstar_db::DbError;
 use dumpstar_db::cards::{self, Card};
 use dumpstar_db::deck_groups;
-use dumpstar_db::decks::{self, CardCount, NewDeck, SetLines};
+use dumpstar_db::decks::{self, CardCount, Line, NewDeck, Pick, SetLines};
 use dumpstar_db::search::{self, SearchRow, Slice};
 use dumpstar_db::search_meta::SearchFlag;
 
@@ -1048,15 +1048,59 @@ impl DumpstarTools {
                     return Err(failed(format!("zone must be main or sideboard, not '{z}'")));
                 }
             };
-            lines.push(DeckEntry {
+            let selector = |key: &str| -> Result<Option<&str>, ToolError> {
+                match l.get(key) {
+                    None | Some(Value::Null) => Ok(None),
+                    Some(Value::String(s)) if !s.is_empty() => Ok(Some(s.as_str())),
+                    Some(_) => Err(failed(format!(
+                        "'{key}' must be a non-empty string (line for '{card_id}')"
+                    ))),
+                }
+            };
+            let pick = Pick {
+                printing_id: selector("printing_id")?.map(String::from),
+                finish: match selector("finish")? {
+                    None => None,
+                    Some(f @ ("Normal" | "Foil")) => Some(f.to_string()),
+                    Some(f) => {
+                        return Err(failed(format!(
+                            "finish must be Normal or Foil, not '{f}' (line for '{card_id}')"
+                        )));
+                    }
+                },
+                variant: selector("variant")?.map(String::from),
+            };
+            if pick.printing_id.is_some() && (pick.finish.is_some() || pick.variant.is_some()) {
+                return Err(failed(format!(
+                    "line for '{card_id}' gives printing_id together with finish/variant; give one or the other"
+                )));
+            }
+            lines.push(Line {
                 card_id: card_id.to_string(),
                 qty,
                 zone,
+                pick,
             });
         }
         self.with_conn(ctx, "set_deck_lines", |c| {
             for l in &mut lines {
+                let given = l.card_id.clone();
                 l.card_id = resolve_card_id(c, &l.card_id)?;
+                if let Some(p) = &l.pick.printing_id {
+                    let of: Option<String> = c
+                        .query_row(
+                            "SELECT card_id FROM shared.printings WHERE printing_id = ?1",
+                            [p],
+                            |r| r.get(0),
+                        )
+                        .optional()
+                        .map_err(|e| db_err(e.into()))?;
+                    if of.as_deref() != Some(l.card_id.as_str()) {
+                        return Err(failed(format!(
+                            "printing_id '{p}' is not a printing of card '{given}'"
+                        )));
+                    }
+                }
             }
             match decks::set_lines(c, id, &lines).map_err(db_err)? {
                 SetLines::Short(short) => Err(failed(format!(
@@ -1330,16 +1374,19 @@ impl ToolProvider for DumpstarTools {
             ),
             def(
                 "set_deck_lines",
-                "Replace the deck's lines in one transaction and reserve an owned copy for every card. A copy in another deck is never taken. Each echoed line carries `copies` ({copy_id, printing_id, set, number, variant, finish}) as get_deck does. If any card lacks enough free copies nothing changes and the short lines are returned.".into(),
+                "Replace the deck's lines in one transaction and reserve an owned copy for every card. A copy in another deck is never taken. Each echoed line carries `copies` ({copy_id, printing_id, set, number, variant, finish}) as get_deck does. A line may name `printing_id`, or `finish` and/or `variant`, to reserve only matching copies. If any line lacks enough free matching copies nothing changes and the short lines (naming the selector) are returned. Re-running with unchanged lines keeps the copies the deck already holds.".into(),
                 schema(
                     json!({
                         "id": id,
-                        "lines": {"type": "array", "description": "Objects {card_id, qty, zone?} with zone main (default) or sideboard", "items": {
+                        "lines": {"type": "array", "description": "Objects {card_id, qty, zone?, printing_id?, finish?, variant?} with zone main (default) or sideboard. printing_id, or finish and/or variant, limits the copies reserved for the line to matching printings; printing_id cannot be combined with finish/variant. One card may appear on several lines with different selectors.", "items": {
                             "type": "object",
                             "properties": {
                                 "card_id": {"type": "string", "description": CARD_ID_DOC},
                                 "qty": {"type": "integer"},
                                 "zone": {"type": "string", "enum": ["main", "sideboard"]},
+                                "printing_id": {"type": "string", "description": "Reserve only copies of this printing (one of the card's printing_ids)"},
+                                "finish": {"type": "string", "enum": ["Normal", "Foil"], "description": "Reserve only copies of this finish"},
+                                "variant": {"type": "string", "description": "Reserve only copies of this variant, e.g. Standard, Hyperspace, Showcase"},
                             },
                             "required": ["card_id", "qty"],
                         }},

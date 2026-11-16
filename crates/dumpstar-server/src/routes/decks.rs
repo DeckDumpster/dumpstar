@@ -71,8 +71,18 @@ async fn set_lines(
     Path(id): Path<i64>,
     Json(body): Json<SetLinesBody>,
 ) -> Result<Response, AppError> {
+    let lines: Vec<decks::Line> = body
+        .lines
+        .into_iter()
+        .map(|l| decks::Line {
+            card_id: l.card_id,
+            zone: l.zone,
+            qty: l.qty,
+            pick: decks::Pick::default(),
+        })
+        .collect();
     let out = blocking(&state, move |c| {
-        Ok(match decks::set_lines(c, id, &body.lines)? {
+        Ok(match decks::set_lines(c, id, &lines)? {
             SetLines::Short(short) => Err(short),
             SetLines::Set { reserved } => Ok(SetLinesDone {
                 reserved,

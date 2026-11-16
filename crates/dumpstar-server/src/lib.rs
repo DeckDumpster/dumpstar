@@ -3542,6 +3542,107 @@ mod tests {
             assert!(err.contains("SOR-12"), "{err}");
         }
 
+        /// A `set_deck_lines` line naming a printing reserves only that printing, and
+        /// a short or foreign selector refuses the call with no copy moved (sp-6tgu95).
+        #[tokio::test]
+        async fn set_deck_lines_reserves_only_the_printing_a_line_names() {
+            async fn held(site: &Site, token: &str) -> Vec<(Value, Value)> {
+                let card = site
+                    .tool(token, "get_card", json!({"id": "SOR-1"}))
+                    .await
+                    .unwrap();
+                card["copies"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|c| (c["printing_id"].clone(), c["deck_id"].clone()))
+                    .collect()
+            }
+            let extra = format!(
+                "{SECOND_CARD} INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
+                   VALUES ('SOR-1-foil', 'SOR-1', 'SOR', '1', 'Standard', 'Foil');"
+            );
+            let mut site = Site::with_catalog(&["alice"], &extra).await;
+            site.sign_in(member("alice@example.com")).await;
+            for body in [
+                ADD_CARD,
+                ADD_CARD,
+                r#"{"printing_id":"SOR-1-foil","source":"manual_id"}"#,
+            ] {
+                let r = site.send("POST", "/api/collection", Some(body)).await;
+                assert_eq!(r.status(), StatusCode::CREATED);
+            }
+            let alice = site.token_for("alice@example.com");
+            let deck = site
+                .tool(
+                    &alice,
+                    "create_deck",
+                    json!({"name": "Pack", "format": "x"}),
+                )
+                .await
+                .unwrap()["deck"]["id"]
+                .as_i64()
+                .unwrap();
+            let before = held(&site, &alice).await;
+
+            let set = |lines: Value| {
+                site.tool(
+                    &alice,
+                    "set_deck_lines",
+                    json!({"id": deck, "lines": lines}),
+                )
+            };
+            // Two Foils asked, one owned: refused, nothing moves.
+            let err = set(json!([{"card_id": "SOR-1", "qty": 2, "printing_id": "SOR-1-foil"}]))
+                .await
+                .unwrap_err();
+            assert!(err.contains("not enough free copies"), "{err}");
+            assert!(
+                err.contains("SOR-1-foil"),
+                "refusal names the selector: {err}"
+            );
+            assert_eq!(held(&site, &alice).await, before);
+            // Another card's printing is refused, naming both.
+            let err = set(json!([{"card_id": "SOR-1", "qty": 1, "printing_id": "SOR-2-normal"}]))
+                .await
+                .unwrap_err();
+            assert!(
+                err.contains("SOR-2-normal") && err.contains("SOR-1"),
+                "{err}"
+            );
+            let err = set(json!([{"card_id": "SOR-1", "qty": 1, "printing_id": "SOR-1-foil", "finish": "Foil"}]))
+                .await
+                .unwrap_err();
+            assert!(err.contains("printing_id"), "{err}");
+            assert_eq!(held(&site, &alice).await, before);
+            for bad in [json!("Bogus"), json!(""), json!(1)] {
+                let err = set(json!([{"card_id": "SOR-1", "qty": 1, "finish": bad}]))
+                    .await
+                    .unwrap_err();
+                assert!(err.contains("finish"), "{err}");
+            }
+            assert_eq!(held(&site, &alice).await, before);
+            // A finish selector reserves only that finish.
+            set(json!([{"card_id": "SOR-1", "qty": 1, "finish": "Foil"}]))
+                .await
+                .unwrap();
+            for (printing, deck_id) in held(&site, &alice).await {
+                assert_eq!(deck_id == json!(deck), printing == "SOR-1-foil");
+            }
+            set(json!([])).await.unwrap();
+            // A named printing reserves exactly it.
+            set(json!([{"card_id": "SOR-1", "qty": 1, "printing_id": "SOR-1-foil"}]))
+                .await
+                .unwrap();
+            for (printing, deck_id) in held(&site, &alice).await {
+                assert_eq!(
+                    deck_id == json!(deck),
+                    printing == "SOR-1-foil",
+                    "only the Foil is held: {printing} {deck_id}"
+                );
+            }
+        }
+
         const THIRD_CARD: &str = "INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
                VALUES ('SOR-1-hyper', 'SOR-1', 'SOR', '101', 'Hyperspace', 'Normal');";
 

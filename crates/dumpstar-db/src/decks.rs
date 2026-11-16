@@ -1357,6 +1357,45 @@ mod tests {
     }
 
     #[test]
+    fn finish_and_variant_together_match_only_that_printing_and_name_both_when_short() {
+        let (_d, shared, _u, conn, a, _b) = stocked(2);
+        crate::testkit::printing(
+            &open_shared(&shared).unwrap(),
+            "C1-hs-foil",
+            "C1",
+            "SOR",
+            "1h",
+            "Hyperspace",
+            "Foil",
+        );
+        conn.execute(
+            "INSERT INTO collection (printing_id, acquired_at, source) VALUES ('C1-hs-foil','2026-10-13','manual_id')",
+            [],
+        )
+        .unwrap();
+        let pick = |finish: &str, variant: &str, qty| Line {
+            pick: Pick {
+                printing_id: None,
+                finish: Some(finish.into()),
+                variant: Some(variant.into()),
+            },
+            ..line("C1", qty)
+        };
+        assert_eq!(
+            set_lines(&conn, a, &[pick("Foil", "Hyperspace", 1)]).unwrap(),
+            SetLines::Set { reserved: 1 }
+        );
+        assert_eq!(held_ids(&conn, a), vec![3]);
+        let SetLines::Short(short) = set_lines(&conn, a, &[pick("Foil", "Hyperspace", 2)]).unwrap()
+        else {
+            panic!("expected short")
+        };
+        assert_eq!(short[0].variant.as_deref(), Some("Hyperspace"));
+        assert_eq!(short[0].finish.as_deref(), Some("Foil"));
+        assert_eq!(short[0].available, 1);
+    }
+
+    #[test]
     fn a_selector_with_too_few_matching_copies_refuses_and_moves_nothing() {
         let (conn, a, _b) = stocked_with_foil();
         let before = deck_ids(&conn);

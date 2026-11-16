@@ -33,6 +33,8 @@ use dumpstar_db::search_meta::SearchFlag;
 const DEFAULT_PAGE: u32 = 25;
 /// The most rows one `search_cards` page returns; keeps a page far under the result-size cap.
 const MAX_PAGE: u32 = 100;
+/// The most ids one `get_cards` call takes.
+const MAX_CARD_BATCH: usize = 500;
 const EXAMPLES: [&str; 4] = [
     "a:vigilance t:unit arena:space cost<=3",
     "t:leader a:heroism",
@@ -396,6 +398,16 @@ fn display_id(conn: &Connection, card_id: &str) -> Result<String, ToolError> {
 /// Accepts the documented `<SET>-<number>` and the older internal forms (`n:<slug>`, bare
 /// numeric ids) and returns the catalog's own card id.
 fn resolve_card_id(conn: &Connection, given: &str) -> Result<String, ToolError> {
+    find_card_id(conn, given)?.ok_or_else(|| {
+        failed(format!(
+            "no card '{}'; ids look like SOR-5 (<SET>-<number>), search_cards finds them",
+            given.trim()
+        ))
+    })
+}
+
+/// [`resolve_card_id`], with `None` for an id that names no card.
+fn find_card_id(conn: &Connection, given: &str) -> Result<Option<String>, ToolError> {
     let given = given.trim();
     let known = conn
         .query_row(
@@ -405,8 +417,8 @@ fn resolve_card_id(conn: &Connection, given: &str) -> Result<String, ToolError> 
         )
         .optional()
         .map_err(|e| db_err(e.into()))?;
-    if let Some(id) = known {
-        return Ok(id);
+    if known.is_some() {
+        return Ok(known);
     }
     if let Some((set, number)) = given.split_once('-') {
         let sql = format!(
@@ -417,13 +429,11 @@ fn resolve_card_id(conn: &Connection, given: &str) -> Result<String, ToolError> 
             .query_row(&sql, [set, number], |r| r.get::<_, String>(0))
             .optional()
             .map_err(|e| db_err(e.into()))?;
-        if let Some(id) = found {
-            return Ok(id);
+        if found.is_some() {
+            return Ok(found);
         }
     }
-    Err(failed(format!(
-        "no card '{given}'; ids look like SOR-5 (<SET>-<number>), search_cards finds them"
-    )))
+    Ok(None)
 }
 
 /// The `get_deck` response for deck `id`; `update_deck` echoes the same shape.
@@ -627,6 +637,18 @@ fn schema(properties: Value, required: &[&str]) -> Value {
 
 /// The card object of one card, as `get_card` and `get_deck` return it.
 fn detail_card_object(c: &Connection, card: &Card) -> Result<Value, ToolError> {
+    let counts = counts_for(c, std::slice::from_ref(&card.card_id))?;
+    let structured = structured_for(c, std::slice::from_ref(&card.card_id))?;
+    card_object_from(c, card, &counts, &structured)
+}
+
+/// [`detail_card_object`] over counts and structured facts already read for a batch of cards.
+fn card_object_from(
+    c: &Connection,
+    card: &Card,
+    counts: &HashMap<String, CardCount>,
+    structured: &HashMap<String, Structured>,
+) -> Result<Value, ToolError> {
     let Card {
         card_id,
         set_code,
@@ -644,8 +666,6 @@ fn detail_card_object(c: &Connection, card: &Card) -> Result<Value, ToolError> {
         rarity,
         ..
     } = card;
-    let counts = counts_for(c, std::slice::from_ref(card_id))?;
-    let structured = structured_for(c, std::slice::from_ref(card_id))?;
     Ok(card_object(
         Facts {
             card_id,
@@ -664,9 +684,43 @@ fn detail_card_object(c: &Connection, card: &Card) -> Result<Value, ToolError> {
             traits,
             rules_text: rules_text.as_deref(),
         },
-        &counts,
-        &structured,
+        counts,
+        structured,
     ))
+}
+
+/// The `get_card` value of each detail, in order: counts, structured facts and deck holders are
+/// each read once over all the cards, not once per card.
+fn card_details(c: &Connection, details: &[cards::CardDetail]) -> Result<Vec<Value>, ToolError> {
+    let ids: Vec<String> = details.iter().map(|d| d.card.card_id.clone()).collect();
+    let counts = counts_for(c, &ids)?;
+    let structured = structured_for(c, &ids)?;
+    let holders = holders_for(c, &ids)?;
+    details
+        .iter()
+        .map(|detail| {
+            let mut card = card_object_from(c, &detail.card, &counts, &structured)?;
+            card["in_decks"] = json!(
+                holders
+                    .get(&detail.card.card_id)
+                    .cloned()
+                    .unwrap_or_default()
+            );
+            Ok(json!({
+                "card": card,
+                "printings": detail.printings.iter().map(|p| json!({
+                    "printing_id": p.printing_id, "set": p.set_code, "number": p.number,
+                    "variant": p.variant, "finish": p.finish, "rarity": p.rarity,
+                    "owned_count": p.owned_count, "market_price": p.market_price,
+                })).collect::<Vec<_>>(),
+                "copies": detail.copies.iter().map(|e| json!({
+                    "copy_id": e.id, "printing_id": e.printing_id, "condition": e.condition,
+                    "language": e.language, "status": e.status, "deck_id": e.deck_id,
+                    "binder_id": e.binder_id,
+                })).collect::<Vec<_>>(),
+            }))
+        })
+        .collect()
 }
 
 /// The `search_cards` result for `args`; `/mcp` and `/api/agent/search` both serve it.
@@ -803,22 +857,72 @@ impl DumpstarTools {
             let detail = cards::get_card_detail_variant(c, &set, &number, variant.as_deref())
                 .map_err(db_err)?
                 .ok_or_else(|| failed(format!("no card printed as {set}/{number}")))?;
-            let mut card = detail_card_object(c, &detail.card)?;
-            card["in_decks"] = json!(holders_for(c, std::slice::from_ref(&detail.card.card_id))?
-                .remove(&detail.card.card_id)
-                .unwrap_or_default());
+            let mut values = card_details(c, std::slice::from_ref(&detail))?;
+            Ok(values.remove(0))
+        })
+    }
+
+    /// `get_card` for up to [`MAX_CARD_BATCH`] ids in one call (one unit of the rate limit).
+    fn get_cards(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
+        let ids: Vec<&str> = args
+            .get("ids")
+            .and_then(Value::as_array)
+            .ok_or_else(|| failed("get_cards needs 'ids', an array of card id strings"))?
+            .iter()
+            .map(|v| {
+                v.as_str()
+                    .ok_or_else(|| failed("every entry of 'ids' must be a string"))
+            })
+            .collect::<Result<_, _>>()?;
+        let mut seen = std::collections::HashSet::new();
+        let ids: Vec<&str> = ids.into_iter().filter(|id| seen.insert(*id)).collect();
+        if ids.len() > MAX_CARD_BATCH {
+            return Err(failed(format!(
+                "get_cards takes at most {MAX_CARD_BATCH} ids; got {}",
+                ids.len()
+            )));
+        }
+        self.with_read(ctx, "get_cards", |c| {
+            let mut found = Vec::new();
+            let mut details = Vec::new();
+            let mut missing = Vec::new();
+            for given in ids {
+                let resolved = match find_card_id(c, given)? {
+                    Some(id) => c
+                        .query_row(
+                            &format!("SELECT set_code, number, variant FROM shared.printings WHERE card_id = ?1 {CANONICAL_PRINTING}"),
+                            [&id],
+                            |r| {
+                                Ok((
+                                    r.get::<_, String>(0)?,
+                                    r.get::<_, String>(1)?,
+                                    r.get::<_, String>(2)?,
+                                ))
+                            },
+                        )
+                        .optional()
+                        .map_err(|e| db_err(e.into()))?,
+                    None => None,
+                };
+                let detail = match resolved {
+                    Some((set, number, variant)) => {
+                        cards::get_card_detail_variant(c, &set, &number, Some(&variant))
+                            .map_err(db_err)?
+                    }
+                    None => None,
+                };
+                match detail {
+                    Some(d) => {
+                        found.push(given);
+                        details.push(d);
+                    }
+                    None => missing.push(given),
+                }
+            }
+            let values = card_details(c, &details)?;
             Ok(json!({
-                "card": card,
-                "printings": detail.printings.iter().map(|p| json!({
-                    "printing_id": p.printing_id, "set": p.set_code, "number": p.number,
-                    "variant": p.variant, "finish": p.finish, "rarity": p.rarity,
-                    "owned_count": p.owned_count, "market_price": p.market_price,
-                })).collect::<Vec<_>>(),
-                "copies": detail.copies.iter().map(|e| json!({
-                    "copy_id": e.id, "printing_id": e.printing_id, "condition": e.condition,
-                    "language": e.language, "status": e.status, "deck_id": e.deck_id,
-                    "binder_id": e.binder_id,
-                })).collect::<Vec<_>>(),
+                "cards": found.into_iter().map(String::from).zip(values).collect::<serde_json::Map<_, _>>(),
+                "missing": missing,
             }))
         })
     }
@@ -1156,6 +1260,20 @@ impl ToolProvider for DumpstarTools {
                 ),
             ),
             def(
+                "get_cards",
+                format!("Many cards at once: each entry is exactly what get_card returns for that id, keyed by the id as given; ids that are not cards are listed under missing. At most {MAX_CARD_BATCH} ids per call, and it counts as one call. Use it instead of get_card whenever more than a few cards are needed."),
+                schema(
+                    json!({
+                        "ids": {
+                            "type": "array",
+                            "items": {"type": "string", "description": CARD_ID_DOC},
+                            "maxItems": MAX_CARD_BATCH,
+                        },
+                    }),
+                    &["ids"],
+                ),
+            ),
+            def(
                 "query_help",
                 "The search vocabulary in full: every term with its aliases, operators and help.".into(),
                 schema(json!({}), &[]),
@@ -1320,6 +1438,7 @@ impl DumpstarTools {
         match name {
             "search_cards" => self.search_cards(ctx, &args),
             "get_card" => self.get_card(ctx, &args),
+            "get_cards" => self.get_cards(ctx, &args),
             "query_help" => Ok(self.keywords.help_value()),
             "collection_summary" => self.collection_summary(ctx),
             "list_decks" => self.list_decks(ctx, &args),

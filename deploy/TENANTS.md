@@ -703,6 +703,10 @@ DUMPSTAR_OIDC_REQUIRED_GROUP   dumpstar-users
 DUMPSTAR_OIDC_COOKIE_KEY       >= 32 bytes, hex or base64 (openssl rand -hex 32)
 ```
 
+Sessions last 30 days, renewed on use (any request made more than a day after the cookie was
+issued gets a fresh one); `DUMPSTAR_OIDC_SESSION_TTL_SECS` is left unset. A sign-in started from
+`http://` is sent on to the redirect URL's https origin and completes there (sp-fjrnga).
+
 Setting **any** `DUMPSTAR_OIDC_*` variable selects this mode and then all of them are required.
 In it every path needs a session except `/health`, `/api/backup-status` and `/auth/*`; a page
 without one is sent to Pocket ID, an `/api` call is a 401, and a signed-in user outside

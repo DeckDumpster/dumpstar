@@ -1498,9 +1498,9 @@ dependencies = [
 
 [[package]]
 name = "dumpster-kit-mcp-auth"
-version = "0.1.6"
+version = "0.1.9"
 source = "sparse+http://ubuntu-mini-0.tailb4a728.ts.net:3000/api/packages/rgantt/cargo/"
-checksum = "c6483d7a4f69b73c4ec5a28c3f00b94121d67c71bed6be6d4f081afec19e2500"
+checksum = "46eb4519d594a0477e8f659d0078cb03e7a0db8a17f6db548d83b77123697af8"
 dependencies = [
  "axum",
  "dumpster-kit-oidc",
@@ -1517,9 +1517,9 @@ dependencies = [
 
 [[package]]
 name = "dumpster-kit-oidc"
-version = "0.1.6"
+version = "0.1.9"
 source = "sparse+http://ubuntu-mini-0.tailb4a728.ts.net:3000/api/packages/rgantt/cargo/"
-checksum = "d3a03e1927f6650babd9e60296e75e89c3f2bc303a970c5d31a21d17d71118cd"
+checksum = "5516beb907a66f5670e3957f6fe87b6ce4984df4512a9c99cb38250e3c4c733f"
 dependencies = [
  "axum",
  "base64",
@@ -1570,9 +1570,9 @@ dependencies = [
 
 [[package]]
 name = "dumpster-kit-telemetry"
-version = "0.1.6"
+version = "0.1.9"
 source = "sparse+http://ubuntu-mini-0.tailb4a728.ts.net:3000/api/packages/rgantt/cargo/"
-checksum = "a9e2bd7cbc28f168058e2b6b2fa4ac39a0cdf67a962ced7d7c849ee27dd3b681"
+checksum = "00db5f688b82170014a5fed9b7912ace0b877e87ec6e0c38f7c8768711210562"
 dependencies = [
  "axum",
  "reqwest",
@@ -1582,9 +1582,9 @@ dependencies = [
 
 [[package]]
 name = "dumpster-kit-tenancy"
-version = "0.1.6"
+version = "0.1.9"
 source = "sparse+http://ubuntu-mini-0.tailb4a728.ts.net:3000/api/packages/rgantt/cargo/"
-checksum = "6199f424bb7be29f0174c70792aa5a810b006930a04b46182e8b63bd854a6057"
+checksum = "6b13d35a03d5326e2d6cdc949cd661a89b1c5c0542f388358c7a55b7688cfea5"
 dependencies = [
  "axum",
  "base64",

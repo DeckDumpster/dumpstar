@@ -1753,6 +1753,8 @@ mod tests {
             provider: FakeProvider,
             tenants_dir: PathBuf,
             jar: Vec<(String, String)>,
+            /// Seconds the session clock runs ahead of the wall clock.
+            clock_offset: Arc<std::sync::atomic::AtomicI64>,
             _dir: tempfile::TempDir,
         }
 
@@ -1763,15 +1765,25 @@ mod tests {
 
             /// As [`Site::new`], with `extra_sql` run against the seeded catalog first.
             async fn with_catalog(handles: &[&str], extra_sql: &str) -> Self {
-                Self::build(handles, extra_sql, None).await
+                Self::build(handles, extra_sql, None, None).await
             }
 
             /// As [`Site::new`], with a second `/api` audience configured.
             async fn with_api_audience(handles: &[&str], api_resource: &str) -> Self {
-                Self::build(handles, "", Some(api_resource)).await
+                Self::build(handles, "", Some(api_resource), None).await
             }
 
-            async fn build(handles: &[&str], extra_sql: &str, api_resource: Option<&str>) -> Self {
+            /// As [`Site::new`], with Pocket ID's registered redirect URL set to `redirect_url`.
+            async fn with_redirect(handles: &[&str], redirect_url: &str) -> Self {
+                Self::build(handles, "", None, Some(redirect_url)).await
+            }
+
+            async fn build(
+                handles: &[&str],
+                extra_sql: &str,
+                api_resource: Option<&str>,
+                redirect_url: Option<&str>,
+            ) -> Self {
                 let dir = tempfile::tempdir().unwrap();
                 let shared = seed(dir.path());
                 if !extra_sql.is_empty() {
@@ -1799,14 +1811,26 @@ mod tests {
                     )
                     .unwrap();
                 }
-                let provider = FakeProvider::start().await;
+                let provider = match redirect_url {
+                    Some(r) => FakeProvider::start_with_redirect(r).await,
+                    None => FakeProvider::start().await,
+                };
                 let mut cfg = provider.config();
+                // The lifetime production runs with: the kit's default, never set here.
+                cfg.session_ttl = dumpster_kit_oidc::config::DEFAULT_SESSION_TTL;
                 cfg.bypass_paths
                     .extend(OIDC_BYPASS_PATHS.iter().map(|p| p.to_string()));
                 cfg.bypass_paths
                     .extend(MCP_BYPASS_PATHS.iter().map(|p| p.to_string()));
                 let (issuer, group) = (cfg.issuer.clone(), cfg.required_group.clone());
-                let oidc = Oidc::discover(cfg).await.unwrap();
+                let clock_offset = Arc::new(std::sync::atomic::AtomicI64::new(0));
+                let offset = clock_offset.clone();
+                let oidc = Oidc::discover_with_clock(
+                    cfg,
+                    Box::new(move || unix_now() + offset.load(std::sync::atomic::Ordering::SeqCst)),
+                )
+                .await
+                .unwrap();
                 let (api_issuer, api_group) = (issuer.clone(), group.clone());
                 let c = dumpstar_db::open_shared(&shared).unwrap();
                 let tenants = Arc::new(test_tenants(
@@ -1872,12 +1896,32 @@ mod tests {
                     provider,
                     tenants_dir,
                     jar: vec![],
+                    clock_offset,
                     _dir: dir,
                 }
             }
 
             async fn send(&mut self, method: &str, uri: &str, body: Option<&str>) -> Response {
+                self.send_with(method, uri, body, &[]).await
+            }
+
+            /// As [`Site::send`], with request `headers`. A request that says
+            /// `x-forwarded-proto: http` is a plain-http page: like a browser, the jar refuses
+            /// the `Secure` cookies it sets.
+            async fn send_with(
+                &mut self,
+                method: &str,
+                uri: &str,
+                body: Option<&str>,
+                headers: &[(&str, &str)],
+            ) -> Response {
+                let over_http = headers
+                    .iter()
+                    .any(|(k, v)| *k == "x-forwarded-proto" && *v == "http");
                 let mut b = Request::builder().method(method).uri(uri);
+                for (k, v) in headers {
+                    b = b.header(*k, *v);
+                }
                 if !self.jar.is_empty() {
                     let cookies: Vec<String> =
                         self.jar.iter().map(|(k, v)| format!("{k}={v}")).collect();
@@ -1892,7 +1936,10 @@ mod tests {
                 };
                 let resp = self.router.clone().oneshot(req).await.unwrap();
                 for sc in resp.headers().get_all(header::SET_COOKIE) {
-                    let (nv, _) = sc.to_str().unwrap().split_once(';').unwrap();
+                    let (nv, attrs) = sc.to_str().unwrap().split_once(';').unwrap();
+                    if over_http && attrs.contains("Secure") {
+                        continue;
+                    }
                     let (n, v) = nv.split_once('=').unwrap();
                     self.jar.retain(|(k, _)| k != n);
                     if !v.is_empty() {
@@ -1923,6 +1970,74 @@ mod tests {
                 self.get(&format!("/auth/callback?code={code}&state={state}"))
                     .await
             }
+        }
+
+        /// Acceptance (sp-fjrnga): a session is the kit's 30 days, not the eight hours it was
+        /// under dumpster-kit-oidc 0.1.6, and any use after a day issues a fresh cookie.
+        #[tokio::test]
+        async fn a_session_lasts_past_eight_hours_and_is_renewed_on_use() {
+            use std::sync::atomic::Ordering;
+            let mut site = Site::new(&["alice"]).await;
+            site.sign_in(member("alice@example.com")).await;
+
+            site.clock_offset.store(9 * 3600, Ordering::SeqCst);
+            assert_eq!(site.get("/").await.status(), StatusCode::OK);
+
+            site.clock_offset.store(2 * 86_400, Ordering::SeqCst);
+            let r = site.get("/").await;
+            assert_eq!(r.status(), StatusCode::OK);
+            assert!(
+                r.headers()
+                    .get_all(header::SET_COOKIE)
+                    .iter()
+                    .any(|c| c.to_str().unwrap().starts_with("dk_session=")),
+                "a session used two days on is renewed"
+            );
+        }
+
+        /// Acceptance (sp-fjrnga): a sign-in started from `http://` is sent to the canonical
+        /// https origin and completes there; under 0.1.6 the Secure flow cookie never came back
+        /// and the callback was a 400.
+        #[tokio::test]
+        async fn a_sign_in_started_over_http_completes() {
+            let mut site = Site::with_redirect(&["alice"], "https://star.test/auth/callback").await;
+            let r = site
+                .send_with(
+                    "GET",
+                    "/auth/login?return_to=/collection",
+                    None,
+                    &[("host", "star.test"), ("x-forwarded-proto", "http")],
+                )
+                .await;
+            assert_eq!(r.status(), StatusCode::SEE_OTHER);
+            let https = [("host", "star.test"), ("x-forwarded-proto", "https")];
+            // The browser follows whatever the login answered: the canonical https origin, or
+            // straight on to the provider.
+            let mut r = r;
+            let next = r.headers()[header::LOCATION].to_str().unwrap().to_string();
+            if let Some(path) = next.strip_prefix("https://star.test") {
+                r = site.send_with("GET", path, None, &https).await;
+            }
+            let loc = r.headers()[header::LOCATION].to_str().unwrap().to_string();
+            let state = url::Url::parse(&loc)
+                .unwrap()
+                .query_pairs()
+                .find(|(k, _)| k == "state")
+                .unwrap()
+                .1
+                .into_owned();
+            let code = site.provider.authorize(&loc, member("alice@example.com"));
+            let cb = site
+                .send_with(
+                    "GET",
+                    &format!("/auth/callback?code={code}&state={state}"),
+                    None,
+                    &https,
+                )
+                .await;
+            assert_eq!(cb.status(), StatusCode::SEE_OTHER);
+            let page = site.send_with("GET", "/", None, &https).await;
+            assert_eq!(page.status(), StatusCode::OK);
         }
 
         fn member(email: &str) -> TokenSpec {

@@ -1,0 +1,12 @@
+# Scenario: Add a preconstructed deck and land on a full deck
+# Use case: UC-decks-10
+#
+# Prerequisites:
+#   The fixture offers "Spotlight Deck: Boba Fett" (52 cards), never added yet
+
+description: >
+  On the /decks page I open the "Preconstructed" tab, see the
+  preconstructed decks listed under their set, and press "Add to
+  collection and create deck" on "Spotlight Deck: Boba Fett". I land on
+  the new deck's page at /decks/:id, named for the product, with every
+  line filled: all 52 cards are in my collection and in the deck.

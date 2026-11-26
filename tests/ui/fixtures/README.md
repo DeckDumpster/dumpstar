@@ -51,14 +51,24 @@ invented to exercise the legality checker.
 
 ## Catalog (`shared.sqlite`)
 
-3 sets, 26 cards, 86 printings (43 collector numbers x Normal/Foil), 111 price
-rows, 4 builtin formats, 4 sealed products.
+4 sets, 50 cards, 110 printings (43 collector numbers x Normal/Foil, plus 24
+Standard Normal printings for the preconstructed deck), 111 price rows, 4
+builtin formats, 5 sealed products.
 
 | Set | Name | Released |
 | --- | --- | --- |
 | `SOR` | Spark of Rebellion | 2024-03-08 |
 | `SHD` | Shadows of the Galaxy | 2024-07-12 |
+| `TWI` | Twilight of the Republic | 2024-11-08 |
 | `JTL` | Jump to Lightspeed | 2025-03-14 |
+
+**Preconstructed deck.** `Spotlight Deck: Boba Fett` (`jtl-boba-fett`, product
+614673, 52 cards over 25 lines) is the one shipped decklist that resolves here,
+so the one offered; no tenant has added it. The 24 cards seeded for it carry no
+price, rules text or image; those with no name captured under `fixtures/swu/`
+are called by set and number (`Fixture Card TWI 181`). Its leader is `JTL_009`
+Boba Fett, Any Methods Necessary, and its base `SHD_026`. The other shipped
+decklists raise `precon_unresolved` alarms.
 
 **Ids.** A card id is `<SET>_<number>` of its Standard printing (`SOR_005`). A
 printing id is `<SET>-<number>:<Finish>` (`SOR-262:Foil`), the shape of
@@ -67,6 +77,8 @@ crosswalk id. Variants have their own collector numbers: Standard (`005`),
 Hyperspace (`262`..`269`), Showcase (`515`, `520`, `521`) and Promo (`P01`..`P05`).
 
 **Cards by type** (all ids are `card_id`):
+
+The table below leaves out the preconstructed deck's cards.
 
 | Type | Cards |
 | --- | --- |
@@ -101,6 +113,7 @@ catalog crate's own `formats.json`. Invented legality rows: `SOR_193` is
 | 900002 | Shadows of the Galaxy Booster Box | market 96.40 (mid 94.75), also 2025-06-14: 94.80 | 1 |
 | 900003 | Spark of Rebellion Two-Player Starter | none | no |
 | 900004 | Jump to Lightspeed Booster Pack | mid 5.24, `market_price` NULL | 6 |
+| 614673 | Spotlight Deck: Boba Fett | none | no |
 
 The two held lots are quoted the two ways on purpose: one by `market_price`,
 one by `mid_price` alone (the `COALESCE` fallback).

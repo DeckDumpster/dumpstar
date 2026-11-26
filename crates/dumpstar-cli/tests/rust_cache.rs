@@ -25,6 +25,15 @@ fn read(path: &str) -> String {
     fs::read_to_string(repo().join(path)).unwrap_or_else(|e| panic!("{path}: {e}"))
 }
 
+/// A file without its whole-line comments, so a commented-out use is no use.
+fn code(path: &str) -> String {
+    read(path)
+        .lines()
+        .filter(|line| !line.trim_start().starts_with('#'))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// A throwaway `HOME`, sccache directory and stub directory for one case.
 struct Sandbox {
     dir: TempDir,
@@ -126,12 +135,14 @@ fn disabled_cache_says_so() {
         "dumpstar_rust_cache_enable",
         &[("DUMPSTAR_RUST_CACHE", "off")],
     );
+    assert!(out.contains("disabled (DUMPSTAR_RUST_CACHE=off)"), "{out}");
     assert!(out.contains("compiling cold"), "{out}");
 }
 
 #[test]
 fn missing_sccache_says_so() {
     let out = Sandbox::new().rust_cache("dumpstar_rust_cache_enable", &[("PATH", "/usr/bin:/bin")]);
+    assert!(out.contains("not installed"), "{out}");
     assert!(out.contains("compiling cold"), "{out}");
 }
 
@@ -144,6 +155,7 @@ fn unreachable_store_falls_back_says_so() {
         "dumpstar_rust_cache_enable",
         &[("DUMPSTAR_SCCACHE_ENDPOINT", "http://127.0.0.1:1")],
     );
+    assert!(out.contains("unreachable"), "{out}");
     assert!(out.contains("compiling cold"), "{out}");
 }
 
@@ -158,13 +170,13 @@ fn report_states_a_cold_run() {
 
 #[test]
 fn ci_sh_and_image_lib_sh_use_the_cache() {
-    assert!(read("deploy/ci.sh").contains("dumpstar_rust_cache_enable"));
-    assert!(read("deploy/image-lib.sh").contains("dumpstar_rust_cache_buildargs"));
+    assert!(code("deploy/ci.sh").contains("dumpstar_rust_cache_enable"));
+    assert!(code("deploy/image-lib.sh").contains("dumpstar_rust_cache_buildargs"));
 }
 
 #[test]
 fn containerfile_builder_consumes_the_cache() {
-    let containerfile = read("Containerfile");
+    let containerfile = code("Containerfile");
     assert!(containerfile.contains("RUSTC_WRAPPER"));
     assert!(containerfile.contains("sccache-bin"));
 }
@@ -192,7 +204,7 @@ fn working_sccache_passes_the_probe() {
 
 #[test]
 fn containerfile_probes_before_enabling_the_wrapper() {
-    assert!(read("Containerfile").contains("sccache-probe.sh"));
+    assert!(code("Containerfile").contains("sccache-probe.sh"));
 }
 
 #[test]

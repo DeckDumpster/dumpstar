@@ -2146,7 +2146,10 @@ pub(crate) mod tests {
                 |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .unwrap();
-        assert!(offered, "the shipped decklist did not resolve in the fixture");
+        assert!(
+            offered,
+            "the shipped decklist did not resolve in the fixture"
+        );
         assert_eq!(cards, 52);
         let leaders: i64 = catalog
             .query_row(

@@ -9,4 +9,8 @@ description: >
   preconstructed decks listed under their set, and press "Add to
   collection and create deck" on "Spotlight Deck: Boba Fett". I land on
   the new deck's page at /decks/:id, named for the product, with every
-  line filled: all 52 cards are in my collection and in the deck.
+  line filled: all 52 cards are in my collection and in the deck. If I
+  add the same deck again, the page says it was already added and asks me
+  to confirm; confirming opens a second full deck. A failure to add shows
+  on the page, and the "New deck" tab the page opens on still creates a
+  deck from the name I type.

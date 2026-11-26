@@ -1,10 +1,14 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { api } from '$lib/api';
 	import { count } from '$lib/format';
-	import { EmptyState } from '$lib/components/ui';
+	import { tryAddPrecon } from '$lib/preconAdd';
+	import PreconList from '$lib/components/PreconList.svelte';
+	import { EmptyState, Segmented } from '$lib/components/ui';
 	import type { Deck } from '$lib/types/Deck';
 	import type { DeckGroup } from '$lib/types/DeckGroup';
+	import type { Precon } from '$lib/types/Precon';
 
 	let decks = $state<Deck[]>([]);
 	let groups = $state<DeckGroup[]>([]);
@@ -46,6 +50,48 @@
 		}
 	}
 
+	const tabs = [
+		{ value: 'new', label: 'New deck' },
+		{ value: 'precon', label: 'Preconstructed' }
+	];
+	let tab = $state('new');
+	let precons = $state<Precon[] | null>(null);
+	let preconsLoading = false;
+	let repeat = $state<{ id: string; message: string } | null>(null);
+
+	// The list is fetched when the tab is first opened.
+	$effect(() => {
+		if (tab === 'precon') untrack(loadPrecons);
+	});
+
+	async function loadPrecons() {
+		if (precons || preconsLoading) return;
+		preconsLoading = true;
+		error = null;
+		try {
+			precons = await api.precons();
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		} finally {
+			preconsLoading = false;
+		}
+	}
+
+	async function addPrecon(id: string, confirmRepeat: boolean) {
+		busy = true;
+		error = null;
+		repeat = null;
+		try {
+			const outcome = await tryAddPrecon(api.addPrecon, id, confirmRepeat);
+			if ('deck' in outcome) await goto('/decks/' + outcome.deck.id);
+			else repeat = { id, message: outcome.refusal };
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+		} finally {
+			busy = false;
+		}
+	}
+
 	const ungrouped = $derived(decks.filter((d) => !d.group));
 	const membersOf = (g: DeckGroup) => decks.filter((d) => d.group === g.name);
 
@@ -69,17 +115,34 @@
 
 <h1>Decks</h1>
 
-<form
-	class="newform"
-	onsubmit={(e) => {
-		e.preventDefault();
-		create();
-	}}
->
-	<input type="text" placeholder="New deck name…" bind:value={newName} />
-	<input type="text" placeholder="Owner (optional)" bind:value={newOwner} />
-	<button type="submit" disabled={busy}>Create</button>
-</form>
+<Segmented items={tabs} bind:value={tab} label="Create a deck" />
+
+{#if tab === 'new'}
+	<form
+		class="newform"
+		onsubmit={(e) => {
+			e.preventDefault();
+			create();
+		}}
+	>
+		<input type="text" placeholder="New deck name…" bind:value={newName} />
+		<input type="text" placeholder="Owner (optional)" bind:value={newOwner} />
+		<button type="submit" disabled={busy}>Create</button>
+	</form>
+{:else if precons === null}
+	{#if !error}<p class="muted">Loading…</p>{/if}
+{:else if precons.length === 0}
+	<p class="muted">No preconstructed decks are in the catalog yet.</p>
+{:else}
+	<PreconList
+		{precons}
+		{busy}
+		{repeat}
+		onAdd={(id) => addPrecon(id, false)}
+		onConfirm={(id) => addPrecon(id, true)}
+		onCancel={() => (repeat = null)}
+	/>
+{/if}
 
 <form
 	class="newform"

@@ -20,6 +20,7 @@ import type { BinderEdit } from './types/BinderEdit';
 import type { Deck } from './types/Deck';
 import type { DeckDetail } from './types/DeckDetail';
 import type { NewDeck } from './types/NewDeck';
+import type { Precon } from './types/Precon';
 import type { DeckEdit } from './types/DeckEdit';
 import type { DeckGroup } from './types/DeckGroup';
 import type { DeckGroupEdit } from './types/DeckGroupEdit';
@@ -62,12 +63,15 @@ export class ApiError extends Error {
 	status: number;
 	method: string;
 	url: string;
-	constructor(res: { status: number; statusText: string }, method: string, url: string) {
+	/** The reply's text, when it was read: the server's own reason. */
+	body: string;
+	constructor(res: { status: number; statusText: string }, method: string, url: string, body = '') {
 		super(`${res.status} ${res.statusText} — ${method === 'GET' ? '' : method + ' '}${url}`);
 		this.name = 'ApiError';
 		this.status = res.status;
 		this.method = method;
 		this.url = url;
+		this.body = body;
 	}
 }
 
@@ -87,7 +91,7 @@ async function send<T>(method: string, url: string, body?: unknown): Promise<T> 
 		body: body !== undefined ? JSON.stringify(body) : undefined
 	});
 	if (!res.ok) {
-		throw new ApiError(res, method, url);
+		throw new ApiError(res, method, url, await res.text().catch(() => ''));
 	}
 	return (res.status === 204 ? undefined : await res.json()) as T;
 }
@@ -235,6 +239,12 @@ export const api = {
 	createDeck: (d: Partial<NewDeck> & { name: string }) => send<Deck>('POST', '/api/decks', d),
 	updateDeck: (id: number, e: Partial<DeckEdit>) => send<Deck>('PUT', `/api/decks/${id}`, e),
 	deleteDeck: (id: number) => send<void>('DELETE', `/api/decks/${id}`),
+
+	// --- Preconstructed decks ---
+	precons: () => getJson<Precon[]>('/api/precons'),
+	/** 409 for a deck already added, unless `confirmRepeat`. */
+	addPrecon: (id: string, confirmRepeat = false) =>
+		send<Deck>('POST', `/api/precons/${id}/add`, { confirm_repeat: confirmRepeat }),
 
 	// --- Deck groups ---
 	deckGroups: () => getJson<DeckGroup[]>('/api/deck-groups'),

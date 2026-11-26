@@ -1093,6 +1093,18 @@
           "tier": "T4",
           "statement": "When I visit /decks on an instance with no decks, I see the message No decks yet. instead of a deck grid, with a line explaining what a deck is and to name one above. The inline create form is still available above th... (decks_list_empty_state)",
           "covering_suites": []
+        },
+        {
+          "id": "UC-decks-10",
+          "tier": "T3",
+          "statement": "On the /decks page I open the Preconstructed tab, see the preconstructed decks listed under their set, and press Add to collection and create deck on Spotlight Deck: Boba Fett. I land on the new deck's page at /decks/... (decks_precon_add_creates_full_deck)",
+          "covering_suites": [
+            {
+              "path": "tests/ui/implementations/decks_precon_add_creates_full_deck.ts",
+              "tier": "T3",
+              "over_budget": false
+            }
+          ]
         }
       ]
     },

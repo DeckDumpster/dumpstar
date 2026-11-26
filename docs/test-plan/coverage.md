@@ -189,6 +189,7 @@ Generated from docs/test-plan/*.toml, every suite's # tier:/# covers: header, an
 | UC-decks-06 | T4 | When I delete the deck Luke Vigilance Midrange, its cards remain in my collection. After deletion, I can search for Luke Skywalker - Faithful Friend on the Collection page and still find the copies that had been in th... (decks_delete_keeps_cards) | — | **GAP** |
 | UC-decks-08 | T4 | When I visit /decks with existing decks, each deck tile in the grid displays the deck name as a heading, a lifecycle state badge (e.g. built, ready, idea), the owner when one is set, and the card count. The fixture ha... (decks_list_card_content) | — | **GAP** |
 | UC-decks-09 | T4 | When I visit /decks on an instance with no decks, I see the message No decks yet. instead of a deck grid, with a line explaining what a deck is and to name one above. The inline create form is still available above th... (decks_list_empty_state) | — | **GAP** |
+| UC-decks-10 | T3 | On the /decks page I open the Preconstructed tab, see the preconstructed decks listed under their set, and press Add to collection and create deck on Spotlight Deck: Boba Fett. I land on the new deck's page at /decks/... (decks_precon_add_creates_full_deck) | tests/ui/implementations/decks_precon_add_creates_full_deck.ts | covered |
 
 ## edit
 

@@ -1,18 +1,27 @@
 //! Preconstructed decklists, a catalog source authored in git (`data/precons/`).
 //!
 //! The files are compiled in by `build.rs`, so a new deck is a new file and no
-//! code edit. Every convergence reconciles them into `precon_decks` and
-//! `precon_cards`: each line names the Standard Normal printing of a set and
-//! collector number, and a line can start resolving when a derive brings the
-//! printing in, which is why this runs every time rather than once per revision.
+//! code edit. Every convergence reconciles them into `precon_decks`,
+//! `precon_cards` (the deck) and `precon_extras` (what else is in the box): each
+//! line names the Normal printing that carries a set and collector number, and a
+//! line can start resolving when a derive brings the printing in, which is why
+//! this runs every time rather than once per revision.
+//!
+//! The number alone names the printing: a number above the set's size is a
+//! Hyperspace printing. Where variants share a number the Standard one is meant;
+//! where several share it and none is Standard (promo sets), the line is
+//! ambiguous and does not resolve.
 //!
 //! A defect never fails the build. It raises a `precon_unresolved` alarm keyed
-//! `<file>:<line>` (1-based card line; `0` for the file as a whole), which
-//! `catalog-check` reports, and the deck is stored `offered = 0`.
+//! `<file>:<line>` (1-based card line; `0` for the file as a whole) or
+//! `<file>:extras:<line>`, which `catalog-check` reports, and the deck is stored
+//! `offered = 0`.
 //!
 //! [`list`] and [`add`] are the tenant's side: an offered deck becomes, in one
-//! transaction, a batch, new copies and a deck that reserves exactly those.
+//! transaction, a batch, a new copy of every card in the box and a deck that
+//! reserves exactly the copies of its own cards.
 
+use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
@@ -88,6 +97,10 @@ struct DeckFile {
     /// The number of cards the deck holds, checked against its lines.
     total: i64,
     cards: Vec<Line>,
+    /// Cards that come in the product and are not in the deck. Their `zone` is
+    /// not stored.
+    #[serde(default)]
+    extras: Vec<Line>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -115,49 +128,119 @@ fn precons_rev(files: &[(&str, &str)]) -> String {
     format!("{:x}", h.finalize())
 }
 
-/// `(set_code, normalised number)` to `(printing_id, card_id)`.
-type Printings = HashMap<(String, String), (String, String)>;
+/// The Normal printing a set and collector number name.
+struct Numbered {
+    printing_id: String,
+    card_id: String,
+    variant: String,
+    /// The number names no one printing: variants share it, none Standard.
+    ambiguous: bool,
+}
 
-fn standard_normal_printings(tx: &Transaction) -> Result<Printings> {
+/// By `(set_code, normalised number)`.
+type Printings = HashMap<(String, String), Numbered>;
+
+fn normal_printings(tx: &Transaction) -> Result<Printings> {
+    // Standard first, so it is the one kept where variants share a number.
     let mut stmt = tx.prepare(
-        "SELECT set_code, number, printing_id, card_id FROM printings \
-          WHERE variant = 'Standard' AND finish = 'Normal' \
-          ORDER BY variant_code, printing_id",
+        "SELECT set_code, number, printing_id, card_id, variant FROM printings \
+          WHERE finish = 'Normal' \
+          ORDER BY variant <> 'Standard', variant_code, printing_id",
     )?;
     let mut rows = stmt.query([])?;
     let mut out = Printings::new();
     while let Some(r) = rows.next()? {
         let number: String = r.get(1)?;
-        out.entry((r.get(0)?, norm_number(&number)))
-            .or_insert((r.get(2)?, r.get(3)?));
+        let variant: String = r.get(4)?;
+        match out.entry((r.get(0)?, norm_number(&number))) {
+            Entry::Vacant(slot) => {
+                slot.insert(Numbered {
+                    printing_id: r.get(2)?,
+                    card_id: r.get(3)?,
+                    variant,
+                    ambiguous: false,
+                });
+            }
+            Entry::Occupied(mut slot) => {
+                let kept = slot.get_mut();
+                kept.ambiguous |= kept.variant != "Standard" && kept.variant != variant;
+            }
+        }
     }
     Ok(out)
 }
 
-/// Make `precon_decks`, `precon_cards`, the `precon_unresolved` alarms and
-/// `precons.rev` say exactly what `files` (the complete set, as
-/// `(path, body)`) say against the catalog as it is now, in one transaction.
+/// One list of a deck file, resolved against the catalog.
+struct Resolved<'a> {
+    /// `(1-based line, line, printing)` for each line that resolved.
+    hits: Vec<(usize, &'a Line, &'a Numbered)>,
+    /// The cards the lines with a positive qty add up to.
+    count: i64,
+}
+
+/// Resolve `lines`, reporting each that does not to `defect` by its 1-based
+/// position in the list.
+fn resolve<'a>(
+    lines: &'a [Line],
+    printings: &'a Printings,
+    mut defect: impl FnMut(usize, String),
+) -> Resolved<'a> {
+    let mut out = Resolved {
+        hits: Vec::new(),
+        count: 0,
+    };
+    for (i, line) in lines.iter().enumerate() {
+        let n = i + 1;
+        if line.qty < 1 {
+            defect(n, format!("qty {} is not a positive count", line.qty));
+            continue;
+        }
+        out.count = out.count.saturating_add(line.qty);
+        match printings.get(&(line.set.clone(), norm_number(&line.number))) {
+            Some(hit) if !hit.ambiguous => out.hits.push((n, line, hit)),
+            Some(_) => defect(
+                n,
+                format!(
+                    "several variants carry {} {} and none is Standard",
+                    line.set, line.number
+                ),
+            ),
+            None => defect(
+                n,
+                format!("no Normal printing {} {}", line.set, line.number),
+            ),
+        }
+    }
+    out
+}
+
+/// Make `precon_decks`, `precon_cards`, `precon_extras`, the
+/// `precon_unresolved` alarms and `precons.rev` say exactly what `files` (the
+/// complete set, as `(path, body)`) say against the catalog as it is now, in one
+/// transaction.
 pub fn reconcile_files(conn: &Connection, files: &[(&str, &str)]) -> Result<Report> {
     // Immediate: this reads and then writes, and a deferred transaction that
     // loses that upgrade is refused without waiting out the busy timeout.
     let tx = Transaction::new_unchecked(conn, TransactionBehavior::Immediate)?;
-    let printings = standard_normal_printings(&tx)?;
-    tx.execute_batch("DELETE FROM precon_cards; DELETE FROM precon_decks;")?;
+    let printings = normal_printings(&tx)?;
+    tx.execute_batch(
+        "DELETE FROM precon_extras; DELETE FROM precon_cards; DELETE FROM precon_decks;",
+    )?;
 
     let mut report = Report::default();
     // Keyed as the alarm table is, so two defects on one line share its row.
     let mut defects: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for (path, body) in files {
-        let mut defect = |line: usize, what: String| {
+        let mut defect = |at: String, what: String| {
             defects
-                .entry(format!("{path}:{line}"))
+                .entry(format!("{path}:{at}"))
                 .or_default()
                 .push(what);
         };
         let file: DeckFile = match serde_json::from_str(body) {
             Ok(f) => f,
             Err(e) => {
-                defect(0, format!("does not parse: {e}"));
+                defect("0".into(), format!("does not parse: {e}"));
                 continue;
             }
         };
@@ -173,36 +256,24 @@ pub fn reconcile_files(conn: &Connection, files: &[(&str, &str)]) -> Result<Repo
         if !known_product {
             offered = false;
             defect(
-                0,
+                "0".into(),
                 format!("product_id {} has no sealed_products row", file.product_id),
             );
         }
 
-        let mut count: i64 = 0;
-        let mut resolved = Vec::new();
-        for (i, line) in file.cards.iter().enumerate() {
-            let n = i + 1;
-            if line.qty < 1 {
-                offered = false;
-                defect(n, format!("qty {} is not a positive count", line.qty));
-                continue;
-            }
-            count = count.saturating_add(line.qty);
-            match printings.get(&(line.set.clone(), norm_number(&line.number))) {
-                Some(hit) => resolved.push((n, line, hit)),
-                None => {
-                    offered = false;
-                    defect(
-                        n,
-                        format!("no Standard Normal printing {} {}", line.set, line.number),
-                    );
-                }
-            }
-        }
+        let deck = resolve(&file.cards, &printings, |n, what| {
+            offered = false;
+            defect(n.to_string(), what);
+        });
+        let extras = resolve(&file.extras, &printings, |n, what| {
+            offered = false;
+            defect(format!("extras:{n}"), what);
+        });
+        let count = deck.count;
         if count != file.total {
             offered = false;
             defect(
-                0,
+                "0".into(),
                 format!("total is {}, the lines add up to {count}", file.total),
             );
         }
@@ -223,18 +294,25 @@ pub fn reconcile_files(conn: &Connection, files: &[(&str, &str)]) -> Result<Repo
                 offered
             ],
         )?;
-        for (n, line, (printing_id, card_id)) in resolved {
+        for (n, line, hit) in deck.hits {
             tx.execute(
                 "INSERT INTO precon_cards (precon_id, line, printing_id, card_id, zone, qty) \
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
                     precon_id,
                     n as i64,
-                    printing_id,
-                    card_id,
+                    hit.printing_id,
+                    hit.card_id,
                     line.zone.as_str(),
                     line.qty
                 ],
+            )?;
+        }
+        for (n, line, hit) in extras.hits {
+            tx.execute(
+                "INSERT INTO precon_extras (precon_id, line, printing_id, card_id, qty) \
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![precon_id, n as i64, hit.printing_id, hit.card_id, line.qty],
             )?;
         }
         report.decks += 1;
@@ -271,6 +349,9 @@ pub struct Precon {
     pub kind: String,
     #[ts(type = "number")]
     pub card_count: i64,
+    /// Cards in the product outside the deck; 0 for most precons.
+    #[ts(type = "number")]
+    pub extra_count: i64,
     /// The art of the deck's first leader line.
     pub leader_image: Option<String>,
 }
@@ -284,7 +365,9 @@ pub fn list(conn: &Connection) -> Result<Vec<Precon>> {
                    JOIN shared.cards c ON c.card_id = l.card_id \
                    JOIN shared.printings p ON p.printing_id = l.printing_id \
                   WHERE l.precon_id = d.precon_id AND c.card_type = 'Leader' \
-                  ORDER BY l.line LIMIT 1) \
+                  ORDER BY l.line LIMIT 1), \
+                COALESCE((SELECT SUM(qty) FROM shared.precon_extras e \
+                           WHERE e.precon_id = d.precon_id), 0) \
            FROM shared.precon_decks d \
            LEFT JOIN shared.sets s ON s.set_code = d.set_code \
           WHERE d.offered \
@@ -301,6 +384,7 @@ pub fn list(conn: &Connection) -> Result<Vec<Precon>> {
             kind: r.get(6)?,
             card_count: r.get(7)?,
             leader_image: r.get(8)?,
+            extra_count: r.get(9)?,
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
@@ -311,17 +395,21 @@ pub fn list(conn: &Connection) -> Result<Vec<Precon>> {
 pub struct Added {
     pub deck_id: i64,
     pub batch_id: i64,
+    /// The copies the deck holds.
     pub copies: u32,
+    /// The copies of the rest of the box, held by no deck.
+    pub extras: u32,
 }
 
 #[cfg(test)]
 thread_local! {
-    /// Fails [`add`] once its copies exist, to prove they are rolled back.
+    /// Fails [`add`] once all its copies exist, to prove they are rolled back.
     static FAIL_AFTER_COPIES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Add an offered preconstructed deck to the tenant, all or nothing: a batch,
-/// one new copy per card, and a deck whose lines reserve exactly those copies.
+/// one new copy per card in the box, and a deck whose lines reserve exactly the
+/// copies of its own cards. The extras are left unreserved.
 /// A deck already added is refused unless `confirm_repeat`, which makes a
 /// second deck with copies of its own.
 pub fn add(conn: &Connection, precon_id: &str, confirm_repeat: bool) -> Result<Added> {
@@ -422,23 +510,57 @@ fn add_in(conn: &Connection, precon_id: &str, confirm_repeat: bool) -> Result<Ad
         }
     }
 
+    let lines: Vec<decks::Line> = lines.into_iter().map(|(_, line)| line).collect();
+    match decks::set_lines_in(conn, deck_id, &lines)? {
+        SetLines::Set { reserved } if reserved == copies => {}
+        other => {
+            return Err(DbError::Env(format!(
+                "preconstructed deck '{precon_id}' added {copies} copies but did not reserve \
+                 them: {other:?}"
+            )));
+        }
+    }
+
+    // After the deck's lines are set, so no extra can be reserved by them.
+    let extras = add_extras(conn, precon_id, batch_id)?;
+
     #[cfg(test)]
     if FAIL_AFTER_COPIES.get() {
         return Err(DbError::Env("injected failure after the copies".into()));
     }
 
-    let lines: Vec<decks::Line> = lines.into_iter().map(|(_, line)| line).collect();
-    match decks::set_lines_in(conn, deck_id, &lines)? {
-        SetLines::Set { reserved } if reserved == copies => Ok(Added {
-            deck_id,
-            batch_id,
-            copies,
-        }),
-        other => Err(DbError::Env(format!(
-            "preconstructed deck '{precon_id}' added {copies} copies but did not reserve them: \
-             {other:?}"
-        ))),
+    Ok(Added {
+        deck_id,
+        batch_id,
+        copies,
+        extras,
+    })
+}
+
+/// A copy of each card the box holds outside the deck, in the batch and in no
+/// deck. Returns how many.
+fn add_extras(conn: &Connection, precon_id: &str, batch_id: i64) -> Result<u32> {
+    let lines: Vec<(String, u32)> = conn
+        .prepare(
+            "SELECT printing_id, qty FROM shared.precon_extras \
+              WHERE precon_id = ?1 ORDER BY line",
+        )?
+        .query_map([precon_id], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<rusqlite::Result<_>>()?;
+    let mut copies = 0;
+    for (printing_id, qty) in lines {
+        let new = NewCopy {
+            printing_id,
+            source: "precon".into(),
+            batch_id: Some(batch_id),
+            ..Default::default()
+        };
+        for _ in 0..qty {
+            collection::add_in(conn, &new)?;
+            copies += 1;
+        }
     }
+    Ok(copies)
 }
 
 #[cfg(test)]
@@ -474,6 +596,16 @@ mod tests {
             "total": total, "cards": cards,
         })
         .to_string()
+    }
+
+    /// `body` with `extras`: the cards in the box that are not in the deck.
+    fn boxed(body: &str, extras: &[(&str, &str, i64)]) -> String {
+        let mut file: serde_json::Value = serde_json::from_str(body).unwrap();
+        file["extras"] = extras
+            .iter()
+            .map(|(set, number, qty)| serde_json::json!({"set": set, "number": number, "qty": qty}))
+            .collect();
+        file.to_string()
     }
 
     fn good() -> String {
@@ -680,6 +812,92 @@ mod tests {
         assert_eq!(lines, 1);
     }
 
+    #[test]
+    fn extras_resolve_and_an_unresolved_extra_alarms() {
+        let (_d, c) = catalog();
+        let body = boxed(&good(), &[("SOR", "189", 2)]);
+        reconcile_files(&c, &[("data/precons/a.json", &body)]).unwrap();
+        assert!(offered(&c, "a"));
+        let rows: (i64, i64, i64, i64) = c
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM precon_cards), \
+                        (SELECT COUNT(*) FROM precon_extras), \
+                        (SELECT SUM(qty) FROM precon_extras), \
+                        (SELECT card_count FROM precon_decks)",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!(rows, (2, 1, 2, 4));
+        assert!(alarm_keys(&c).is_empty());
+
+        let bad = boxed(&good(), &[("SOR", "189", 2), ("SOR", "999", 1)]);
+        reconcile_files(&c, &[("data/precons/a.json", &bad)]).unwrap();
+        assert!(!offered(&c, "a"));
+        assert_eq!(alarm_keys(&c), ["data/precons/a.json:extras:2"]);
+    }
+
+    #[test]
+    fn an_extra_without_a_positive_qty_is_a_defect() {
+        let (_d, c) = catalog();
+        let bad = boxed(&good(), &[("SOR", "189", 0)]);
+        reconcile_files(&c, &[("data/precons/a.json", &bad)]).unwrap();
+        assert!(!offered(&c, "a"));
+        assert_eq!(alarm_keys(&c), ["data/precons/a.json:extras:1"]);
+    }
+
+    #[test]
+    fn a_number_above_the_set_size_derives_and_adds_its_hyperspace_printing() {
+        let (dir, c) = catalog();
+        testkit::set(&c, "IC27", "Icons 2027");
+        testkit::printing(
+            &c,
+            "IC27-209-hyper",
+            "SOR-189",
+            "IC27",
+            "209",
+            "Hyperspace",
+            "Normal",
+        );
+        let body = boxed(
+            &deck(PRODUCT, 1, &[("IC27", "209", 1)]),
+            &[("IC27", "209", 1)],
+        );
+        reconcile_files(&c, &[("data/precons/ic.json", &body)]).unwrap();
+        assert!(alarm_keys(&c).is_empty(), "{:?}", alarm_keys(&c));
+        drop(c);
+        let c = connect(&dir);
+
+        let added = add(&c, "ic", false).unwrap();
+
+        let printings: Vec<String> = c
+            .prepare("SELECT printing_id FROM collection WHERE batch_id = ?1")
+            .unwrap()
+            .query_map([added.batch_id], |r| r.get(0))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+        assert_eq!(printings, ["IC27-209-hyper", "IC27-209-hyper"]);
+        assert_eq!(held(&c, added.deck_id).len(), 1);
+    }
+
+    /// Promo sets put different cards on one number, none of them Standard.
+    #[test]
+    fn a_number_shared_by_variants_with_no_standard_one_alarms() {
+        let (_d, c) = catalog();
+        testkit::set(&c, "SORP", "Promos");
+        for (id, variant) in [
+            ("SORP-1-weekly", "Weekly Play"),
+            ("SORP-1-judge", "SS Judge"),
+        ] {
+            testkit::printing(&c, id, "SOR-189", "SORP", "1", variant, "Normal");
+        }
+        let body = deck(PRODUCT, 1, &[("SORP", "1", 1)]);
+        reconcile_files(&c, &[("data/precons/a.json", &body)]).unwrap();
+        assert!(!offered(&c, "a"));
+        assert_eq!(alarm_keys(&c), ["data/precons/a.json:1"]);
+    }
+
     /// The derive's case: the product exists only as a tcgcsv row until the
     /// same convergence folds it into `sealed_products`.
     #[test]
@@ -712,9 +930,13 @@ mod tests {
     /// A tenant over [`catalog`] (JTL 9 and SOR 189) holding the test deck
     /// `test`: one copy of JTL 9 and three of SOR 189.
     fn tenant() -> (tempfile::TempDir, Connection) {
+        tenant_of(&good())
+    }
+
+    /// A tenant over [`catalog`] holding `body` as the deck `test`.
+    fn tenant_of(body: &str) -> (tempfile::TempDir, Connection) {
         let (dir, c) = catalog();
-        let body = good();
-        reconcile_files(&c, &[("data/precons/test.json", &body)]).unwrap();
+        reconcile_files(&c, &[("data/precons/test.json", body)]).unwrap();
         drop(c);
         let conn = connect(&dir);
         (dir, conn)
@@ -802,6 +1024,49 @@ mod tests {
         let lines = decks::line_states(&c, added.deck_id).unwrap();
         assert_eq!(lines.len(), 2);
         assert!(lines.iter().all(|l| l.reserved == l.qty), "{lines:?}");
+    }
+
+    #[test]
+    fn adding_a_box_with_extras_reserves_only_the_deck() {
+        let (_d, c) = tenant_of(&boxed(&good(), &[("SOR", "189", 2)]));
+
+        let added = add(&c, "test", false).unwrap();
+
+        assert_eq!((added.copies, added.extras), (4, 2));
+        assert_eq!(counts(&c), (1, 6, 1));
+        let batch = ids(
+            &c,
+            "SELECT id FROM collection WHERE batch_id = ?1 ORDER BY id",
+            added.batch_id,
+        );
+        assert_eq!(batch.len(), 6);
+        let lines = decks::line_states(&c, added.deck_id).unwrap();
+        assert_eq!(lines.len(), 2);
+        assert!(lines.iter().all(|l| l.reserved == l.qty), "{lines:?}");
+        assert_eq!(lines.iter().map(|l| l.reserved).sum::<u32>(), 4);
+        let deck_copies = held(&c, added.deck_id);
+        assert_eq!(deck_copies.len(), 4);
+        assert!(deck_copies.iter().all(|id| batch.contains(id)));
+        let free = ids(
+            &c,
+            "SELECT id FROM collection WHERE batch_id = ?1 AND deck_id IS NULL",
+            added.batch_id,
+        );
+        assert_eq!(free.len(), 2);
+        let listed = list(&c).unwrap();
+        assert_eq!((listed[0].card_count, listed[0].extra_count), (4, 2));
+    }
+
+    #[test]
+    fn a_failure_after_the_extras_leaves_nothing() {
+        let (_d, c) = tenant_of(&boxed(&good(), &[("SOR", "189", 2)]));
+        let before = counts(&c);
+        FAIL_AFTER_COPIES.set(true);
+        let out = add(&c, "test", false);
+        FAIL_AFTER_COPIES.set(false);
+        let err = out.unwrap_err().to_string();
+        assert!(err.contains("injected"), "{err}");
+        assert_eq!(counts(&c), before);
     }
 
     #[test]
@@ -944,6 +1209,7 @@ mod tests {
         assert_eq!(got[1].set_name, "JTL");
         assert_eq!(got[1].kind, "spotlight");
         assert_eq!(got[1].card_count, 4);
+        assert!(got.iter().all(|p| p.extra_count == 0));
         assert_eq!(
             got[1].leader_image.as_deref(),
             Some("https://example.invalid/boba.png")

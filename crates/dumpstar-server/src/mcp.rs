@@ -999,7 +999,9 @@ impl DumpstarTools {
         };
         self.with_conn(ctx, "add_precon", |c| {
             let added = precons::add(c, id, confirm_repeat).map_err(db_err)?;
-            deck_response(c, added.deck_id)
+            let mut out = deck_response(c, added.deck_id)?;
+            out["extra_count"] = json!(added.extras);
+            Ok(out)
         })
     }
 
@@ -1379,12 +1381,12 @@ impl ToolProvider for DumpstarTools {
             ),
             def(
                 "list_precons",
-                "The preconstructed decks that can be added (Spotlight decks, two-player starters, Twin Suns decks and Intro Battle: Hoth), newest set first, each with its precon_id, set, kind, card count and leader art.".into(),
+                "The preconstructed decks that can be added (Spotlight decks, two-player starters, Twin Suns decks and Intro Battle: Hoth), newest set first, each with its precon_id, set, kind, card count, leader art, and how many more cards the box holds (extra_count).".into(),
                 schema(json!({}), &[]),
             ),
             def(
                 "add_precon",
-                "Add a preconstructed deck the user owns: in one step, every card of it joins the collection as a new copy, in one batch, and a new deck named for the product reserves exactly those copies, never ones owned before. Pairs and bundles are added one deck at a time, and a box's booster is not included. A deck already added is refused, naming the earlier deck; set confirm_repeat only when the user has another one, which makes a second deck with its own copies. Returns exactly what get_deck returns for the new deck.".into(),
+                "Add a preconstructed deck the user owns: in one step, every card in the box joins the collection as a new copy, in one batch, and a new deck named for the product reserves only the deck's cards, exactly those new copies, never ones owned before. Any other cards in the box stay in the collection, unreserved. Pairs and bundles are added one deck at a time, and a box's booster is not included. A deck already added is refused, naming the earlier deck; set confirm_repeat only when the user has another one, which makes a second deck with its own copies. Returns what get_deck returns for the new deck, plus extra_count: the copies added that are not in the deck.".into(),
                 schema(
                     json!({
                         "id": {"type": "string", "description": "precon_id from list_precons, e.g. jtl-boba-fett"},

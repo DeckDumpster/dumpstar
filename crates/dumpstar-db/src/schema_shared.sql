@@ -76,7 +76,7 @@ JOIN (SELECT tcgplayer_product_id, MAX(observed_at) AS observed_at
 -- Preconstructed decks
 -- ---------------------------------------------------------------------
 
--- Both rebuilt from `data/precons/*.json` on every convergence (precons.rs).
+-- All rebuilt from `data/precons/*.json` on every convergence (precons.rs).
 -- A deck with a `precon_unresolved` alarm has `offered = 0` and holds only the
 -- lines that resolved; `card_count` is what the file's lines list.
 CREATE TABLE IF NOT EXISTS precon_decks (
@@ -96,6 +96,16 @@ CREATE TABLE IF NOT EXISTS precon_cards (
     printing_id  TEXT NOT NULL,
     card_id      TEXT NOT NULL,
     zone         TEXT NOT NULL,
+    qty          INTEGER NOT NULL,
+    PRIMARY KEY (precon_id, line)
+);
+-- Cards that come in the product and are not in the deck: adding the precon
+-- puts them in the collection, unreserved.
+CREATE TABLE IF NOT EXISTS precon_extras (
+    precon_id    TEXT NOT NULL REFERENCES precon_decks,
+    line         INTEGER NOT NULL,           -- 1-based position in the file's extras
+    printing_id  TEXT NOT NULL,
+    card_id      TEXT NOT NULL,
     qty          INTEGER NOT NULL,
     PRIMARY KEY (precon_id, line)
 );

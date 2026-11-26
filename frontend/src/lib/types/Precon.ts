@@ -13,6 +13,10 @@ deck: string | null, set_code: string, set_name: string,
  */
 kind: string, card_count: number, 
 /**
+ * Cards in the product outside the deck; 0 for most precons.
+ */
+extra_count: number, 
+/**
  * The art of the deck's first leader line.
  */
 leader_image: string | null, };

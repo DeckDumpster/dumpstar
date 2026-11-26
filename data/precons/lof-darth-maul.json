@@ -1,0 +1,135 @@
+{
+  "product_id": 626662,
+  "name": "Spotlight Deck: Darth Maul",
+  "set_code": "LOF",
+  "kind": "spotlight",
+  "source": "https://starwarsunlimited.com/articles/a-fated-duel",
+  "total": 52,
+  "cards": [
+    {
+      "set": "LOF",
+      "number": "9",
+      "qty": 1
+    },
+    {
+      "set": "LOF",
+      "number": "21",
+      "qty": 1
+    },
+    {
+      "set": "LOF",
+      "number": "63",
+      "qty": 1
+    },
+    {
+      "set": "LOF",
+      "number": "38",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "138",
+      "qty": 1
+    },
+    {
+      "set": "LOF",
+      "number": "138",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "137",
+      "qty": 1
+    },
+    {
+      "set": "LOF",
+      "number": "154",
+      "qty": 3
+    },
+    {
+      "set": "LOF",
+      "number": "31",
+      "qty": 2
+    },
+    {
+      "set": "LOF",
+      "number": "59",
+      "qty": 3
+    },
+    {
+      "set": "LOF",
+      "number": "129",
+      "qty": 2
+    },
+    {
+      "set": "LOF",
+      "number": "131",
+      "qty": 3
+    },
+    {
+      "set": "LOF",
+      "number": "156",
+      "qty": 2
+    },
+    {
+      "set": "LOF",
+      "number": "229",
+      "qty": 2
+    },
+    {
+      "set": "LOF",
+      "number": "160",
+      "qty": 2
+    },
+    {
+      "set": "LOF",
+      "number": "35",
+      "qty": 3
+    },
+    {
+      "set": "LOF",
+      "number": "67",
+      "qty": 2
+    },
+    {
+      "set": "LOF",
+      "number": "231",
+      "qty": 3
+    },
+    {
+      "set": "LOF",
+      "number": "233",
+      "qty": 3
+    },
+    {
+      "set": "LOF",
+      "number": "136",
+      "qty": 2
+    },
+    {
+      "set": "LOF",
+      "number": "137",
+      "qty": 2
+    },
+    {
+      "set": "LOF",
+      "number": "39",
+      "qty": 3
+    },
+    {
+      "set": "LOF",
+      "number": "140",
+      "qty": 3
+    },
+    {
+      "set": "LOF",
+      "number": "41",
+      "qty": 3
+    },
+    {
+      "set": "SOR",
+      "number": "139",
+      "qty": 2
+    }
+  ]
+}

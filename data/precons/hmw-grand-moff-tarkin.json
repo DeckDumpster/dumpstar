@@ -1,0 +1,150 @@
+{
+  "product_id": 722196,
+  "name": "Spotlight Deck: Grand Moff Tarkin",
+  "set_code": "HMW",
+  "kind": "spotlight",
+  "source": "https://starwarsunlimited.com/articles/defend-and-destroy",
+  "total": 52,
+  "cards": [
+    {
+      "set": "HMW",
+      "number": "4",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "22",
+      "qty": 1
+    },
+    {
+      "set": "HMW",
+      "number": "37",
+      "qty": 1
+    },
+    {
+      "set": "HMW",
+      "number": "66",
+      "qty": 1
+    },
+    {
+      "set": "LAW",
+      "number": "103",
+      "qty": 1
+    },
+    {
+      "set": "LOF",
+      "number": "91",
+      "qty": 1
+    },
+    {
+      "set": "JTL",
+      "number": "43",
+      "qty": 1
+    },
+    {
+      "set": "HMW",
+      "number": "95",
+      "qty": 2
+    },
+    {
+      "set": "HMW",
+      "number": "205",
+      "qty": 1
+    },
+    {
+      "set": "HMW",
+      "number": "206",
+      "qty": 3
+    },
+    {
+      "set": "HMW",
+      "number": "59",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "72",
+      "qty": 2
+    },
+    {
+      "set": "SEC",
+      "number": "80",
+      "qty": 2
+    },
+    {
+      "set": "JTL",
+      "number": "33",
+      "qty": 2
+    },
+    {
+      "set": "HMW",
+      "number": "85",
+      "qty": 2
+    },
+    {
+      "set": "HMW",
+      "number": "60",
+      "qty": 3
+    },
+    {
+      "set": "HMW",
+      "number": "113",
+      "qty": 3
+    },
+    {
+      "set": "ASH",
+      "number": "103",
+      "qty": 2
+    },
+    {
+      "set": "HMW",
+      "number": "81",
+      "qty": 2
+    },
+    {
+      "set": "SEC",
+      "number": "30",
+      "qty": 2
+    },
+    {
+      "set": "HMW",
+      "number": "61",
+      "qty": 3
+    },
+    {
+      "set": "ASH",
+      "number": "97",
+      "qty": 2
+    },
+    {
+      "set": "HMW",
+      "number": "63",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "98",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "48",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "50",
+      "qty": 2
+    },
+    {
+      "set": "LAW",
+      "number": "171",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "133",
+      "qty": 2
+    }
+  ]
+}

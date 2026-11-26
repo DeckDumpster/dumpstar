@@ -1,0 +1,161 @@
+{
+  "product_id": 553332,
+  "name": "Two-Player Starter",
+  "set_code": "SHD",
+  "kind": "starter",
+  "source": "https://starwarsunlimited.com/articles/heated-rivals",
+  "deck": "The Mandalorian",
+  "total": 52,
+  "cards": [
+    {
+      "set": "SHD",
+      "number": "18",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "20",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "40",
+      "qty": 2
+    },
+    {
+      "set": "SHD",
+      "number": "56",
+      "qty": 3
+    },
+    {
+      "set": "SHD",
+      "number": "245",
+      "qty": 3
+    },
+    {
+      "set": "SHD",
+      "number": "196",
+      "qty": 3
+    },
+    {
+      "set": "SHD",
+      "number": "41",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "60",
+      "qty": 3
+    },
+    {
+      "set": "SHD",
+      "number": "258",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "247",
+      "qty": 2
+    },
+    {
+      "set": "SHD",
+      "number": "43",
+      "qty": 3
+    },
+    {
+      "set": "SHD",
+      "number": "216",
+      "qty": 2
+    },
+    {
+      "set": "SHD",
+      "number": "44",
+      "qty": 3
+    },
+    {
+      "set": "SHD",
+      "number": "64",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "47",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "66",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "220",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "68",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "221",
+      "qty": 2
+    },
+    {
+      "set": "SHD",
+      "number": "69",
+      "qty": 2
+    },
+    {
+      "set": "SHD",
+      "number": "70",
+      "qty": 2
+    },
+    {
+      "set": "SHD",
+      "number": "261",
+      "qty": 2
+    },
+    {
+      "set": "SHD",
+      "number": "223",
+      "qty": 2
+    },
+    {
+      "set": "SHD",
+      "number": "74",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "73",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "251",
+      "qty": 3
+    },
+    {
+      "set": "SHD",
+      "number": "231",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "253",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "206",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "78",
+      "qty": 1
+    }
+  ]
+}

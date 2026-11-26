@@ -1,0 +1,145 @@
+{
+  "product_id": 614672,
+  "name": "Spotlight Deck: Han Solo",
+  "set_code": "JTL",
+  "kind": "spotlight",
+  "source": "https://starwarsunlimited.com/articles/disintegrating-the-odds",
+  "total": 52,
+  "cards": [
+    {
+      "set": "JTL",
+      "number": "17",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "24",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "95",
+      "qty": 3
+    },
+    {
+      "set": "SOR",
+      "number": "204",
+      "qty": 2
+    },
+    {
+      "set": "JTL",
+      "number": "93",
+      "qty": 1
+    },
+    {
+      "set": "JTL",
+      "number": "245",
+      "qty": 2
+    },
+    {
+      "set": "JTL",
+      "number": "196",
+      "qty": 3
+    },
+    {
+      "set": "SHD",
+      "number": "195",
+      "qty": 3
+    },
+    {
+      "set": "TWI",
+      "number": "191",
+      "qty": 3
+    },
+    {
+      "set": "SOR",
+      "number": "97",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "110",
+      "qty": 1
+    },
+    {
+      "set": "JTL",
+      "number": "97",
+      "qty": 2
+    },
+    {
+      "set": "SOR",
+      "number": "192",
+      "qty": 2
+    },
+    {
+      "set": "JTL",
+      "number": "215",
+      "qty": 2
+    },
+    {
+      "set": "JTL",
+      "number": "96",
+      "qty": 2
+    },
+    {
+      "set": "JTL",
+      "number": "200",
+      "qty": 3
+    },
+    {
+      "set": "JTL",
+      "number": "217",
+      "qty": 1
+    },
+    {
+      "set": "JTL",
+      "number": "249",
+      "qty": 3
+    },
+    {
+      "set": "JTL",
+      "number": "103",
+      "qty": 3
+    },
+    {
+      "set": "TWI",
+      "number": "114",
+      "qty": 1
+    },
+    {
+      "set": "JTL",
+      "number": "210",
+      "qty": 1
+    },
+    {
+      "set": "JTL",
+      "number": "124",
+      "qty": 2
+    },
+    {
+      "set": "SOR",
+      "number": "217",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "222",
+      "qty": 3
+    },
+    {
+      "set": "JTL",
+      "number": "208",
+      "qty": 3
+    },
+    {
+      "set": "JTL",
+      "number": "209",
+      "qty": 1
+    },
+    {
+      "set": "JTL",
+      "number": "235",
+      "qty": 1
+    }
+  ]
+}

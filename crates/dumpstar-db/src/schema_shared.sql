@@ -73,6 +73,34 @@ JOIN (SELECT tcgplayer_product_id, MAX(observed_at) AS observed_at
  AND sp.observed_at = m.observed_at;
 
 -- ---------------------------------------------------------------------
+-- Preconstructed decks
+-- ---------------------------------------------------------------------
+
+-- Both rebuilt from `data/precons/*.json` on every convergence (precons.rs).
+-- A deck with a `precon_unresolved` alarm has `offered = 0` and holds only the
+-- lines that resolved; `card_count` is what the file's lines list.
+CREATE TABLE IF NOT EXISTS precon_decks (
+    precon_id    TEXT PRIMARY KEY,           -- the file stem
+    product_id   INTEGER NOT NULL,           -- sealed_products.product_id
+    name         TEXT NOT NULL,
+    deck         TEXT,                       -- member name when a product holds two
+    set_code     TEXT,
+    kind         TEXT NOT NULL CHECK (kind IN ('spotlight','starter','twin-suns','intro')),
+    source       TEXT NOT NULL,
+    card_count   INTEGER NOT NULL,
+    offered      INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS precon_cards (
+    precon_id    TEXT NOT NULL REFERENCES precon_decks,
+    line         INTEGER NOT NULL,           -- 1-based position in the file's cards
+    printing_id  TEXT NOT NULL,
+    card_id      TEXT NOT NULL,
+    zone         TEXT NOT NULL,
+    qty          INTEGER NOT NULL,
+    PRIMARY KEY (precon_id, line)
+);
+
+-- ---------------------------------------------------------------------
 -- Provenance
 -- ---------------------------------------------------------------------
 

@@ -1,0 +1,136 @@
+{
+  "product_id": 626661,
+  "name": "Spotlight Deck: Qui-Gon Jinn",
+  "set_code": "LOF",
+  "kind": "spotlight",
+  "source": "https://starwarsunlimited.com/articles/a-fated-duel",
+  "total": 52,
+  "cards": [
+    {
+      "set": "LOF",
+      "number": "16",
+      "qty": 1
+    },
+    {
+      "set": "LOF",
+      "number": "23",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "96",
+      "qty": 1
+    },
+    {
+      "set": "JTL",
+      "number": "201",
+      "qty": 1,
+      "corrected": "printed number 203*"
+    },
+    {
+      "set": "LOF",
+      "number": "249",
+      "qty": 1
+    },
+    {
+      "set": "LOF",
+      "number": "104",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "219",
+      "qty": 1
+    },
+    {
+      "set": "LOF",
+      "number": "190",
+      "qty": 3
+    },
+    {
+      "set": "LOF",
+      "number": "242",
+      "qty": 3
+    },
+    {
+      "set": "LOF",
+      "number": "255",
+      "qty": 3
+    },
+    {
+      "set": "TWI",
+      "number": "193",
+      "qty": 2
+    },
+    {
+      "set": "LOF",
+      "number": "193",
+      "qty": 3
+    },
+    {
+      "set": "LOF",
+      "number": "96",
+      "qty": 3
+    },
+    {
+      "set": "LOF",
+      "number": "111",
+      "qty": 2
+    },
+    {
+      "set": "LOF",
+      "number": "194",
+      "qty": 2
+    },
+    {
+      "set": "LOF",
+      "number": "196",
+      "qty": 3
+    },
+    {
+      "set": "LOF",
+      "number": "99",
+      "qty": 2
+    },
+    {
+      "set": "LOF",
+      "number": "197",
+      "qty": 3
+    },
+    {
+      "set": "LOF",
+      "number": "198",
+      "qty": 2
+    },
+    {
+      "set": "LOF",
+      "number": "199",
+      "qty": 2
+    },
+    {
+      "set": "LOF",
+      "number": "100",
+      "qty": 2
+    },
+    {
+      "set": "TWI",
+      "number": "217",
+      "qty": 2
+    },
+    {
+      "set": "LOF",
+      "number": "201",
+      "qty": 3
+    },
+    {
+      "set": "LOF",
+      "number": "218",
+      "qty": 2
+    },
+    {
+      "set": "LOF",
+      "number": "227",
+      "qty": 3
+    }
+  ]
+}

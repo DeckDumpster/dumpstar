@@ -35,6 +35,8 @@ other files and are never touched.
 
 **Deck groups.** A deck group (`deck_groups`: unique name, description, format label) is a named container for decks, managed as a unit through `/api/deck-groups` and the MCP tools `list_groups`, `get_group`, `create_group`, `update_group`, `delete_group`. Membership is by name: `decks.deck_group` holds the group's name, a group named on `create_deck`/`update_deck` is created, and `deck_groups::converge` (every tenant open) makes a group of every name already on a deck. Dumpstar knows nothing about cubes; deckdumpster and pokedumpster have no such container (a stated divergence).
 
+**Preconstructed decks.** One file per deck in `data/precons/` (the precon id is the file stem): `product_id`, `name`, `set_code`, `kind` (`spotlight|starter|twin-suns|intro`), `source`, `total` (the card count, checked against the lines), `deck` when two files share a product, and `cards: [{set, number, qty, zone?}]`; other fields are ignored. `dumpstar-db/build.rs` compiles them in, so adding a deck is adding a file. Every catalog convergence reconciles them into `precon_decks`/`precon_cards`, each line to its Standard Normal printing, and sets `sync_state` `precons.rev`. A bad line, product or total never fails a build: it raises a `precon_unresolved` alarm keyed `<file>:<line>` (0: the whole file) and stores the deck `offered = 0`.
+
 **Not here yet** (each is its own bead of the dumpstar design): authentication
 and tenant resolution under the dumpstar name, the shared `dumpster-kit`
 adoption beyond tokens and primitives, and a Star Wars: Unlimited rework of the

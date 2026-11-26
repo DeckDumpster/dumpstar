@@ -83,7 +83,7 @@ use crate::error::Result;
 /// catalog's fingerprint once, which converges on the next open and is
 /// harmless; it is called out only so nobody reads a changed hash as a bug.
 pub(crate) fn inputs() -> Vec<(&'static str, &'static str)> {
-    vec![
+    let mut inputs = vec![
         ("crates/dumpstar-swu/src/schema.sql", dumpstar_swu::SCHEMA),
         (
             "crates/dumpstar-db/src/schema_shared.sql",
@@ -99,7 +99,10 @@ pub(crate) fn inputs() -> Vec<(&'static str, &'static str)> {
             "data/sealed-remedial.json",
             crate::connection::SEALED_REMEDIAL,
         ),
-    ]
+        ("crates/dumpstar-db/src/precons.rs", crate::precons::READER),
+    ];
+    inputs.extend_from_slice(crate::precons::PRECON_FILES);
+    inputs
 }
 
 /// The `include_str!`ed files in this crate that are deliberately NOT part of
@@ -143,11 +146,16 @@ pub(crate) fn fingerprint() -> String {
     h.update(b"schema_version=");
     h.update(crate::schema_version::Shared.version.to_string().as_bytes());
     h.update(b"\n");
-    for (path, bytes) in inputs() {
+    hash_inputs(&mut h, &inputs());
+    format!("{:x}", h.finalize())
+}
+
+/// Feed `(path, contents)` pairs to `h`, each length-prefixed.
+pub(crate) fn hash_inputs(h: &mut Sha256, inputs: &[(&str, &str)]) {
+    for (path, bytes) in inputs {
         h.update(format!("input={path}:{}\n", bytes.len()).as_bytes());
         h.update(bytes.as_bytes());
     }
-    format!("{:x}", h.finalize())
 }
 
 /// Record that this build's convergence has been applied. Called last by
@@ -239,7 +247,7 @@ mod tests {
             }
         }
         assert!(
-            found.len() >= inputs().len(),
+            found.len() + crate::precons::PRECON_FILES.len() >= inputs().len(),
             "the scan found {} include_str! inputs but the fingerprint names {} — the scan is \
              broken, not the code",
             found.len(),
@@ -260,10 +268,19 @@ mod tests {
             );
             assert!(!(in_hash && in_excl), "{path} is in BOTH convergence lists",);
         }
-        // The catalog crate's schema is embedded there, not here.
+        // The catalog crate's schema is embedded there, not here, and the
+        // decklists by build.rs, in a generated file this scan does not read.
+        let decklists: Vec<&str> = crate::precons::PRECON_FILES
+            .iter()
+            .map(|(p, _)| *p)
+            .collect();
+        for decklist in &decklists {
+            assert!(hashed.contains(decklist), "{decklist} is not hashed");
+        }
+        assert!(decklists.contains(&"data/precons/jtl-boba-fett.json"));
         for path in hashed
             .into_iter()
-            .filter(|p| !p.starts_with("crates/dumpstar-swu/"))
+            .filter(|p| !p.starts_with("crates/dumpstar-swu/") && !decklists.contains(p))
         {
             assert!(
                 found.contains(&path.to_string()),

@@ -1,0 +1,155 @@
+{
+  "product_id": 721888,
+  "name": "Spotlight Deck: Chewbacca",
+  "set_code": "HMW",
+  "kind": "spotlight",
+  "source": "https://starwarsunlimited.com/articles/defend-and-destroy",
+  "total": 52,
+  "cards": [
+    {
+      "set": "HMW",
+      "number": "9",
+      "qty": 1
+    },
+    {
+      "set": "HMW",
+      "number": "29",
+      "qty": 1
+    },
+    {
+      "set": "ASH",
+      "number": "34",
+      "qty": 1
+    },
+    {
+      "set": "HMW",
+      "number": "164",
+      "qty": 1
+    },
+    {
+      "set": "LAW",
+      "number": "56",
+      "qty": 1
+    },
+    {
+      "set": "HMW",
+      "number": "168",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "103",
+      "qty": 1
+    },
+    {
+      "set": "HMW",
+      "number": "115",
+      "qty": 2
+    },
+    {
+      "set": "HMW",
+      "number": "162",
+      "qty": 1
+    },
+    {
+      "set": "HMW",
+      "number": "176",
+      "qty": 2
+    },
+    {
+      "set": "HMW",
+      "number": "177",
+      "qty": 2
+    },
+    {
+      "set": "HMW",
+      "number": "255",
+      "qty": 3
+    },
+    {
+      "set": "HMW",
+      "number": "163",
+      "qty": 2
+    },
+    {
+      "set": "HMW",
+      "number": "116",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "166",
+      "qty": 2
+    },
+    {
+      "set": "HMW",
+      "number": "45",
+      "qty": 1
+    },
+    {
+      "set": "HMW",
+      "number": "171",
+      "qty": 3
+    },
+    {
+      "set": "JTL",
+      "number": "95",
+      "qty": 2
+    },
+    {
+      "set": "JTL",
+      "number": "96",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "108",
+      "qty": 1
+    },
+    {
+      "set": "HMW",
+      "number": "257",
+      "qty": 3
+    },
+    {
+      "set": "LAW",
+      "number": "146",
+      "qty": 2
+    },
+    {
+      "set": "JTL",
+      "number": "151",
+      "qty": 2
+    },
+    {
+      "set": "HMW",
+      "number": "127",
+      "qty": 3
+    },
+    {
+      "set": "JTL",
+      "number": "164",
+      "qty": 1
+    },
+    {
+      "set": "HMW",
+      "number": "170",
+      "qty": 2
+    },
+    {
+      "set": "HMW",
+      "number": "121",
+      "qty": 3
+    },
+    {
+      "set": "LAW",
+      "number": "62",
+      "qty": 2
+    },
+    {
+      "set": "JTL",
+      "number": "168",
+      "qty": 2
+    }
+  ]
+}

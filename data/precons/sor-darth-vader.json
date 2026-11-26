@@ -1,0 +1,156 @@
+{
+  "product_id": 533899,
+  "name": "Two-Player Starter",
+  "set_code": "SOR",
+  "kind": "starter",
+  "source": "community, no official list: names and counts from https://wdwnt.com/2023/08/star-wars-unlimited-starter-deck-lists-announced/ and https://sw-unlimited-db.com/decks/3081, which agree on every card; numbers from the latter's card codes",
+  "deck": "Darth Vader",
+  "total": 52,
+  "cards": [
+    {
+      "set": "SOR",
+      "number": "10",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "23",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "225",
+      "qty": 2
+    },
+    {
+      "set": "SOR",
+      "number": "128",
+      "qty": 3
+    },
+    {
+      "set": "SOR",
+      "number": "129",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "130",
+      "qty": 2
+    },
+    {
+      "set": "SOR",
+      "number": "226",
+      "qty": 3
+    },
+    {
+      "set": "SOR",
+      "number": "227",
+      "qty": 2
+    },
+    {
+      "set": "SOR",
+      "number": "228",
+      "qty": 2
+    },
+    {
+      "set": "SOR",
+      "number": "79",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "83",
+      "qty": 3
+    },
+    {
+      "set": "SOR",
+      "number": "229",
+      "qty": 3
+    },
+    {
+      "set": "SOR",
+      "number": "230",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "84",
+      "qty": 3
+    },
+    {
+      "set": "SOR",
+      "number": "132",
+      "qty": 3
+    },
+    {
+      "set": "SOR",
+      "number": "231",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "232",
+      "qty": 2
+    },
+    {
+      "set": "SOR",
+      "number": "86",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "88",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "135",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "89",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "136",
+      "qty": 3
+    },
+    {
+      "set": "SOR",
+      "number": "123",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "139",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "126",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "172",
+      "qty": 3
+    },
+    {
+      "set": "SOR",
+      "number": "233",
+      "qty": 3
+    },
+    {
+      "set": "SOR",
+      "number": "234",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "92",
+      "qty": 1
+    }
+  ]
+}

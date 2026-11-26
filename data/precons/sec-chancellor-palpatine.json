@@ -1,0 +1,154 @@
+{
+  "product_id": 654607,
+  "name": "Spotlight Deck: Chancellor Palpatine",
+  "set_code": "SEC",
+  "kind": "spotlight",
+  "source": "https://starwarsunlimited.com/articles/disclosing-plots",
+  "total": 52,
+  "cards": [
+    {
+      "set": "SEC",
+      "number": "1",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "22",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "79",
+      "qty": 3
+    },
+    {
+      "set": "SEC",
+      "number": "55",
+      "qty": 2
+    },
+    {
+      "set": "SEC",
+      "number": "111",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "81",
+      "qty": 1
+    },
+    {
+      "set": "JTL",
+      "number": "33",
+      "qty": 3,
+      "corrected": "printed number 35*"
+    },
+    {
+      "set": "SEC",
+      "number": "27",
+      "qty": 3
+    },
+    {
+      "set": "LOF",
+      "number": "82",
+      "qty": 2
+    },
+    {
+      "set": "SEC",
+      "number": "82",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "31",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "83",
+      "qty": 3
+    },
+    {
+      "set": "SEC",
+      "number": "241",
+      "qty": 3
+    },
+    {
+      "set": "SEC",
+      "number": "84",
+      "qty": 2,
+      "corrected": "printed number 85"
+    },
+    {
+      "set": "SEC",
+      "number": "33",
+      "qty": 2,
+      "corrected": "printed number 32"
+    },
+    {
+      "set": "SEC",
+      "number": "85",
+      "qty": 1,
+      "corrected": "printed number 84"
+    },
+    {
+      "set": "SEC",
+      "number": "34",
+      "qty": 3
+    },
+    {
+      "set": "SEC",
+      "number": "87",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "36",
+      "qty": 3
+    },
+    {
+      "set": "SEC",
+      "number": "92",
+      "qty": 3
+    },
+    {
+      "set": "SEC",
+      "number": "37",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "245",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "70",
+      "qty": 2
+    },
+    {
+      "set": "SEC",
+      "number": "124",
+      "qty": 2
+    },
+    {
+      "set": "SEC",
+      "number": "123",
+      "qty": 2
+    },
+    {
+      "set": "SEC",
+      "number": "76",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "77",
+      "qty": 2
+    },
+    {
+      "set": "LOF",
+      "number": "43",
+      "qty": 1
+    }
+  ]
+}

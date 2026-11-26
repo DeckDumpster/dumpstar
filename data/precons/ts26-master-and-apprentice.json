@@ -1,0 +1,431 @@
+{
+  "product_id": 680634,
+  "name": "Twin Suns: Master and Apprentice",
+  "set_code": "TS26",
+  "kind": "twin-suns",
+  "source": "https://docs.google.com/spreadsheets/d/19rjKzdMnQ4H8UJsKGlXsOq_-cyWfDGM0u_CxAEk1yuo/edit?gid=1161396354",
+  "total": 84,
+  "cards": [
+    {
+      "set": "TS26",
+      "number": "1",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "7",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "10",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "13",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "15",
+      "qty": 1,
+      "corrected": "name spelled 'C-3P0' in the catalog"
+    },
+    {
+      "set": "TS26",
+      "number": "16",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "17",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "27",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "33",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "37",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "38",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "42",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "43",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "44",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "45",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "47",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "48",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "49",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "50",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "51",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "52",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "53",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "54",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "56",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "60",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "61",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "73",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "74",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "75",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "76",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "77",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "78",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "79",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "81",
+      "qty": 1
+    },
+    {
+      "set": "TS26",
+      "number": "83",
+      "qty": 1
+    },
+    {
+      "set": "JTL",
+      "number": "33",
+      "qty": 1
+    },
+    {
+      "set": "JTL",
+      "number": "71",
+      "qty": 1
+    },
+    {
+      "set": "JTL",
+      "number": "191",
+      "qty": 1
+    },
+    {
+      "set": "JTL",
+      "number": "229",
+      "qty": 1
+    },
+    {
+      "set": "LAW",
+      "number": "97",
+      "qty": 1
+    },
+    {
+      "set": "LOF",
+      "number": "65",
+      "qty": 1
+    },
+    {
+      "set": "LOF",
+      "number": "110",
+      "qty": 1
+    },
+    {
+      "set": "LOF",
+      "number": "120",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "33",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "39",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "91",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "123",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "215",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "217",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "263",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "29",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "31",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "71",
+      "qty": 1
+    },
+    {
+      "set": "SHD",
+      "number": "85",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "38",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "71",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "92",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "122",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "178",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "186",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "23",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "31",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "33",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "36",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "79",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "80",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "81",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "84",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "85",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "113",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "128",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "180",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "181",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "183",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "185",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "187",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "190",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "207",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "210",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "229",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "230",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "238",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "252",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "118",
+      "qty": 1
+    }
+  ]
+}

@@ -54,6 +54,15 @@ impl From<dumpstar_core::import::ImportError> for DbError {
     }
 }
 
+impl From<dumpstar_swu::CatalogError> for DbError {
+    fn from(e: dumpstar_swu::CatalogError) -> Self {
+        match e {
+            dumpstar_swu::CatalogError::Sqlite(e) => DbError::Sqlite(e),
+            other => DbError::Conflict(other.to_string()),
+        }
+    }
+}
+
 impl From<dumpster_kit_tenancy::TenancyError> for DbError {
     fn from(e: dumpster_kit_tenancy::TenancyError) -> Self {
         use dumpster_kit_tenancy::TenancyError as T;

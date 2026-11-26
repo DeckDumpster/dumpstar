@@ -1,0 +1,166 @@
+{
+  "product_id": 533899,
+  "name": "Two-Player Starter",
+  "set_code": "SOR",
+  "kind": "starter",
+  "source": "community, no official list: names and counts from https://wdwnt.com/2023/08/star-wars-unlimited-starter-deck-lists-announced/ and https://sw-unlimited-db.com/decks/3080, which agree on every card; numbers from the latter's card codes",
+  "deck": "Luke Skywalker",
+  "total": 52,
+  "cards": [
+    {
+      "set": "SOR",
+      "number": "5",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "29",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "59",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "236",
+      "qty": 3
+    },
+    {
+      "set": "SOR",
+      "number": "237",
+      "qty": 3
+    },
+    {
+      "set": "SOR",
+      "number": "238",
+      "qty": 3
+    },
+    {
+      "set": "SOR",
+      "number": "239",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "44",
+      "qty": 2
+    },
+    {
+      "set": "SOR",
+      "number": "189",
+      "qty": 3
+    },
+    {
+      "set": "SOR",
+      "number": "194",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "240",
+      "qty": 3
+    },
+    {
+      "set": "SOR",
+      "number": "241",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "45",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "63",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "66",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "46",
+      "qty": 3
+    },
+    {
+      "set": "SOR",
+      "number": "195",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "242",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "244",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "196",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "48",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "49",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "198",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "69",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "53",
+      "qty": 3
+    },
+    {
+      "set": "SOR",
+      "number": "74",
+      "qty": 2
+    },
+    {
+      "set": "SOR",
+      "number": "217",
+      "qty": 1
+    },
+    {
+      "set": "SOR",
+      "number": "218",
+      "qty": 2
+    },
+    {
+      "set": "SOR",
+      "number": "220",
+      "qty": 2
+    },
+    {
+      "set": "SOR",
+      "number": "222",
+      "qty": 2
+    },
+    {
+      "set": "SOR",
+      "number": "78",
+      "qty": 3
+    }
+  ]
+}

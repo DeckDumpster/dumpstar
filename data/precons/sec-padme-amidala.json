@@ -1,0 +1,162 @@
+{
+  "product_id": 654606,
+  "name": "Spotlight Deck: Padme Amidala",
+  "set_code": "SEC",
+  "kind": "spotlight",
+  "source": "https://starwarsunlimited.com/articles/disclosing-plots",
+  "total": 52,
+  "cards": [
+    {
+      "set": "SEC",
+      "number": "16",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "22",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "248",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "93",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "197",
+      "qty": 3
+    },
+    {
+      "set": "SEC",
+      "number": "198",
+      "qty": 2
+    },
+    {
+      "set": "SEC",
+      "number": "199",
+      "qty": 2
+    },
+    {
+      "set": "SEC",
+      "number": "111",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "94",
+      "qty": 2
+    },
+    {
+      "set": "LOF",
+      "number": "192",
+      "qty": 2
+    },
+    {
+      "set": "JTL",
+      "number": "111",
+      "qty": 1,
+      "corrected": "printed number 113*"
+    },
+    {
+      "set": "SEC",
+      "number": "96",
+      "qty": 3
+    },
+    {
+      "set": "SEC",
+      "number": "201",
+      "qty": 3
+    },
+    {
+      "set": "LOF",
+      "number": "194",
+      "qty": 3
+    },
+    {
+      "set": "SEC",
+      "number": "115",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "98",
+      "qty": 3
+    },
+    {
+      "set": "SEC",
+      "number": "116",
+      "qty": 2
+    },
+    {
+      "set": "SEC",
+      "number": "99",
+      "qty": 1
+    },
+    {
+      "set": "LOF",
+      "number": "198",
+      "qty": 2
+    },
+    {
+      "set": "SEC",
+      "number": "208",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "120",
+      "qty": 2
+    },
+    {
+      "set": "LOF",
+      "number": "100",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "103",
+      "qty": 1
+    },
+    {
+      "set": "JTL",
+      "number": "123",
+      "qty": 2,
+      "corrected": "printed number 125*"
+    },
+    {
+      "set": "SEC",
+      "number": "226",
+      "qty": 3
+    },
+    {
+      "set": "SEC",
+      "number": "234",
+      "qty": 2
+    },
+    {
+      "set": "SEC",
+      "number": "127",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "256",
+      "qty": 1
+    },
+    {
+      "set": "SEC",
+      "number": "129",
+      "qty": 2
+    },
+    {
+      "set": "SEC",
+      "number": "106",
+      "qty": 1
+    }
+  ]
+}

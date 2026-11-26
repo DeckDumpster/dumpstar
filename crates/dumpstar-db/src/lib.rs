@@ -27,6 +27,7 @@ pub mod manual_prices;
 pub mod natsort;
 pub mod orders;
 pub mod outbox;
+pub mod precons;
 pub mod prices;
 pub mod raw_derivation;
 pub mod registry;

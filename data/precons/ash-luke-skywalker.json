@@ -1,0 +1,135 @@
+{
+  "product_id": 693638,
+  "name": "Spotlight Deck: Luke Skywalker",
+  "set_code": "ASH",
+  "kind": "spotlight",
+  "source": "https://starwarsunlimited.com/articles/a-fated-confrontation",
+  "total": 52,
+  "cards": [
+    {
+      "set": "ASH",
+      "number": "5",
+      "qty": 1
+    },
+    {
+      "set": "ASH",
+      "number": "24",
+      "qty": 1
+    },
+    {
+      "set": "ASH",
+      "number": "153",
+      "qty": 1
+    },
+    {
+      "set": "ASH",
+      "number": "31",
+      "qty": 1
+    },
+    {
+      "set": "ASH",
+      "number": "60",
+      "qty": 1
+    },
+    {
+      "set": "LAW",
+      "number": "47",
+      "qty": 1
+    },
+    {
+      "set": "ASH",
+      "number": "163",
+      "qty": 1
+    },
+    {
+      "set": "ASH",
+      "number": "71",
+      "qty": 3
+    },
+    {
+      "set": "ASH",
+      "number": "72",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "166",
+      "qty": 3
+    },
+    {
+      "set": "JTL",
+      "number": "62",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "59",
+      "qty": 3
+    },
+    {
+      "set": "ASH",
+      "number": "156",
+      "qty": 2
+    },
+    {
+      "set": "JTL",
+      "number": "51",
+      "qty": 3
+    },
+    {
+      "set": "LAW",
+      "number": "254",
+      "qty": 3
+    },
+    {
+      "set": "ASH",
+      "number": "78",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "158",
+      "qty": 3
+    },
+    {
+      "set": "ASH",
+      "number": "61",
+      "qty": 3
+    },
+    {
+      "set": "ASH",
+      "number": "159",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "255",
+      "qty": 3
+    },
+    {
+      "set": "ASH",
+      "number": "65",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "66",
+      "qty": 3
+    },
+    {
+      "set": "ASH",
+      "number": "88",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "184",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "162",
+      "qty": 2
+    }
+  ]
+}

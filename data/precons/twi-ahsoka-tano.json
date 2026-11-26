@@ -1,0 +1,166 @@
+{
+  "product_id": 581258,
+  "name": "Two-Player Starter",
+  "set_code": "TWI",
+  "kind": "starter",
+  "source": "https://starwarsunlimited.com/articles/clash-of-ideals",
+  "deck": "Ahsoka Tano",
+  "total": 52,
+  "cards": [
+    {
+      "set": "TWI",
+      "number": "11",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "24",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "240",
+      "qty": 3
+    },
+    {
+      "set": "TWI",
+      "number": "141",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "142",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "158",
+      "qty": 2
+    },
+    {
+      "set": "TWI",
+      "number": "106",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "159",
+      "qty": 2
+    },
+    {
+      "set": "TWI",
+      "number": "90",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "107",
+      "qty": 2
+    },
+    {
+      "set": "TWI",
+      "number": "241",
+      "qty": 3
+    },
+    {
+      "set": "TWI",
+      "number": "91",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "92",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "109",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "144",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "111",
+      "qty": 2
+    },
+    {
+      "set": "TWI",
+      "number": "243",
+      "qty": 2
+    },
+    {
+      "set": "TWI",
+      "number": "251",
+      "qty": 2
+    },
+    {
+      "set": "TWI",
+      "number": "164",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "94",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "147",
+      "qty": 3
+    },
+    {
+      "set": "TWI",
+      "number": "114",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "244",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "97",
+      "qty": 3
+    },
+    {
+      "set": "TWI",
+      "number": "246",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "248",
+      "qty": 3
+    },
+    {
+      "set": "TWI",
+      "number": "123",
+      "qty": 2
+    },
+    {
+      "set": "TWI",
+      "number": "171",
+      "qty": 2
+    },
+    {
+      "set": "TWI",
+      "number": "99",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "126",
+      "qty": 2
+    },
+    {
+      "set": "TWI",
+      "number": "174",
+      "qty": 3
+    }
+  ]
+}

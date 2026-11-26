@@ -1,0 +1,138 @@
+{
+  "product_id": 672294,
+  "name": "Spotlight Deck: Leia Organa",
+  "set_code": "LAW",
+  "kind": "spotlight",
+  "source": "https://starwarsunlimited.com/articles/aspects-and-credits",
+  "total": 52,
+  "cards": [
+    {
+      "set": "LAW",
+      "number": "10",
+      "qty": 1
+    },
+    {
+      "set": "LAW",
+      "number": "20",
+      "qty": 1
+    },
+    {
+      "set": "LAW",
+      "number": "37",
+      "qty": 3
+    },
+    {
+      "set": "LAW",
+      "number": "142",
+      "qty": 2
+    },
+    {
+      "set": "SEC",
+      "number": "93",
+      "qty": 2
+    },
+    {
+      "set": "LAW",
+      "number": "67",
+      "qty": 1
+    },
+    {
+      "set": "LAW",
+      "number": "38",
+      "qty": 3
+    },
+    {
+      "set": "LAW",
+      "number": "104",
+      "qty": 1
+    },
+    {
+      "set": "JTL",
+      "number": "95",
+      "qty": 3,
+      "corrected": "printed number 97*"
+    },
+    {
+      "set": "LAW",
+      "number": "145",
+      "qty": 3
+    },
+    {
+      "set": "LAW",
+      "number": "152",
+      "qty": 2
+    },
+    {
+      "set": "LAW",
+      "number": "105",
+      "qty": 2
+    },
+    {
+      "set": "LAW",
+      "number": "119",
+      "qty": 1
+    },
+    {
+      "set": "LAW",
+      "number": "146",
+      "qty": 3
+    },
+    {
+      "set": "JTL",
+      "number": "250",
+      "qty": 1,
+      "corrected": "printed number 252*"
+    },
+    {
+      "set": "SEC",
+      "number": "252",
+      "qty": 2
+    },
+    {
+      "set": "LAW",
+      "number": "35",
+      "qty": 2
+    },
+    {
+      "set": "LAW",
+      "number": "147",
+      "qty": 3
+    },
+    {
+      "set": "LAW",
+      "number": "45",
+      "qty": 2,
+      "corrected": "name spelled 'Zeb Orellios' in the catalog"
+    },
+    {
+      "set": "LAW",
+      "number": "108",
+      "qty": 3
+    },
+    {
+      "set": "SEC",
+      "number": "103",
+      "qty": 1
+    },
+    {
+      "set": "LAW",
+      "number": "111",
+      "qty": 3
+    },
+    {
+      "set": "LAW",
+      "number": "166",
+      "qty": 2
+    },
+    {
+      "set": "LAW",
+      "number": "167",
+      "qty": 3
+    },
+    {
+      "set": "LAW",
+      "number": "41",
+      "qty": 2
+    }
+  ]
+}

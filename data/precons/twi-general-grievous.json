@@ -1,0 +1,171 @@
+{
+  "product_id": 581258,
+  "name": "Two-Player Starter",
+  "set_code": "TWI",
+  "kind": "starter",
+  "source": "https://starwarsunlimited.com/articles/clash-of-ideals",
+  "deck": "General Grievous",
+  "total": 52,
+  "cards": [
+    {
+      "set": "TWI",
+      "number": "15",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "23",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "228",
+      "qty": 2
+    },
+    {
+      "set": "TWI",
+      "number": "206",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "104",
+      "qty": 3
+    },
+    {
+      "set": "TWI",
+      "number": "179",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "207",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "79",
+      "qty": 2
+    },
+    {
+      "set": "TWI",
+      "number": "237",
+      "qty": 2
+    },
+    {
+      "set": "TWI",
+      "number": "80",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "180",
+      "qty": 3
+    },
+    {
+      "set": "TWI",
+      "number": "229",
+      "qty": 3
+    },
+    {
+      "set": "TWI",
+      "number": "82",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "230",
+      "qty": 2
+    },
+    {
+      "set": "TWI",
+      "number": "83",
+      "qty": 3
+    },
+    {
+      "set": "TWI",
+      "number": "190",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "112",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "84",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "184",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "86",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "217",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "233",
+      "qty": 2
+    },
+    {
+      "set": "TWI",
+      "number": "234",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "87",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "221",
+      "qty": 2
+    },
+    {
+      "set": "TWI",
+      "number": "218",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "222",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "124",
+      "qty": 2
+    },
+    {
+      "set": "TWI",
+      "number": "257",
+      "qty": 1
+    },
+    {
+      "set": "TWI",
+      "number": "238",
+      "qty": 3
+    },
+    {
+      "set": "TWI",
+      "number": "226",
+      "qty": 2
+    },
+    {
+      "set": "TWI",
+      "number": "236",
+      "qty": 3
+    }
+  ]
+}

@@ -1,0 +1,137 @@
+{
+  "product_id": 672295,
+  "name": "Spotlight Deck: Jabba the Hutt",
+  "set_code": "LAW",
+  "kind": "spotlight",
+  "source": "https://starwarsunlimited.com/articles/aspects-and-credits",
+  "total": 52,
+  "cards": [
+    {
+      "set": "LAW",
+      "number": "15",
+      "qty": 1
+    },
+    {
+      "set": "LAW",
+      "number": "23",
+      "qty": 1
+    },
+    {
+      "set": "LAW",
+      "number": "210",
+      "qty": 3
+    },
+    {
+      "set": "LAW",
+      "number": "134",
+      "qty": 1
+    },
+    {
+      "set": "LAW",
+      "number": "136",
+      "qty": 2
+    },
+    {
+      "set": "LAW",
+      "number": "152",
+      "qty": 2
+    },
+    {
+      "set": "LAW",
+      "number": "212",
+      "qty": 3
+    },
+    {
+      "set": "SEC",
+      "number": "186",
+      "qty": 2
+    },
+    {
+      "set": "LAW",
+      "number": "211",
+      "qty": 3
+    },
+    {
+      "set": "LAW",
+      "number": "231",
+      "qty": 3
+    },
+    {
+      "set": "LAW",
+      "number": "249",
+      "qty": 3
+    },
+    {
+      "set": "LAW",
+      "number": "158",
+      "qty": 2
+    },
+    {
+      "set": "SEC",
+      "number": "189",
+      "qty": 2
+    },
+    {
+      "set": "JTL",
+      "number": "184",
+      "qty": 3,
+      "corrected": "printed number 186*"
+    },
+    {
+      "set": "JTL",
+      "number": "216",
+      "qty": 2,
+      "corrected": "printed number 218*"
+    },
+    {
+      "set": "LAW",
+      "number": "65",
+      "qty": 2
+    },
+    {
+      "set": "LAW",
+      "number": "214",
+      "qty": 1
+    },
+    {
+      "set": "LAW",
+      "number": "215",
+      "qty": 1
+    },
+    {
+      "set": "LAW",
+      "number": "252",
+      "qty": 1
+    },
+    {
+      "set": "LAW",
+      "number": "216",
+      "qty": 2
+    },
+    {
+      "set": "LAW",
+      "number": "163",
+      "qty": 3
+    },
+    {
+      "set": "LAW",
+      "number": "244",
+      "qty": 3
+    },
+    {
+      "set": "LAW",
+      "number": "246",
+      "qty": 2
+    },
+    {
+      "set": "LAW",
+      "number": "168",
+      "qty": 3
+    },
+    {
+      "set": "LAW",
+      "number": "170",
+      "qty": 1
+    }
+  ]
+}

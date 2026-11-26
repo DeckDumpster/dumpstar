@@ -620,7 +620,7 @@ fn advance(tx: &Transaction, key: &str, value: &str) -> Result<usize> {
 
 /// Upsert `alarms`; then delete every stored alarm of a kind in `replace` that
 /// is not among them. Returns rows written or removed.
-fn put_alarms(tx: &Transaction, alarms: &[AlarmRecord], replace: &[&str]) -> Result<usize> {
+pub fn put_alarms(tx: &Transaction, alarms: &[AlarmRecord], replace: &[&str]) -> Result<usize> {
     let mut n = 0;
     for a in alarms {
         n += tx.execute(

@@ -1,0 +1,135 @@
+{
+  "product_id": 693639,
+  "name": "Spotlight Deck: Emperor Palpatine",
+  "set_code": "ASH",
+  "kind": "spotlight",
+  "source": "https://starwarsunlimited.com/articles/a-fated-confrontation",
+  "total": 52,
+  "cards": [
+    {
+      "set": "ASH",
+      "number": "15",
+      "qty": 1
+    },
+    {
+      "set": "ASH",
+      "number": "21",
+      "qty": 1
+    },
+    {
+      "set": "ASH",
+      "number": "118",
+      "qty": 1
+    },
+    {
+      "set": "ASH",
+      "number": "36",
+      "qty": 1
+    },
+    {
+      "set": "ASH",
+      "number": "128",
+      "qty": 1
+    },
+    {
+      "set": "ASH",
+      "number": "101",
+      "qty": 1
+    },
+    {
+      "set": "LOF",
+      "number": "91",
+      "qty": 1
+    },
+    {
+      "set": "ASH",
+      "number": "116",
+      "qty": 3
+    },
+    {
+      "set": "ASH",
+      "number": "189",
+      "qty": 3
+    },
+    {
+      "set": "SEC",
+      "number": "185",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "215",
+      "qty": 3
+    },
+    {
+      "set": "ASH",
+      "number": "94",
+      "qty": 3
+    },
+    {
+      "set": "ASH",
+      "number": "191",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "218",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "96",
+      "qty": 3
+    },
+    {
+      "set": "ASH",
+      "number": "97",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "193",
+      "qty": 3
+    },
+    {
+      "set": "ASH",
+      "number": "221",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "243",
+      "qty": 3
+    },
+    {
+      "set": "ASH",
+      "number": "99",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "197",
+      "qty": 3
+    },
+    {
+      "set": "ASH",
+      "number": "198",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "199",
+      "qty": 3
+    },
+    {
+      "set": "ASH",
+      "number": "103",
+      "qty": 2
+    },
+    {
+      "set": "ASH",
+      "number": "139",
+      "qty": 2
+    }
+  ]
+}

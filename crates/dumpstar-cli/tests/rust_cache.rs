@@ -256,18 +256,43 @@ exit 2
     assert_ne!(installed.permissions().mode() & 0o111, 0, "{text}");
 }
 
-#[test]
-fn testenv_rust_tier_fetches_sccache_before_ci_sh() {
-    let testenv = read(".spira/testenv.toml");
-    let argv = testenv
+/// The `key = ` line of one `[tier.<name>]` section of `.spira/testenv.toml`.
+fn testenv_tier_line(tier: &str, key: &str) -> String {
+    let header = format!("[tier.{tier}]");
+    let prefix = format!("{key} = ");
+    read(".spira/testenv.toml")
         .lines()
-        .skip_while(|line| *line != "[tier.rust]")
+        .skip_while(|line| *line != header)
         .skip(1)
         .take_while(|line| !line.starts_with('['))
-        .find_map(|line| line.strip_prefix("argv = "))
-        .expect("[tier.rust] has an argv line");
+        .find_map(|line| line.strip_prefix(&prefix))
+        .unwrap_or_else(|| panic!("{header} has no {key} line"))
+        .to_owned()
+}
+
+#[test]
+fn testenv_rust_tier_fetches_sccache_before_ci_sh() {
+    let argv = testenv_tier_line("rust", "argv");
     let (_, after_fetch) = argv
         .split_once("runner-deps.sh --sccache && ")
         .unwrap_or_else(|| panic!("rust tier does not fetch sccache: {argv}"));
     assert!(after_fetch.contains("deploy/ci.sh"), "{argv}");
+}
+
+#[test]
+fn testenv_isolation_tier_runs_in_the_rust_image() {
+    // Without the group list, ci.sh's dependency check demands podman, node and
+    // chromium, which the image lacks, and no isolation test runs.
+    let env = testenv_tier_line("isolation", "env");
+    assert!(
+        env.contains(r#"DUMPSTAR_RUNNER_DEPS_ONLY = "base rust""#),
+        "isolation tier checks every runner-deps group: {env}"
+    );
+    let argv = testenv_tier_line("isolation", "argv");
+    for step in ["apt-get install", "runner-deps.sh --sccache && "] {
+        let (_, after_step) = argv
+            .split_once(step)
+            .unwrap_or_else(|| panic!("isolation tier lacks `{step}`: {argv}"));
+        assert!(after_step.contains("deploy/ci.sh"), "{argv}");
+    }
 }

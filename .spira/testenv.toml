@@ -4,12 +4,13 @@
 # (tests/ci/select_test.sh holds this file to that list). Each tier is
 # `DUMPSTAR_CI_TIERS=<tier> bash deploy/ci.sh`, the explicit-list path, which runs
 # exactly that tier with no floor added.
-# The rust tier also fetches sccache, so it compiles against the shared store.
+# The rust and isolation tiers also fetch sccache, so they compile against the
+# shared store.
 # The image is the builder base the Containerfile names. It stands in for CI's
-# host runner: lint and rust need only a toolchain, bash and git. deploy, frontend
-# and container need podman (and node, systemd) which this image does not carry,
-# so they are declared — CI runs them — but only work where those are reachable;
-# they are not in `default`.
+# host runner: lint, rust and isolation need only a toolchain, bash and git.
+# deploy, frontend and container need podman (and node, systemd) which this image
+# does not carry, so they are declared — CI runs them — but only work where those
+# are reachable; they are not in `default`.
 # frontend-check is the exception that needs only node: the frontend's unit tests
 # and svelte-check, which CI runs inside the frontend tier 35 minutes in. It is
 # not a ci.sh tier (the name has a hyphen, so select_test.sh's canonical-tier
@@ -50,8 +51,8 @@ argv = ["bash", "-c", "set -euo pipefail; apt-get update -qq && apt-get install 
 timeout = 900
 
 [tier.isolation]
-argv = ["bash", "deploy/ci.sh"]
-env = { DUMPSTAR_CI_TIERS = "isolation" }
+argv = ["bash", "-c", "apt-get update -qq && apt-get install -y -qq git curl jq sqlite3 python3 make >/dev/null && bash deploy/runner-deps.sh --sccache && bash deploy/ci.sh"]
+env = { DUMPSTAR_CI_TIERS = "isolation", DUMPSTAR_RUNNER_DEPS_ONLY = "base rust" }
 timeout = 1800
 
 [tier.deploy]

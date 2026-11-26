@@ -37,4 +37,41 @@ printf '#!/bin/sh\nexec "$@"\n' >"$stub/sccache"
 sh deploy/sccache-probe.sh "$stub/sccache" >/dev/null 2>&1 && ok "working sccache passes the probe" || bad "working sccache failed the probe"
 grep -q 'sccache-probe.sh' Containerfile && ok "Containerfile probes before enabling the wrapper" || bad "Containerfile does not probe"
 
+# sp-p7xf0n: the testenv rust tier is a bare container, so it fetches sccache
+# alone (runner-deps.sh --sccache). curl is a stub: no network.
+mkdir "$stub/bin" "$stub/home"
+sccache_only() { # <install dir>
+    HOME="$stub/home" DUMPSTAR_SCCACHE_DIR="$1" PATH="$stub/bin:/usr/bin:/bin" \
+        bash deploy/runner-deps.sh --sccache 2>&1
+}
+printf '#!/bin/sh\nexit 22\n' >"$stub/bin/curl"
+chmod +x "$stub/bin/curl"
+out="$(sccache_only "$stub/failed")"; rc=$?
+[ "$rc" -eq 0 ] && [[ "$out" == *"could not install sccache"* && "$out" != *apt* ]] \
+    && ok "--sccache: a failed download is a note, nothing else is installed" \
+    || bad "--sccache with a failed download: rc=$rc $out"
+
+release=sccache-v0.10.0-x86_64-unknown-linux-musl
+mkdir -p "$stub/release/$release"
+printf '#!/bin/sh\n' >"$stub/release/$release/sccache"
+chmod +x "$stub/release/$release/sccache"
+tar -czf "$stub/release.tgz" -C "$stub/release" "$release"
+cat >"$stub/bin/curl" <<STUB
+#!/bin/sh
+while [ \$# -gt 0 ]; do
+    [ "\$1" = -o ] && exec cp "$stub/release.tgz" "\$2"
+    shift
+done
+exit 2
+STUB
+out="$(sccache_only "$stub/installed")"; rc=$?
+[ "$rc" -eq 0 ] && [ -x "$stub/installed/sccache" ] \
+    && ok "--sccache installs the release's binary" || bad "--sccache did not install: rc=$rc $out"
+
+argv="$(sed -n '/^\[tier\.rust\]$/,/^$/s/^argv = //p' .spira/testenv.toml)"
+case "$argv" in
+    *"runner-deps.sh --sccache && "*"deploy/ci.sh"*) ok "testenv rust tier fetches sccache before ci.sh" ;;
+    *) bad "testenv rust tier does not fetch sccache before ci.sh: $argv" ;;
+esac
+
 exit $fail

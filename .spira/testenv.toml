@@ -4,6 +4,7 @@
 # (tests/ci/select_test.sh holds this file to that list). Each tier is
 # `DUMPSTAR_CI_TIERS=<tier> bash deploy/ci.sh`, the explicit-list path, which runs
 # exactly that tier with no floor added.
+# The rust tier also fetches sccache, so it compiles against the shared store.
 # The image is the builder base the Containerfile names. It stands in for CI's
 # host runner: lint and rust need only a toolchain, bash and git. deploy, frontend
 # and container need podman (and node, systemd) which this image does not carry,
@@ -40,7 +41,7 @@ env = { DUMPSTAR_CI_TIERS = "plan", DUMPSTAR_RUNNER_DEPS_ONLY = "base rust" }
 timeout = 1200
 
 [tier.rust]
-argv = ["bash", "-c", "apt-get update -qq && apt-get install -y -qq git curl jq sqlite3 python3 make >/dev/null && cargo install --locked cargo-nextest --version 0.9.148 && bash deploy/ci.sh"]
+argv = ["bash", "-c", "apt-get update -qq && apt-get install -y -qq git curl jq sqlite3 python3 make >/dev/null && cargo install --locked cargo-nextest --version 0.9.148 && bash deploy/runner-deps.sh --sccache && bash deploy/ci.sh"]
 env = { DUMPSTAR_CI_TIERS = "rust", DUMPSTAR_RUNNER_DEPS_ONLY = "base rust nextest" }
 timeout = 1800
 

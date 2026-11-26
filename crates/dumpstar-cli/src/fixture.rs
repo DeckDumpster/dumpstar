@@ -13,9 +13,10 @@
 //! init runs and the running server can open them unchanged. The intents
 //! harness snapshots/restores these before each test.
 //!
-//! The data is small and deterministic: three real sets (names and release
-//! dates), a couple of dozen cards across every card type, and printings in
-//! Standard, Hyperspace, Showcase and Promo variants. Card stats and rules
+//! The data is small and deterministic: four real sets (names and release
+//! dates), a few dozen cards across every card type, and printings in
+//! Standard, Hyperspace, Showcase and Promo variants. One shipped
+//! preconstructed decklist resolves against it. Card stats and rules
 //! text are paraphrases written for a fixture. The stable names are documented
 //! in `tests/ui/fixtures/README.md`.
 
@@ -112,8 +113,11 @@ fn seed(args: FixtureArgs) -> anyhow::Result<()> {
     }
 
     println!("Building shared catalog at {}", shared_path.display());
-    let shared = dumpstar_db::open_shared(&shared_path)?;
+    let mut shared = dumpstar_db::open_shared(&shared_path)?;
     seed_catalog(&shared)?;
+    seed_precon(&shared)?;
+    // The open above converged an empty catalog, which offers no decklist.
+    dumpstar_db::converge_shared(&mut shared)?;
     // The keyword registry, rarity ranks and flag definitions fixture-backed
     // search tests need came in with the read-write open above
     // (connection.rs::converge).
@@ -201,10 +205,53 @@ const ACQUIRED_AT: &str = "2025-06-10T12:00:00Z";
 /// A set: code, name, release date, sort order. The dates are the real ones.
 type SetRow = (&'static str, &'static str, &'static str, i64);
 
-const SETS: [SetRow; 3] = [
+const SETS: [SetRow; 4] = [
     ("SOR", "Spark of Rebellion", "2024-03-08", 1),
     ("SHD", "Shadows of the Galaxy", "2024-07-12", 2),
-    ("JTL", "Jump to Lightspeed", "2025-03-14", 3),
+    ("TWI", "Twilight of the Republic", "2024-11-08", 3),
+    ("JTL", "Jump to Lightspeed", "2025-03-14", 4),
+];
+
+/// The shipped decklist the fixture offers, for the preconstructed-deck replay.
+const PRECON: &str = "jtl-boba-fett";
+
+/// The cards that decklist names and the tables below lack: set, number, name,
+/// subtitle, type. A card with no name captured under `fixtures/swu/` is called
+/// by its set and number.
+type PreconCardRow = (
+    &'static str,
+    &'static str,
+    &'static str,
+    Option<&'static str>,
+    &'static str,
+);
+
+#[rustfmt::skip]
+const PRECON_CARDS: [PreconCardRow; 24] = [
+    ("JTL", "009", "Boba Fett", Some("Any Methods Necessary"), "Leader"),
+    ("SHD", "026", "Fixture Base SHD 026", None, "Base"),
+    ("JTL", "132", "First Order Stormtrooper", None, "Unit"),
+    ("JTL", "133", "Allegiant General Pryde", Some("Ruthless and Loyal"), "Unit"),
+    ("JTL", "183", "Zygerrian Starhopper", None, "Unit"),
+    ("JTL", "237", "TIE Bomber", None, "Unit"),
+    ("SOR", "131", "Fifth Brother", Some("Fear Hunter"), "Unit"),
+    ("TWI", "181", "Fixture Card TWI 181", None, "Unit"),
+    ("JTL", "185", "Hound's Tooth", Some("Reliable and Deadly"), "Unit"),
+    ("JTL", "187", "Bossk", Some("Hunt By Instinct"), "Unit"),
+    ("JTL", "139", "Dengar", Some("Crude and Slovenly"), "Unit"),
+    ("JTL", "240", "Fett's Firespray", Some("Feared Silhouette"), "Unit"),
+    ("JTL", "140", "IG-2000", Some("Assassin's Aggressor"), "Unit"),
+    ("JTL", "165", "Hunting Aggressor", None, "Unit"),
+    ("SOR", "132", "Imperial Interceptor", None, "Unit"),
+    ("JTL", "141", "IG-88", Some("Murderous Phlutdroid"), "Unit"),
+    ("JTL", "189", "Boba Fett", Some("Feared Bounty Hunter"), "Unit"),
+    ("SOR", "184", "Fett's Firespray", Some("Pursuing the Bounty"), "Unit"),
+    ("JTL", "230", "Electromagnetic Pulse", None, "Event"),
+    ("SHD", "178", "Fixture Card SHD 178", None, "Unit"),
+    ("TWI", "171", "Fixture Card TWI 171", None, "Unit"),
+    ("SOR", "186", "No Good to Me Dead", None, "Event"),
+    ("SOR", "139", "Force Choke", None, "Event"),
+    ("JTL", "144", "No Disintegrations", None, "Event"),
 ];
 
 /// A game card: everything its rules text says, shared by all its printings.
@@ -1240,6 +1287,52 @@ fn seed_catalog(conn: &Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// What [`PRECON`] needs to resolve: its product, and a Standard Normal
+/// printing for every card line.
+fn seed_precon(conn: &Connection) -> anyhow::Result<()> {
+    let deck = dumpstar_db::precons::shipped(PRECON)?;
+    conn.execute(
+        "INSERT INTO sealed_products \
+           (product_id, set_code, name, category, subtype, release_date, fetched_at) \
+         VALUES (?1, ?2, ?3, 'sealed', 'Starter', '2025-03-14', ?4)",
+        rusqlite::params![deck.product_id, deck.set_code, deck.name, FETCHED_AT],
+    )?;
+    for (set, number) in &deck.cards {
+        // The file writes `9`; the catalog prints `009`.
+        let number = format!("{number:0>3}");
+        let held: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM printings WHERE set_code = ?1 AND number = ?2 \
+                              AND variant = 'Standard' AND finish = 'Normal')",
+            [set, &number],
+            |r| r.get(0),
+        )?;
+        if held {
+            continue;
+        }
+        let (.., name, subtitle, card_type) = PRECON_CARDS
+            .iter()
+            .find(|c| c.0 == set && c.1 == number)
+            .ok_or_else(|| anyhow::anyhow!("{PRECON}: no fixture card for {set} {number}"))?;
+        let card_id = format!("{set}_{number}");
+        conn.execute(
+            "INSERT INTO cards (card_id, name, subtitle, card_type) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![card_id, name, subtitle, card_type],
+        )?;
+        conn.execute(
+            "INSERT INTO card_search (card_id, name, subtitle, rules_text, traits) \
+             VALUES (?1, ?2, ?3, '', '')",
+            rusqlite::params![card_id, name, subtitle],
+        )?;
+        conn.execute(
+            "INSERT INTO printings \
+               (printing_id, card_id, set_code, number, variant, finish, rarity) \
+             VALUES (?1, ?2, ?3, ?4, 'Standard', 'Normal', 'Common')",
+            rusqlite::params![printing_id(set, &number, "Normal"), card_id, set, number],
+        )?;
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // User data (collection.sqlite)
 // ---------------------------------------------------------------------------
@@ -2039,6 +2132,34 @@ pub(crate) mod tests {
              Missing: {}. Fix the seeder (fixture.rs).",
             missing.join(", "),
         );
+    }
+
+    /// The browser tier adds this deck, so the fixture catalog must hold every
+    /// line of the shipped decklist: one unresolved line and it is not offered.
+    #[test]
+    fn the_fixture_offers_the_boba_fett_spotlight_deck() {
+        let catalog = dumpstar_db::open_shared_readonly(&committed_shared()).unwrap();
+        let (offered, cards): (bool, i64) = catalog
+            .query_row(
+                "SELECT offered, card_count FROM precon_decks WHERE precon_id = 'jtl-boba-fett'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert!(
+            offered,
+            "the shipped decklist did not resolve in the fixture"
+        );
+        assert_eq!(cards, 52);
+        let leaders: i64 = catalog
+            .query_row(
+                "SELECT count(*) FROM precon_cards l JOIN cards c ON c.card_id = l.card_id \
+                  WHERE l.precon_id = 'jtl-boba-fett' AND c.card_type = 'Leader'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(leaders, 1, "the row's leader art comes from this line");
     }
 
     /// The committed fixture must PRICE the sealed product it holds, and

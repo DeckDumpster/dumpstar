@@ -99,6 +99,31 @@ struct Line {
     zone: Zone,
 }
 
+/// What a shipped decklist needs the catalog to hold, for a seeder that builds
+/// its own.
+pub struct Shipped {
+    pub product_id: i64,
+    pub name: String,
+    pub set_code: String,
+    /// `(set_code, collector number)` of each card line, in file order.
+    pub cards: Vec<(String, String)>,
+}
+
+/// The compiled-in decklist `data/precons/<precon_id>.json`.
+pub fn shipped(precon_id: &str) -> Result<Shipped> {
+    let (_, body) = PRECON_FILES
+        .iter()
+        .find(|(path, _)| Path::new(path).file_stem().is_some_and(|s| s == precon_id))
+        .ok_or_else(|| DbError::NotFound(format!("shipped decklist '{precon_id}'")))?;
+    let file: DeckFile = serde_json::from_str(body)?;
+    Ok(Shipped {
+        product_id: file.product_id,
+        name: file.name,
+        set_code: file.set_code,
+        cards: file.cards.into_iter().map(|l| (l.set, l.number)).collect(),
+    })
+}
+
 /// What one reconciliation wrote.
 #[derive(Debug, Default)]
 pub struct Report {

@@ -17,7 +17,7 @@
  */
 
 import { registerHooks } from 'node:module';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { compile } from 'svelte/compiler';
@@ -39,8 +39,13 @@ registerHooks({
 			const rest = specifier.slice('$lib'.length).replace(/^\//, '');
 			const base = pathToFileURL(join(libDir, rest)).href;
 			// A bare `$lib/format` is `format.ts`; an extension is only spelled
-			// out for `.svelte` (and for the `.svelte.ts` rune stores).
-			const url = /\.(ts|js|svelte)$/.test(rest) ? base : `${base}.ts`;
+			// out for `.svelte` (and for the `.svelte.ts` rune stores). A
+			// directory (`$lib/components/ui`) is its `index.ts`.
+			const url = /\.(ts|js|svelte)$/.test(rest)
+				? base
+				: existsSync(join(libDir, rest, 'index.ts'))
+					? `${base}/index.ts`
+					: `${base}.ts`;
 			if (isSvelte(url)) return { url, format: 'module', shortCircuit: true };
 			return nextResolve(url, context);
 		}

@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS decks (
     description       TEXT,
     format            TEXT,                    -- free-text label; a sanctioned one ('Premier') is rule-checked, any other is user-defined
     deck_group        TEXT,                    -- optional free-text group (a cube, a set of packs)
+    precon_id         TEXT,                    -- the preconstructed deck it was added from (shared.precon_decks)
     owner             TEXT,                    -- free-text: "Ryan"|"Alice"
     state             TEXT NOT NULL DEFAULT 'idea'
         CHECK (state IN ('idea', 'ready', 'built')),

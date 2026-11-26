@@ -9,18 +9,24 @@
 //! A defect never fails the build. It raises a `precon_unresolved` alarm keyed
 //! `<file>:<line>` (1-based card line; `0` for the file as a whole), which
 //! `catalog-check` reports, and the deck is stored `offered = 0`.
+//!
+//! [`list`] and [`add`] are the tenant's side: an offered deck becomes, in one
+//! transaction, a batch, new copies and a deck that reserves exactly those.
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 use dumpstar_swu::crosswalk::norm_number;
 use dumpstar_swu::record::AlarmRecord;
-use rusqlite::{Connection, Transaction, TransactionBehavior, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
+use crate::batches::{self, NewBatch};
+use crate::collection::{self, NewCopy};
 use crate::convergence::hash_inputs;
-use crate::error::Result;
+use crate::decks::{self, NewDeck, Pick, SetLines};
+use crate::error::{DbError, Result};
 
 include!(concat!(env!("OUT_DIR"), "/precons.rs"));
 
@@ -249,10 +255,196 @@ pub fn reconcile_files(conn: &Connection, files: &[(&str, &str)]) -> Result<Repo
     Ok(report)
 }
 
+/// A preconstructed deck the catalog offers.
+#[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
+#[ts(export)]
+pub struct Precon {
+    pub precon_id: String,
+    #[ts(type = "number")]
+    pub product_id: i64,
+    pub name: String,
+    /// The member's name when one product holds two decks.
+    pub deck: Option<String>,
+    pub set_code: String,
+    pub set_name: String,
+    /// `spotlight` | `starter` | `twin-suns` | `intro`.
+    pub kind: String,
+    #[ts(type = "number")]
+    pub card_count: i64,
+    /// The art of the deck's first leader line.
+    pub leader_image: Option<String>,
+}
+
+/// Every offered deck, newest set first, then by name.
+pub fn list(conn: &Connection) -> Result<Vec<Precon>> {
+    let mut stmt = conn.prepare(
+        "SELECT d.precon_id, d.product_id, d.name, d.deck, COALESCE(d.set_code, ''), \
+                COALESCE(s.name, d.set_code, ''), d.kind, d.card_count, \
+                (SELECT p.image_url FROM shared.precon_cards l \
+                   JOIN shared.cards c ON c.card_id = l.card_id \
+                   JOIN shared.printings p ON p.printing_id = l.printing_id \
+                  WHERE l.precon_id = d.precon_id AND c.card_type = 'Leader' \
+                  ORDER BY l.line LIMIT 1) \
+           FROM shared.precon_decks d \
+           LEFT JOIN shared.sets s ON s.set_code = d.set_code \
+          WHERE d.offered \
+          ORDER BY s.release_date DESC, d.name, d.deck, d.precon_id",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok(Precon {
+            precon_id: r.get(0)?,
+            product_id: r.get(1)?,
+            name: r.get(2)?,
+            deck: r.get(3)?,
+            set_code: r.get(4)?,
+            set_name: r.get(5)?,
+            kind: r.get(6)?,
+            card_count: r.get(7)?,
+            leader_image: r.get(8)?,
+        })
+    })?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// What one [`add`] created.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Added {
+    pub deck_id: i64,
+    pub batch_id: i64,
+    pub copies: u32,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Fails [`add`] once its copies exist, to prove they are rolled back.
+    static FAIL_AFTER_COPIES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Add an offered preconstructed deck to the tenant, all or nothing: a batch,
+/// one new copy per card, and a deck whose lines reserve exactly those copies.
+/// A deck already added is refused unless `confirm_repeat`, which makes a
+/// second deck with copies of its own.
+pub fn add(conn: &Connection, precon_id: &str, confirm_repeat: bool) -> Result<Added> {
+    decks::immediate(conn, |conn| add_in(conn, precon_id, confirm_repeat))
+}
+
+fn add_in(conn: &Connection, precon_id: &str, confirm_repeat: bool) -> Result<Added> {
+    let (mut name, member, kind): (String, Option<String>, String) = conn
+        .query_row(
+            "SELECT name, deck, kind FROM shared.precon_decks WHERE precon_id = ?1 AND offered",
+            [precon_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .optional()?
+        .ok_or_else(|| DbError::NotFound(format!("preconstructed deck '{precon_id}'")))?;
+    if let Some(member) = member {
+        name = format!("{name} ({member})");
+    }
+    if !confirm_repeat {
+        let earlier: Option<(i64, String)> = conn
+            .query_row(
+                "SELECT id, name FROM decks WHERE precon_id = ?1 ORDER BY id LIMIT 1",
+                [precon_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?;
+        if let Some((id, earlier)) = earlier {
+            return Err(DbError::Conflict(format!(
+                "already added as deck '{earlier}' (id {id}); \
+                 add again to get a second deck and second copies"
+            )));
+        }
+    }
+
+    let batch_id = batches::create(
+        conn,
+        &NewBatch {
+            batch_type: "precon".into(),
+            name: Some(name.clone()),
+            ..Default::default()
+        },
+    )?;
+    let format = if kind == Kind::TwinSuns.as_str() {
+        "Twin Suns"
+    } else {
+        "Premier"
+    };
+    let deck_id = decks::create(
+        conn,
+        &NewDeck {
+            name,
+            format: Some(format.into()),
+            ..Default::default()
+        },
+    )?;
+    conn.execute(
+        "UPDATE decks SET precon_id = ?2 WHERE id = ?1",
+        params![deck_id, precon_id],
+    )?;
+
+    let lines: Vec<(String, decks::Line)> = conn
+        .prepare(
+            "SELECT printing_id, card_id, zone, qty FROM shared.precon_cards \
+              WHERE precon_id = ?1 ORDER BY line",
+        )?
+        .query_map([precon_id], |r| {
+            let printing_id: String = r.get(0)?;
+            let zone: String = r.get(2)?;
+            Ok((
+                printing_id.clone(),
+                decks::Line {
+                    card_id: r.get(1)?,
+                    zone: decks::zone_from_str(&zone),
+                    qty: r.get(3)?,
+                    pick: Pick {
+                        printing_id: Some(printing_id),
+                        ..Default::default()
+                    },
+                },
+            ))
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+
+    // Each copy is born in the deck, which is what makes `set_lines_in` reserve
+    // it ahead of any copy the tenant already owned.
+    let mut copies = 0;
+    for (printing_id, line) in &lines {
+        let new = NewCopy {
+            printing_id: printing_id.clone(),
+            source: "precon".into(),
+            batch_id: Some(batch_id),
+            deck_id: Some(deck_id),
+            ..Default::default()
+        };
+        for _ in 0..line.qty {
+            collection::add_in(conn, &new)?;
+            copies += 1;
+        }
+    }
+
+    #[cfg(test)]
+    if FAIL_AFTER_COPIES.get() {
+        return Err(DbError::Env("injected failure after the copies".into()));
+    }
+
+    let lines: Vec<decks::Line> = lines.into_iter().map(|(_, line)| line).collect();
+    match decks::set_lines_in(conn, deck_id, &lines)? {
+        SetLines::Set { reserved } if reserved == copies => Ok(Added {
+            deck_id,
+            batch_id,
+            copies,
+        }),
+        other => Err(DbError::Env(format!(
+            "preconstructed deck '{precon_id}' added {copies} copies but did not reserve them: \
+             {other:?}"
+        ))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{open_shared, testkit};
+    use crate::{connect_user, open_shared, testkit};
 
     const PRODUCT: i64 = 9001;
 
@@ -515,5 +707,253 @@ mod tests {
         let boba: DeckFile = serde_json::from_str(body).unwrap();
         assert_eq!(boba.kind.as_str(), "spotlight");
         assert_eq!(boba.product_id, 614673);
+    }
+
+    /// A tenant over [`catalog`] (JTL 9 and SOR 189) holding the test deck
+    /// `test`: one copy of JTL 9 and three of SOR 189.
+    fn tenant() -> (tempfile::TempDir, Connection) {
+        let (dir, c) = catalog();
+        let body = good();
+        reconcile_files(&c, &[("data/precons/test.json", &body)]).unwrap();
+        drop(c);
+        let conn = connect(&dir);
+        (dir, conn)
+    }
+
+    fn connect(dir: &tempfile::TempDir) -> Connection {
+        connect_user(
+            &dir.path().join("collection.sqlite"),
+            &dir.path().join("shared.sqlite"),
+        )
+        .unwrap()
+    }
+
+    /// `(batches, copies, decks)` the tenant holds.
+    fn counts(c: &Connection) -> (i64, i64, i64) {
+        c.query_row(
+            "SELECT (SELECT COUNT(*) FROM batches), (SELECT COUNT(*) FROM collection), \
+                    (SELECT COUNT(*) FROM decks)",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap()
+    }
+
+    fn ids(c: &Connection, sql: &str, arg: i64) -> Vec<i64> {
+        c.prepare(sql)
+            .unwrap()
+            .query_map([arg], |r| r.get(0))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect()
+    }
+
+    fn held(c: &Connection, deck: i64) -> Vec<i64> {
+        ids(
+            c,
+            "SELECT id FROM collection WHERE deck_id = ?1 ORDER BY id",
+            deck,
+        )
+    }
+
+    #[test]
+    fn add_makes_one_batch_n_copies_one_deck_and_reserves_exactly_them() {
+        let (_d, mut c) = tenant();
+        let owned = collection::add(
+            &mut c,
+            &NewCopy {
+                printing_id: "SOR-189-normal".into(),
+                source: "manual_id".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let added = add(&c, "test", false).unwrap();
+
+        assert_eq!(counts(&c), (1, 5, 1));
+        assert_eq!(added.copies, 4);
+        let new = ids(
+            &c,
+            "SELECT id FROM collection WHERE batch_id = ?1 ORDER BY id",
+            added.batch_id,
+        );
+        assert_eq!(new.len(), 4);
+        assert!(!new.contains(&owned));
+        assert_eq!(held(&c, added.deck_id), new);
+        let free: Option<i64> = c
+            .query_row(
+                "SELECT deck_id FROM collection WHERE id = ?1",
+                [owned],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(free, None);
+        let deck = decks::get(&c, added.deck_id).unwrap().unwrap();
+        assert_eq!(deck.precon_id.as_deref(), Some("test"));
+        assert_eq!(deck.name, "Test Deck");
+        assert_eq!(deck.format.as_deref(), Some("Premier"));
+        let batch = crate::batches::get_detail(&c, added.batch_id)
+            .unwrap()
+            .unwrap()
+            .batch;
+        assert_eq!(batch.batch_type, "precon");
+        assert_eq!(batch.name.as_deref(), Some("Test Deck"));
+        let lines = decks::line_states(&c, added.deck_id).unwrap();
+        assert_eq!(lines.len(), 2);
+        assert!(lines.iter().all(|l| l.reserved == l.qty), "{lines:?}");
+    }
+
+    #[test]
+    fn a_failure_after_the_copies_leaves_nothing() {
+        let (_d, c) = tenant();
+        let before = counts(&c);
+        FAIL_AFTER_COPIES.set(true);
+        let out = add(&c, "test", false);
+        FAIL_AFTER_COPIES.set(false);
+        let err = out.unwrap_err().to_string();
+        assert!(err.contains("injected"), "{err}");
+        assert_eq!(counts(&c), before);
+    }
+
+    #[test]
+    fn a_repeat_add_is_refused_naming_the_earlier_deck_and_confirm_makes_a_second() {
+        let (_d, c) = tenant();
+        let first = add(&c, "test", false).unwrap();
+        let before = counts(&c);
+
+        let err = add(&c, "test", false).unwrap_err();
+        let DbError::Conflict(msg) = err else {
+            panic!("not a conflict: {err}");
+        };
+        assert!(
+            msg.contains("'Test Deck'") && msg.contains(&format!("(id {})", first.deck_id)),
+            "{msg}"
+        );
+        assert_eq!(counts(&c), before);
+
+        let first_copies = held(&c, first.deck_id);
+        let second = add(&c, "test", true).unwrap();
+        assert_ne!(second.deck_id, first.deck_id);
+        assert_eq!(counts(&c), (2, 8, 2));
+        assert_eq!(held(&c, first.deck_id), first_copies);
+        assert_eq!(held(&c, second.deck_id).len(), 4);
+    }
+
+    #[test]
+    fn a_twin_suns_deck_with_two_leaders_is_legal_after_the_add() {
+        let (dir, c) = catalog();
+        dumpstar_swu::Catalog::open_writer(&dir.path().join("shared.sqlite"))
+            .unwrap()
+            .seed_formats()
+            .unwrap();
+        testkit::set(&c, "TS26", "Twin Suns");
+        let mut cards = Vec::new();
+        for n in 1..=83 {
+            let number = n.to_string();
+            let card_id = format!("TS26-{n}");
+            let kind = match n {
+                1 | 2 => "Leader",
+                3 => "Base",
+                _ => "Unit",
+            };
+            c.execute(
+                "INSERT INTO cards (card_id, name, card_type) VALUES (?1, ?1, ?2)",
+                [card_id.as_str(), kind],
+            )
+            .unwrap();
+            testkit::printing(
+                &c,
+                &format!("{card_id}-normal"),
+                &card_id,
+                "TS26",
+                &number,
+                "Standard",
+                "Normal",
+            );
+            cards.push(("TS26", number));
+        }
+        let cards: Vec<_> = cards.iter().map(|(s, n)| (*s, n.as_str(), 1)).collect();
+        let body = deck(PRODUCT, 83, &cards).replace("\"spotlight\"", "\"twin-suns\"");
+        reconcile_files(&c, &[("data/precons/suns.json", &body)]).unwrap();
+        drop(c);
+        let c = connect(&dir);
+
+        let added = add(&c, "suns", false).unwrap();
+
+        let v = decks::validate(&c, added.deck_id).unwrap();
+        assert_eq!(v.format_id.as_deref(), Some("twin_suns"));
+        let report = v.report.unwrap();
+        assert!(report.legal, "{:?}", report.violations);
+        assert_eq!(report.counts.leaders, 2);
+    }
+
+    #[test]
+    fn a_deck_not_offered_cannot_be_added() {
+        let (dir, c) = catalog();
+        let bad = deck(PRODUCT, 52, &[("JTL", "009", 1), ("SOR", "189", 3)]);
+        reconcile_files(&c, &[("data/precons/bad.json", &bad)]).unwrap();
+        assert!(!offered(&c, "bad"));
+        drop(c);
+        let c = connect(&dir);
+        for id in ["bad", "no-such-deck"] {
+            let err = add(&c, id, false).unwrap_err();
+            assert!(matches!(err, DbError::NotFound(_)), "{id}: {err}");
+        }
+        assert_eq!(counts(&c), (0, 0, 0));
+        assert!(list(&c).unwrap().is_empty());
+    }
+
+    #[test]
+    fn list_shows_offered_decks_newest_set_first_with_leader_art() {
+        let (dir, c) = catalog();
+        testkit::set_on(&c, "OLD", "Older Set", "2023-01-01");
+        c.execute_batch(
+            "UPDATE cards SET card_type = 'Leader' WHERE card_id = 'JTL-9'; \
+             UPDATE printings SET image_url = 'https://example.invalid/boba.png' \
+              WHERE printing_id = 'JTL-9-normal';",
+        )
+        .unwrap();
+        let new = good();
+        let named = deck(PRODUCT, 3, &[("SOR", "189", 3)])
+            .replace("\"set_code\":\"JTL\"", "\"set_code\":\"OLD\"")
+            .replace(
+                "\"name\":\"Test Deck\"",
+                "\"name\":\"A Deck\",\"deck\":\"Vader\"",
+            );
+        let bad = deck(PRODUCT, 9, &[("SOR", "189", 3)]);
+        // Same set as `new`, sorting before it by name and after it by id.
+        let first = good().replace("\"Test Deck\"", "\"Alpha Deck\"");
+        reconcile_files(
+            &c,
+            &[
+                ("data/precons/zz.json", &first),
+                ("data/precons/bad.json", &bad),
+                ("data/precons/named.json", &named),
+                ("data/precons/new.json", &new),
+            ],
+        )
+        .unwrap();
+        drop(c);
+        let c = connect(&dir);
+
+        let got = list(&c).unwrap();
+
+        let ids: Vec<_> = got.iter().map(|p| p.precon_id.as_str()).collect();
+        assert_eq!(ids, ["zz", "new", "named"]);
+        assert_eq!(got[1].set_name, "JTL");
+        assert_eq!(got[1].kind, "spotlight");
+        assert_eq!(got[1].card_count, 4);
+        assert_eq!(
+            got[1].leader_image.as_deref(),
+            Some("https://example.invalid/boba.png")
+        );
+        assert_eq!(got[2].set_name, "Older Set");
+        assert_eq!(got[2].deck.as_deref(), Some("Vader"));
+        assert_eq!(got[2].leader_image, None);
+
+        let added = add(&c, "named", false).unwrap();
+        let deck = decks::get(&c, added.deck_id).unwrap().unwrap();
+        assert_eq!(deck.name, "A Deck (Vader)");
     }
 }

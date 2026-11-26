@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tier: T0
-# covers: deploy/ci.sh Containerfile
+# covers: deploy/ci.sh Containerfile deploy/rust-cache.sh deploy/runner-deps.sh .spira/testenv.toml
 # The shared Rust compile cache wiring (sp-2i16qf): hermetic, no cargo, no podman.
 set -uo pipefail
 cd "$(dirname "$0")/../.."

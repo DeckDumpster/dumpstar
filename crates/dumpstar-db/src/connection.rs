@@ -111,10 +111,7 @@ pub fn open_shared_with_patience(path: &Path, patience: Duration) -> Result<Conn
     schema_version::gate(&conn, schema_version::Shared)?;
     // A catalog written by the Pokémon-shaped schema this project was forked
     // with is emptied, not migrated: it is derived data (sp-r7w5xi).
-    if dumpstar_swu::reset_if_legacy(&conn).map_err(|e| match e {
-        dumpstar_swu::CatalogError::Sqlite(e) => crate::DbError::Sqlite(e),
-        other => crate::DbError::Conflict(other.to_string()),
-    })? {
+    if dumpstar_swu::reset_if_legacy(&conn)? {
         println!(
             "dumpstar: {} held another card model; emptied it for the Star Wars: Unlimited \
              catalog (rebuilt by `dumpstar catalog-apply`)",

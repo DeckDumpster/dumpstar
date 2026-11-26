@@ -146,11 +146,16 @@ pub(crate) fn fingerprint() -> String {
     h.update(b"schema_version=");
     h.update(crate::schema_version::Shared.version.to_string().as_bytes());
     h.update(b"\n");
-    for (path, bytes) in inputs() {
+    hash_inputs(&mut h, &inputs());
+    format!("{:x}", h.finalize())
+}
+
+/// Feed `(path, contents)` pairs to `h`, each length-prefixed.
+pub(crate) fn hash_inputs(h: &mut Sha256, inputs: &[(&str, &str)]) {
+    for (path, bytes) in inputs {
         h.update(format!("input={path}:{}\n", bytes.len()).as_bytes());
         h.update(bytes.as_bytes());
     }
-    format!("{:x}", h.finalize())
 }
 
 /// Record that this build's convergence has been applied. Called last by

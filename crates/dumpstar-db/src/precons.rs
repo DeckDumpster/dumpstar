@@ -19,7 +19,8 @@ use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
-use crate::error::{DbError, Result};
+use crate::convergence::hash_inputs;
+use crate::error::Result;
 
 include!(concat!(env!("OUT_DIR"), "/precons.rs"));
 
@@ -103,10 +104,8 @@ pub struct Report {
 /// The revision of `files` as this build reads them.
 fn precons_rev(files: &[(&str, &str)]) -> String {
     let mut h = Sha256::new();
-    for (path, bytes) in std::iter::once(&("precons.rs", READER)).chain(files) {
-        h.update(format!("input={path}:{}\n", bytes.len()).as_bytes());
-        h.update(bytes.as_bytes());
-    }
+    hash_inputs(&mut h, &[("precons.rs", READER)]);
+    hash_inputs(&mut h, files);
     format!("{:x}", h.finalize())
 }
 
@@ -240,10 +239,7 @@ pub fn reconcile_files(conn: &Connection, files: &[(&str, &str)]) -> Result<Repo
         .into_iter()
         .map(|(key, what)| AlarmRecord::alarm(ALARM_KIND, key, what.join("; ")))
         .collect();
-    dumpstar_swu::apply::put_alarms(&tx, &report.alarms, &[ALARM_KIND]).map_err(|e| match e {
-        dumpstar_swu::CatalogError::Sqlite(e) => DbError::Sqlite(e),
-        other => DbError::Conflict(other.to_string()),
-    })?;
+    dumpstar_swu::apply::put_alarms(&tx, &report.alarms, &[ALARM_KIND])?;
     tx.execute(
         "INSERT INTO sync_state (key, value) VALUES (?1, ?2) \
          ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -464,6 +460,50 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM precon_decks", [], |r| r.get(0))
             .unwrap();
         assert_eq!(decks, PRECON_FILES.len());
+    }
+
+    #[test]
+    fn a_line_without_a_positive_qty_is_a_defect() {
+        let (_d, c) = catalog();
+        let bad = deck(PRODUCT, 1, &[("JTL", "9", 1), ("SOR", "189", 0)]);
+        let ok = good();
+        reconcile_files(
+            &c,
+            &[
+                ("data/precons/bad.json", &bad),
+                ("data/precons/ok.json", &ok),
+            ],
+        )
+        .unwrap();
+        assert_eq!(alarm_keys(&c), ["data/precons/bad.json:2"]);
+        assert!(!offered(&c, "bad"));
+        assert!(offered(&c, "ok"));
+        let lines: i64 = c
+            .query_row(
+                "SELECT COUNT(*) FROM precon_cards WHERE precon_id='bad'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(lines, 1);
+    }
+
+    /// The derive's case: the product exists only as a tcgcsv row until the
+    /// same convergence folds it into `sealed_products`.
+    #[test]
+    fn convergence_reconciles_after_folding_the_sealed_products() {
+        let (_d, mut c) = catalog();
+        c.execute_batch(
+            "INSERT INTO tcgcsv_groups (group_id, name, abbreviation) VALUES (1, 'JTL', 'JTL'); \
+             INSERT INTO tcgcsv_products (product_id, group_id, name, number) \
+             VALUES (614673, 1, 'Spotlight Deck: Boba Fett', NULL);",
+        )
+        .unwrap();
+        crate::converge_shared(&mut c).unwrap();
+        let keys = alarm_keys(&c);
+        assert!(!keys.contains(&"data/precons/jtl-boba-fett.json:0".to_string()));
+        // The file is being judged at all: its cards are not in this catalog.
+        assert!(keys.contains(&"data/precons/jtl-boba-fett.json:2".to_string()));
     }
 
     #[test]

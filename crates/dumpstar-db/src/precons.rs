@@ -8,8 +8,8 @@
 //! this runs every time rather than once per revision.
 //!
 //! The number alone names the printing: a number above the set's size is a
-//! Hyperspace printing. Where variants share a number the Standard one is meant;
-//! where several share it and none is Standard (promo sets), the line is
+//! Hyperspace printing. Where printings share a number the Standard one is
+//! meant; where several share it and none is Standard (promo sets), the line is
 //! ambiguous and does not resolve.
 //!
 //! A defect never fails the build. It raises a `precon_unresolved` alarm keyed
@@ -132,8 +132,8 @@ fn precons_rev(files: &[(&str, &str)]) -> String {
 struct Numbered {
     printing_id: String,
     card_id: String,
-    variant: String,
-    /// The number names no one printing: variants share it, none Standard.
+    standard: bool,
+    /// The number names no one printing: several share it, none Standard.
     ambiguous: bool,
 }
 
@@ -143,7 +143,7 @@ type Printings = HashMap<(String, String), Numbered>;
 fn normal_printings(tx: &Transaction) -> Result<Printings> {
     // Standard first, so it is the one kept where variants share a number.
     let mut stmt = tx.prepare(
-        "SELECT set_code, number, printing_id, card_id, variant FROM printings \
+        "SELECT set_code, number, printing_id, card_id, variant = 'Standard' FROM printings \
           WHERE finish = 'Normal' \
           ORDER BY variant <> 'Standard', variant_code, printing_id",
     )?;
@@ -151,19 +151,19 @@ fn normal_printings(tx: &Transaction) -> Result<Printings> {
     let mut out = Printings::new();
     while let Some(r) = rows.next()? {
         let number: String = r.get(1)?;
-        let variant: String = r.get(4)?;
         match out.entry((r.get(0)?, norm_number(&number))) {
             Entry::Vacant(slot) => {
                 slot.insert(Numbered {
                     printing_id: r.get(2)?,
                     card_id: r.get(3)?,
-                    variant,
+                    standard: r.get(4)?,
                     ambiguous: false,
                 });
             }
             Entry::Occupied(mut slot) => {
+                // A second printing: harmless only if the first is Standard.
                 let kept = slot.get_mut();
-                kept.ambiguous |= kept.variant != "Standard" && kept.variant != variant;
+                kept.ambiguous = !kept.standard;
             }
         }
     }
@@ -201,7 +201,7 @@ fn resolve<'a>(
             Some(_) => defect(
                 n,
                 format!(
-                    "several variants carry {} {} and none is Standard",
+                    "several printings carry {} {} and none is Standard",
                     line.set, line.number
                 ),
             ),
@@ -882,6 +882,25 @@ mod tests {
     }
 
     /// Promo sets put different cards on one number, none of them Standard.
+    #[test]
+    fn a_number_shared_by_two_printings_of_one_non_standard_variant_alarms() {
+        let (_d, c) = catalog();
+        testkit::set(&c, "SORP", "Promos");
+        for (id, card, code) in [("SORP-1-a", "SOR-189", "60"), ("SORP-1-b", "JTL-9", "61")] {
+            c.execute(
+                "INSERT INTO printings (printing_id, card_id, set_code, number, variant, \
+                                        variant_code, finish) \
+                 VALUES (?1, ?2, 'SORP', '1', 'Weekly Play', ?3, 'Normal')",
+                [id, card, code],
+            )
+            .unwrap();
+        }
+        let body = deck(PRODUCT, 1, &[("SORP", "1", 1)]);
+        reconcile_files(&c, &[("data/precons/a.json", &body)]).unwrap();
+        assert!(!offered(&c, "a"));
+        assert_eq!(alarm_keys(&c), ["data/precons/a.json:1"]);
+    }
+
     #[test]
     fn a_number_shared_by_variants_with_no_standard_one_alarms() {
         let (_d, c) = catalog();

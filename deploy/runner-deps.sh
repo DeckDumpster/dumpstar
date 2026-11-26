@@ -11,6 +11,7 @@
 #
 #   bash deploy/runner-deps.sh            install anything missing (idempotent)
 #   bash deploy/runner-deps.sh --check    report what is missing; exit 1 if any
+#   bash deploy/runner-deps.sh --sccache  install only sccache (optional; exit 0)
 #
 # WHY THIS EXISTS. CI used to run on one long-lived box where somebody had
 # installed cargo, node and podman by hand, under that user's $HOME. The
@@ -36,8 +37,9 @@ set -uo pipefail
 MODE=install
 case "${1:-}" in
     --check) MODE=check ;;
+    --sccache) MODE=sccache ;;
     "")      MODE=install ;;
-    *)       printf 'usage: runner-deps.sh [--check]\n' >&2; exit 2 ;;
+    *)       printf 'usage: runner-deps.sh [--check|--sccache]\n' >&2; exit 2 ;;
 esac
 
 MISSING=()
@@ -55,6 +57,35 @@ fi
 # have them on PATH. Doing this here rather than in the workflow means a
 # developer, a polecat and CI all get the same answer from `command -v cargo`.
 export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
+
+# sccache, the shared Rust compile cache (sp-2i16qf; see deploy/rust-cache.sh).
+# The OFFICIAL static (musl) release, because the same binary is handed to the
+# image's bookworm builder, which a build linked against this host's newer glibc
+# would not run in. OPTIONAL: without it CI compiles cold and says so, so a failed
+# download is a note, never a failed install.
+SCCACHE_VERSION=0.10.0
+SCCACHE_BIN_DIR="${DUMPSTAR_SCCACHE_DIR:-$HOME/.cache/dumpstar-sccache-bin}"
+install_sccache() {
+    [ ! -x "$SCCACHE_BIN_DIR/sccache" ] && [ "$(uname -m)" = x86_64 ] || return 0
+    note "installing sccache ${SCCACHE_VERSION} (static) into ${SCCACHE_BIN_DIR}"
+    local dir name="sccache-v${SCCACHE_VERSION}-x86_64-unknown-linux-musl"
+    dir="$(mktemp -d)"
+    if curl -fsSL --retry 3 -o "$dir/sccache.tgz" \
+           "https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/${name}.tar.gz" \
+       && tar -xzf "$dir/sccache.tgz" -C "$dir" \
+       && mkdir -p "$SCCACHE_BIN_DIR" \
+       && install -m 0755 "$dir/${name}/sccache" "$SCCACHE_BIN_DIR/sccache"; then
+        note "sccache installed"
+    else
+        note "could not install sccache -- CI will compile Rust cold"
+    fi
+    rm -rf "$dir"
+}
+
+if [ "$MODE" = sccache ]; then
+    install_sccache
+    exit 0
+fi
 
 # installable <pkg> -- true when apt can actually install this name.
 #
@@ -577,7 +608,7 @@ phase "fast path: is everything already baked in?"
 _pinned="$(sed -n 's/^channel[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' rust-toolchain.toml 2>/dev/null)"
 if run_checks >/dev/null 2>&1 && [ ${#MISSING[@]} -eq 0 ] \
    && { [ -z "$_pinned" ] || [[ $'\n'"$(rustup toolchain list 2>/dev/null)" == *$'\n'"${_pinned}"* ]]; } \
-   && { [ "$(uname -m)" != x86_64 ] || [ -x "${DUMPSTAR_SCCACHE_DIR:-$HOME/.cache/dumpstar-sccache-bin}/sccache" ]; }; then
+   && { [ "$(uname -m)" != x86_64 ] || [ -x "$SCCACHE_BIN_DIR/sccache" ]; }; then
     note "everything already present -- nothing to install"
     exit 0
 fi
@@ -702,28 +733,7 @@ if command -v loginctl >/dev/null 2>&1 && [ ! -d "/run/user/$(id -u)" ]; then
         || note "WARNING: /run/user/$(id -u) still absent after enabling linger"
 fi
 
-# sccache, the shared Rust compile cache (sp-2i16qf; see deploy/rust-cache.sh).
-# The OFFICIAL static (musl) release, because the same binary is handed to the
-# image's bookworm builder, which a build linked against this host's newer glibc
-# would not run in. OPTIONAL: without it CI compiles cold and says so, so a failed
-# download is a note, never a failed install.
-SCCACHE_VERSION=0.10.0
-SCCACHE_BIN_DIR="${DUMPSTAR_SCCACHE_DIR:-$HOME/.cache/dumpstar-sccache-bin}"
-if [ ! -x "$SCCACHE_BIN_DIR/sccache" ] && [ "$(uname -m)" = x86_64 ]; then
-    note "installing sccache ${SCCACHE_VERSION} (static) into ${SCCACHE_BIN_DIR}"
-    _sc_dir="$(mktemp -d)"
-    _sc_name="sccache-v${SCCACHE_VERSION}-x86_64-unknown-linux-musl"
-    if curl -fsSL --retry 3 -o "$_sc_dir/sccache.tgz" \
-           "https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/${_sc_name}.tar.gz" \
-       && tar -xzf "$_sc_dir/sccache.tgz" -C "$_sc_dir" \
-       && mkdir -p "$SCCACHE_BIN_DIR" \
-       && install -m 0755 "$_sc_dir/${_sc_name}/sccache" "$SCCACHE_BIN_DIR/sccache"; then
-        note "sccache installed"
-    else
-        note "could not install sccache -- CI will compile Rust cold"
-    fi
-    rm -rf "$_sc_dir"
-fi
+install_sccache
 
 # Re-check and report. A partial install is a failure HERE rather than a
 # surprise three gates into ci.sh on a machine that no longer exists.

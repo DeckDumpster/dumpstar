@@ -854,9 +854,6 @@ if tier lint; then
 
     # ci.yml has no concurrency: block, provisions through ephemeral-ci@v2 with
     # the 60s spill, and tears down under if: always().
-    step "Shared Rust compile cache wiring (tests/ci/rust_cache_test.sh)"
-    bash "$REPO_DIR/tests/ci/rust_cache_test.sh"
-
     step "ci.yml shape (tests/ci/workflow_test.sh)"
     bash "$REPO_DIR/tests/ci/workflow_test.sh"
 

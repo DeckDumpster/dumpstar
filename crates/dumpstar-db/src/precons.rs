@@ -16,7 +16,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
-use dumpstar_core::deck::Zone as DeckZone;
 use dumpstar_swu::crosswalk::norm_number;
 use dumpstar_swu::record::AlarmRecord;
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
@@ -395,11 +394,7 @@ fn add_in(conn: &Connection, precon_id: &str, confirm_repeat: bool) -> Result<Ad
                 printing_id.clone(),
                 decks::Line {
                     card_id: r.get(1)?,
-                    zone: if zone == Zone::Sideboard.as_str() {
-                        DeckZone::Sideboard
-                    } else {
-                        DeckZone::Main
-                    },
+                    zone: decks::zone_from_str(&zone),
                     qty: r.get(3)?,
                     pick: Pick {
                         printing_id: Some(printing_id),
@@ -927,9 +922,12 @@ mod tests {
                 "\"name\":\"A Deck\",\"deck\":\"Vader\"",
             );
         let bad = deck(PRODUCT, 9, &[("SOR", "189", 3)]);
+        // Same set as `new`, sorting before it by name and after it by id.
+        let first = good().replace("\"Test Deck\"", "\"Alpha Deck\"");
         reconcile_files(
             &c,
             &[
+                ("data/precons/zz.json", &first),
                 ("data/precons/bad.json", &bad),
                 ("data/precons/named.json", &named),
                 ("data/precons/new.json", &new),
@@ -942,17 +940,17 @@ mod tests {
         let got = list(&c).unwrap();
 
         let ids: Vec<_> = got.iter().map(|p| p.precon_id.as_str()).collect();
-        assert_eq!(ids, ["new", "named"]);
-        assert_eq!(got[0].set_name, "JTL");
-        assert_eq!(got[0].kind, "spotlight");
-        assert_eq!(got[0].card_count, 4);
+        assert_eq!(ids, ["zz", "new", "named"]);
+        assert_eq!(got[1].set_name, "JTL");
+        assert_eq!(got[1].kind, "spotlight");
+        assert_eq!(got[1].card_count, 4);
         assert_eq!(
-            got[0].leader_image.as_deref(),
+            got[1].leader_image.as_deref(),
             Some("https://example.invalid/boba.png")
         );
-        assert_eq!(got[1].set_name, "Older Set");
-        assert_eq!(got[1].deck.as_deref(), Some("Vader"));
-        assert_eq!(got[1].leader_image, None);
+        assert_eq!(got[2].set_name, "Older Set");
+        assert_eq!(got[2].deck.as_deref(), Some("Vader"));
+        assert_eq!(got[2].leader_image, None);
 
         let added = add(&c, "named", false).unwrap();
         let deck = decks::get(&c, added.deck_id).unwrap().unwrap();

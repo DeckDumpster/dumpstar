@@ -236,6 +236,15 @@ fn zone_str(z: Zone) -> &'static str {
     }
 }
 
+/// The zone a stored `zone` column names.
+pub(crate) fn zone_from_str(z: &str) -> Zone {
+    if z == "sideboard" {
+        Zone::Sideboard
+    } else {
+        Zone::Main
+    }
+}
+
 /// A deck's lines, as the checker takes them.
 pub fn entries(conn: &Connection, deck_id: i64) -> Result<Vec<DeckEntry>> {
     let mut stmt = conn.prepare(
@@ -245,11 +254,7 @@ pub fn entries(conn: &Connection, deck_id: i64) -> Result<Vec<DeckEntry>> {
         let zone: String = r.get(1)?;
         Ok(DeckEntry {
             card_id: r.get(0)?,
-            zone: if zone == "sideboard" {
-                Zone::Sideboard
-            } else {
-                Zone::Main
-            },
+            zone: zone_from_str(&zone),
             qty: r.get(2)?,
         })
     })?;
@@ -929,6 +934,28 @@ mod tests {
         open_shared(&shared).unwrap();
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         (dir, conn)
+    }
+
+    #[test]
+    fn a_collection_from_before_the_precon_origin_column_grows_one_on_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("collection.sqlite");
+        {
+            let c = crate::open_user(&path).unwrap();
+            c.execute_batch("ALTER TABLE decks DROP COLUMN precon_id")
+                .unwrap();
+            c.execute(
+                "INSERT INTO decks (name, created_at, updated_at) VALUES ('Old', '', '')",
+                [],
+            )
+            .unwrap();
+        }
+
+        let c = crate::open_user(&path).unwrap();
+
+        let decks = list(&c).unwrap();
+        assert_eq!(decks.len(), 1);
+        assert_eq!(decks[0].precon_id, None);
     }
 
     #[test]

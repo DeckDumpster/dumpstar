@@ -13,7 +13,7 @@ use crate::natsort::natural_cmp;
 
 const COLS: &str = "d.id, d.name, d.description, d.format, d.owner, d.state, \
      d.sleeve_color, d.storage_location, d.notes, d.created_at, d.updated_at, \
-     (SELECT count(*) FROM collection c WHERE c.deck_id = d.id), d.deck_group";
+     (SELECT count(*) FROM collection c WHERE c.deck_id = d.id), d.deck_group, d.precon_id";
 
 /// A deck, with the count of cards assigned to it.
 #[derive(Debug, Clone, serde::Serialize, ts_rs::TS)]
@@ -36,6 +36,8 @@ pub struct Deck {
     pub card_count: i64,
     /// Optional free-text group (a cube, a set of packs).
     pub group: Option<String>,
+    /// The preconstructed deck this one was added from; `None` for any other.
+    pub precon_id: Option<String>,
 }
 
 /// Fields for creating a deck.
@@ -83,6 +85,7 @@ fn from_row(r: &rusqlite::Row) -> rusqlite::Result<Deck> {
         updated_at: r.get(10)?,
         card_count: r.get(11)?,
         group: r.get(12)?,
+        precon_id: r.get(13)?,
     })
 }
 
@@ -233,6 +236,15 @@ fn zone_str(z: Zone) -> &'static str {
     }
 }
 
+/// The zone a stored `zone` column names.
+pub(crate) fn zone_from_str(z: &str) -> Zone {
+    if z == "sideboard" {
+        Zone::Sideboard
+    } else {
+        Zone::Main
+    }
+}
+
 /// A deck's lines, as the checker takes them.
 pub fn entries(conn: &Connection, deck_id: i64) -> Result<Vec<DeckEntry>> {
     let mut stmt = conn.prepare(
@@ -242,11 +254,7 @@ pub fn entries(conn: &Connection, deck_id: i64) -> Result<Vec<DeckEntry>> {
         let zone: String = r.get(1)?;
         Ok(DeckEntry {
             card_id: r.get(0)?,
-            zone: if zone == "sideboard" {
-                Zone::Sideboard
-            } else {
-                Zone::Main
-            },
+            zone: zone_from_str(&zone),
             qty: r.get(2)?,
         })
     })?;
@@ -478,6 +486,11 @@ fn log_move(
 /// A copy in another deck is never taken. When any card cannot be filled
 /// nothing changes and every short line is returned.
 pub fn set_lines(conn: &Connection, deck_id: i64, lines: &[Line]) -> Result<SetLines> {
+    immediate(conn, |conn| set_lines_in(conn, deck_id, lines))
+}
+
+/// [`set_lines`] inside a transaction the caller holds.
+pub(crate) fn set_lines_in(conn: &Connection, deck_id: i64, lines: &[Line]) -> Result<SetLines> {
     let mut merged: std::collections::BTreeMap<(String, Zone), u32> = Default::default();
     // Per card, the copies wanted for each selector.
     let mut demands: std::collections::BTreeMap<&str, std::collections::BTreeMap<&Pick, u32>> =
@@ -493,140 +506,138 @@ pub fn set_lines(conn: &Connection, deck_id: i64, lines: &[Line]) -> Result<SetL
             .entry(&l.pick)
             .or_default() += l.qty;
     }
-    immediate(conn, |conn| {
-        require_deck(conn, deck_id)?;
-        let mut owned_stmt = conn.prepare(
-            "SELECT c.id, c.deck_id, c.binder_id, p.printing_id, p.finish, p.variant FROM collection c \
-               JOIN shared.printings p ON p.printing_id = c.printing_id \
-              WHERE p.card_id = ?1 AND c.status = 'owned' \
-              ORDER BY (c.deck_id IS ?2) DESC, (c.binder_id IS NULL) DESC, c.id",
-        )?;
-        type Row = (i64, Option<i64>, Option<i64>, String, String, String);
-        let mut keep: Vec<(i64, Option<i64>, Option<i64>)> = Vec::new();
-        let mut short = Vec::new();
-        for (card, picks) in &demands {
-            let rows: Vec<Row> = owned_stmt
-                .query_map(params![card, deck_id], |r| {
-                    Ok((
-                        r.get(0)?,
-                        r.get(1)?,
-                        r.get(2)?,
-                        r.get(3)?,
-                        r.get(4)?,
-                        r.get(5)?,
-                    ))
-                })?
-                .collect::<rusqlite::Result<_>>()?;
-            let owned = rows.len() as u32;
-            let elsewhere = rows
-                .iter()
-                .filter(|r| r.1.is_some_and(|d| d != deck_id))
-                .count() as u32;
-            let usable: Vec<Row> = rows
-                .into_iter()
-                .filter(|r| r.1.is_none() || r.1 == Some(deck_id))
-                .collect();
-            let mut taken = vec![false; usable.len()];
-            let mut order: Vec<(&&Pick, &u32)> = picks.iter().collect();
-            order.sort_by_key(|(p, _)| p.specificity());
-            for (pick, need) in order {
-                let mut got = 0;
-                for (i, r) in usable.iter().enumerate() {
-                    if got == *need {
-                        break;
-                    }
-                    if !taken[i] && pick.matches(&r.3, &r.4, &r.5) {
-                        taken[i] = true;
-                        got += 1;
-                        keep.push((r.0, r.1, r.2));
-                    }
-                }
-                if got == *need {
-                    continue;
-                }
-                let label = pick.label();
-                let held_by: Vec<DeckHold> = holders(conn, &[(*card).to_string()])?
-                    .remove(*card)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter(|h| h.id != deck_id)
-                    .collect();
-                let hint = if held_by.is_empty() {
-                    let kind = if label.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" {label}")
-                    };
-                    format!("own {} more{kind} or lower the quantity", need - got)
-                } else {
-                    let names: Vec<String> = held_by
-                        .iter()
-                        .map(|h| format!("'{}' (id {}, qty {})", h.name, h.id, h.qty))
-                        .collect();
-                    let wanted = if label.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" ({label} wanted)")
-                    };
-                    format!(
-                        "{card} has {owned} {}{wanted}, held by deck {}: substitute a card, or remove it from the holding deck with set_deck_lines",
-                        if owned == 1 { "copy" } else { "copies" },
-                        names.join(", ")
-                    )
-                };
-                short.push(ShortLine {
-                    card_id: (*card).to_string(),
-                    needed: *need,
-                    owned,
-                    reserved_elsewhere: elsewhere,
-                    available: got,
-                    printing_id: pick.printing_id.clone(),
-                    finish: pick.finish.clone(),
-                    variant: pick.variant.clone(),
-                    held_by,
-                    hint,
-                });
-            }
-        }
-        if !short.is_empty() {
-            return Ok(SetLines::Short(short));
-        }
-        let keep_ids: std::collections::HashSet<i64> = keep.iter().map(|k| k.0).collect();
-        let mut held = conn.prepare("SELECT id FROM collection WHERE deck_id = ?1")?;
-        let held: Vec<i64> = held
-            .query_map([deck_id], |r| r.get(0))?
+    require_deck(conn, deck_id)?;
+    let mut owned_stmt = conn.prepare(
+        "SELECT c.id, c.deck_id, c.binder_id, p.printing_id, p.finish, p.variant FROM collection c \
+           JOIN shared.printings p ON p.printing_id = c.printing_id \
+          WHERE p.card_id = ?1 AND c.status = 'owned' \
+          ORDER BY (c.deck_id IS ?2) DESC, (c.binder_id IS NULL) DESC, c.id",
+    )?;
+    type Row = (i64, Option<i64>, Option<i64>, String, String, String);
+    let mut keep: Vec<(i64, Option<i64>, Option<i64>)> = Vec::new();
+    let mut short = Vec::new();
+    for (card, picks) in &demands {
+        let rows: Vec<Row> = owned_stmt
+            .query_map(params![card, deck_id], |r| {
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    r.get(5)?,
+                ))
+            })?
             .collect::<rusqlite::Result<_>>()?;
-        for id in held.into_iter().filter(|i| !keep_ids.contains(i)) {
-            conn.execute("UPDATE collection SET deck_id = NULL WHERE id = ?1", [id])?;
-            log_move(conn, id, Some(deck_id), None, None, "released by set_lines")?;
-        }
-        for (id, deck, binder) in &keep {
-            if *deck != Some(deck_id) {
-                conn.execute(
-                    "UPDATE collection SET deck_id = ?2, binder_id = NULL WHERE id = ?1",
-                    params![id, deck_id],
-                )?;
-                log_move(
-                    conn,
-                    *id,
-                    None,
-                    Some(deck_id),
-                    *binder,
-                    "reserved by set_lines",
-                )?;
+        let owned = rows.len() as u32;
+        let elsewhere = rows
+            .iter()
+            .filter(|r| r.1.is_some_and(|d| d != deck_id))
+            .count() as u32;
+        let usable: Vec<Row> = rows
+            .into_iter()
+            .filter(|r| r.1.is_none() || r.1 == Some(deck_id))
+            .collect();
+        let mut taken = vec![false; usable.len()];
+        let mut order: Vec<(&&Pick, &u32)> = picks.iter().collect();
+        order.sort_by_key(|(p, _)| p.specificity());
+        for (pick, need) in order {
+            let mut got = 0;
+            for (i, r) in usable.iter().enumerate() {
+                if got == *need {
+                    break;
+                }
+                if !taken[i] && pick.matches(&r.3, &r.4, &r.5) {
+                    taken[i] = true;
+                    got += 1;
+                    keep.push((r.0, r.1, r.2));
+                }
             }
+            if got == *need {
+                continue;
+            }
+            let label = pick.label();
+            let held_by: Vec<DeckHold> = holders(conn, &[(*card).to_string()])?
+                .remove(*card)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|h| h.id != deck_id)
+                .collect();
+            let hint = if held_by.is_empty() {
+                let kind = if label.is_empty() {
+                    String::new()
+                } else {
+                    format!(" {label}")
+                };
+                format!("own {} more{kind} or lower the quantity", need - got)
+            } else {
+                let names: Vec<String> = held_by
+                    .iter()
+                    .map(|h| format!("'{}' (id {}, qty {})", h.name, h.id, h.qty))
+                    .collect();
+                let wanted = if label.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ({label} wanted)")
+                };
+                format!(
+                    "{card} has {owned} {}{wanted}, held by deck {}: substitute a card, or remove it from the holding deck with set_deck_lines",
+                    if owned == 1 { "copy" } else { "copies" },
+                    names.join(", ")
+                )
+            };
+            short.push(ShortLine {
+                card_id: (*card).to_string(),
+                needed: *need,
+                owned,
+                reserved_elsewhere: elsewhere,
+                available: got,
+                printing_id: pick.printing_id.clone(),
+                finish: pick.finish.clone(),
+                variant: pick.variant.clone(),
+                held_by,
+                hint,
+            });
         }
-        conn.execute("DELETE FROM deck_cards WHERE deck_id = ?1", [deck_id])?;
-        for ((card, zone), qty) in &merged {
-            set_card(conn, deck_id, card, *zone, *qty)?;
+    }
+    if !short.is_empty() {
+        return Ok(SetLines::Short(short));
+    }
+    let keep_ids: std::collections::HashSet<i64> = keep.iter().map(|k| k.0).collect();
+    let mut held = conn.prepare("SELECT id FROM collection WHERE deck_id = ?1")?;
+    let held: Vec<i64> = held
+        .query_map([deck_id], |r| r.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    for id in held.into_iter().filter(|i| !keep_ids.contains(i)) {
+        conn.execute("UPDATE collection SET deck_id = NULL WHERE id = ?1", [id])?;
+        log_move(conn, id, Some(deck_id), None, None, "released by set_lines")?;
+    }
+    for (id, deck, binder) in &keep {
+        if *deck != Some(deck_id) {
+            conn.execute(
+                "UPDATE collection SET deck_id = ?2, binder_id = NULL WHERE id = ?1",
+                params![id, deck_id],
+            )?;
+            log_move(
+                conn,
+                *id,
+                None,
+                Some(deck_id),
+                *binder,
+                "reserved by set_lines",
+            )?;
         }
-        conn.execute(
-            "UPDATE decks SET updated_at = ?2 WHERE id = ?1",
-            params![deck_id, crate::clock::now_rfc3339()],
-        )?;
-        Ok(SetLines::Set {
-            reserved: keep.len() as u32,
-        })
+    }
+    conn.execute("DELETE FROM deck_cards WHERE deck_id = ?1", [deck_id])?;
+    for ((card, zone), qty) in &merged {
+        set_card(conn, deck_id, card, *zone, *qty)?;
+    }
+    conn.execute(
+        "UPDATE decks SET updated_at = ?2 WHERE id = ?1",
+        params![deck_id, crate::clock::now_rfc3339()],
+    )?;
+    Ok(SetLines::Set {
+        reserved: keep.len() as u32,
     })
 }
 
@@ -923,6 +934,28 @@ mod tests {
         open_shared(&shared).unwrap();
         let conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
         (dir, conn)
+    }
+
+    #[test]
+    fn a_collection_from_before_the_precon_origin_column_grows_one_on_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("collection.sqlite");
+        {
+            let c = crate::open_user(&path).unwrap();
+            c.execute_batch("ALTER TABLE decks DROP COLUMN precon_id")
+                .unwrap();
+            c.execute(
+                "INSERT INTO decks (name, created_at, updated_at) VALUES ('Old', '', '')",
+                [],
+            )
+            .unwrap();
+        }
+
+        let c = crate::open_user(&path).unwrap();
+
+        let decks = list(&c).unwrap();
+        assert_eq!(decks.len(), 1);
+        assert_eq!(decks[0].precon_id, None);
     }
 
     #[test]

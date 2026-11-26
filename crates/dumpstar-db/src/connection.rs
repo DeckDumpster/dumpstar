@@ -315,6 +315,14 @@ const USER_ADDED_COLUMNS: &[(&str, &str, &str)] = &[
         "deck_group",
         "ALTER TABLE decks ADD COLUMN deck_group TEXT",
     ),
+    // sp-1d2msd. A deck added from a preconstructed list records which; every
+    // earlier deck came from none, which NULL says. No `user_version` bump, an
+    // older binary ignores the column.
+    (
+        "decks",
+        "precon_id",
+        "ALTER TABLE decks ADD COLUMN precon_id TEXT",
+    ),
     (
         "ownership_outbox",
         "source",

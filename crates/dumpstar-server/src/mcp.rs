@@ -26,6 +26,7 @@ use dumpstar_db::DbError;
 use dumpstar_db::cards::{self, Card};
 use dumpstar_db::deck_groups;
 use dumpstar_db::decks::{self, CardCount, Line, NewDeck, Pick, SetLines};
+use dumpstar_db::precons;
 use dumpstar_db::search::{self, SearchRow, Slice};
 use dumpstar_db::search_meta::SearchFlag;
 
@@ -983,6 +984,25 @@ impl DumpstarTools {
         })
     }
 
+    fn list_precons(&self, ctx: &ToolContext) -> Result<Value, ToolError> {
+        self.with_read(ctx, "list_precons", |c| {
+            Ok(json!({ "precons": precons::list(c).map_err(db_err)? }))
+        })
+    }
+
+    fn add_precon(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
+        let id = arg_str(args, "id").ok_or_else(|| failed("'id' is required"))?;
+        let confirm_repeat = match args.get("confirm_repeat") {
+            None | Some(Value::Null) => false,
+            Some(Value::Bool(b)) => *b,
+            Some(_) => return Err(failed("'confirm_repeat' must be true or false")),
+        };
+        self.with_conn(ctx, "add_precon", |c| {
+            let added = precons::add(c, id, confirm_repeat).map_err(db_err)?;
+            deck_response(c, added.deck_id)
+        })
+    }
+
     fn update_deck(&self, ctx: &ToolContext, args: &Value) -> Result<Value, ToolError> {
         const KEYS: [&str; 6] = ["id", "name", "format", "group", "description", "notes"];
         let obj = args
@@ -1358,6 +1378,22 @@ impl ToolProvider for DumpstarTools {
                 ),
             ),
             def(
+                "list_precons",
+                "The preconstructed decks that can be added (Spotlight decks, two-player starters, Twin Suns decks and Intro Battle: Hoth), newest set first, each with its precon_id, set, kind, card count and leader art.".into(),
+                schema(json!({}), &[]),
+            ),
+            def(
+                "add_precon",
+                "Add a preconstructed deck the user owns: in one step, every card of it joins the collection as a new copy, in one batch, and a new deck named for the product reserves exactly those copies, never ones owned before. Pairs and bundles are added one deck at a time, and a box's booster is not included. A deck already added is refused, naming the earlier deck; set confirm_repeat only when the user has another one, which makes a second deck with its own copies. Returns exactly what get_deck returns for the new deck.".into(),
+                schema(
+                    json!({
+                        "id": {"type": "string", "description": "precon_id from list_precons, e.g. jtl-boba-fett"},
+                        "confirm_repeat": {"type": "boolean", "description": "Add a deck already added once more; default false"},
+                    }),
+                    &["id"],
+                ),
+            ),
+            def(
                 "update_deck",
                 "Change a deck's own fields, keeping its id and lines: rename it, move it to another group, relabel its format, edit description or notes. Partial: an absent key is left unchanged, and null (or an empty string) clears an optional field; name cannot be cleared. Returns exactly what get_deck returns for the updated deck ({deck, lines, lines_digest, cards}). Rename or regroup with this, never delete and recreate.".into(),
                 schema(
@@ -1491,6 +1527,8 @@ impl DumpstarTools {
             "list_decks" => self.list_decks(ctx, &args),
             "get_deck" => self.get_deck(ctx, &args),
             "create_deck" => self.create_deck(ctx, &args),
+            "list_precons" => self.list_precons(ctx),
+            "add_precon" => self.add_precon(ctx, &args),
             "update_deck" => self.update_deck(ctx, &args),
             "set_deck_lines" => self.set_deck_lines(ctx, &args),
             "release_deck" => self.release_deck(ctx, &args),

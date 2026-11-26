@@ -11,4 +11,8 @@ state: string, sleeve_color: string | null, storage_location: string | null, not
 /**
  * Optional free-text group (a cube, a set of packs).
  */
-group: string | null, };
+group: string | null, 
+/**
+ * The preconstructed deck this one was added from; `None` for any other.
+ */
+precon_id: string | null, };

@@ -5,7 +5,7 @@
 //! `status_log` and binder/deck moves append to `movement_log`, so the
 //! collection carries a full audit trail.
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
 use crate::catalog;
 use crate::error::{DbError, Result};
@@ -115,6 +115,16 @@ fn now() -> String {
 /// rejects a binder+deck conflict, and records the opening `status_log`
 /// entry. Returns the new row id.
 pub fn add(conn: &mut Connection, new: &NewCopy) -> Result<i64> {
+    // Immediate: `add_in` reads before it writes, and a deferred transaction
+    // that loses that upgrade is refused without waiting out the busy timeout.
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let id = add_in(&tx, new)?;
+    tx.commit()?;
+    Ok(id)
+}
+
+/// [`add`] inside a transaction the caller holds.
+pub(crate) fn add_in(conn: &Connection, new: &NewCopy) -> Result<i64> {
     if !catalog::printing_exists(conn, &new.printing_id)? {
         return Err(DbError::NotFound(format!(
             "printing '{}' is not in the catalog",
@@ -131,8 +141,7 @@ pub fn add(conn: &mut Connection, new: &NewCopy) -> Result<i64> {
     let status = new.status.as_deref().unwrap_or("owned");
     let acquired = new.acquired_at.clone().unwrap_or_else(now);
 
-    let tx = conn.transaction()?;
-    tx.execute(
+    conn.execute(
         "INSERT INTO collection
            (printing_id, condition, language, purchase_price, acquired_at,
             source, status, notes, order_id, binder_id, deck_id, batch_id)
@@ -152,16 +161,15 @@ pub fn add(conn: &mut Connection, new: &NewCopy) -> Result<i64> {
             new.batch_id,
         ],
     )?;
-    let id = tx.last_insert_rowid();
-    tx.execute(
+    let id = conn.last_insert_rowid();
+    conn.execute(
         "INSERT INTO status_log (collection_id, from_status, to_status, changed_at, note)
          VALUES (?1, NULL, ?2, ?3, 'added')",
         params![id, status, now()],
     )?;
     if matches!(status, "owned" | "ordered") {
-        crate::wishlist::credit_copy(&tx, &new.printing_id, condition, new.purchase_price)?;
+        crate::wishlist::credit_copy(conn, &new.printing_id, condition, new.purchase_price)?;
     }
-    tx.commit()?;
     Ok(id)
 }
 

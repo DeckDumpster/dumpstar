@@ -2302,6 +2302,164 @@ mod tests {
             assert_eq!(s, StatusCode::OK, "{body}");
         }
 
+        /// A [`Site`] whose catalog offers one preconstructed deck, `test`: two
+        /// copies of SOR 1 and one of SOR 2.
+        async fn site_with_precon(handles: &[&str]) -> Site {
+            let product = format!(
+                "{SECOND_CARD} INSERT INTO sealed_products (product_id, name, category, \
+                 fetched_at) VALUES (9001, 'Spotlight Deck', 'sealed', '');"
+            );
+            let site = Site::with_catalog(handles, &product).await;
+            let body = json!({
+                "product_id": 9001, "name": "Spotlight Deck: Luke Skywalker",
+                "set_code": "SOR", "kind": "spotlight", "total": 3,
+                "source": "https://example.invalid/deck",
+                "cards": [
+                    {"set": "SOR", "number": "1", "qty": 2},
+                    {"set": "SOR", "number": "2", "qty": 1},
+                ],
+            })
+            .to_string();
+            let shared = dumpstar_db::open_shared(&site._dir.path().join("shared.sqlite")).unwrap();
+            dumpstar_db::precons::reconcile_files(&shared, &[("data/precons/test.json", &body)])
+                .unwrap();
+            site
+        }
+
+        async fn json_of(r: Response) -> Value {
+            serde_json::from_str(&body_string(r).await).unwrap()
+        }
+
+        fn assert_every_line_reserved(lines: &Value) {
+            let lines = lines.as_array().unwrap();
+            assert_eq!(lines.len(), 2, "{lines:?}");
+            for l in lines {
+                assert_eq!(l["reserved"], l["qty"], "{l}");
+            }
+        }
+
+        const ADD_PRECON: &str = r#"{"confirm_repeat":false}"#;
+
+        /// sp-1d2msd: the offered precons are listed, one POST makes the batch,
+        /// the copies and a fully reserved deck, and a second one is a 409 naming it.
+        #[tokio::test]
+        async fn precons_list_and_add_through_http() {
+            let mut site = site_with_precon(&["alice"]).await;
+            site.sign_in(member("alice@example.com")).await;
+
+            let r = site.get("/api/precons").await;
+            assert_eq!(r.status(), StatusCode::OK);
+            let listed = json_of(r).await;
+            assert_eq!(listed.as_array().unwrap().len(), 1, "{listed}");
+            assert_eq!(listed[0]["precon_id"], "test");
+            assert_eq!(listed[0]["set_name"], "Spark of Rebellion");
+            assert_eq!(listed[0]["kind"], "spotlight");
+            assert_eq!(listed[0]["card_count"], 3);
+
+            let r = site
+                .send("POST", "/api/precons/test/add", Some(ADD_PRECON))
+                .await;
+            assert_eq!(r.status(), StatusCode::CREATED);
+            let deck = json_of(r).await;
+            assert_eq!(deck["precon_id"], "test");
+            assert_eq!(deck["card_count"], 3);
+            let id = deck["id"].as_i64().unwrap();
+
+            let r = site.get(&format!("/api/decks/{id}/lines")).await;
+            assert_every_line_reserved(&json_of(r).await["lines"]);
+            let batches = json_of(site.get("/api/batches").await).await;
+            assert_eq!(batches[0]["batch_type"], "precon", "{batches}");
+            assert_eq!(batches[0]["name"], "Spotlight Deck: Luke Skywalker");
+            assert_eq!(batches[0]["card_count"], 3);
+
+            let r = site
+                .send("POST", "/api/precons/test/add", Some(ADD_PRECON))
+                .await;
+            assert_eq!(r.status(), StatusCode::CONFLICT);
+            let why = body_string(r).await;
+            assert!(
+                why.contains("'Spotlight Deck: Luke Skywalker'")
+                    && why.contains(&format!("(id {id})")),
+                "{why}"
+            );
+
+            let r = site
+                .send(
+                    "POST",
+                    "/api/precons/test/add",
+                    Some(r#"{"confirm_repeat":true}"#),
+                )
+                .await;
+            assert_eq!(r.status(), StatusCode::CREATED);
+            assert_ne!(json_of(r).await["id"], id);
+
+            let r = site
+                .send("POST", "/api/precons/nope/add", Some(ADD_PRECON))
+                .await;
+            assert_eq!(r.status(), StatusCode::NOT_FOUND);
+        }
+
+        /// sp-1d2msd: what one tenant adds is theirs alone, and does not count as
+        /// a repeat for another.
+        #[tokio::test]
+        async fn a_precon_deck_is_per_tenant() {
+            let mut site = site_with_precon(&["alice", "bob"]).await;
+            site.sign_in(member("alice@example.com")).await;
+            let r = site
+                .send("POST", "/api/precons/test/add", Some(ADD_PRECON))
+                .await;
+            assert_eq!(r.status(), StatusCode::CREATED);
+
+            site.sign_in(member("bob@example.com")).await;
+            for uri in ["/api/decks", "/api/batches", "/api/collection"] {
+                let theirs = json_of(site.get(uri).await).await;
+                assert_eq!(theirs, json!([]), "bob sees alice's rows at {uri}");
+            }
+            let r = site.get("/api/decks/1").await;
+            assert_eq!(r.status(), StatusCode::NOT_FOUND);
+            let r = site
+                .send("POST", "/api/precons/test/add", Some(ADD_PRECON))
+                .await;
+            assert_eq!(r.status(), StatusCode::CREATED);
+        }
+
+        /// sp-1d2msd: `add_precon` answers with what `get_deck` returns, every
+        /// line reserved.
+        #[tokio::test]
+        async fn add_precon_tool_returns_the_full_deck() {
+            let site = site_with_precon(&["alice"]).await;
+            let alice = site.token_for("alice@example.com");
+
+            let listed = site.tool(&alice, "list_precons", json!({})).await.unwrap();
+            assert_eq!(listed["precons"][0]["precon_id"], "test", "{listed}");
+
+            let added = site
+                .tool(&alice, "add_precon", json!({"id": "test"}))
+                .await
+                .unwrap();
+            assert_every_line_reserved(&added["lines"]);
+            let read = site
+                .tool(&alice, "get_deck", json!({"id": added["deck"]["id"]}))
+                .await
+                .unwrap();
+            assert_eq!(added, read);
+
+            let refused = site
+                .tool(&alice, "add_precon", json!({"id": "test"}))
+                .await
+                .unwrap_err();
+            assert!(refused.contains("already added as deck"), "{refused}");
+            let second = site
+                .tool(
+                    &alice,
+                    "add_precon",
+                    json!({"id": "test", "confirm_repeat": true}),
+                )
+                .await
+                .unwrap();
+            assert_ne!(second["deck"]["id"], added["deck"]["id"]);
+        }
+
         /// sp-3250cy: swap_deck_copy moves one reservation between two copies of a card,
         /// refuses (changing nothing) the three bad pairings, and cannot reach another tenant's copies.
         #[tokio::test]

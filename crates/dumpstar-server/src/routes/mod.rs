@@ -13,6 +13,7 @@ pub mod export;
 pub mod import;
 pub mod manual_prices;
 pub mod orders;
+pub mod precons;
 pub mod sealed;
 pub mod search;
 pub mod sets;
@@ -37,6 +38,7 @@ pub fn authenticated_api_router() -> Router<AppState> {
         .merge(sets::routes())
         .merge(binders::routes())
         .merge(decks::routes())
+        .merge(precons::routes())
         .merge(deck_groups::routes())
         .merge(agent::routes())
         .merge(sealed::routes())

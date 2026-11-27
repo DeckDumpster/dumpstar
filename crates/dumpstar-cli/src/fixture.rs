@@ -2134,7 +2134,7 @@ pub(crate) mod tests {
         );
     }
 
-    /// The browser tier adds this deck, so the fixture catalog must hold every
+    /// The `ui` tier adds this deck, so the fixture catalog must hold every
     /// line of the shipped decklist: one unresolved line and it is not offered.
     #[test]
     fn the_fixture_offers_the_boba_fett_spotlight_deck() {
@@ -2175,7 +2175,7 @@ pub(crate) mod tests {
     /// `sealed_market_price_expr_from!`.
     ///
     /// Stated against the COMMITTED artefact rather than against a fresh
-    /// seed, because that is the file the browser tier serves: a seeder
+    /// seed, because that is the file the `ui` tier serves: a seeder
     /// changed and a fixture not regenerated is exactly the state this bead
     /// found. It asserts the two `COALESCE` arms separately — a fixture where
     /// every quote carried a `market_price` would render identically and

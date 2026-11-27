@@ -115,6 +115,9 @@ Steps, in order, exiting non-zero on the first failure of a sequential step
 2. `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`.
    Then `tests/deploy/run.sh` — the store resolution and the low-disk guard.
 3. Frontend: `npm ci && npm test && npm run check && npm run build`.
+   Then the `ui` tier (`tests/ui/run.sh`), the one browser gate: the replay
+   implementations in `tests/ui` run in Chromium, with no API key, on every run
+   of the full suite.
    Then the shipped image, built **once** — five gates below need it and each
    wants its own tag, so they tag this one (see
    [The image, once](#the-image-once)).
@@ -125,9 +128,6 @@ Steps, in order, exiting non-zero on the first failure of a sequential step
 6. DR drill (`tests/litestream/drill.sh`): `deploy/RESTORE.md`'s procedure
    executed with the shipped scripts — one tenant restored in place while the
    others keep exactly their own data.
-7. The `ui` tier (`tests/ui/run.sh`), on every run of the full suite: the
-   replay implementations in `tests/ui` run in Chromium, with no API key. It is
-   the one browser gate.
 
 The property specs in `tests/visual/` are not part of the loop. Run them by hand:
 

@@ -15,9 +15,9 @@
 #   full suite. This is asserted by enumerating answers, not by reading the
 #   default arm and believing it.
 #
-#   THE BROWSER TIER STILL RUNS FOR SHARED CSS AND COMPONENTS — §3. pd-tf4h:
+#   THE UI TIER STILL RUNS FOR SHARED CSS AND COMPONENTS — §3. pd-tf4h:
 #   visual baselines went un-re-recorded because a change did not look like it
-#   touched the UI. A selector that skipped screenshots for anything under
+#   touched the UI. A selector that skipped the `ui` tier for anything under
 #   frontend/ that is not a route file would reintroduce that exactly.
 #
 #   MASTER AND EVERY OTHER CALLER GET EVERYTHING — §4/§5. deploy/ci.sh runs the

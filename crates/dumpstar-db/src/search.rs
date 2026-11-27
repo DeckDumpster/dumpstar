@@ -40,10 +40,6 @@ const CARD_OWNED_COUNT_SUBQ: &str = "SELECT COUNT(*) FROM printings cp \
      WHERE cp.card_id = p.card_id";
 const OWNED_COUNT_SUBQ: &str =
     "SELECT COUNT(*) FROM collection c WHERE c.printing_id = p.printing_id";
-// This printing's copies that are in hand (`status = 'owned'`): the copies
-// `SearchPage::total_copies` and `copy_totals` count.
-const OWNED_STATUS_COUNT_SUBQ: &str = "SELECT count(*) FROM collection c \
-     WHERE c.printing_id = p.printing_id AND c.status = 'owned'";
 // What this printing's OWNED copies are worth: its market price times the sum
 // of its owned copies' condition multipliers. The per-row half of
 // `SearchPage::total_value`; see that field for why `status = 'owned'` and not
@@ -175,11 +171,6 @@ pub struct SearchPage {
     /// Rows the query matches in total, ignoring `limit`/`offset`.
     #[ts(type = "number")]
     pub total: i64,
-    /// Owned copies (`status = 'owned'`) of every printing the query matches,
-    /// ignoring `limit`/`offset`: the copy count beside [`SearchPage::total`]'s
-    /// printing count.
-    #[ts(type = "number")]
-    pub total_copies: i64,
     /// [`SearchPage::total`] in money: the condition-adjusted market value of
     /// every **owned** copy of every printing the query matches, ignoring
     /// `limit`/`offset`. `None` when the result contains no owned, priced copy
@@ -395,7 +386,7 @@ pub fn search_page(
 }
 
 /// Wall time of each stage of [`search_page`], in milliseconds, for the
-/// `Server-Timing` header: `totals` (counts + owned value), `rows` (the page
+/// `Server-Timing` header: `totals` (count + owned value), `rows` (the page
 /// query) and `copies` (the per-printing copy expansion).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SearchTimings {
@@ -419,7 +410,7 @@ pub fn search_page_timed(
         return cursor_page(conn, compiled, limit, cursor.as_deref());
     }
     let t = std::time::Instant::now();
-    let (total, total_copies, total_value) = totals(conn, compiled)?;
+    let (total, total_value) = totals(conn, compiled)?;
     let mut timings = SearchTimings {
         totals_ms: Some(ms(t)),
         ..Default::default()
@@ -439,7 +430,6 @@ pub fn search_page_timed(
         SearchPage {
             rows,
             total,
-            total_copies,
             total_value,
             limit,
             offset,
@@ -455,9 +445,6 @@ pub fn search_page_timed(
 struct CursorBody {
     f: String,
     t: i64,
-    /// Defaulted so a cursor issued before this field existed still decodes.
-    #[serde(default)]
-    c: i64,
     v: Option<f64>,
     k: Vec<serde_json::Value>,
     /// Pages already served, so the page this cursor opens has depth `d`.
@@ -565,12 +552,12 @@ fn cursor_page(
     let fp = fingerprint(compiled);
     let parts = order_parts(compiled);
     let mut timings = SearchTimings::default();
-    let (total, total_copies, total_value, seek) = match cursor {
+    let (total, total_value, seek) = match cursor {
         None => {
             let t = std::time::Instant::now();
-            let (total, copies, value) = totals(conn, compiled)?;
+            let (total, value) = totals(conn, compiled)?;
             timings.totals_ms = Some(ms(t));
-            (total, copies, value, None)
+            (total, value, None)
         }
         Some(raw) => {
             let invalid = || crate::error::DbError::Invalid("cursor is not valid".to_string());
@@ -586,7 +573,7 @@ fn cursor_page(
                 .filter(|k| k.len() == parts.len())
                 .ok_or_else(invalid)?;
             timings.depth = body.d;
-            (body.t, body.c, body.v, Some(keys))
+            (body.t, body.v, Some(keys))
         }
     };
 
@@ -618,7 +605,6 @@ fn cursor_page(
         (true, Some((_, keys))) => Some(encode_cursor(&CursorBody {
             f: fp,
             t: total,
-            c: total_copies,
             v: total_value,
             k: keys.iter().map(to_json).collect(),
             d: timings.depth + 1,
@@ -635,7 +621,6 @@ fn cursor_page(
         SearchPage {
             rows,
             total,
-            total_copies,
             total_value,
             limit,
             offset: 0,
@@ -646,21 +631,19 @@ fn cursor_page(
 }
 
 /// Everything the compiled query matches, ignoring any paging: how many rows,
-/// how many owned copies they hold, and what those copies are worth
-/// ([`SearchPage::total`], [`SearchPage::total_copies`] and
-/// [`SearchPage::total_value`]).
+/// and what the owned copies among them are worth
+/// ([`SearchPage::total`] and [`SearchPage::total_value`]).
 ///
-/// One statement, because these are the same fact counted in different units
+/// One statement, because the two are the same fact counted in different units
 /// and a second statement would be a second execution of the same WHERE clause
 /// — and, worse, of a WHERE clause that could drift from this one.
-pub fn totals(conn: &Connection, compiled: &CompiledSearch) -> Result<(i64, i64, Option<f64>)> {
+pub fn totals(conn: &Connection, compiled: &CompiledSearch) -> Result<(i64, Option<f64>)> {
     let sql = format!(
-        "SELECT COUNT(*), COALESCE(SUM(({OWNED_STATUS_COUNT_SUBQ})), 0), \
-                SUM(({OWNED_VALUE_SUBQ})) {FROM_CLAUSE} WHERE {}",
+        "SELECT COUNT(*), SUM(({OWNED_VALUE_SUBQ})) {FROM_CLAUSE} WHERE {}",
         where_clause(compiled)
     );
     let row = conn.query_row(&sql, params_from_iter(compiled.params.iter()), |r| {
-        Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+        Ok((r.get(0)?, r.get(1)?))
     })?;
     Ok(row)
 }
@@ -690,7 +673,8 @@ pub fn copy_totals(
     } else {
         format!(
             "SELECT COALESCE(SUM(o), 0), COALESCE(SUM(o - r), 0), COALESCE(SUM(r), 0) FROM (\
-               SELECT ({OWNED_STATUS_COUNT_SUBQ}) AS o, \
+               SELECT (SELECT count(*) FROM collection c \
+                        WHERE c.printing_id = p.printing_id AND c.status = 'owned') AS o, \
                       (SELECT count(c.deck_id) FROM collection c \
                         WHERE c.printing_id = p.printing_id AND c.status = 'owned') AS r \
                  {FROM_CLAUSE} WHERE {})",
@@ -3122,69 +3106,6 @@ mod tests {
             (got - 50.0).abs() < 1e-9,
             "only the owned copy is money the collection holds, got {got}"
         );
-    }
-
-    /// The copy count beside `total`'s printing count: owned copies only, over
-    /// the whole result, whatever slice was asked for.
-    #[test]
-    fn total_copies_counts_owned_copies_over_the_whole_result() {
-        let f = fixture();
-        f.conn
-            .execute(
-                "INSERT INTO collection (printing_id,condition,language,acquired_at,source,status)
-                 VALUES
-                 ('han-std','Near Mint','English','2024-03-01','manual_id','owned'),
-                 ('han-std','Near Mint','English','2024-03-02','manual_id','owned'),
-                 ('han-std','Near Mint','English','2024-03-03','manual_id','ordered'),
-                 ('han-std','Near Mint','English','2024-03-04','manual_id','sold')",
-                [],
-            )
-            .unwrap();
-        let han = search_page(&f.conn, &f.compile("han solo"), Slice::All).unwrap();
-        assert_eq!((han.total, han.total_copies), (1, 2));
-
-        // The fixture's three owned copies plus Han's two.
-        let c = all_printings();
-        for slice in [
-            Slice::All,
-            Slice::Page {
-                limit: 0,
-                offset: 0,
-            },
-        ] {
-            let page = search_page(&f.conn, &c, slice.clone()).unwrap();
-            assert_eq!(page.total_copies, 5, "{slice:?}");
-        }
-        let first = search_page(
-            &f.conn,
-            &c,
-            Slice::Cursor {
-                limit: 1,
-                cursor: None,
-            },
-        )
-        .unwrap();
-        let second = search_page(
-            &f.conn,
-            &c,
-            Slice::Cursor {
-                limit: 1,
-                cursor: first.next_cursor.clone(),
-            },
-        )
-        .unwrap();
-        assert_eq!((first.total_copies, second.total_copies), (5, 5));
-
-        // A cursor issued before the copy count existed is still accepted.
-        let cursor = first.next_cursor.unwrap();
-        let mut old = serde_json::to_value(decode_cursor(&cursor).unwrap()).unwrap();
-        old.as_object_mut().unwrap().remove("c").unwrap();
-        let old = encode_cursor(&serde_json::from_value(old).unwrap());
-        let slice = Slice::Cursor {
-            limit: 1,
-            cursor: Some(old),
-        };
-        assert_eq!(search_page(&f.conn, &c, slice).unwrap().rows.len(), 1);
     }
 
     /// A result with no owned, priced copy answers `None`, not `Some(0.0)`.

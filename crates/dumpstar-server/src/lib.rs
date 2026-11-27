@@ -1503,48 +1503,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn search_counts_owned_copies_live_without_a_valuation() {
-        let (_d, router, fx) = test_app().await;
-        let tok = fx.valid_token("u@example.com");
-        let add = || async {
-            let resp = router
-                .clone()
-                .oneshot(request(
-                    "POST",
-                    "/api/collection",
-                    Some(&tok),
-                    Some(ADD_CARD),
-                ))
-                .await
-                .unwrap();
-            assert!(resp.status().is_success(), "{}", resp.status());
-        };
-        let count = || async {
-            let resp = router
-                .clone()
-                .oneshot(request(
-                    "GET",
-                    "/api/collection/search?limit=0",
-                    Some(&tok),
-                    None,
-                ))
-                .await
-                .unwrap();
-            assert_eq!(resp.status(), StatusCode::OK);
-            serde_json::from_str::<serde_json::Value>(&body_string(resp).await).unwrap()
-        };
-
-        add().await;
-        add().await;
-        let body = count().await;
-        assert_eq!(body["total_copies"], 2);
-        assert_eq!(body["total"], 1);
-
-        add().await;
-        assert_eq!(count().await["total_copies"], 3);
-    }
-
-    #[tokio::test]
     async fn search_reports_where_its_time_went_in_server_timing() {
         let (_d, router, fx) = test_app().await;
         let tok = fx.valid_token("u@example.com");

@@ -1,7 +1,6 @@
 <!--
-	The "Your collection" body of the front page. "Copies owned" is the live
-	count in both branches. Beside it: the valued figures when a valuation
-	snapshot covers the collection, a not-valued note when cards are
+	The "Your collection" body of the front page: the valued figures when a
+	valuation snapshot covers the collection, an owned-count note when cards are
 	owned but not yet valued (the snapshot is written by the daily valuation, so
 	cards added since the last run have no row), and the empty state only when
 	nothing is owned.
@@ -15,7 +14,8 @@
 	let {
 		loading,
 		valued,
-		copiesOwned,
+		ownedCards,
+		valuedCards,
 		ownedLabel,
 		ownedMeta,
 		valueMeta,
@@ -26,7 +26,8 @@
 	}: {
 		loading: boolean;
 		valued: boolean;
-		copiesOwned: number;
+		ownedCards: number;
+		valuedCards: string;
 		ownedLabel: string;
 		ownedMeta: string;
 		valueMeta: string;
@@ -41,8 +42,8 @@
 	<div class="stats">
 		<Panel padding="md">
 			<div class="stat">
-				<span class="stat-label">Copies owned</span>
-				<strong class="stat-figure">{ownedLabel}</strong>
+				<span class="stat-label">Cards owned</span>
+				<strong class="stat-figure">{valuedCards}</strong>
 				<span class="stat-meta">{ownedMeta}</span>
 			</div>
 		</Panel>
@@ -74,10 +75,10 @@
 			</div>
 		</Panel>
 	</div>
-{:else if copiesOwned > 0}
+{:else if ownedCards > 0}
 	<Panel padding="md">
 		<div class="stat">
-			<span class="stat-label">Copies owned</span>
+			<span class="stat-label">Cards owned</span>
 			<strong class="stat-figure">{ownedLabel}</strong>
 			<span class="stat-meta">
 				Not valued yet — market value and cost basis appear after the next valuation, which runs

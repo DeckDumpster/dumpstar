@@ -37,7 +37,6 @@ test('trait links wrap after a separator and stay out of the Aspects column', as
 			json: {
 				rows: Array.from({ length: 5 }, (_, i) => row(i)),
 				total: 5,
-				total_copies: 5,
 				total_value: 8,
 				limit: 60,
 				offset: 0

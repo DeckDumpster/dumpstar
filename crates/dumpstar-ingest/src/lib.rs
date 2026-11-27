@@ -3,6 +3,10 @@
 //! Cache-population only: the TCGCSV client and its raw landing. Runtime card
 //! lookups never touch the network — see `architecture/CARD_DATA_ACCESS.md`.
 
+#[cfg(test)]
+#[macro_use]
+extern crate spira_test_id;
+
 mod error;
 pub mod landing;
 pub mod retry;

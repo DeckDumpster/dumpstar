@@ -710,6 +710,7 @@ mod tests {
         crate::testkit::card(&conn, "SOR-1", "Luke Skywalker");
     }
 
+    #[test_id(td65xww)]
     #[test]
     fn open_shared_creates_schema() {
         let dir = tempfile::tempdir().unwrap();
@@ -734,6 +735,7 @@ mod tests {
         assert_eq!(n2, 1);
     }
 
+    #[test_id(tgjavej)]
     #[test]
     fn attach_exposes_catalog_and_enforces_readonly() {
         let dir = tempfile::tempdir().unwrap();
@@ -769,6 +771,7 @@ mod tests {
         assert!(write.is_err(), "shared catalog must be read-only");
     }
 
+    #[test_id(tosrzzu)]
     #[test]
     fn restore_is_wal_correct_with_live_connection() {
         // Reproduces dumpstar-lxm: the server holds a long-lived WAL
@@ -865,6 +868,7 @@ mod tests {
 
     /// The adoption path, which is the release-blocking one: every database
     /// in existence is version 0, so if this is wrong, prod does not start.
+    #[test_id(tf5akun)]
     #[test]
     fn an_unversioned_collection_is_adopted_in_place_with_its_rows() {
         use std::os::unix::fs::MetadataExt;
@@ -898,6 +902,7 @@ mod tests {
         );
     }
 
+    #[test_id(t9wcdoo)]
     #[test]
     fn an_unversioned_catalog_is_adopted_and_keeps_its_rows() {
         let dir = tempfile::tempdir().unwrap();
@@ -924,6 +929,7 @@ mod tests {
     /// was — the gate does not creep the number on every start. (That the
     /// stamp writes *nothing at all* in this case is asserted a level down,
     /// in `schema_version`, against the file's change counter.)
+    #[test_id(ttdn2gw)]
     #[test]
     fn re_opening_an_up_to_date_database_writes_no_version() {
         let dir = tempfile::tempdir().unwrap();
@@ -944,6 +950,7 @@ mod tests {
     /// and the refusal names both versions and the file. Rollback is only
     /// safe because of this — an older binary must stop, not quietly
     /// operate on a schema it does not know.
+    #[test_id(t6g5b52)]
     #[test]
     fn a_collection_from_the_future_is_refused_not_opened() {
         let dir = tempfile::tempdir().unwrap();
@@ -978,6 +985,7 @@ mod tests {
 
     /// The server reaches the catalog by attaching it, not through
     /// `open_shared` — so the gate has to be on that path as well.
+    #[test_id(tyiodqc)]
     #[test]
     fn a_catalog_from_the_future_is_refused_on_attach() {
         let dir = tempfile::tempdir().unwrap();
@@ -1023,6 +1031,7 @@ mod tests {
     /// The adoption path for the third database. It is the one that actually
     /// runs: there is no registry anywhere carrying a version, so if this is
     /// wrong, no box with users on it starts.
+    #[test_id(txkqzbt)]
     #[test]
     fn an_unversioned_registry_is_adopted_in_place_with_its_rows() {
         use std::os::unix::fs::MetadataExt;
@@ -1060,6 +1069,7 @@ mod tests {
     /// database is whose. An older build that applied its own schema over a
     /// newer registry would not damage a collection — it would damage the
     /// only thing that can attribute one.
+    #[test_id(trteirt)]
     #[test]
     fn a_registry_from_the_future_is_refused_not_opened() {
         let dir = tempfile::tempdir().unwrap();
@@ -1107,6 +1117,7 @@ mod tests {
     /// All THREE databases are gated, not two. The registry was declared in
     /// `schema_version` and wired to nothing for as long as the two epics were
     /// separate branches, and "declared" is not "enforced" (pd-r60h).
+    #[test_id(te024ex)]
     #[test]
     fn every_database_refuses_a_file_from_the_future() {
         let dir = tempfile::tempdir().unwrap();
@@ -1162,6 +1173,7 @@ mod tests {
     /// pd-yj40: the legacy table goes away on open, so no reader downstream
     /// has to know its name. Before the drop the JSON export was the one
     /// keeping it out of a fresh collection — by naming it.
+    #[test_id(t9wvanq)]
     #[test]
     fn a_legacy_refinery_table_is_dropped_from_a_collection_on_open() {
         let dir = tempfile::tempdir().unwrap();
@@ -1196,6 +1208,7 @@ mod tests {
     /// and the schema no longer needs a `DROP` for it: the Star Wars: Unlimited
     /// schema never had one. A connection that merely attaches the catalog, or
     /// `open_shared_readonly`, cannot do this.
+    #[test_id(tfvdu5m)]
     #[test]
     fn a_legacy_refinery_table_does_not_survive_the_catalog_rebuild() {
         let dir = tempfile::tempdir().unwrap();
@@ -1214,6 +1227,7 @@ mod tests {
     /// single open — so it must cost nothing once there is nothing to drop.
     /// A write here would be a write on every server start, replicated
     /// off-box by Litestream each time (same standard as the version stamp).
+    #[test_id(tgs4r5r)]
     #[test]
     fn dropping_a_table_that_is_already_gone_writes_nothing_at_all() {
         let dir = tempfile::tempdir().unwrap();
@@ -1264,6 +1278,7 @@ mod tests {
     /// The move IS the migration: an existing collection grows the table and
     /// its five defaults on the next open, keeping its rows, and comes out
     /// stamped with this build's version.
+    #[test_id(tys7sig)]
     #[test]
     fn a_collection_written_before_the_move_grows_conditions_on_open() {
         let dir = tempfile::tempdir().unwrap();
@@ -1289,6 +1304,7 @@ mod tests {
 
     /// The catalog sheds its copy on the one path that holds it read-write:
     /// the rebuild of a Pokémon-shaped file takes every table with it.
+    #[test_id(tt0x96y)]
     #[test]
     fn the_catalogs_conditions_table_does_not_survive_the_catalog_rebuild() {
         let dir = tempfile::tempdir().unwrap();
@@ -1321,6 +1337,7 @@ mod tests {
     /// build — so a `shared.sqlite` not yet through `dumpstar setup` since the
     /// move still holds `conditions`, and a TEMP VIEW over it would silently
     /// become the multipliers every value on the page is computed from.
+    #[test_id(tmgg152)]
     #[test]
     fn a_stale_catalog_table_does_not_shade_the_collections_own() {
         let dir = tempfile::tempdir().unwrap();
@@ -1348,6 +1365,7 @@ mod tests {
         assert_eq!(stale, 0.01);
     }
 
+    #[test_id(tm9vqe4)]
     #[test]
     fn connect_user_attaches_catalog() {
         let dir = tempfile::tempdir().unwrap();
@@ -1358,6 +1376,7 @@ mod tests {
         assert!(catalog::card_exists(&conn, "SOR-1").unwrap());
     }
 
+    #[test_id(teqj1tu)]
     #[test]
     fn connect_user_has_user_schema_and_enforces_exclusivity() {
         let dir = tempfile::tempdir().unwrap();
@@ -1409,6 +1428,7 @@ mod tests {
     /// sp-r7w5xi: a `shared.sqlite` left by the Pokémon schema is derived
     /// data; opening it read-write empties it and builds the one card model on
     /// top, rather than failing on a column that is not there.
+    #[test_id(t4xf01r)]
     #[test]
     fn open_shared_over_a_pokemon_shaped_file_empties_and_rebuilds_it() {
         let dir = tempfile::tempdir().unwrap();
@@ -1455,6 +1475,7 @@ mod tests {
 
     /// The rebuild happens once: the file it leaves is SWU-shaped, so the next
     /// open keeps whatever the catalog apply has put in since.
+    #[test_id(tkct611)]
     #[test]
     fn a_second_open_shared_keeps_rows_written_after_the_rebuild() {
         let dir = tempfile::tempdir().unwrap();
@@ -1476,6 +1497,7 @@ mod tests {
     /// `backfill_sealed` folds tcgcsv products with no collector number into
     /// `sealed_products`, once: a second pass (every open runs one) adds
     /// nothing and does not chase a changed name.
+    #[test_id(tuq8h8v)]
     #[test]
     fn backfill_sealed_copies_numberless_tcgcsv_products_exactly_once() {
         let dir = tempfile::tempdir().unwrap();
@@ -1535,6 +1557,7 @@ mod tests {
 
     /// The remedial dataset adds a sealed product tcgcsv lacks, once, and
     /// queues its picture for the image store.
+    #[test_id(txjj9ju)]
     #[test]
     fn remedial_sealed_products_are_inserted_if_absent() {
         let conn = open_shared(&tempfile::tempdir().unwrap().path().join("shared.sqlite")).unwrap();
@@ -1548,6 +1571,7 @@ mod tests {
 
     /// An ordinary restart of the server asks one read-only question and is
     /// done: no write lock, no write to the file (pd-dzu5).
+    #[test_id(tnjmow8)]
     #[test]
     fn open_shared_for_serving_on_a_converged_file_takes_the_read_only_path() {
         let dir = tempfile::tempdir().unwrap();

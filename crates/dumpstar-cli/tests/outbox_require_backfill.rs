@@ -8,6 +8,9 @@
 //! the shape of check that arms a box early (`pd-whsw`) — and the shape of
 //! listing `pd-cxq4` taught this repo never to conclude anything from.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::path::Path;
 use std::process::Output;
 
@@ -24,6 +27,7 @@ fn stderr(out: &Output) -> String {
     String::from_utf8_lossy(&out.stderr).to_string()
 }
 
+#[test_id(t21u28q)]
 #[test]
 fn a_collection_that_was_never_backfilled_refuses_to_be_called_ready() {
     let home = tempfile::tempdir().unwrap();
@@ -50,6 +54,7 @@ fn a_collection_that_was_never_backfilled_refuses_to_be_called_ready() {
     );
 }
 
+#[test_id(tfrx79k)]
 #[test]
 fn a_backfilled_collection_is_ready() {
     let home = tempfile::tempdir().unwrap();
@@ -72,6 +77,7 @@ fn a_backfilled_collection_is_ready() {
 /// A ledger that holds only a redrive is not a collection that has been
 /// described to the zone in full. `runs.is_empty()` cannot tell the two
 /// apart, which is why the check asks for a *backfill* specifically.
+#[test_id(tfzc33a)]
 #[test]
 fn a_redrive_is_not_a_backfill() {
     let home = tempfile::tempdir().unwrap();

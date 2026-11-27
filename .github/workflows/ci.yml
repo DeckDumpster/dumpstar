@@ -240,9 +240,15 @@ jobs:
       - name: Report setup time
         run: echo "setup (checkout, runner dependencies, tier selection) took $(( $(date +%s) - SETUP_T0 ))s -- target < 90s"
 
+      # The flip deny list is a repository variable holding what
+      # `test-registry deny-list` printed. An undefined one writes an empty file,
+      # which ci.sh refuses by name rather than running every test.
       - name: deploy/ci.sh
-        run: bash deploy/ci.sh
+        run: |
+          printf '%s\n' "$SPIRA_DENY_TEXT" > "$RUNNER_TEMP/deny-list"
+          SPIRA_TEST_DENY_LIST="$RUNNER_TEMP/deny-list" bash deploy/ci.sh
         env:
+          SPIRA_DENY_TEXT: ${{ vars.SPIRA_TEST_DENY_LIST }}
           # Pull requests test the tree that will land; only those publish it.
           DUMPSTAR_PUBLISH_IMAGE: ${{ github.event_name == 'pull_request' && '1' || '' }}
           GHCR_USER: ${{ github.actor }}

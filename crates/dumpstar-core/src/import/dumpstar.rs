@@ -132,6 +132,7 @@ SOR,6,normal,Near Mint,en,2,1.50
 SOR,262,Foil,Lightly Played,en,1,42.00
 SHD,57,,,en,,";
 
+    #[test_id(tygh4zy)]
     #[test]
     fn expands_quantity_one_row_per_copy() {
         let rows = parse(SAMPLE).unwrap();
@@ -153,12 +154,14 @@ SHD,57,,,en,,";
         assert_eq!(rows[3].purchase_price, None);
     }
 
+    #[test_id(t71oh51)]
     #[test]
     fn missing_set_code_column_is_an_error() {
         let csv = "number,finish\n6,normal";
         assert!(matches!(parse(csv), Err(ImportError::MissingColumn(_))));
     }
 
+    #[test_id(tj49o6j)]
     #[test]
     fn missing_number_column_is_an_error() {
         let csv = "set_code,finish\nSOR,normal";

@@ -13,6 +13,10 @@
 //! [`CatalogSource`] that produce the [`record::CatalogPayload`] shape; the
 //! hand-written [`source::FakeSource`] ships with the seam.
 
+#[cfg(test)]
+#[macro_use]
+extern crate spira_test_id;
+
 pub mod apply;
 pub mod art;
 mod catalog;

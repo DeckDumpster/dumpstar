@@ -772,6 +772,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         }
     }
 
+    #[test_id(tsxmj7d)]
     #[test]
     fn resolves_by_set_code_and_reports_misses() {
         let (_d, conn) = db();
@@ -804,6 +805,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         );
     }
 
+    #[test_id(tqcl6wi)]
     #[test]
     fn foil_row_resolves_to_the_foil_printing() {
         let (dir, _conn) = db();
@@ -823,6 +825,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         assert_eq!(report.unmatched.len(), 1);
     }
 
+    #[test_id(twc8pkn)]
     #[test]
     fn commit_adds_matched_rows_under_a_batch() {
         let (_d, mut conn) = db();
@@ -835,6 +838,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         assert!(cards.iter().all(|c| c.source == "csv_manabox"));
     }
 
+    #[test_id(t6ihgri)]
     #[test]
     fn zero_padded_number_resolves_against_unpadded_catalog() {
         // Collectr writes '090'; the catalog stores '90'. An exact WHERE
@@ -847,6 +851,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         assert_eq!(report.matched[0].number, "90");
     }
 
+    #[test_id(t2usjbj)]
     #[test]
     fn set_name_plus_leading_zero_resolves() {
         // Collectr sends the set's name ('Spark of Rebellion', not its code)
@@ -915,6 +920,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         row("Miscellaneous Products", Some(name), number, finish)
     }
 
+    #[test_id(t9ns8um)]
     #[test]
     fn name_with_subtitle_resolves_across_sets() {
         // The set doesn't resolve; "Name - Subtitle" plus the number falls
@@ -934,6 +940,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         assert_eq!(report.matched[0].printing_id, "SOR-5-normal");
     }
 
+    #[test_id(ttozyuq)]
     #[test]
     fn bare_name_matches_a_card_with_a_subtitle() {
         let (_d, conn) = misc_db();
@@ -942,6 +949,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         assert_eq!(report.matched[0].printing_id, "SOR-5-normal");
     }
 
+    #[test_id(t67k1hz)]
     #[test]
     fn stamped_promo_resolves_by_name_and_number_across_sets() {
         // "Vanquish (Prerelease Promo)" #026 Foil → SHD #26 Foil (leading-zero
@@ -958,6 +966,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         assert_eq!(report.matched[0].printing_id, "SHD-26-foil");
     }
 
+    #[test_id(tpn8vfp)]
     #[test]
     fn missing_finish_is_reported() {
         let (_d, conn) = misc_db();
@@ -973,6 +982,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         );
     }
 
+    #[test_id(t0qrpsk)]
     #[test]
     fn ambiguous_name_number_is_flagged_not_guessed() {
         // Two sets carry a card with the same (name, number): the fallback
@@ -996,6 +1006,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         );
     }
 
+    #[test_id(t06e4kf)]
     #[test]
     fn hyperspace_number_resolves_to_the_hyperspace_printing() {
         // Standard #5 and Hyperspace #262 are different collector numbers of
@@ -1032,6 +1043,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         assert_eq!(report.matched[1].printing_id, "SOR-5-hs");
     }
 
+    #[test_id(tgyav6a)]
     #[test]
     fn preview_flags_already_owned_copies() {
         let (_d, mut conn) = db();
@@ -1057,6 +1069,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         );
     }
 
+    #[test_id(tktdkb6)]
     #[test]
     fn commit_selected_adds_only_included_lines() {
         let (_d, mut conn) = db();
@@ -1080,6 +1093,7 @@ NOPE,Mystery,1,normal,1,near_mint,en,";
         assert_eq!(cards.len(), 2);
     }
 
+    #[test_id(t4qtbmd)]
     #[test]
     fn unknown_format_is_rejected() {
         assert!(ImportFormat::parse("nonsense").is_err());
@@ -1116,6 +1130,7 @@ Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebel
         (dir, conn)
     }
 
+    #[test_id(tdo2rhh)]
     #[test]
     fn collectr_preview_splits_singles_sealed_and_skips() {
         let (_d, conn) = sealed_db();
@@ -1139,6 +1154,7 @@ Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebel
         assert_eq!(report.skipped[0].category, "Lorcana");
     }
 
+    #[test_id(tjsux2k)]
     #[test]
     fn collectr_commit_writes_both_sides_without_crossing() {
         let (_d, mut conn) = sealed_db();
@@ -1158,6 +1174,7 @@ Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebel
         assert_eq!(sealed[0].quantity, 3);
     }
 
+    #[test_id(tpvt1l3)]
     #[test]
     fn collectr_preview_annotates_owned_on_both_sides() {
         let (_d, mut conn) = sealed_db();
@@ -1186,6 +1203,7 @@ Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebel
         assert_eq!(report.sealed.matched[0].already_owned, 2);
     }
 
+    #[test_id(tqsyewz)]
     #[test]
     fn collectr_commit_selected_honors_each_pane() {
         let (_d, mut conn) = sealed_db();

@@ -153,6 +153,7 @@ pub fn normalize_collector_number(raw: &str) -> String {
 mod number_tests {
     use super::normalize_collector_number;
 
+    #[test_id(tzhmvcy)]
     #[test]
     fn strips_leading_zeros_only_on_all_digit_tokens() {
         // Zero-padded numerics collapse to the catalog's unpadded form.

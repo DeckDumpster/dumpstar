@@ -37,6 +37,7 @@ serde_json = { workspace = true, optional = true }
 dumpster-kit-tenancy = { workspace = true, features = ["testing"], optional = true }
 
 [dev-dependencies]
+spira-test-id = { path = "../spira-test-id" }
 dumpster-kit-tenancy.workspace = true
 # The raw-coverage gate in `data.rs` drives a whole acquisition phase, which
 # builds its own upstream clients — so it needs the in-process fake upstream

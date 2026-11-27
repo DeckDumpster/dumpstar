@@ -23,5 +23,6 @@ clap.workspace = true
 rusqlite.workspace = true
 
 [dev-dependencies]
+spira-test-id = { path = "../spira-test-id" }
 tempfile.workspace = true
 dumpster-kit-ship.workspace = true

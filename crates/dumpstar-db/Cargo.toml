@@ -21,6 +21,7 @@ ulid.workspace = true
 sha2.workspace = true
 
 [dev-dependencies]
+spira-test-id = { path = "../spira-test-id" }
 # The outbox reader and its one reduction (`Event`, `events`, `project`) are the kit shipper's;
 # these tests read them back to prove the writers here agree with it.
 dumpster-kit-ship.workspace = true

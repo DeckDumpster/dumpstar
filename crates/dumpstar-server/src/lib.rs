@@ -755,6 +755,13 @@ async fn shutdown_signal() {
     }
 }
 
+// `#[test_id]`. Here, directly above the tests, on purpose: the source ratchets
+// (`tests/no_catalog_writer.rs`, swu's `acceptance.rs`, `registered_route_paths`) read each file
+// only up to its first `cfg(test)`, so this at the top would hide the whole crate root from them.
+#[cfg(test)]
+#[macro_use]
+extern crate spira_test_id;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -909,6 +916,7 @@ mod tests {
         String::from_utf8(bytes.to_vec()).unwrap()
     }
 
+    #[test_id(toqidsj)]
     #[tokio::test]
     async fn health_responds() {
         let (_d, router, _fx) = test_app().await;
@@ -924,6 +932,7 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
     }
 
+    #[test_id(tcoa262)]
     #[tokio::test]
     async fn api_request_without_token_is_401() {
         let (_d, router, _fx) = test_app().await;
@@ -945,6 +954,7 @@ mod tests {
 
     // Seen red first: with backup-status inside the authenticated router, this
     // test fails with 401. Green only once it is in the public router.
+    #[test_id(t9vs2nf)]
     #[tokio::test]
     async fn backup_status_requires_no_token() {
         let (_d, router, _fx) = test_app().await;
@@ -962,6 +972,7 @@ mod tests {
     // Ratchet: every route listed here must still require authentication.
     // If /api/backup-status is the only public route, adding to this list
     // should be a deliberate edit alongside adding to public_api_router().
+    #[test_id(t47vf2r)]
     #[tokio::test]
     async fn authenticated_api_routes_reject_tokenless_requests() {
         let (_d, router, _fx) = test_app().await;
@@ -989,6 +1000,7 @@ mod tests {
         }
     }
 
+    #[test_id(tspgv34)]
     #[tokio::test]
     async fn backup_status_no_marker_is_not_stale() {
         let (_d, router, fx) = test_app().await;
@@ -1003,6 +1015,7 @@ mod tests {
         assert!(body.contains("\"stale\":false"), "body: {body}");
     }
 
+    #[test_id(t3c95r2)]
     #[tokio::test]
     async fn backup_status_old_marker_is_stale() {
         let (dir, router, fx) = test_app().await;
@@ -1022,6 +1035,7 @@ mod tests {
         assert!(body.contains("\"stale\":true"), "body: {body}");
     }
 
+    #[test_id(t6nkvxr)]
     #[tokio::test]
     async fn icons_are_served_as_files() {
         let (d, router, _fx) = test_app().await;
@@ -1041,6 +1055,7 @@ mod tests {
         }
     }
 
+    #[test_id(t4ztd3h)]
     #[tokio::test]
     async fn serves_spa_index_with_fallback() {
         let (_d, router, _fx) = test_app().await;
@@ -1122,6 +1137,7 @@ mod tests {
 
     const BULKY_JSON: &str = "/api/search/keywords";
 
+    #[test_id(tz6jvkm)]
     #[tokio::test]
     async fn json_gzips_and_decodes_to_the_uncompressed_bytes() {
         let (_d, router, fx) = test_app().await;
@@ -1148,6 +1164,7 @@ mod tests {
         assert_eq!(gunzip(&compressed), plain);
     }
 
+    #[test_id(th6txbn)]
     #[tokio::test]
     async fn brotli_is_used_when_the_client_offers_it() {
         let (_d, router, fx) = test_app().await;
@@ -1160,6 +1177,7 @@ mod tests {
         assert_eq!(unbrotli(&compressed), plain);
     }
 
+    #[test_id(to0kbue)]
     #[tokio::test]
     async fn responses_below_the_threshold_are_not_compressed() {
         let (_d, router, fx) = test_app().await;
@@ -1175,6 +1193,7 @@ mod tests {
         serde_json::from_slice::<serde_json::Value>(&body).unwrap();
     }
 
+    #[test_id(tevi0rg)]
     #[tokio::test]
     async fn images_are_never_recompressed() {
         let (dir, router, _fx) = test_app().await;
@@ -1189,6 +1208,7 @@ mod tests {
         assert_eq!(body, png);
     }
 
+    #[test_id(tqbhjy1)]
     #[tokio::test]
     async fn set_art_is_served_from_the_data_dir_and_named_in_the_set_list() {
         let (dir, router, fx) = test_app().await;
@@ -1230,6 +1250,7 @@ mod tests {
         assert_eq!(body, b"PNG");
     }
 
+    #[test_id(tpminlq)]
     #[tokio::test]
     async fn collection_endpoints_round_trip() {
         let (_d, router, fx) = test_app().await;
@@ -1274,6 +1295,7 @@ mod tests {
         assert_eq!(deleted.status(), StatusCode::NO_CONTENT);
     }
 
+    #[test_id(ttfwbuy)]
     #[tokio::test]
     async fn manual_price_on_a_catalog_printing_is_a_400_naming_the_seed_file() {
         let (_d, router, fx) = test_app().await;
@@ -1308,6 +1330,7 @@ mod tests {
         assert_eq!(unknown.status(), StatusCode::NOT_FOUND);
     }
 
+    #[test_id(t6vw7xt)]
     #[tokio::test]
     async fn card_endpoint_returns_detail_and_404() {
         let (_d, router, fx) = test_app().await;
@@ -1328,6 +1351,7 @@ mod tests {
         assert_eq!(missing.status(), StatusCode::NOT_FOUND);
     }
 
+    #[test_id(tt2wrm7)]
     #[tokio::test]
     async fn search_owned_and_missing() {
         let (_d, router, fx) = test_app().await;
@@ -1370,6 +1394,7 @@ mod tests {
         assert!(body.contains("\"total\":0"), "no matches: {body}");
     }
 
+    #[test_id(t7vtx51)]
     #[tokio::test]
     async fn search_returns_a_page_envelope_with_a_bounded_default() {
         let (_d, router, fx) = test_app().await;
@@ -1391,6 +1416,7 @@ mod tests {
         assert_eq!(body["offset"], 0);
     }
 
+    #[test_id(tgwqhdw)]
     #[tokio::test]
     async fn search_honours_limit_and_offset() {
         let (_d, router, fx) = test_app().await;
@@ -1420,6 +1446,7 @@ mod tests {
         assert_eq!(past_end["offset"], 5);
     }
 
+    #[test_id(tlygz18)]
     #[tokio::test]
     async fn search_cursor_first_page_counts_and_a_bad_cursor_is_a_400() {
         let (_d, router, fx) = test_app().await;
@@ -1457,6 +1484,7 @@ mod tests {
         }
     }
 
+    #[test_id(t2pkcnb)]
     #[tokio::test]
     async fn search_prices_the_whole_result_and_not_the_page() {
         let (dir, router, fx) = test_app().await;
@@ -1502,6 +1530,7 @@ mod tests {
         assert_eq!(none["total_value"], 12.5);
     }
 
+    #[test_id(tluk9n9)]
     #[tokio::test]
     async fn search_counts_every_card_and_not_the_catalog_rows() {
         let (_dir, router, fx) = test_app().await;
@@ -1542,6 +1571,7 @@ mod tests {
         assert_eq!(counts().await, (3.into(), 1.into()));
     }
 
+    #[test_id(tcwkxhu)]
     #[tokio::test]
     async fn search_reports_where_its_time_went_in_server_timing() {
         let (_d, router, fx) = test_app().await;
@@ -1565,6 +1595,7 @@ mod tests {
         }
     }
 
+    #[test_id(t01ne0v)]
     #[tokio::test]
     async fn search_serves_the_whole_result_for_limit_all() {
         let (_d, router, fx) = test_app().await;
@@ -1586,6 +1617,7 @@ mod tests {
         assert_eq!(body["offset"], 0);
     }
 
+    #[test_id(t0vrwbp)]
     #[tokio::test]
     async fn search_refuses_an_offset_alongside_limit_all() {
         let (_d, router, fx) = test_app().await;
@@ -1605,6 +1637,7 @@ mod tests {
         assert!(body["position"].is_null());
     }
 
+    #[test_id(tcmm21c)]
     #[tokio::test]
     async fn search_refuses_bad_paging_bounds() {
         let (_d, router, fx) = test_app().await;
@@ -1631,6 +1664,7 @@ mod tests {
         }
     }
 
+    #[test_id(t58kzme)]
     #[tokio::test]
     async fn search_refuses_a_sort_it_cannot_satisfy() {
         let (_d, router, fx) = test_app().await;
@@ -1652,6 +1686,7 @@ mod tests {
         }
     }
 
+    #[test_id(t6i40gp)]
     #[tokio::test]
     async fn search_serves_every_advertised_sort_key() {
         let (_d, router, fx) = test_app().await;
@@ -1667,6 +1702,7 @@ mod tests {
         }
     }
 
+    #[test_id(tcmi6xd)]
     #[tokio::test]
     async fn search_sorted_by_added_orders_on_each_printings_newest_copy() {
         let (dir, router, tenants_dir, fx) = multi_tenant_app(&["u"]).await;
@@ -1739,6 +1775,7 @@ mod tests {
         );
     }
 
+    #[test_id(tdiqoi7)]
     #[tokio::test]
     async fn search_rejects_unknown_keyword_with_position() {
         let (_d, router, fx) = test_app().await;
@@ -1758,6 +1795,7 @@ mod tests {
         assert!(body.contains("xyz"), "expected keyword in {body}");
     }
 
+    #[test_id(tmo01xt)]
     #[tokio::test]
     async fn search_keywords_endpoint_serves_registry() {
         let (_d, router, fx) = test_app().await;
@@ -1777,6 +1815,7 @@ mod tests {
     /// startup — and a search by aspect finds a fake SWU card. The same file,
     /// first written by the fork's legacy card schema,
     /// is rebuilt rather than failed on.
+    #[test_id(t449a69)]
     #[tokio::test]
     async fn a_fake_applied_catalog_is_served_and_searchable_by_aspect() {
         for legacy in [false, true] {
@@ -1819,6 +1858,7 @@ mod tests {
         }
     }
 
+    #[test_id(tomowc8)]
     #[tokio::test]
     async fn export_json_serves_a_downloadable_envelope() {
         let (_d, router, fx) = test_app().await;
@@ -2086,6 +2126,7 @@ mod tests {
 
         /// Acceptance (sp-fjrnga): a session is the kit's 30 days, not the eight hours it was
         /// under dumpster-kit-oidc 0.1.6, and any use after a day issues a fresh cookie.
+        #[test_id(twelwqw)]
         #[tokio::test]
         async fn a_session_lasts_past_eight_hours_and_is_renewed_on_use() {
             use std::sync::atomic::Ordering;
@@ -2110,6 +2151,7 @@ mod tests {
         /// Acceptance (sp-fjrnga): a sign-in started from `http://` is sent to the canonical
         /// https origin and completes there; under 0.1.6 the Secure flow cookie never came back
         /// and the callback was a 400.
+        #[test_id(thno9ru)]
         #[tokio::test]
         async fn a_sign_in_started_over_http_completes() {
             let mut site = Site::with_redirect(&["alice"], "https://star.test/auth/callback").await;
@@ -2161,6 +2203,7 @@ mod tests {
 
         /// Acceptance: sign in through the provider and reach the main page and the API as the
         /// tenant the email is bound to.
+        #[test_id(ttlvdvn)]
         #[tokio::test]
         async fn a_member_signs_in_through_the_provider_and_reaches_the_main_page() {
             let mut site = Site::new(&["alice"]).await;
@@ -2194,6 +2237,7 @@ mod tests {
         }
 
         /// Acceptance: a user outside the required group is a 403 and gets no session.
+        #[test_id(tfqq3gt)]
         #[tokio::test]
         async fn a_user_outside_dumpstar_users_gets_403_and_no_session() {
             let mut site = Site::new(&["alice"]).await;
@@ -2214,6 +2258,7 @@ mod tests {
 
         /// A group member whose email no tenant is bound to is a 403 naming the fix, and
         /// nothing is provisioned.
+        #[test_id(toyl1d9)]
         #[tokio::test]
         async fn a_member_bound_to_no_tenant_is_a_403_and_creates_nothing() {
             let mut site = Site::new(&["alice"]).await;
@@ -2233,6 +2278,7 @@ mod tests {
         }
 
         /// An `/api` call without a session is a 401 — never the redirect a page gets.
+        #[test_id(tz6bvip)]
         #[tokio::test]
         async fn api_without_a_session_is_401_not_a_redirect() {
             let mut site = Site::new(&["alice"]).await;
@@ -2246,6 +2292,7 @@ mod tests {
 
         /// The paths automation reaches without a credential stay open: the liveness probe and
         /// the backup-freshness marker `alarm-status.sh` reads from localhost.
+        #[test_id(te0odpb)]
         #[tokio::test]
         async fn the_automation_paths_need_no_session() {
             let mut site = Site::new(&["alice"]).await;
@@ -2256,6 +2303,7 @@ mod tests {
         }
 
         /// "Sign out" ends the app session: the cookie goes, and the API is a 401 again.
+        #[test_id(tni0oi9)]
         #[tokio::test]
         async fn sign_out_ends_the_session() {
             let mut site = Site::new(&["alice"]).await;
@@ -2273,6 +2321,7 @@ mod tests {
         /// The kit's negative-JWT corpus, minted by the kit's own JWKS fixture, is refused by
         /// dumpstar's router with the status the corpus states; the valid token under the same
         /// fixture is the positive control.
+        #[test_id(t9g47u3)]
         #[tokio::test]
         async fn every_entry_of_the_kit_negative_jwt_corpus_is_refused() {
             let (_d, router, _dir, fx) = multi_tenant_app(&["alice"]).await;
@@ -2308,6 +2357,7 @@ mod tests {
         }
 
         /// Each tenant's JWT email resolves to their own database only.
+        #[test_id(tpeyfoy)]
         #[tokio::test]
         async fn one_tenant_cannot_reach_another_tenants_collection() {
             let (_d, router, _dir, fx) = multi_tenant_app(&["alice", "bob"]).await;
@@ -2359,6 +2409,7 @@ mod tests {
 
         /// The deck-line routes act on the signed-in tenant's decks only, and a
         /// line the tenant cannot fill is refused with the card named (sp-mmdoxy).
+        #[test_id(tlubfaf)]
         #[tokio::test]
         async fn deck_lines_are_per_tenant_and_over_reservation_is_refused() {
             let (_d, router, _dir, fx) = multi_tenant_app(&["alice", "bob"]).await;
@@ -2460,6 +2511,7 @@ mod tests {
 
         /// sp-1d2msd: the offered precons are listed, one POST makes the batch,
         /// the copies and a fully reserved deck, and a second one is a 409 naming it.
+        #[test_id(t2zu4sq)]
         #[tokio::test]
         async fn precons_list_and_add_through_http() {
             let mut site = site_with_precon(&["alice"]).await;
@@ -2520,6 +2572,7 @@ mod tests {
 
         /// sp-o69ge5: a box holding more than its deck is listed with both
         /// counts, and the add reports how many extra copies it made.
+        #[test_id(teoz1oh)]
         #[tokio::test]
         async fn a_precon_with_extras_reports_both_counts() {
             let extras = json!([{"set": "SOR", "number": "2", "qty": 1}]);
@@ -2543,6 +2596,7 @@ mod tests {
 
         /// sp-1d2msd: what one tenant adds is theirs alone, and does not count as
         /// a repeat for another.
+        #[test_id(twxyft0)]
         #[tokio::test]
         async fn a_precon_deck_is_per_tenant() {
             let mut site = site_with_precon(&["alice", "bob"]).await;
@@ -2567,6 +2621,7 @@ mod tests {
 
         /// sp-1d2msd: `add_precon` answers with what `get_deck` returns, every
         /// line reserved.
+        #[test_id(tjus96h)]
         #[tokio::test]
         async fn add_precon_tool_returns_the_full_deck() {
             let site = site_with_precon(&["alice"]).await;
@@ -2607,6 +2662,7 @@ mod tests {
 
         /// sp-3250cy: swap_deck_copy moves one reservation between two copies of a card,
         /// refuses (changing nothing) the three bad pairings, and cannot reach another tenant's copies.
+        #[test_id(te1fjzb)]
         #[tokio::test]
         async fn swap_deck_copy_moves_a_reservation_and_refuses_bad_pairings() {
             let mut site = Site::with_catalog(&["alice", "bob"], SECOND_CARD).await;
@@ -2738,6 +2794,7 @@ mod tests {
         }
 
         /// An unbound email is a 403 and does not create a database.
+        #[test_id(tnfi987)]
         #[tokio::test]
         async fn an_unbound_email_is_a_403_and_creates_nothing() {
             let (_d, router, tenants_dir, fx) = multi_tenant_app(&["alice"]).await;
@@ -2755,6 +2812,7 @@ mod tests {
         /// unbound one a 403 naming the fix, and no token, a garbage token and
         /// every entry of the negative-JWT list a 401 — with nothing provisioned
         /// by any of them.
+        #[test_id(tuhfnq8)]
         #[tokio::test]
         async fn the_access_gate_at_the_router() {
             let (_d, router, tenants_dir, fx) = multi_tenant_app(&["alice"]).await;
@@ -2816,6 +2874,7 @@ mod tests {
         }
 
         /// Detach takes access away; reattach gives it back, with the data.
+        #[test_id(tmvkg1i)]
         #[tokio::test]
         async fn reattach_restores_access() {
             let (d, router, _tenants_dir, fx) = multi_tenant_app(&["alice"]).await;
@@ -2850,6 +2909,7 @@ mod tests {
         /// A leftover `x-dumpstar-tenant` header cannot be used to reach another
         /// tenant's collection. The header is not read; resolution is from the JWT
         /// email only. Sending bob's handle alongside alice's JWT still gives alice.
+        #[test_id(trkijfz)]
         #[tokio::test]
         async fn leftover_tenant_header_cannot_escalate_to_another_tenant() {
             let (_d, router, _dir, fx) = multi_tenant_app(&["alice", "bob"]).await;
@@ -2891,6 +2951,7 @@ mod tests {
             );
         }
 
+        #[test_id(thmokzj)]
         #[tokio::test]
         async fn there_is_no_database_outside_a_resolved_request() {
             let (dir, _router, tenants_dir, fx) = multi_tenant_app(&["u"]).await;
@@ -2936,6 +2997,7 @@ mod tests {
 
         /// One slow read and one slow write in flight on a tenant must not make another read
         /// of that tenant wait: reads run on their own connections, in parallel.
+        #[test_id(t31qr19)]
         #[tokio::test]
         async fn a_slow_request_does_not_block_another_read_of_the_tenant() {
             let (dir, _router, tenants_dir, fx) = multi_tenant_app(&["u"]).await;
@@ -3005,6 +3067,7 @@ mod tests {
         /// own, can neither read, change nor delete any of them, and A's rows
         /// are untouched afterwards. Row ids are per-database counters, so B
         /// naming id 1 is exactly the guess an attacker would make.
+        #[test_id(tlg23v2)]
         #[tokio::test]
         async fn tenant_b_cannot_read_change_or_delete_tenant_a_rows() {
             let (_d, router, _dir, fx) = multi_tenant_app(&["alice", "bob"]).await;
@@ -3083,6 +3146,7 @@ mod tests {
         /// Moving a copy between binders is visible in both binders' views at
         /// once, and a move into a binder that exists only in another tenant's
         /// database is rejected with the copy left where it was.
+        #[test_id(tmn51xe)]
         #[tokio::test]
         async fn moving_a_copy_between_binders_updates_both_views_and_stops_at_the_tenant() {
             let (_d, router, _dir, fx) = multi_tenant_app(&["alice", "bob"]).await;
@@ -3172,6 +3236,7 @@ mod tests {
         /// Tenant A's copy, named by id through every collection route that
         /// takes one (and the ones that do not): tenant B changes nothing and
         /// reads nothing, and A's copy is intact afterwards.
+        #[test_id(tjgpsaf)]
         #[tokio::test]
         async fn tenant_b_cannot_reach_tenant_a_copies_through_any_collection_route() {
             let (_d, router, _dir, fx) = multi_tenant_app(&["alice", "bob"]).await;
@@ -3250,6 +3315,7 @@ mod tests {
         /// Browse: every catalogued set has a page, and the owned overlay on the
         /// sets index, the set page and the card detail is the asking tenant's
         /// own collection and nobody else's.
+        #[test_id(t3j5yk6)]
         #[tokio::test]
         async fn browse_serves_every_set_and_counts_only_the_tenants_own_copies() {
             let (d, router, _dir, fx) = multi_tenant_app(&["alice", "bob"]).await;
@@ -3340,6 +3406,7 @@ mod tests {
 
         /// A 100,000-copy collection lists in one gzip response that decodes to
         /// every row, and the same route for another tenant stays empty.
+        #[test_id(tbwlhhz)]
         #[tokio::test]
         async fn a_hundred_thousand_copies_list_gzipped_and_stay_private() {
             const N: usize = 100_000;
@@ -3427,6 +3494,7 @@ mod tests {
         /// method and never with anything but a 401, a 405 or the SPA shell on
         /// the others — unless it is in [`PUBLIC_API_ROUTES`]. A route added
         /// to either router without the access layer in front of it fails here.
+        #[test_id(t9ocfer)]
         #[tokio::test]
         async fn every_registered_route_requires_a_token_unless_listed_public() {
             let (_d, router, _fx) = test_app().await;
@@ -3498,6 +3566,7 @@ mod tests {
 
         /// The public list is also true in the other direction: a listed
         /// public route really is reachable with no credential.
+        #[test_id(t15kgn8)]
         #[tokio::test]
         async fn listed_public_routes_need_no_token() {
             let (_d, router, _fx) = test_app().await;
@@ -3528,6 +3597,7 @@ mod tests {
         /// unmatched path, the public route — is private and no-store, so no
         /// shared cache between the origin and a tenant's browser can hold one
         /// tenant's body and hand it to another.
+        #[test_id(tmbf3xj)]
         #[tokio::test]
         async fn every_api_response_is_private_no_store() {
             let (_d, router, _dir, fx) = multi_tenant_app(&["alice"]).await;
@@ -3607,6 +3677,7 @@ mod tests {
 
         /// A token minted for the MCP resource (what Claude Code's sign-in yields) reads and
         /// writes `/api` as the tenant its email is bound to, with no cookie.
+        #[test_id(tyi9yd6)]
         #[tokio::test]
         async fn an_mcp_audience_token_is_accepted_on_api() {
             let site = Site::new(&["alice", "bob"]).await;
@@ -3638,6 +3709,7 @@ mod tests {
 
         /// The configured API audience is accepted too; the cookie keeps working beside it,
         /// and the bearer resolves to the same tenant the browser session does.
+        #[test_id(tjunmol)]
         #[tokio::test]
         async fn an_api_audience_token_is_accepted_and_matches_the_cookie_tenant() {
             let mut site = Site::with_api_audience(&["alice"], API_RESOURCE).await;
@@ -3661,6 +3733,7 @@ mod tests {
         /// A Pocket ID access token carries `sub` and no email: once the site has learned the
         /// subject at a browser sign-in, `/api` serves it as the same tenant `/mcp` does.
         /// A member's token is not refused with a 403 for lacking an email (sp-s4e2dd).
+        #[test_id(tvt15jb)]
         #[tokio::test]
         async fn a_sub_only_mcp_token_is_accepted_on_api() {
             let mut site = Site::new(&["alice"]).await;
@@ -3682,6 +3755,7 @@ mod tests {
         }
 
         /// A token for a user outside the required group is a 403 that says why.
+        #[test_id(tduh6yd)]
         #[tokio::test]
         async fn a_token_outside_the_group_is_403_with_a_reason_on_api() {
             let site = Site::new(&["alice"]).await;
@@ -3699,6 +3773,7 @@ mod tests {
         }
 
         /// A bad token is a 401 — never a redirect and never a fall-back to the cookie path.
+        #[test_id(tb8g2y8)]
         #[tokio::test]
         async fn a_wrong_audience_or_garbage_token_is_401_on_api() {
             let site = Site::with_api_audience(&["alice"], API_RESOURCE).await;
@@ -3821,6 +3896,7 @@ mod tests {
 
         /// `/mcp` without a bearer is a 401 pointing at the metadata, and the metadata is
         /// served without a session; a browser session cookie does not open it.
+        #[test_id(tg7qyk1)]
         #[tokio::test]
         async fn mcp_without_a_bearer_is_401_and_a_cookie_is_not_one() {
             let mut site = Site::new(&["alice"]).await;
@@ -3842,6 +3918,7 @@ mod tests {
         }
 
         /// The card object carries the catalog's keywords, uniqueness and epic action.
+        #[test_id(tej1yhg)]
         #[tokio::test]
         async fn the_mcp_card_object_carries_keywords_unique_and_epic_action() {
             let site = Site::with_catalog(
@@ -3900,6 +3977,7 @@ mod tests {
 
         /// sp-sk3oz4: every card id the tools return is `<SET>-<number>`, whatever the catalog's
         /// own key is, and the catalog's older forms (`n:<slug>`, bare numerics) still go in.
+        #[test_id(tml4rrh)]
         #[tokio::test]
         async fn mcp_card_ids_are_one_documented_form_and_old_forms_are_accepted() {
             let site = Site::with_catalog(
@@ -3964,6 +4042,7 @@ mod tests {
 
         /// A `set_deck_lines` line naming a printing reserves only that printing, and
         /// a short or foreign selector refuses the call with no copy moved (sp-6tgu95).
+        #[test_id(tuevhjt)]
         #[tokio::test]
         async fn set_deck_lines_reserves_only_the_printing_a_line_names() {
             async fn held(site: &Site, token: &str) -> Vec<(Value, Value)> {
@@ -4067,6 +4146,7 @@ mod tests {
                VALUES ('SOR-1-hyper', 'SOR-1', 'SOR', '101', 'Hyperspace', 'Normal');";
 
         /// sp-n99pud: `get_cards` returns, for each id, exactly what `get_card` returns.
+        #[test_id(tecauay)]
         #[tokio::test]
         async fn get_cards_returns_what_get_card_returns_for_each_id() {
             let mut site =
@@ -4125,6 +4205,7 @@ mod tests {
             assert_eq!(both["cards"]["sor-001"]["card"]["in_decks"][0]["id"], deck);
         }
 
+        #[test_id(t93edql)]
         #[tokio::test]
         async fn get_cards_lists_unknown_ids_as_missing_dedups_and_keys_ids_as_given() {
             let site = Site::with_catalog(&["alice"], "").await;
@@ -4156,6 +4237,7 @@ mod tests {
             }
         }
 
+        #[test_id(toduan2)]
         #[tokio::test]
         async fn get_cards_refuses_more_than_500_ids_naming_the_cap() {
             let site = Site::with_catalog(&["alice"], "").await;
@@ -4168,6 +4250,7 @@ mod tests {
             assert!(err.contains("500"), "{err}");
         }
 
+        #[test_id(tpqucka)]
         #[tokio::test]
         async fn get_cards_carries_only_the_callers_copies() {
             let mut site = Site::with_catalog(&["alice", "bob"], "").await;
@@ -4189,6 +4272,7 @@ mod tests {
 
         /// 400 cards with two printings and a copy each: one call, under the raised result cap,
         /// and one unit of the grant's rate limit (120 a minute).
+        #[test_id(tl3993i)]
         #[tokio::test]
         async fn get_cards_reads_400_cards_in_one_call_and_one_rate_unit() {
             let rules = "x".repeat(300);
@@ -4246,6 +4330,7 @@ mod tests {
         }
 
         /// A bearer token opens `/api` (sp-t5m86j) but nothing else the browser gate guards.
+        #[test_id(tmluha7)]
         #[tokio::test]
         async fn a_bearer_token_opens_the_api_and_not_the_pages() {
             let site = Site::new(&["alice"]).await;
@@ -4257,6 +4342,7 @@ mod tests {
         }
 
         /// The whole v1 contract as one tenant, and a second tenant sees none of it.
+        #[test_id(tg8ddwv)]
         #[tokio::test]
         async fn an_agent_builds_a_deck_from_owned_copies_and_no_copy_lands_twice() {
             let mut site = Site::with_catalog(&["alice", "bob"], SECOND_CARD).await;
@@ -4458,6 +4544,7 @@ mod tests {
 
         /// sp-4be2yr: every resource an agent can create (a `create_<r>` tool) has get, list,
         /// update and delete tools too, so no resource needs delete-and-recreate to change.
+        #[test_id(tsdnvzb)]
         #[tokio::test]
         async fn every_agent_writable_resource_has_create_get_list_update_delete() {
             let site = Site::new(&["alice"]).await;
@@ -4494,6 +4581,7 @@ mod tests {
         }
 
         /// sp-4be2yr: update_deck is a partial update that keeps the id.
+        #[test_id(td3306s)]
         #[tokio::test]
         async fn update_deck_renames_regroups_and_clears_keeping_the_id() {
             let mut site = Site::with_catalog(&["alice", "bob"], SECOND_CARD).await;
@@ -4570,6 +4658,7 @@ mod tests {
         /// Deck groups: the swu-cube flow (a group by name on create_deck, list_decks by
         /// group) is unchanged, groups have CRUDL over MCP and the API, a group releases as a
         /// unit, and both delete modes do what they say.
+        #[test_id(t48yqhu)]
         #[tokio::test]
         async fn deck_groups_are_managed_as_a_unit_and_the_name_flow_still_works() {
             let mut site = Site::with_catalog(&["alice", "bob"], SECOND_CARD).await;
@@ -4757,6 +4846,7 @@ mod tests {
 
         /// sp-8y7ro4: the skill's second search (`a:<color> -a:heroism -a:villainy -t:base`) finds
         /// the same-color card with no alignment that the aligned search cannot.
+        #[test_id(tkljdpp)]
         #[tokio::test]
         async fn the_skills_unaligned_search_returns_a_same_color_card() {
             let sql = "INSERT INTO cards (card_id, name, card_type, cost, arenas, aspects) VALUES \
@@ -4807,6 +4897,7 @@ mod tests {
 
         /// sp-jceiw2: collection_summary breaks owned and available copies down by type,
         /// aspect and set, bases by HP and epic/ability/vanilla, leaders by aspect and alignment.
+        #[test_id(t4x8yn0)]
         #[tokio::test]
         async fn collection_summary_breaks_the_collection_down() {
             let mut sql = String::from(
@@ -5003,6 +5094,7 @@ mod tests {
 
         /// sp-orq075: leaders counted per color x alignment; a two-aspect Neutral leader counts
         /// under each color, a leader with no color under `none`, Neutral apart from Heroism.
+        #[test_id(tc1lvs7)]
         #[tokio::test]
         async fn collection_summary_leaders_by_color_and_alignment() {
             let mut site = Site::with_catalog(
@@ -5044,6 +5136,7 @@ mod tests {
 
         /// sp-akeb45: leaders report distinct cards beside copies: three copies of one leader
         /// and one of another are distinct 2, owned 4.
+        #[test_id(tk3p2s8)]
         #[tokio::test]
         async fn collection_summary_leaders_report_distinct_cards() {
             let mut site = Site::with_catalog(
@@ -5077,6 +5170,7 @@ mod tests {
         /// sp-fn5iwc: one canonical form across the tools: ids as the catalog numbers them
         /// (`SOR-5`), the summary's set the card's own set (not a weekly-play `LAWP`), and the
         /// aspect names (Heroism, Villainy) for alignment.
+        #[test_id(t9sq5s4)]
         #[tokio::test]
         async fn mcp_ids_sets_and_alignment_use_one_vocabulary() {
             let mut site = Site::with_catalog(
@@ -5140,6 +5234,7 @@ mod tests {
 
         /// sp-jsizxw: search_cards is one row per card with its original printing's id, and
         /// `v:standard` leaves the Prestige and Serialized variants out.
+        #[test_id(tzs65ea)]
         #[tokio::test]
         async fn mcp_search_is_one_row_per_card_with_the_original_id() {
             let site = Site::with_catalog(
@@ -5228,6 +5323,7 @@ mod tests {
         }
 
         /// An unknown term gets the nearest valid ones, not an empty result.
+        #[test_id(thup5dd)]
         #[tokio::test]
         async fn a_misspelled_term_names_the_nearest_valid_ones() {
             let site = Site::new(&["alice"]).await;
@@ -5240,6 +5336,7 @@ mod tests {
         }
 
         /// sp-5mb0l3: `k:` counts a conditional keyword; `ku:` leaves it out.
+        #[test_id(tncqgx0)]
         #[tokio::test]
         async fn ku_excludes_a_conditional_keyword_that_k_includes() {
             let site = Site::with_catalog(
@@ -5263,6 +5360,7 @@ mod tests {
 
         /// sp-iz2vmf: the card object carries its mechanics, and makes:, uses:, needs: and
         /// has:dependency search them.
+        #[test_id(tdjw4xe)]
         #[tokio::test]
         async fn mechanics_are_in_the_card_object_and_searchable() {
             let site = Site::with_catalog(
@@ -5294,6 +5392,7 @@ mod tests {
         }
 
         /// sp-5mb0l3: every term query_help lists is in the search_cards description.
+        #[test_id(tdex3wl)]
         #[tokio::test]
         async fn the_search_cards_description_names_every_query_help_term() {
             let site = Site::new(&["alice"]).await;
@@ -5324,6 +5423,7 @@ mod tests {
         }
 
         /// Acceptance: the kit's conformance suite passes against a running dumpstar.
+        #[test_id(ts15b31)]
         #[tokio::test]
         async fn the_kit_conformance_suite_passes_against_a_running_site() {
             let site = Site::with_catalog(&["alice"], SECOND_CARD).await;

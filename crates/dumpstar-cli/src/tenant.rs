@@ -585,6 +585,7 @@ mod tests {
     /// The compatibility promise, and the trap: an operator's muscle memory
     /// and every script that says `tenant remove <name> --yes` still parses
     /// — and now detaches instead of deleting.
+    #[test_id(tzk6o93)]
     #[test]
     fn remove_is_an_alias_for_detach() {
         let TenantCommand::Detach(a) = parse(&["remove", "alice", "--yes"]) else {
@@ -599,6 +600,7 @@ mod tests {
         assert_eq!(b.handle, "alice");
     }
 
+    #[test_id(tll1b6v)]
     #[test]
     fn identity_subcommands_parse() {
         let TenantCommand::Identity(ref i) =
@@ -668,6 +670,7 @@ mod tests {
 
     /// Purge takes a `database_id`, not a handle. Naming a person is how a
     /// destructive command gets reached by typo.
+    #[test_id(t9a4ous)]
     #[test]
     fn purge_takes_a_database_id() {
         let TenantCommand::Purge(a) = parse(&["purge", "01J0000000000000000000000Z", "--yes"])
@@ -678,6 +681,7 @@ mod tests {
         assert!(a.yes);
     }
 
+    #[test_id(ty2xscv)]
     #[test]
     fn reattach_takes_a_database_id() {
         let TenantCommand::Reattach(a) = parse(&["reattach", "01J0000000000000000000000Z"]) else {
@@ -686,6 +690,7 @@ mod tests {
         assert_eq!(a.database_id, "01J0000000000000000000000Z");
     }
 
+    #[test_id(tl6ka6m)]
     #[test]
     fn clone_takes_two_handles_and_a_flag() {
         let TenantCommand::Clone(a) = parse(&["clone", "ryan", "concierge", "--include-decks"])
@@ -696,6 +701,7 @@ mod tests {
         assert!(a.include_decks);
     }
 
+    #[test_id(tfraiap)]
     #[test]
     fn rename_takes_two_handles() {
         let TenantCommand::Rename(a) = parse(&["rename", "alice", "alicia"]) else {

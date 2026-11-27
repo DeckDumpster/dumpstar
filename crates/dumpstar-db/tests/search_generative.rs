@@ -15,6 +15,9 @@
 //! positions would (correctly) hit the `1=0` arm. They are covered by the
 //! curated corpus instead.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use dumpstar_core::query::{KeywordRegistry, parse};
 use dumpstar_db::search::{compile, search};
 use dumpstar_db::search_meta::{self, SearchFlag};
@@ -402,11 +405,13 @@ fn run(collection_only: bool) {
     }
 }
 
+#[test_id(tx3y9j6)]
 #[test]
 fn generated_queries_parse_compile_execute() {
     run(false);
 }
 
+#[test_id(twwp4xm)]
 #[test]
 fn generated_collection_queries_parse_compile_execute() {
     run(true);

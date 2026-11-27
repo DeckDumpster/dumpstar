@@ -41,6 +41,7 @@ pub fn natural_cmp(a: &str, b: &str) -> Ordering {
 mod tests {
     use super::*;
 
+    #[test_id(tvucwom)]
     #[test]
     fn digits_compare_by_value() {
         let mut v = vec!["Pack 10", "pack 2", "Pack 1", "Pack 11"];

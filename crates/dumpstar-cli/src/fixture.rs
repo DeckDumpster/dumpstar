@@ -1938,6 +1938,7 @@ pub(crate) mod tests {
     /// review is bytes. It is portable because `rusqlite` is built `bundled`,
     /// so the SQLite writing these pages is pinned by `Cargo.lock` rather than
     /// by whatever the box has installed.
+    #[test_id(tyzzvmn)]
     #[test]
     fn two_seed_runs_are_byte_identical() {
         let a = tempfile::tempdir().unwrap();
@@ -1981,6 +1982,7 @@ pub(crate) mod tests {
     /// Stated over every text cell of every table rather than over the eleven
     /// columns that were wrong: a new table with a `created_at` is exactly
     /// what nobody would think to add here.
+    #[test_id(tf1dc2r)]
     #[test]
     fn no_fixture_row_is_dated_after_the_frozen_browser_clock() {
         // READ-ONLY: a test that opens a committed artefact read-write is one
@@ -2100,6 +2102,7 @@ pub(crate) mod tests {
     /// Only objects the schema declares and the fixture lacks are a failure.
     /// A table the schema has since dropped, still sitting in the fixture,
     /// breaks no read — "behind" is the direction that hurts.
+    #[test_id(t07m80y)]
     #[test]
     fn the_committed_fixture_carries_every_catalog_object_the_schema_declares() {
         let dir = tempfile::tempdir().unwrap();
@@ -2136,6 +2139,7 @@ pub(crate) mod tests {
 
     /// The `ui` tier adds this deck, so the fixture catalog must hold every
     /// line of the shipped decklist: one unresolved line and it is not offered.
+    #[test_id(toswmrb)]
     #[test]
     fn the_fixture_offers_the_boba_fett_spotlight_deck() {
         let catalog = dumpstar_db::open_shared_readonly(&committed_shared()).unwrap();
@@ -2180,6 +2184,7 @@ pub(crate) mod tests {
     /// found. It asserts the two `COALESCE` arms separately — a fixture where
     /// every quote carried a `market_price` would render identically and
     /// exercise the fallback nowhere.
+    #[test_id(t6s0xgp)]
     #[test]
     fn the_committed_fixture_values_its_sealed_holdings() {
         // READ-ONLY on both halves: these are committed bytes under review.

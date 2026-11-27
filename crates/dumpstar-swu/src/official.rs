@@ -814,6 +814,7 @@ pub fn parse_page(bytes: &[u8]) -> Result<Page> {
 mod granted_keyword_tests {
     use super::{has_itself, stands_alone};
 
+    #[test_id(t0cbx3c)]
     #[test]
     fn a_conditional_self_keyword_is_the_cards_own() {
         // Shin Hati (ASH-49), Baze Malbus (SOR-65): the card gives itself Sentinel.
@@ -837,6 +838,7 @@ mod granted_keyword_tests {
         assert!(!has_itself("This unit gains Sentinelfoo.", "Sentinel"));
     }
 
+    #[test_id(tbbm6wl)]
     #[test]
     fn a_keyword_the_card_gives_is_not_its_own() {
         assert!(!stands_alone("Attached unit gains Sentinel.", "Sentinel"));
@@ -869,6 +871,7 @@ mod keyword_alarm_tests {
         alarms.into_iter().map(|a| a.detail).collect()
     }
 
+    #[test_id(ty9qr6v)]
     #[test]
     fn fortify_is_a_known_keyword() {
         assert_eq!(
@@ -881,6 +884,7 @@ mod keyword_alarm_tests {
         );
     }
 
+    #[test_id(trds7c2)]
     #[test]
     fn a_card_that_only_mentions_raid_owes_no_number_but_one_that_has_it_does() {
         assert!(

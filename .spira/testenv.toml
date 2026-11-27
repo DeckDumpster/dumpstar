@@ -9,6 +9,10 @@
 # the shared store. The rust tier sets DUMPSTAR_RUST_CACHE=required, which turns it
 # red, naming the endpoint, when it would compile cold: cold, it cannot finish under
 # the suite cap.
+# ci.sh runs neither tier without a test-registry deny list. A run here checks one
+# branch before it is submitted and is handed no registry, so each of these two
+# tiers states a list with no rows: every test runs. ci.yml hands the forge's run
+# the real one.
 # The image is the builder base the Containerfile names. It stands in for CI's
 # host runner: lint, rust and isolation need only a toolchain, bash and git.
 # deploy, frontend and container need podman (and node, systemd) which this image
@@ -46,7 +50,7 @@ env = { DUMPSTAR_CI_TIERS = "plan", DUMPSTAR_RUNNER_DEPS_ONLY = "base rust" }
 timeout = 1200
 
 [tier.rust]
-argv = ["bash", "-c", "apt-get update -qq && apt-get install -y -qq git curl jq sqlite3 python3 make xz-utils ca-certificates >/dev/null && cargo install --locked cargo-nextest --version 0.9.148 && bash deploy/runner-deps.sh --sccache && bash deploy/ci.sh"]
+argv = ["bash", "-c", "apt-get update -qq && apt-get install -y -qq git curl jq sqlite3 python3 make xz-utils ca-certificates >/dev/null && cargo install --locked cargo-nextest --version 0.9.148 && bash deploy/runner-deps.sh --sccache && echo '# test-registry deny-list at=0 rows=0' > /tmp/deny-list && SPIRA_TEST_DENY_LIST=/tmp/deny-list bash deploy/ci.sh"]
 env = { DUMPSTAR_CI_TIERS = "rust", DUMPSTAR_RUNNER_DEPS_ONLY = "base rust nextest sccache", DUMPSTAR_RUST_CACHE = "required" }
 timeout = 1800
 
@@ -55,7 +59,7 @@ argv = ["bash", "-c", "set -euo pipefail; apt-get update -qq && apt-get install 
 timeout = 900
 
 [tier.isolation]
-argv = ["bash", "-c", "apt-get update -qq && apt-get install -y -qq git curl jq sqlite3 python3 make xz-utils ca-certificates >/dev/null && bash deploy/runner-deps.sh --sccache && bash deploy/ci.sh"]
+argv = ["bash", "-c", "apt-get update -qq && apt-get install -y -qq git curl jq sqlite3 python3 make xz-utils ca-certificates >/dev/null && bash deploy/runner-deps.sh --sccache && echo '# test-registry deny-list at=0 rows=0' > /tmp/deny-list && SPIRA_TEST_DENY_LIST=/tmp/deny-list bash deploy/ci.sh"]
 env = { DUMPSTAR_CI_TIERS = "isolation", DUMPSTAR_RUNNER_DEPS_ONLY = "base rust" }
 timeout = 1800
 

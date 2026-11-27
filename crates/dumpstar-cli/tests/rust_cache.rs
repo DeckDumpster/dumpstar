@@ -8,6 +8,9 @@
 //! `podman`, `id`, `sccache` and `rustc` are stubs where a case needs a particular
 //! answer from them.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::fs;
 use std::net::TcpListener;
 use std::os::unix::fs::{PermissionsExt, symlink};
@@ -278,6 +281,7 @@ fn is_executable(path: &Path) -> bool {
     fs::metadata(path).is_ok_and(|m| m.permissions().mode() & 0o111 != 0)
 }
 
+#[test_id(t3uu0t9)]
 #[test]
 fn disabled_cache_says_so() {
     let out = Sandbox::new().rust_cache(
@@ -288,6 +292,7 @@ fn disabled_cache_says_so() {
     assert!(out.contains("compiling cold"), "{out}");
 }
 
+#[test_id(terb4x1)]
 #[test]
 fn missing_sccache_says_so() {
     let out = Sandbox::new().rust_cache("dumpstar_rust_cache_enable", &[("PATH", "/usr/bin:/bin")]);
@@ -295,6 +300,7 @@ fn missing_sccache_says_so() {
     assert!(out.contains("compiling cold"), "{out}");
 }
 
+#[test_id(tqfmme5)]
 #[test]
 fn unreachable_store_falls_back_says_so() {
     let sandbox = Sandbox::new();
@@ -312,6 +318,7 @@ fn unreachable_store_falls_back_says_so() {
     assert!(out.contains("compiling cold"), "{out}");
 }
 
+#[test_id(to6sfkc)]
 #[test]
 fn required_cache_unreachable_store_fails_and_names_the_endpoint() {
     let sandbox = Sandbox::new();
@@ -327,6 +334,7 @@ fn required_cache_unreachable_store_fails_and_names_the_endpoint() {
     assert!(out.contains("http://127.0.0.1:1 unreachable"), "{out}");
 }
 
+#[test_id(t3atfdi)]
 #[test]
 fn required_cache_ignores_a_sccache_on_path() {
     let sandbox = Sandbox::new();
@@ -343,6 +351,7 @@ fn required_cache_ignores_a_sccache_on_path() {
     assert!(out.contains("not installed"), "{out}");
 }
 
+#[test_id(tzlr3gd)]
 #[test]
 fn image_build_context_carries_the_store_closure() {
     let sandbox = Sandbox::new();
@@ -375,6 +384,7 @@ fn image_build_context_carries_the_store_closure() {
     assert!(out.lines().any(|line| line == build_arg), "{out}");
 }
 
+#[test_id(tqo458x)]
 #[test]
 fn image_build_context_is_removed_whether_the_build_passes_or_fails() {
     let sandbox = Sandbox::new();
@@ -424,18 +434,21 @@ fn left_by_an_interrupted_build(signal: &str) -> Vec<std::ffi::OsString> {
     sandbox.interrupt_image_ensure(signal)
 }
 
+#[test_id(tz5lkyl)]
 #[test]
 fn image_build_context_is_removed_when_the_build_is_interrupted() {
     let left = left_by_an_interrupted_build("TERM");
     assert!(left.is_empty(), "interrupted build left {left:?}");
 }
 
+#[test_id(tlpinrz)]
 #[test]
 fn image_build_context_is_removed_when_the_build_gets_int() {
     let left = left_by_an_interrupted_build("INT");
     assert!(left.is_empty(), "interrupted build left {left:?}");
 }
 
+#[test_id(t2u80o4)]
 #[test]
 fn image_build_context_is_removed_when_the_copy_is_interrupted() {
     let sandbox = Sandbox::new();
@@ -461,6 +474,7 @@ exec /bin/rm "$@"
     assert!(left.is_empty(), "interrupted copy left {left:?}");
 }
 
+#[test_id(tjt49xo)]
 #[test]
 fn image_ensure_keeps_the_callers_traps_and_returns_the_build_status() {
     let sandbox = Sandbox::new();
@@ -489,6 +503,7 @@ fn image_ensure_keeps_the_callers_traps_and_returns_the_build_status() {
     );
 }
 
+#[test_id(tax11wq)]
 #[test]
 fn report_states_a_cold_run() {
     let out = Sandbox::new().rust_cache(
@@ -498,12 +513,14 @@ fn report_states_a_cold_run() {
     assert!(out.contains("not in use"), "{out}");
 }
 
+#[test_id(tffb931)]
 #[test]
 fn ci_sh_and_image_lib_sh_use_the_cache() {
     assert!(code("deploy/ci.sh").contains("dumpstar_rust_cache_enable"));
     assert!(code("deploy/image-lib.sh").contains("dumpstar_rust_cache_buildargs"));
 }
 
+#[test_id(th0boj0)]
 #[test]
 fn an_image_whose_closure_cannot_be_listed_is_not_built_cold_when_required() {
     let sandbox = Sandbox::new();
@@ -554,6 +571,7 @@ fn ci_sh_path(sandbox: &Sandbox, inherited: &str) -> Vec<PathBuf> {
     path.split(':').map(PathBuf::from).collect()
 }
 
+#[test_id(tes7ix1)]
 #[test]
 fn ci_sh_finds_the_nix_profile_without_letting_it_shadow_the_toolchain() {
     let sandbox = Sandbox::new();
@@ -592,6 +610,7 @@ fn containerfile_cache_gate() -> String {
     )
 }
 
+#[test_id(tr37ymk)]
 #[test]
 fn containerfile_turns_the_wrapper_on_only_for_a_sccache_that_works() {
     let sandbox = Sandbox::new();
@@ -633,6 +652,7 @@ fn containerfile_turns_the_wrapper_on_only_for_a_sccache_that_works() {
     }
 }
 
+#[test_id(t61nr39)]
 #[test]
 fn ci_sh_stops_when_a_required_cache_is_unavailable() {
     let ci = code("deploy/ci.sh");
@@ -680,6 +700,7 @@ fn run_with_server(sandbox: &Sandbox, mode: &str, port: u16, call: &str) -> (Opt
 /// one could be taken for it before its process had exited.
 const SILENT_PORT: u16 = 1;
 
+#[test_id(tadytop)]
 #[test]
 fn required_cache_fails_when_the_server_does_not_start() {
     let sandbox = Sandbox::new();
@@ -695,6 +716,7 @@ fn required_cache_fails_when_the_server_does_not_start() {
     assert!(out.contains("Address already in use"), "{out}");
 }
 
+#[test_id(tngs7mh)]
 #[test]
 fn a_server_that_does_not_start_compiles_cold_and_says_so() {
     let sandbox = Sandbox::new();
@@ -711,6 +733,7 @@ fn a_server_that_does_not_start_compiles_cold_and_says_so() {
     assert!(out.contains("STATE=off WRAPPER=unset"), "{out}");
 }
 
+#[test_id(tmqfyx0)]
 #[test]
 fn required_cache_fails_when_the_server_dies_before_the_report() {
     let sandbox = Sandbox::new();
@@ -732,6 +755,7 @@ fn required_cache_fails_when_the_server_dies_before_the_report() {
     assert!(out.contains(&lost), "{out}");
 }
 
+#[test_id(tpvfd0v)]
 #[test]
 fn a_lost_server_under_on_is_said_once_and_the_run_goes_on_cold() {
     let sandbox = Sandbox::new();
@@ -760,6 +784,7 @@ fn a_lost_server_under_on_is_said_once_and_the_run_goes_on_cold() {
     assert!(out.contains("(doctest): not in use"), "{out}");
 }
 
+#[test_id(thx42i8)]
 #[test]
 fn a_live_server_reports_hits() {
     let sandbox = Sandbox::new();
@@ -784,6 +809,7 @@ fn a_live_server_reports_hits() {
     assert!(killed.success(), "server {pid} was not running: {out}");
 }
 
+#[test_id(t1nt3zl)]
 #[test]
 fn containerfile_builder_consumes_the_cache() {
     let containerfile = code("Containerfile");
@@ -792,6 +818,7 @@ fn containerfile_builder_consumes_the_cache() {
     assert!(containerfile.lines().any(|line| line == "ARG SCCACHE_BIN="));
 }
 
+#[test_id(tbxn8l8)]
 #[test]
 fn dead_sccache_server_fails_the_probe_says_why() {
     let sandbox = Sandbox::new();
@@ -805,6 +832,7 @@ fn dead_sccache_server_fails_the_probe_says_why() {
     assert!(stdout.contains("did not start"), "{out:?}");
 }
 
+#[test_id(taend99)]
 #[test]
 fn working_sccache_passes_the_probe() {
     let sandbox = Sandbox::new();
@@ -813,11 +841,13 @@ fn working_sccache_passes_the_probe() {
     assert!(out.status.success(), "{out:?}");
 }
 
+#[test_id(tswhtl9)]
 #[test]
 fn containerfile_probes_before_enabling_the_wrapper() {
     assert!(code("Containerfile").contains("sccache-probe.sh"));
 }
 
+#[test_id(ttb3n5h)]
 #[test]
 fn sccache_flag_a_failed_nix_build_fails_the_install_and_names_sccache() {
     let sandbox = Sandbox::new();
@@ -832,6 +862,7 @@ fn sccache_flag_a_failed_nix_build_fails_the_install_and_names_sccache() {
     assert!(!text.contains("apt"), "{text}");
 }
 
+#[test_id(ta803k1)]
 #[test]
 fn sccache_flag_installs_with_nix_build_and_no_curl() {
     let sandbox = Sandbox::new();
@@ -850,6 +881,7 @@ fn sccache_flag_installs_with_nix_build_and_no_curl() {
     assert_eq!(sandbox.log("curl.log"), "", "{text}");
 }
 
+#[test_id(tqdfttx)]
 #[test]
 fn sccache_flag_uses_a_daemon_installed_nix_that_is_not_on_path() {
     // The CI runner images: /nix is root's, and only a login shell has nix on
@@ -866,6 +898,7 @@ fn sccache_flag_uses_a_daemon_installed_nix_that_is_not_on_path() {
     assert_eq!(sandbox.log("curl.log"), "", "{text}");
 }
 
+#[test_id(tyqt8fr)]
 #[test]
 fn sccache_builds_without_reading_the_checkouts_git_directory() {
     // testenv mounts a worktree whose .git names a host path the container
@@ -880,6 +913,7 @@ fn sccache_builds_without_reading_the_checkouts_git_directory() {
     assert_eq!(sandbox.log("nix.cwd"), "flake.lock\nflake.nix\n", "{text}");
 }
 
+#[test_id(ty0ivjf)]
 #[test]
 fn sccache_flag_replaces_the_curl_era_install() {
     let sandbox = Sandbox::new();
@@ -894,6 +928,7 @@ fn sccache_flag_replaces_the_curl_era_install() {
     );
 }
 
+#[test_id(tp5vfbj)]
 #[test]
 fn a_nix_installer_failing_its_checksum_is_not_run() {
     let sandbox = Sandbox::new();
@@ -909,6 +944,7 @@ fn a_nix_installer_failing_its_checksum_is_not_run() {
     assert!(sandbox.log("curl.log").contains(url), "{text}");
 }
 
+#[test_id(tezb77o)]
 #[test]
 fn a_nix_installer_matching_its_checksum_runs_and_its_nix_installs_sccache() {
     let sandbox = Sandbox::new();
@@ -939,6 +975,7 @@ fn a_nix_installer_matching_its_checksum_runs_and_its_nix_installs_sccache() {
     );
 }
 
+#[test_id(t4e5koe)]
 #[test]
 fn a_root_bootstrap_creates_nix_itself_and_needs_no_build_users_group() {
     // The bare tier container: root, no sudo, no nixbld group.
@@ -1021,6 +1058,7 @@ fn assert_fast_path_built_sccache(sandbox: &Sandbox, out: &Output, text: &str) {
     assert!(text.contains("everything already present"), "{text}");
 }
 
+#[test_id(t190d1i)]
 #[test]
 fn full_install_fast_path_brings_an_existing_sccache_to_the_flake_pin() {
     let sandbox = Sandbox::new();
@@ -1030,6 +1068,7 @@ fn full_install_fast_path_brings_an_existing_sccache_to_the_flake_pin() {
     assert_fast_path_built_sccache(&sandbox, &out, &text);
 }
 
+#[test_id(tc4bmsy)]
 #[test]
 fn full_install_fast_path_installs_an_absent_sccache() {
     let sandbox = Sandbox::new();
@@ -1042,6 +1081,7 @@ fn full_install_fast_path_installs_an_absent_sccache() {
     );
 }
 
+#[test_id(tfnsd5l)]
 #[test]
 fn full_install_fast_path_a_failed_nix_build_fails_the_run_and_names_sccache() {
     let sandbox = Sandbox::new();
@@ -1079,6 +1119,7 @@ fn assert_sccache_reported_current(sandbox: &Sandbox, out: &Output, text: &str) 
     );
 }
 
+#[test_id(tu9n4t6)]
 #[test]
 fn full_install_fast_path_runs_no_nix_for_a_current_sccache() {
     let sandbox = Sandbox::new();
@@ -1090,6 +1131,7 @@ fn full_install_fast_path_runs_no_nix_for_a_current_sccache() {
     assert!(text.contains("everything already present"), "{text}");
 }
 
+#[test_id(tunj64q)]
 #[test]
 fn sccache_flag_runs_no_nix_for_a_current_sccache() {
     let sandbox = Sandbox::new();
@@ -1100,6 +1142,7 @@ fn sccache_flag_runs_no_nix_for_a_current_sccache() {
     assert_sccache_reported_current(&sandbox, &out, &text);
 }
 
+#[test_id(tzkxmtk)]
 #[test]
 fn full_install_fast_path_rebuilds_a_sccache_stamped_for_other_flake_inputs() {
     let sandbox = Sandbox::new();
@@ -1111,6 +1154,7 @@ fn full_install_fast_path_rebuilds_a_sccache_stamped_for_other_flake_inputs() {
     assert_eq!(sandbox.log(STAMP).trim(), flake_sha256(&sandbox), "{text}");
 }
 
+#[test_id(ths66az)]
 #[test]
 fn full_install_fast_path_rebuilds_a_stamped_sccache_that_does_not_run() {
     let sandbox = Sandbox::new();
@@ -1121,6 +1165,7 @@ fn full_install_fast_path_rebuilds_a_stamped_sccache_that_does_not_run() {
     assert_fast_path_built_sccache(&sandbox, &out, &text);
 }
 
+#[test_id(teqbay8)]
 #[test]
 fn a_successful_sccache_build_stamps_the_flake_inputs() {
     let sandbox = Sandbox::new();
@@ -1130,6 +1175,7 @@ fn a_successful_sccache_build_stamps_the_flake_inputs() {
     assert_eq!(sandbox.log(STAMP).trim(), flake_sha256(&sandbox), "{text}");
 }
 
+#[test_id(teu52id)]
 #[test]
 fn the_stamp_names_the_inputs_that_were_built_when_the_checkout_changes_mid_build() {
     let sandbox = Sandbox::new();
@@ -1165,6 +1211,7 @@ fn the_stamp_names_the_inputs_that_were_built_when_the_checkout_changes_mid_buil
     );
 }
 
+#[test_id(tzzowpw)]
 #[test]
 fn a_failed_sccache_build_leaves_no_stamp() {
     let sandbox = Sandbox::new();
@@ -1225,6 +1272,7 @@ fn sudo_root() -> Sandbox {
     sandbox
 }
 
+#[test_id(tkcklim)]
 #[test]
 fn a_sudo_root_full_install_refuses_and_names_the_user_command() {
     let sandbox = sudo_root();
@@ -1247,6 +1295,7 @@ fn a_sudo_root_full_install_refuses_and_names_the_user_command() {
     }
 }
 
+#[test_id(tzhe3m9)]
 #[test]
 fn a_sudo_root_install_runs_when_root_is_claimed() {
     let sandbox = sudo_root();
@@ -1262,6 +1311,7 @@ fn a_sudo_root_install_runs_when_root_is_claimed() {
     );
 }
 
+#[test_id(t15svcb)]
 #[test]
 fn check_is_not_refused_under_sudo() {
     let (_, text) = sudo_root().runner_deps(
@@ -1275,6 +1325,7 @@ fn check_is_not_refused_under_sudo() {
     assert!(text.contains("MISSING sccache"), "{text}");
 }
 
+#[test_id(t169y6b)]
 #[test]
 fn roots_own_sudo_is_not_refused() {
     let sandbox = sudo_root();
@@ -1283,6 +1334,7 @@ fn roots_own_sudo_is_not_refused() {
     assert!(out.status.success(), "{text}");
 }
 
+#[test_id(t41lfjh)]
 #[test]
 fn check_reports_a_missing_sccache() {
     let (out, text) =
@@ -1291,11 +1343,13 @@ fn check_reports_a_missing_sccache() {
     assert!(text.contains("MISSING sccache"), "{text}");
 }
 
+#[test_id(t7s13xs)]
 #[test]
 fn flake_declares_the_sccache_package() {
     assert!(code("flake.nix").contains("packages.${system}.sccache = pkgs.sccache;"));
 }
 
+#[test_id(ta1h383)]
 #[test]
 fn ci_entry_installs_sccache_before_ci_sh_requires_it() {
     let entry = code(".spira/testenv.toml");
@@ -1323,6 +1377,7 @@ fn testenv_tier_line(tier: &str, key: &str) -> String {
         .to_owned()
 }
 
+#[test_id(tkhglj4)]
 #[test]
 fn testenv_rust_tier_installs_sccache_and_requires_the_cache() {
     let argv = testenv_tier_line("rust", "argv");
@@ -1343,6 +1398,7 @@ fn testenv_rust_tier_installs_sccache_and_requires_the_cache() {
     }
 }
 
+#[test_id(twou646)]
 #[test]
 fn testenv_isolation_tier_runs_in_the_rust_image() {
     // Without the group list, ci.sh's dependency check demands podman, node and

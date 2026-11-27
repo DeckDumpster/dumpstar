@@ -419,6 +419,7 @@ mod tests {
     // base_owned, and surface the custom variant as its own slot printing. The
     // binder query was catalog-only (printings, no user_printings), so the slot
     // stayed unowned.
+    #[test_id(tedbvek)]
     #[test]
     fn slot_owns_card_via_custom_variant() {
         use crate::user_printings::{self, NewUserPrinting};
@@ -464,6 +465,7 @@ mod tests {
         assert_eq!(p.base_owned, 1);
     }
 
+    #[test_id(tdxz4lx)]
     #[test]
     fn assembles_sections_and_progress() {
         let (_d, mut conn) = binder_conn();
@@ -532,6 +534,7 @@ mod tests {
         assert_eq!(no_promo.slots.len(), 5);
     }
 
+    #[test_id(tqqdll7)]
     #[test]
     fn slot_carries_card_identity_and_prices() {
         let dir = tempfile::tempdir().unwrap();
@@ -592,6 +595,7 @@ mod tests {
         assert_eq!(price("Foil"), Some(9.0));
     }
 
+    #[test_id(tfo2if6)]
     #[test]
     fn paginates() {
         let (_d, conn) = binder_conn();
@@ -614,6 +618,7 @@ mod tests {
         assert_eq!(clamped.page, 2);
     }
 
+    #[test_id(tkzpk2g)]
     #[test]
     fn leaders_and_bases_head_the_page_in_every_non_number_sort() {
         let dir = tempfile::tempdir().unwrap();
@@ -692,6 +697,7 @@ mod tests {
         }
     }
 
+    #[test_id(t4zj3fa)]
     #[test]
     fn price_sort_is_one_flat_list_across_leaders_and_bases() {
         // HMW shape: dozens of leaders and bases head the page, so the first
@@ -743,6 +749,7 @@ mod tests {
         assert_eq!(order("price_asc"), ["4", "1", "5", "3", "2", "6"]);
     }
 
+    #[test_id(t6vzh1z)]
     #[test]
     fn price_sort_ignores_type_and_variant_section() {
         // A cheap leader, an expensive promo and a mid hyperspace card.
@@ -773,6 +780,7 @@ mod tests {
         assert_eq!(&asc[..3], ["1", "264", "P01"]);
     }
 
+    #[test_id(tga3lzz)]
     #[test]
     fn price_sort_orders_by_shown_price_unpriced_last() {
         // Priced: #3 $5, #264 $20, #2 $1. Unpriced: #1, #270, #P01.
@@ -818,6 +826,7 @@ mod tests {
         }
     }
 
+    #[test_id(tl4u9y2)]
     #[test]
     fn sorts_searches_and_filters() {
         let (_d, mut conn) = binder_conn();
@@ -891,6 +900,7 @@ mod tests {
     // A printing of another card at the same collector number, whose variant
     // sorts before 'Standard' (an Event Exclusive 1/2 filed as Hyperspace), must
     // not become the slot: the Standard printing is the slot's identity.
+    #[test_id(tivdkc0)]
     #[test]
     fn a_slot_is_the_standard_printing_not_the_first_variant() {
         let dir = tempfile::tempdir().unwrap();
@@ -910,6 +920,7 @@ mod tests {
         assert_eq!(one.name, "Director Krennic");
     }
 
+    #[test_id(tnttmwz)]
     #[test]
     fn unknown_set_is_none() {
         let (_d, conn) = binder_conn();

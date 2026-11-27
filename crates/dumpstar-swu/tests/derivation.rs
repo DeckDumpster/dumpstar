@@ -1,6 +1,9 @@
 //! A change in what an apply derives from a source re-applies the payloads
 //! already applied, from the raw already landed (sp-boex8e).
 
+#[macro_use]
+extern crate spira_test_id;
+
 use chrono::{TimeZone, Utc};
 use dumpstar_swu::Catalog;
 use dumpstar_swu::apply::apply_at;
@@ -14,6 +17,7 @@ fn images(c: &Catalog) -> i64 {
         .unwrap()
 }
 
+#[test_id(ttnwo44)]
 #[test]
 fn a_bumped_derivation_reapplies_an_applied_payload_once_and_only_then() {
     let dir = tempfile::tempdir().unwrap();
@@ -54,6 +58,7 @@ fn a_bumped_derivation_reapplies_an_applied_payload_once_and_only_then() {
     );
 }
 
+#[test_id(tkvrfva)]
 #[test]
 fn a_text_catalog_without_keywords_or_epic_actions_alarms() {
     let dir = tempfile::tempdir().unwrap();
@@ -81,6 +86,7 @@ fn a_text_catalog_without_keywords_or_epic_actions_alarms() {
     );
 }
 
+#[test_id(tr946ki)]
 #[test]
 fn repeated_or_missing_rules_text_is_flagged() {
     let dir = tempfile::tempdir().unwrap();
@@ -125,6 +131,7 @@ fn repeated_or_missing_rules_text_is_flagged() {
     );
 }
 
+#[test_id(tvvch2c)]
 #[test]
 fn a_keyword_with_a_number_in_the_text_but_null_value_is_flagged() {
     let dir = tempfile::tempdir().unwrap();
@@ -161,6 +168,7 @@ fn a_keyword_with_a_number_in_the_text_but_null_value_is_flagged() {
     assert_eq!(keys, vec![("keyword_number_missing", "DEVOTION")]);
 }
 
+#[test_id(then8ti)]
 #[test]
 fn a_keyword_in_the_text_but_not_in_the_keywords_is_flagged() {
     let dir = tempfile::tempdir().unwrap();
@@ -189,6 +197,7 @@ fn a_keyword_in_the_text_but_not_in_the_keywords_is_flagged() {
     );
 }
 
+#[test_id(tmhpmhf)]
 #[test]
 fn reapplying_records_the_derivation_version_in_force() {
     let dir = tempfile::tempdir().unwrap();
@@ -202,6 +211,7 @@ fn reapplying_records_the_derivation_version_in_force() {
     assert!(dumpstar_swu::apply::derivation_version("official") >= 8);
 }
 
+#[test_id(tlddzgl)]
 #[test]
 fn a_mechanic_like_phrase_the_derivation_missed_is_flagged() {
     let dir = tempfile::tempdir().unwrap();
@@ -230,6 +240,7 @@ fn a_mechanic_like_phrase_the_derivation_missed_is_flagged() {
     assert_eq!(keys, vec![("mechanic_unmatched", "NOVEL")]);
 }
 
+#[test_id(teu5fq3)]
 #[test]
 fn an_unmatched_phrase_files_once_and_never_fails_the_check() {
     use dumpstar_swu::filing::{Action, file};
@@ -257,6 +268,7 @@ fn an_unmatched_phrase_files_once_and_never_fails_the_check() {
     assert_eq!(file(&out, &findings).unwrap().unwrap().action, Action::Open);
 }
 
+#[test_id(tu31dcf)]
 #[test]
 fn a_later_finding_appends_to_the_open_bead() {
     use dumpstar_swu::filing::{Action, Finding, State, plan};

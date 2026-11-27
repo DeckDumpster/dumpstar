@@ -158,6 +158,7 @@ mod tests {
         (dir, conn)
     }
 
+    #[test_id(t2yvwgw)]
     #[test]
     fn insert_assigns_per_card_sequence() {
         let (_d, conn) = conn();
@@ -183,6 +184,7 @@ mod tests {
         assert_eq!(a.description.as_deref(), Some("no set stamp misprint"));
     }
 
+    #[test_id(t83bowe)]
     #[test]
     fn insert_rejects_unknown_card() {
         let (_d, conn) = conn();
@@ -197,6 +199,7 @@ mod tests {
         assert!(matches!(err, DbError::NotFound(_)));
     }
 
+    #[test_id(te1guat)]
     #[test]
     fn list_for_card_returns_inserted_rows() {
         let (_d, conn) = conn();
@@ -213,6 +216,7 @@ mod tests {
         assert_eq!(rows[0].description.as_deref(), Some("misprint"));
     }
 
+    #[test_id(tz9mdib)]
     #[test]
     fn exists_covers_user_printings() {
         let (_d, conn) = conn();
@@ -228,6 +232,7 @@ mod tests {
         assert!(!exists(&conn, "nope").unwrap());
     }
 
+    #[test_id(tg1qrx4)]
     #[test]
     fn delete_refuses_when_collection_references_it() {
         let (_d, mut conn) = conn();
@@ -252,6 +257,7 @@ mod tests {
         assert!(matches!(err, DbError::Conflict(_)));
     }
 
+    #[test_id(tni1eh7)]
     #[test]
     fn delete_cascades_manual_prices() {
         let (_d, conn) = conn();

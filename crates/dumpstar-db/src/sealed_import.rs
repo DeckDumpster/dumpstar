@@ -363,6 +363,7 @@ mod tests {
         }
     }
 
+    #[test_id(tb6jpqn)]
     #[test]
     fn resolves_exact_name_and_keeps_quantity() {
         let (_d, conn) = db();
@@ -378,6 +379,7 @@ mod tests {
         assert!(report.unmatched.is_empty());
     }
 
+    #[test_id(ta3v8al)]
     #[test]
     fn commit_writes_one_row_with_quantity() {
         let (_d, conn) = db();
@@ -397,6 +399,7 @@ mod tests {
         assert_eq!(entries[0].purchase_date.as_deref(), Some("2026-02-28"));
     }
 
+    #[test_id(tykuq9y)]
     #[test]
     fn unknown_set_and_unknown_product_are_reported() {
         let (_d, conn) = db();
@@ -419,6 +422,7 @@ mod tests {
         assert!(report.unmatched[1].reason.contains("no sealed product"));
     }
 
+    #[test_id(twx243j)]
     #[test]
     fn distinct_similar_names_do_not_collide() {
         let (_d, conn) = db();
@@ -470,6 +474,7 @@ mod tests {
         }
     }
 
+    #[test_id(t30n5o0)]
     #[test]
     fn null_set_code_product_resolves_by_global_name() {
         // Set 'Miscellaneous Products' doesn't resolve; the product
@@ -482,6 +487,7 @@ mod tests {
         assert_eq!(report.matched[0].set_code, None);
     }
 
+    #[test_id(t0m1hsh)]
     #[test]
     fn global_fallback_folds_hyphens_and_apostrophes() {
         let (_d, conn) = null_set_db();

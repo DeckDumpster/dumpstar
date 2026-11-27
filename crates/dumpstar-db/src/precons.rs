@@ -664,6 +664,7 @@ mod tests {
         .unwrap()
     }
 
+    #[test_id(th1go3j)]
     #[test]
     fn resolves_every_line_to_a_standard_normal_printing() {
         let (_d, c) = catalog();
@@ -699,6 +700,7 @@ mod tests {
         assert!(alarm_keys(&c).is_empty());
     }
 
+    #[test_id(txjfloi)]
     #[test]
     fn unknown_printing_raises_precon_unresolved_naming_file_and_line() {
         let (_d, c) = catalog();
@@ -725,6 +727,7 @@ mod tests {
         assert_eq!(resolved, 1);
     }
 
+    #[test_id(tnigvaw)]
     #[test]
     fn unknown_product_and_wrong_total_raise_precon_unresolved() {
         let (_d, c) = catalog();
@@ -749,6 +752,7 @@ mod tests {
         assert!(offered(&c, "ok"));
     }
 
+    #[test_id(tfdm5yv)]
     #[test]
     fn an_unparseable_file_raises_its_alarm_and_the_others_still_load() {
         let (_d, c) = catalog();
@@ -772,6 +776,7 @@ mod tests {
         assert_eq!(ids, ["ok"]);
     }
 
+    #[test_id(t9x3xv0)]
     #[test]
     fn fixed_file_retires_its_alarm() {
         let (_d, c) = catalog();
@@ -784,6 +789,7 @@ mod tests {
         assert!(offered(&c, "a"));
     }
 
+    #[test_id(t4u8dqb)]
     #[test]
     fn changing_a_decklist_changes_precons_rev_and_rebuilds() {
         let (_d, c) = catalog();
@@ -801,6 +807,7 @@ mod tests {
         assert_eq!(qty, 2);
     }
 
+    #[test_id(t6et05b)]
     #[test]
     fn opening_the_catalog_reconciles_the_shipped_files() {
         let (_d, c) = catalog();
@@ -811,6 +818,7 @@ mod tests {
         assert_eq!(decks, PRECON_FILES.len());
     }
 
+    #[test_id(tzrx95a)]
     #[test]
     fn a_line_without_a_positive_qty_is_a_defect() {
         let (_d, c) = catalog();
@@ -837,6 +845,7 @@ mod tests {
         assert_eq!(lines, 1);
     }
 
+    #[test_id(t7uq3qv)]
     #[test]
     fn extras_resolve_and_an_unresolved_extra_alarms() {
         let (_d, c) = catalog();
@@ -862,6 +871,7 @@ mod tests {
         assert_eq!(alarm_keys(&c), ["data/precons/a.json:extras:2"]);
     }
 
+    #[test_id(tish4pa)]
     #[test]
     fn an_extra_without_a_positive_qty_is_a_defect() {
         let (_d, c) = catalog();
@@ -871,6 +881,7 @@ mod tests {
         assert_eq!(alarm_keys(&c), ["data/precons/a.json:extras:1"]);
     }
 
+    #[test_id(tnl9xv5)]
     #[test]
     fn a_number_above_the_set_size_derives_and_adds_its_hyperspace_printing() {
         let (dir, c) = catalog();
@@ -907,6 +918,7 @@ mod tests {
     }
 
     /// Promo sets put different cards on one number, none of them Standard.
+    #[test_id(tk7iegj)]
     #[test]
     fn a_number_shared_by_two_printings_of_one_non_standard_variant_alarms() {
         let (_d, c) = catalog();
@@ -926,6 +938,7 @@ mod tests {
         assert_eq!(alarm_keys(&c), ["data/precons/a.json:1"]);
     }
 
+    #[test_id(t7wogou)]
     #[test]
     fn a_number_shared_by_variants_with_no_standard_one_alarms() {
         let (_d, c) = catalog();
@@ -944,6 +957,7 @@ mod tests {
 
     /// The derive's case: the product exists only as a tcgcsv row until the
     /// same convergence folds it into `sealed_products`.
+    #[test_id(tke8h2a)]
     #[test]
     fn convergence_reconciles_after_folding_the_sealed_products() {
         let (_d, mut c) = catalog();
@@ -960,6 +974,7 @@ mod tests {
         assert!(keys.contains(&"data/precons/jtl-boba-fett.json:2".to_string()));
     }
 
+    #[test_id(t1mo6n9)]
     #[test]
     fn the_shipped_files_reconcile() {
         let (_, body) = PRECON_FILES
@@ -1022,6 +1037,7 @@ mod tests {
         )
     }
 
+    #[test_id(t20jyiu)]
     #[test]
     fn add_makes_one_batch_n_copies_one_deck_and_reserves_exactly_them() {
         let (_d, mut c) = tenant();
@@ -1070,6 +1086,7 @@ mod tests {
         assert!(lines.iter().all(|l| l.reserved == l.qty), "{lines:?}");
     }
 
+    #[test_id(t43t4dd)]
     #[test]
     fn adding_a_box_with_extras_reserves_only_the_deck() {
         let (_d, c) = tenant_of(&boxed(&good(), &[("SOR", "189", 2)]));
@@ -1101,6 +1118,7 @@ mod tests {
         assert_eq!((listed[0].card_count, listed[0].extra_count), (4, 2));
     }
 
+    #[test_id(tj0o8pf)]
     #[test]
     fn a_failure_after_the_extras_leaves_nothing() {
         let (_d, c) = tenant_of(&boxed(&good(), &[("SOR", "189", 2)]));
@@ -1113,6 +1131,7 @@ mod tests {
         assert_eq!(counts(&c), before);
     }
 
+    #[test_id(tqqiq9u)]
     #[test]
     fn a_failure_after_the_copies_leaves_nothing() {
         let (_d, c) = tenant();
@@ -1125,6 +1144,7 @@ mod tests {
         assert_eq!(counts(&c), before);
     }
 
+    #[test_id(ti2s2y2)]
     #[test]
     fn a_repeat_add_is_refused_naming_the_earlier_deck_and_confirm_makes_a_second() {
         let (_d, c) = tenant();
@@ -1149,6 +1169,7 @@ mod tests {
         assert_eq!(held(&c, second.deck_id).len(), 4);
     }
 
+    #[test_id(tzhj4pd)]
     #[test]
     fn a_twin_suns_deck_with_two_leaders_is_legal_after_the_add() {
         let (dir, c) = catalog();
@@ -1197,6 +1218,7 @@ mod tests {
         assert_eq!(report.counts.leaders, 2);
     }
 
+    #[test_id(t2vpeno)]
     #[test]
     fn a_deck_not_offered_cannot_be_added() {
         let (dir, c) = catalog();
@@ -1213,6 +1235,7 @@ mod tests {
         assert!(list(&c).unwrap().is_empty());
     }
 
+    #[test_id(tbynqbf)]
     #[test]
     fn list_shows_offered_decks_newest_set_first_with_leader_art() {
         let (dir, c) = catalog();

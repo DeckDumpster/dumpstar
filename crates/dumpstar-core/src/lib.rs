@@ -4,6 +4,10 @@
 //! `query` (the SQL compiler that consumes its AST is in `dumpstar-db`); see
 //! architecture/SEARCH_QUERY_LANGUAGE.md.
 
+#[cfg(test)]
+#[macro_use]
+extern crate spira_test_id;
+
 pub mod card;
 pub mod deck;
 pub mod import;

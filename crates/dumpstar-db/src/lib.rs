@@ -6,6 +6,10 @@
 //! schema for each database lives in `schema_shared.sql` / `schema_user.sql`
 //! and is re-applied idempotently on every open (dumpstar-luo).
 
+#[cfg(test)]
+#[macro_use]
+extern crate spira_test_id;
+
 pub mod app;
 /// The set-art store reader, re-exported so the server reads art through the db crate.
 pub use dumpstar_swu::art;

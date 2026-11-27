@@ -233,11 +233,13 @@ mod tests {
 
     // --- bare words / exact names ------------------------------------------
 
+    #[test_id(ttbigmc)]
     #[test]
     fn single_bare_word() {
         assert_eq!(parse_ok("charizard"), Ast::NameSearch("charizard".into()));
     }
 
+    #[test_id(tjhaw8l)]
     #[test]
     fn two_words_are_implicit_and() {
         assert_eq!(
@@ -249,11 +251,13 @@ mod tests {
         );
     }
 
+    #[test_id(tggb9se)]
     #[test]
     fn hyphen_inside_name_is_one_word() {
         assert_eq!(parse_ok("ho-oh"), Ast::NameSearch("ho-oh".into()));
     }
 
+    #[test_id(t880065)]
     #[test]
     fn exact_name_quoted_and_unquoted() {
         assert_eq!(
@@ -265,6 +269,7 @@ mod tests {
 
     // --- keyword comparisons & operators -----------------------------------
 
+    #[test_id(tnsy5ci)]
     #[test]
     fn colon_comparison() {
         assert_eq!(
@@ -277,6 +282,7 @@ mod tests {
         );
     }
 
+    #[test_id(t8ijs7c)]
     #[test]
     fn every_operator() {
         let cases = [
@@ -300,6 +306,7 @@ mod tests {
         }
     }
 
+    #[test_id(ttkgiz6)]
     #[test]
     fn quoted_value_keeps_spaces() {
         assert_eq!(
@@ -312,6 +319,7 @@ mod tests {
         );
     }
 
+    #[test_id(th23mn7)]
     #[test]
     fn aliases_resolve_to_canonical() {
         for alias in ["t", "type", "TYPE"] {
@@ -328,6 +336,7 @@ mod tests {
         }
     }
 
+    #[test_id(tu6dbg4)]
     #[test]
     fn is_flag() {
         assert_eq!(
@@ -342,6 +351,7 @@ mod tests {
 
     // --- boolean logic -----------------------------------------------------
 
+    #[test_id(tsjcptt)]
     #[test]
     fn implicit_and() {
         match parse_ok("t:fire hp>=100") {
@@ -350,6 +360,7 @@ mod tests {
         }
     }
 
+    #[test_id(twmh4rk)]
     #[test]
     fn explicit_or_case_insensitive() {
         for q in ["t:fire or t:water", "t:fire OR t:water"] {
@@ -360,6 +371,7 @@ mod tests {
         }
     }
 
+    #[test_id(t4sdc6t)]
     #[test]
     fn or_flattens() {
         match parse_ok("t:fire or t:water or t:grass") {
@@ -368,11 +380,13 @@ mod tests {
         }
     }
 
+    #[test_id(t6n6v16)]
     #[test]
     fn explicit_and_connector_is_noop() {
         assert_eq!(parse_ok("t:fire and t:water"), parse_ok("t:fire t:water"));
     }
 
+    #[test_id(tjirow8)]
     #[test]
     fn negation_of_comparison() {
         match parse_ok("-t:fire") {
@@ -381,6 +395,7 @@ mod tests {
         }
     }
 
+    #[test_id(tnib9k1)]
     #[test]
     fn negated_keyword_with_op() {
         match parse_ok("-hp>=200") {
@@ -389,6 +404,7 @@ mod tests {
         }
     }
 
+    #[test_id(tm7abol)]
     #[test]
     fn negation_combines_with_and() {
         match parse_ok("-is:graded t:fire") {
@@ -400,6 +416,7 @@ mod tests {
         }
     }
 
+    #[test_id(tzouhhs)]
     #[test]
     fn parentheses_group() {
         match parse_ok("(t:fire or t:water) hp>=100") {
@@ -411,6 +428,7 @@ mod tests {
         }
     }
 
+    #[test_id(tff9h45)]
     #[test]
     fn nested_parentheses() {
         assert!(matches!(
@@ -419,6 +437,7 @@ mod tests {
         ));
     }
 
+    #[test_id(tzgp4bb)]
     #[test]
     fn negated_group() {
         match parse_ok("-(t:fire or t:water)") {
@@ -427,6 +446,7 @@ mod tests {
         }
     }
 
+    #[test_id(tdtbvvd)]
     #[test]
     fn complex_query() {
         match parse_ok("s:pfl t:fire rarity>=rare -is:graded") {
@@ -437,12 +457,14 @@ mod tests {
 
     // --- errors ------------------------------------------------------------
 
+    #[test_id(tdrojoa)]
     #[test]
     fn empty_query_is_error() {
         assert!(parse("", &registry()).is_err());
         assert!(parse("   ", &registry()).is_err());
     }
 
+    #[test_id(txe8lva)]
     #[test]
     fn unknown_keyword_errors_with_position() {
         let err = parse("xyz:value", &registry()).unwrap_err();
@@ -454,18 +476,21 @@ mod tests {
         assert_eq!(err.position, 0);
     }
 
+    #[test_id(t7isw6f)]
     #[test]
     fn unknown_keyword_position_points_at_keyword() {
         let err = parse("t:fire bogus:1", &registry()).unwrap_err();
         assert_eq!(err.position, 7); // index of 'bogus'
     }
 
+    #[test_id(tswgdiu)]
     #[test]
     fn unterminated_quote_errors() {
         let err = parse("o:\"unclosed", &registry()).unwrap_err();
         assert!(err.message.to_lowercase().contains("unterminated"));
     }
 
+    #[test_id(trv5ya6)]
     #[test]
     fn missing_close_paren_errors() {
         let err = parse("(t:fire", &registry()).unwrap_err();
@@ -480,6 +505,7 @@ mod tests {
         KeywordRegistry::new(vec![aspect, avail])
     }
 
+    #[test_id(tg1itoe)]
     #[test]
     fn near_miss_keyword_names_the_valid_term() {
         let err = parse("aspec:vigilance", &reg_with_ops()).unwrap_err();
@@ -492,6 +518,7 @@ mod tests {
         assert!(err.message.contains("'free:'"), "{}", err.message);
     }
 
+    #[test_id(tw474cc)]
     #[test]
     fn color_suggests_aspect_not_cost() {
         let err = parse("color:villainy", &reg_with_ops()).unwrap_err();
@@ -499,12 +526,14 @@ mod tests {
         assert!(!err.message.contains("'c:'"), "{}", err.message);
     }
 
+    #[test_id(tk41h45)]
     #[test]
     fn far_keyword_has_no_suggestion() {
         let err = parse("zzzzzz:1", &reg_with_ops()).unwrap_err();
         assert!(!err.message.contains("did you mean"), "{}", err.message);
     }
 
+    #[test_id(tda86vo)]
     #[test]
     fn misused_operator_names_the_valid_ones() {
         let err = parse("a>3", &reg_with_ops()).unwrap_err();
@@ -512,6 +541,7 @@ mod tests {
         assert!(parse("free>=2", &reg_with_ops()).is_ok());
     }
 
+    #[test_id(t9vmasw)]
     #[test]
     fn negated_wildcard_deck_parses() {
         let reg = KeywordRegistry::new(vec![KeywordDef::new("deck", &["deck"])]);

@@ -4,10 +4,14 @@
 //!   `database_id` or email means here exactly what it means in every other consumer;
 //! * a guard that the copies this repository was forked with stay deleted.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::path::{Path, PathBuf};
 
 use dumpster_kit_conformance as corpus;
 
+#[test_id(tv6yc3b)]
 #[test]
 fn handle_corpus_through_the_validator() {
     for case in corpus::handle_cases() {
@@ -20,6 +24,7 @@ fn handle_corpus_through_the_validator() {
     }
 }
 
+#[test_id(te8fv51)]
 #[test]
 fn handle_corpus_through_the_registry_check() {
     let conn = dumpstar_db::open_registry(Path::new(":memory:")).unwrap();
@@ -33,6 +38,7 @@ fn handle_corpus_through_the_registry_check() {
     }
 }
 
+#[test_id(ti9q8nq)]
 #[test]
 fn database_id_corpus_through_the_validator() {
     for case in corpus::ulid_cases() {
@@ -45,6 +51,7 @@ fn database_id_corpus_through_the_validator() {
     }
 }
 
+#[test_id(t79l490)]
 #[test]
 fn email_corpus_through_the_normaliser() {
     for case in corpus::email_cases() {
@@ -70,6 +77,7 @@ fn rust_and_sql_under(dir: &Path, out: &mut Vec<PathBuf>) {
 
 /// The tenancy kernel has one implementation. These are the fingerprints of the copies
 /// this repository was forked with; none may reappear under `crates/`.
+#[test_id(ttyhete)]
 #[test]
 fn the_forked_tenancy_copies_are_gone() {
     const COPIES: &[(&str, &str)] = &[

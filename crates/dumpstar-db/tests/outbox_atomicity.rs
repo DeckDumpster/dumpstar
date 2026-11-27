@@ -34,6 +34,9 @@
 //! `DUMPSTAR_OUTBOX_CRASH_DB` set; `the_child_that_gets_killed` is its entry
 //! point and is `#[ignore]`d so a normal run never starts one.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -79,6 +82,7 @@ type Holding = (String, i64);
 // The parent
 // ---------------------------------------------------------------------
 
+#[test_id(txfjh2m)]
 #[test]
 fn a_killed_writer_never_leaves_the_holdings_and_the_outbox_disagreeing() {
     let exe = std::env::current_exe().expect("the test binary re-executes itself as the child");
@@ -101,8 +105,9 @@ fn a_killed_writer_never_leaves_the_holdings_and_the_outbox_disagreeing() {
 
         let mut child = Command::new(&exe)
             .args([
-                "--exact",
-                "the_child_that_gets_killed",
+                // Listed as `the_child_that_gets_killed::<test id>`; the id is
+                // not part of what this names, so no `--exact`.
+                "the_child_that_gets_killed::",
                 "--ignored",
                 "--test-threads",
                 "1",
@@ -428,6 +433,7 @@ fn acquire_key(table: &str, n: usize) -> rusqlite::types::Value {
 /// Ignored, so it only runs when the parent asks for it by name — and it
 /// returns immediately if [`DB_ENV`] is unset, so `cargo test -- --ignored`
 /// does not start an unkillable loop.
+#[test_id(ty6cpqd)]
 #[test]
 #[ignore = "the child process of a_killed_writer_never_leaves_..., not a test"]
 fn the_child_that_gets_killed() {

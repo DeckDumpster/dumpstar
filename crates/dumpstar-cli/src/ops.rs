@@ -249,6 +249,7 @@ mod tests {
         (dir, conn)
     }
 
+    #[test_id(tnkcmlz)]
     #[test]
     fn query_reads_tenant_and_attached_catalog_and_refuses_writes() {
         let (_d, conn) = fixture();
@@ -265,6 +266,7 @@ mod tests {
         assert!(conn.execute_batch("CREATE TABLE x (a)").is_err());
     }
 
+    #[test_id(t5ss4uj)]
     #[test]
     fn explain_prints_a_plan_and_wall_time() {
         let (_d, conn) = fixture();
@@ -280,6 +282,7 @@ mod tests {
         assert!(text.contains("wall"), "{text}");
     }
 
+    #[test_id(t7qobnz)]
     #[test]
     fn search_prints_rows_and_timings_through_the_server_path() {
         let (_d, conn) = fixture();

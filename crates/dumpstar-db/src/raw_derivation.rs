@@ -134,6 +134,7 @@ mod tests {
     /// The property the whole table exists for: a rerun REPLACES the date's
     /// provenance. A second derive that appended would leave two run ids for
     /// one date and no way to tell which one the catalog is made of.
+    #[test_id(tibq0bt)]
     #[test]
     fn re_deriving_a_date_replaces_its_provenance() {
         let mut conn = catalog();
@@ -160,6 +161,7 @@ mod tests {
     /// …and it replaces THAT date only. A derive of one date must not erase
     /// the record of another; the table is a history across dates and a
     /// replacement within one.
+    #[test_id(twuh1s7)]
     #[test]
     fn another_date_is_untouched() {
         let mut conn = catalog();
@@ -182,6 +184,7 @@ mod tests {
     /// `observed_at` is the run's clock day and `ingest_date` is the
     /// partition. The UTC-midnight run is the one where they differ, and the
     /// row has to be able to say so.
+    #[test_id(th1tqyc)]
     #[test]
     fn the_observation_day_can_differ_from_the_partition() {
         let mut conn = catalog();

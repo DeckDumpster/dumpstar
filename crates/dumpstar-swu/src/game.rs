@@ -139,6 +139,7 @@ mod tests {
     use super::*;
     use rusqlite::Connection;
 
+    #[test_id(ttmdzdt)]
     #[test]
     fn schema_runs_after_the_kits_ddl() {
         let conn = Connection::open_in_memory().unwrap();
@@ -146,6 +147,7 @@ mod tests {
         conn.execute_batch(Swu::SCHEMA).unwrap();
     }
 
+    #[test_id(tc9f7mv)]
     #[test]
     fn vocabulary_is_valid_and_sources_are_official_and_tcgcsv() {
         let _ = Swu::search_terms();
@@ -153,6 +155,7 @@ mod tests {
         assert_eq!(names, ["official", "tcgcsv"]);
     }
 
+    #[test_id(t2rx71k)]
     #[test]
     fn empty_payload_applies_to_nothing() {
         let mut conn = Connection::open_in_memory().unwrap();

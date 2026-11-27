@@ -48,6 +48,9 @@
 //! for the workload it was added for is worse than no setting, because the next
 //! person reads it as the fix and stops looking.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -273,6 +276,7 @@ const COMMITS: u64 = 12_000;
 /// SQLite, and the bead's whole finding is that the two arms differ by orders
 /// of magnitude. A suite that only asserted the fix would go green against a
 /// harness in which the bug never reproduced.
+#[test_id(tu6hfzk)]
 #[test]
 fn a_reader_in_flight_unbounds_a_wal_that_would_otherwise_stay_small() {
     let dir = tempfile::tempdir().unwrap();
@@ -309,6 +313,7 @@ fn a_reader_in_flight_unbounds_a_wal_that_would_otherwise_stay_small() {
 }
 
 /// The fix, over the same commits the test above shows unbounded.
+#[test_id(tpd0ukh)]
 #[test]
 fn an_opportunistic_reclaim_bounds_a_wal_a_reader_would_otherwise_unbound() {
     let dir = tempfile::tempdir().unwrap();
@@ -354,6 +359,7 @@ fn an_opportunistic_reclaim_bounds_a_wal_a_reader_would_otherwise_unbound() {
 /// merely bounding it. Asserted **while the reader is still reading**, because
 /// that is the state the nightly derive finishes in, and a checkpoint measured
 /// after the readers went away would be measuring nothing.
+#[test_id(trmd91y)]
 #[test]
 fn a_truncating_checkpoint_returns_the_wal_with_a_reader_still_in_flight() {
     let dir = tempfile::tempdir().unwrap();
@@ -385,6 +391,7 @@ fn a_truncating_checkpoint_returns_the_wal_with_a_reader_still_in_flight() {
 /// no checkpoint can reset — and the right behaviour is to say so and carry on,
 /// not to raise. A run that failed the nightly catalog build because somebody
 /// was browsing would be a worse bug than the one being fixed.
+#[test_id(tzoelds)]
 #[test]
 fn a_reader_holding_one_transaction_blocks_the_reset_and_that_is_reported() {
     let dir = tempfile::tempdir().unwrap();
@@ -428,6 +435,7 @@ fn a_reader_holding_one_transaction_blocks_the_reset_and_that_is_reported() {
 /// looking like "the derive got slower" rather than like a bug here, so both
 /// ends are pinned: the production period does not fire inside a window
 /// shorter than itself, and a zero period fires every time it is asked.
+#[test_id(tksjkx0)]
 #[test]
 fn a_reclaim_honours_its_period() {
     let dir = tempfile::tempdir().unwrap();

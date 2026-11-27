@@ -148,6 +148,7 @@ fn env_u32(key: &str) -> Option<u32> {
 mod tests {
     use super::*;
 
+    #[test_id(tpubn3c)]
     #[test]
     fn the_schedule_doubles_and_then_saturates() {
         let p = RetryPolicy::new(6, Duration::from_millis(500));
@@ -160,6 +161,7 @@ mod tests {
         assert_eq!(p.delay_after(50), DEFAULT_MAX_DELAY);
     }
 
+    #[test_id(t4xu5ql)]
     #[test]
     fn the_budget_is_bounded() {
         let p = RetryPolicy::new(4, Duration::from_millis(1));
@@ -170,12 +172,14 @@ mod tests {
 
     /// A policy that never makes a request would turn every fetch into a
     /// failure with no upstream involved at all.
+    #[test_id(tfi6g8p)]
     #[test]
     fn zero_attempts_is_floored_to_one() {
         assert_eq!(RetryPolicy::new(0, Duration::ZERO).attempts, 1);
         assert!(!RetryPolicy::none().should_retry(1));
     }
 
+    #[test_id(twoypi5)]
     #[test]
     fn only_not_now_is_retried() {
         assert!(status_is_retryable(429));

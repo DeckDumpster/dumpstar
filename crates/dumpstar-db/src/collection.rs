@@ -595,6 +595,7 @@ mod tests {
         }
     }
 
+    #[test_id(t3gzn5t)]
     #[test]
     fn add_and_get_round_trip() {
         let (_d, mut conn) = user_conn();
@@ -616,6 +617,7 @@ mod tests {
         assert_eq!(logs, 1);
     }
 
+    #[test_id(txar37f)]
     #[test]
     fn add_rejects_unknown_printing() {
         let (_d, mut conn) = user_conn();
@@ -631,6 +633,7 @@ mod tests {
         assert!(matches!(err, DbError::NotFound(_)));
     }
 
+    #[test_id(t8abdxn)]
     #[test]
     fn update_changes_editable_fields() {
         let (_d, mut conn) = user_conn();
@@ -651,6 +654,7 @@ mod tests {
         assert_eq!(entry.language, "English"); // untouched
     }
 
+    #[test_id(te9eobn)]
     #[test]
     fn set_status_appends_to_log() {
         let (_d, mut conn) = user_conn();
@@ -668,6 +672,7 @@ mod tests {
         assert_eq!(logs, 2); // 'added' + the sale
     }
 
+    #[test_id(tw4ea1g)]
     #[test]
     fn move_to_logs_and_rejects_both() {
         let (_d, mut conn) = user_conn();
@@ -700,6 +705,7 @@ mod tests {
         assert!(matches!(err, DbError::Conflict(_)));
     }
 
+    #[test_id(t46rded)]
     #[test]
     fn delete_cascades_audit_logs() {
         let (_d, mut conn) = user_conn();
@@ -717,6 +723,7 @@ mod tests {
         assert_eq!(logs, 0, "status_log rows cascade on delete");
     }
 
+    #[test_id(t0vyao9)]
     #[test]
     fn list_paginates_newest_first() {
         let (_d, mut conn) = user_conn();
@@ -731,6 +738,7 @@ mod tests {
         assert_eq!(page2[0].id, first);
     }
 
+    #[test_id(t67j339)]
     #[test]
     fn change_printing_swaps_within_card_and_rejects_cross_card() {
         let dir = tempfile::tempdir().unwrap();

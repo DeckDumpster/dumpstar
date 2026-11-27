@@ -10,9 +10,11 @@
 
 use std::fs;
 use std::os::unix::fs::{PermissionsExt, symlink};
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::time::Duration;
 
 use tempfile::TempDir;
 
@@ -193,6 +195,54 @@ esac"#,
         sccache
     }
 
+    /// Run `dumpstar_image_ensure` in its own process group, TERM the group
+    /// once a stub has touched `marker`, and return what `TMPDIR` then holds.
+    fn interrupt_image_ensure(&self) -> Vec<std::ffi::OsString> {
+        let tmp = self.path("ctx-tmp");
+        fs::create_dir(&tmp).unwrap();
+        let mut child = self
+            .command("bash")
+            .args([
+                "-c",
+                ". deploy/rust-cache.sh; . deploy/image-lib.sh; DUMPSTAR_RUST_CACHE_STATE=on; \
+                 dumpstar_image_ensure probe:x \"$PWD\"",
+            ])
+            .env("SCCACHE_WEBDAV_ENDPOINT", "http://store.invalid")
+            .env("TMPDIR", &tmp)
+            .env("PATH", self.stub_path())
+            .process_group(0)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("bash runs");
+        let marker = self.path("marker");
+        while !marker.exists() {
+            if child.try_wait().unwrap().is_some() {
+                let out = child.wait_with_output().unwrap();
+                panic!("exited before the marker: {out:?}");
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let status = Command::new("/bin/kill")
+            .args(["-TERM", "--", &format!("-{}", child.id())])
+            .status()
+            .expect("kill runs");
+        assert!(status.success());
+        // The outer shell can die before the subshell has cleaned up. The pipes
+        // reach EOF only once every process holding them has exited.
+        child.wait_with_output().unwrap();
+        self.chmod_fake("u+w");
+        fs::read_dir(&tmp)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect()
+    }
+
+    /// A stub body that touches `marker`, then stays busy until signalled.
+    fn mark_and_hang(&self) -> String {
+        format!("touch '{}'\nsleep 5", self.path("marker").display())
+    }
+
     fn chmod_fake(&self, mode: &str) {
         let status = Command::new("/bin/chmod")
             .args(["-R", mode])
@@ -290,14 +340,14 @@ fn required_cache_ignores_a_sccache_on_path() {
 fn image_build_context_carries_the_store_closure() {
     let sandbox = Sandbox::new();
     let sccache = sandbox.fake_closure();
-    let tmp = sandbox.path("ctx-tmp");
-    fs::create_dir(&tmp).unwrap();
+    let dir = sandbox.path("ctx");
+    fs::create_dir(&dir).unwrap();
     // Sourcing `rust-cache.sh` resets the state, so the call sets it.
     let (status, out) = sandbox.run_rust_cache(
-        "DUMPSTAR_RUST_CACHE_STATE=on dumpstar_rust_cache_buildargs",
+        "DUMPSTAR_RUST_CACHE_STATE=on dumpstar_rust_cache_buildargs \"$CTX\"",
         &[
             ("SCCACHE_WEBDAV_ENDPOINT", "http://store.invalid"),
-            ("TMPDIR", tmp.to_str().unwrap()),
+            ("CTX", dir.to_str().unwrap()),
             ("PATH", &sandbox.stub_path()),
         ],
     );
@@ -307,7 +357,8 @@ fn image_build_context_carries_the_store_closure() {
         .lines()
         .find_map(|line| line.strip_prefix("sccache-bin="))
         .unwrap_or_else(|| panic!("no sccache-bin context: {out}"));
-    let store = Path::new(context).join("store");
+    assert_eq!(Path::new(context), dir, "{out}");
+    let store = dir.join("store");
     assert!(
         is_executable(&store.join("aaa-sccache/bin/sccache")),
         "{out}"
@@ -350,6 +401,63 @@ exit 9
         assert!(left.is_empty(), "build exiting {build_rc} left {left:?}");
     }
     sandbox.chmod_fake("u+w");
+}
+
+#[test]
+fn image_build_context_is_removed_when_the_build_is_interrupted() {
+    let sandbox = Sandbox::new();
+    sandbox.fake_closure();
+    sandbox.stub(
+        "bin/podman",
+        &format!(
+            "#!/bin/sh\n[ \"$1\" = build ] || exit 0\n{}\n",
+            sandbox.mark_and_hang()
+        ),
+    );
+    let left = sandbox.interrupt_image_ensure();
+    assert!(left.is_empty(), "interrupted build left {left:?}");
+}
+
+#[test]
+fn image_build_context_is_removed_when_the_copy_is_interrupted() {
+    let sandbox = Sandbox::new();
+    sandbox.fake_closure();
+    sandbox.stub("bin/podman", "#!/bin/sh\n");
+    // The real copy runs first, so the half-built store is read-only.
+    sandbox.stub(
+        "bin/cp",
+        &format!("#!/bin/sh\n/bin/cp \"$@\"\n{}\n", sandbox.mark_and_hang()),
+    );
+    let left = sandbox.interrupt_image_ensure();
+    assert!(left.is_empty(), "interrupted copy left {left:?}");
+}
+
+#[test]
+fn image_ensure_keeps_the_callers_traps_and_returns_the_build_status() {
+    let sandbox = Sandbox::new();
+    sandbox.fake_closure();
+    sandbox.stub("bin/podman", "#!/bin/sh\n[ \"$1\" != build ]\n");
+    let tmp = sandbox.path("ctx-tmp");
+    fs::create_dir(&tmp).unwrap();
+    let (status, out) = sandbox.run_rust_cache(
+        ". deploy/image-lib.sh; DUMPSTAR_RUST_CACHE_STATE=on; \
+         trap 'echo caller-trap' EXIT; trap 'echo caller-term' TERM; trap 'echo caller-int' INT; \
+         before=\"$(trap -p EXIT TERM INT)\"; \
+         rc=0; dumpstar_image_ensure probe:x \"$PWD\" || rc=$?; \
+         [ \"$(trap -p EXIT TERM INT)\" = \"$before\" ] && echo traps-kept; \
+         echo returned; exit \"$rc\"",
+        &[
+            ("SCCACHE_WEBDAV_ENDPOINT", "http://store.invalid"),
+            ("TMPDIR", tmp.to_str().unwrap()),
+            ("PATH", &sandbox.stub_path()),
+        ],
+    );
+    sandbox.chmod_fake("u+w");
+    assert_eq!(status, Some(1), "{out}");
+    assert!(
+        out.ends_with("traps-kept\nreturned\ncaller-trap\n"),
+        "{out}"
+    );
 }
 
 #[test]

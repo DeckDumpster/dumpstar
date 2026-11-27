@@ -195,14 +195,19 @@ esac"#,
         sccache
     }
 
-    /// Run `dumpstar_image_ensure` in its own process group, TERM the group
-    /// once a stub has touched `marker`, and return what `TMPDIR` then holds.
-    fn interrupt_image_ensure(&self) -> Vec<std::ffi::OsString> {
+    /// Run `dumpstar_image_ensure` in its own process group, send the group
+    /// `signal` once a stub has touched `marker`, and return what `TMPDIR` then
+    /// holds.
+    fn interrupt_image_ensure(&self, signal: &str) -> Vec<std::ffi::OsString> {
         let tmp = self.path("ctx-tmp");
         fs::create_dir(&tmp).unwrap();
+        // A shell cannot trap a signal it inherited as ignored, as a
+        // background job inherits INT.
         let mut child = self
-            .command("bash")
+            .command("env")
             .args([
+                "--default-signal=INT",
+                "bash",
                 "-c",
                 ". deploy/rust-cache.sh; . deploy/image-lib.sh; DUMPSTAR_RUST_CACHE_STATE=on; \
                  dumpstar_image_ensure probe:x \"$PWD\"",
@@ -224,7 +229,7 @@ esac"#,
             std::thread::sleep(Duration::from_millis(5));
         }
         let status = Command::new("/bin/kill")
-            .args(["-TERM", "--", &format!("-{}", child.id())])
+            .args([&format!("-{signal}"), "--", &format!("-{}", child.id())])
             .status()
             .expect("kill runs");
         assert!(status.success());
@@ -403,8 +408,8 @@ exit 9
     sandbox.chmod_fake("u+w");
 }
 
-#[test]
-fn image_build_context_is_removed_when_the_build_is_interrupted() {
+/// What a signal during `podman build` leaves in `TMPDIR`.
+fn left_by_an_interrupted_build(signal: &str) -> Vec<std::ffi::OsString> {
     let sandbox = Sandbox::new();
     sandbox.fake_closure();
     sandbox.stub(
@@ -414,7 +419,18 @@ fn image_build_context_is_removed_when_the_build_is_interrupted() {
             sandbox.mark_and_hang()
         ),
     );
-    let left = sandbox.interrupt_image_ensure();
+    sandbox.interrupt_image_ensure(signal)
+}
+
+#[test]
+fn image_build_context_is_removed_when_the_build_is_interrupted() {
+    let left = left_by_an_interrupted_build("TERM");
+    assert!(left.is_empty(), "interrupted build left {left:?}");
+}
+
+#[test]
+fn image_build_context_is_removed_when_the_build_gets_int() {
+    let left = left_by_an_interrupted_build("INT");
     assert!(left.is_empty(), "interrupted build left {left:?}");
 }
 
@@ -428,7 +444,18 @@ fn image_build_context_is_removed_when_the_copy_is_interrupted() {
         "bin/cp",
         &format!("#!/bin/sh\n/bin/cp \"$@\"\n{}\n", sandbox.mark_and_hang()),
     );
-    let left = sandbox.interrupt_image_ensure();
+    // Root, as in the testenv rust tier, removes read-only trees. This `rm`
+    // refuses them, as they refuse any other user.
+    sandbox.stub(
+        "bin/rm",
+        r#"#!/bin/sh
+for a; do
+    [ -d "$a" ] && [ -n "$(find "$a" -type d ! -perm -u+w)" ] && exit 1
+done
+exec /bin/rm "$@"
+"#,
+    );
+    let left = sandbox.interrupt_image_ensure("TERM");
     assert!(left.is_empty(), "interrupted copy left {left:?}");
 }
 

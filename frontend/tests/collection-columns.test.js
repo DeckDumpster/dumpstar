@@ -86,3 +86,11 @@ test('the Added cell shows the day of the newest copy', () => {
 	assert.equal(columns.addedDay(['2026-10-13', '2026-11-02T08:00:00Z', '2026-01-01']), '2026-11-02');
 	assert.equal(columns.addedDay([]), null);
 });
+
+test('both table row shapes draw the Added cell under its own column, fed by every copy', () => {
+	assert.equal(pageSrc.match(/\{#if showCol\('added'\)\}<td class="center added">\{a\.added\}<\/td>/g)?.length, 2);
+	assert.ok(pageSrc.includes(`{#if showCol('added')}<col class="c-added" />{/if}`));
+	assert.ok(pageSrc.includes('added: addedDay([r.acquired_at])'));
+	assert.ok(pageSrc.includes('existing.added = addedDay([existing.added!, r.acquired_at])'));
+	assert.ok(pageSrc.includes('added: null,'));
+});

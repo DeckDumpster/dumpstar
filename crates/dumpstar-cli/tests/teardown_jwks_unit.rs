@@ -5,12 +5,16 @@
 //! their argv, so no real unit or container store is touched.
 
 use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use tempfile::TempDir;
 
 const UNIT: &str = "dumpstar-test-jwks-t1-1-2";
+
+fn deploy_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../deploy")
+}
 
 struct Teardown {
     dir: TempDir,
@@ -39,9 +43,25 @@ impl Teardown {
         std::fs::write(self.conf_dir().join("test-jwks.unit"), format!("{UNIT}\n")).unwrap();
     }
 
-    /// Runs `teardown.sh t1 <args>`, requires success and returns the stub log.
-    fn run(&self, args: &[&str]) -> String {
-        let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../deploy/teardown.sh");
+    /// Copies teardown into a tree whose `tests/lib/access.sh` aborts, so a run
+    /// of the copy fails if teardown sources it.
+    fn script_with_poisoned_access_lib(&self) -> PathBuf {
+        let tree = self.dir.path().join("tree");
+        std::fs::create_dir_all(tree.join("deploy")).unwrap();
+        std::fs::create_dir_all(tree.join("tests/lib")).unwrap();
+        for file in ["teardown.sh", "store-lib.sh"] {
+            std::fs::copy(deploy_dir().join(file), tree.join("deploy").join(file)).unwrap();
+        }
+        std::fs::write(
+            tree.join("tests/lib/access.sh"),
+            "echo 'access.sh was sourced' >&2\nexit 1\n",
+        )
+        .unwrap();
+        tree.join("deploy/teardown.sh")
+    }
+
+    /// Runs `<script> t1 <args>`, requires success and returns the stub log.
+    fn run(&self, script: &Path, args: &[&str]) -> String {
         let log = self.dir.path().join("stub.log");
         let path = format!(
             "{}:{}",
@@ -75,7 +95,7 @@ impl Teardown {
 fn teardown_stops_the_recorded_jwks_unit() {
     let t = Teardown::new();
     t.plant_record();
-    let log = t.run(&[]);
+    let log = t.run(&deploy_dir().join("teardown.sh"), &[]);
     assert!(
         log.contains(&format!("--user stop {UNIT}\n")),
         "no stop of {UNIT}:\n{log}"
@@ -86,7 +106,7 @@ fn teardown_stops_the_recorded_jwks_unit() {
 fn purge_stops_the_recorded_jwks_unit_before_deleting_its_record() {
     let t = Teardown::new();
     t.plant_record();
-    let log = t.run(&["--purge"]);
+    let log = t.run(&deploy_dir().join("teardown.sh"), &["--purge"]);
     assert!(
         log.contains(&format!("--user stop {UNIT}\n")),
         "no stop of {UNIT}:\n{log}"
@@ -95,8 +115,8 @@ fn purge_stops_the_recorded_jwks_unit_before_deleting_its_record() {
 }
 
 #[test]
-fn teardown_without_a_record_stops_no_jwks_unit() {
+fn teardown_without_a_record_never_sources_the_access_lib() {
     let t = Teardown::new();
-    let log = t.run(&[]);
+    let log = t.run(&t.script_with_poisoned_access_lib(), &[]);
     assert!(!log.contains("dumpstar-test-jwks"), "{log}");
 }

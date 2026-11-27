@@ -740,11 +740,15 @@ fn a_lost_server_under_on_is_said_once_and_the_run_goes_on_cold() {
         "echo \"server said: idle=$SCCACHE_IDLE_TIMEOUT\" >&2; exec sleep 30",
     );
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    // The port is this test's listener, so enable can return before the stub has run.
     let (status, out) = run_with_server(
         &sandbox,
         "on",
         listener.local_addr().unwrap().port(),
-        "dumpstar_rust_cache_enable && kill \"$DUMPSTAR_SCCACHE_SERVER_PID\" && wait; \
+        "dumpstar_rust_cache_enable && \
+         until [ -s \"$DUMPSTAR_SCCACHE_SERVER_LOG\" ] || \
+         ! kill -0 \"$DUMPSTAR_SCCACHE_SERVER_PID\" 2>/dev/null; do :; done && \
+         kill \"$DUMPSTAR_SCCACHE_SERVER_PID\" && wait; \
          dumpstar_rust_cache_report clippy && echo \"WRAPPER=${RUSTC_WRAPPER-unset}\" && \
          dumpstar_rust_cache_report doctest",
     );
@@ -984,6 +988,11 @@ exec /bin/mkdir "$@"
 
 /// The full install on a box where every other checked dependency is present.
 fn baked_full_install(sandbox: &Sandbox) -> (Output, String) {
+    baked_full_install_checking(sandbox, "sccache")
+}
+
+/// As `baked_full_install`, with `groups` as the checked dependency groups.
+fn baked_full_install_checking(sandbox: &Sandbox, groups: &str) -> (Output, String) {
     sandbox.stub(
         "bin/rustup",
         "#!/bin/sh\necho '1.99.1-x86_64-unknown-linux-gnu (default)'\n",
@@ -992,7 +1001,7 @@ fn baked_full_install(sandbox: &Sandbox) -> (Output, String) {
     // ends there, before it can install anything on this machine.
     sandbox.stub("bin/dpkg", "#!/bin/sh\nkill $PPID\n");
     // An empty mode argument is the full install.
-    sandbox.runner_deps("", &[("DUMPSTAR_RUNNER_DEPS_ONLY", "sccache")])
+    sandbox.runner_deps("", &[("DUMPSTAR_RUNNER_DEPS_ONLY", groups)])
 }
 
 /// An sccache left at the out-link by an earlier flake.lock.
@@ -1166,6 +1175,45 @@ fn a_failed_sccache_build_leaves_no_stamp() {
     assert!(!out.status.success(), "{text}");
     assert!(text.contains("FAILED to install sccache"), "{text}");
     assert!(!sandbox.path(STAMP).exists(), "{text}");
+}
+
+#[test]
+fn full_install_fast_path_reports_how_long_each_check_group_took() {
+    let sandbox = Sandbox::new();
+    sandbox.stub("bin/nix", WORKING_NIX);
+    let script = read("deploy/runner-deps.sh");
+    let nextest = script
+        .lines()
+        .find_map(|line| line.strip_prefix("NEXTEST_VERSION="))
+        .expect("runner-deps.sh pins cargo-nextest");
+    sandbox.stub(
+        "bin/cargo",
+        &format!("#!/bin/sh\necho 'cargo-nextest {nextest}'\n"),
+    );
+    sandbox.stub("bin/rustc", "#!/bin/sh\necho 'rustc 1.99.1'\n");
+    sandbox.stub("bin/node", "#!/bin/sh\necho v22.0.0\n");
+    sandbox.stub("bin/npm", "#!/bin/sh\necho 10.0.0\n");
+    let groups = "rust nextest node";
+    let (out, text) = baked_full_install_checking(&sandbox, groups);
+    assert_fast_path_built_sccache(&sandbox, &out, &text);
+
+    let mut timed = Vec::new();
+    for line in text.lines() {
+        let Some(rest) = line.strip_prefix("runner-deps: check ") else {
+            continue;
+        };
+        let (group, time) = rest.split_once(' ').expect(line);
+        let seconds = time.strip_suffix('s').expect(line);
+        let (whole, hundredths) = seconds.split_once('.').expect(line);
+        assert!(whole.parse::<u32>().is_ok(), "{line}");
+        assert_eq!(hundredths.len(), 2, "{line}");
+        assert!(hundredths.parse::<u32>().is_ok(), "{line}");
+        timed.push(group);
+    }
+    let expected: Vec<_> = groups.split(' ').chain(["pinned-toolchain"]).collect();
+    assert_eq!(timed, expected, "{text}");
+    // The checks' own notes stay out of the fast path's log.
+    assert!(!text.contains("node v22.0.0"), "{text}");
 }
 
 /// uid 0 as sudo leaves it for the developer `dev`, with a `curl` that would

@@ -108,7 +108,9 @@ access_unit_start() { # access_unit_start <dir> <prefix> [bin]
 }
 
 access_unit_stop() { # access_unit_stop <dir>
-	local rec="$1/../test-jwks.unit"
+	# Not "$1/..": that resolves only while <dir> exists, and the record can outlive it.
+	local rec
+	rec="$(dirname "$1")/test-jwks.unit"
 	[[ -f "$rec" ]] || return 0
 	systemctl --user stop "$(cat "$rec")" 2>/dev/null || true
 	systemctl --user reset-failed "$(cat "$rec")" 2>/dev/null || true

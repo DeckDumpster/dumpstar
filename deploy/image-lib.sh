@@ -62,8 +62,14 @@ dumpstar_image_ensure() {
 		# The shared compile cache, when on (deploy/rust-cache.sh): the image's
 		# release build reads the same sccache store the host's cargo does.
 		local -a cache_args=()
+		local cache_out
 		if declare -F dumpstar_rust_cache_buildargs >/dev/null; then
-			mapfile -t cache_args < <(dumpstar_rust_cache_buildargs)
+			# Captured, not piped: a process substitution drops the status.
+			if cache_out="$(dumpstar_rust_cache_buildargs)"; then
+				[ -z "$cache_out" ] || mapfile -t cache_args <<<"$cache_out"
+			else
+				_dumpstar_rust_cache_unavailable || return 1
+			fi
 		fi
 		local rc=0 arg
 		dumpstar_image_build_collecting -t "$tag" \

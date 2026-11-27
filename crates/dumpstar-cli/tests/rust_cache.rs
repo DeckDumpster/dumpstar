@@ -365,6 +365,120 @@ fn ci_sh_and_image_lib_sh_use_the_cache() {
 }
 
 #[test]
+fn an_image_whose_closure_cannot_be_listed_is_not_built_cold_when_required() {
+    let sandbox = Sandbox::new();
+    sandbox.stub("bin/nix-store", "#!/bin/sh\nexit 1\n");
+    let built = sandbox.path("built");
+    sandbox.stub(
+        "bin/podman",
+        &format!(
+            "#!/bin/sh\n[ \"$1\" = build ] && echo \"$*\" >'{}'\nexit 0\n",
+            built.display()
+        ),
+    );
+    let build = |mode: &str| {
+        sandbox.run_rust_cache(
+            ". deploy/image-lib.sh; DUMPSTAR_RUST_CACHE_STATE=on; \
+             dumpstar_image_ensure probe:x \"$PWD\" 2>&1",
+            &[
+                ("DUMPSTAR_RUST_CACHE", mode),
+                ("SCCACHE_WEBDAV_ENDPOINT", "http://store.invalid"),
+                ("PATH", &sandbox.stub_path()),
+            ],
+        )
+    };
+    let (status, out) = build("required");
+    assert_eq!(status, Some(1), "{out}");
+    assert!(out.contains("nix-store cannot list the closure"), "{out}");
+    assert!(!built.exists(), "built cold under required: {out}");
+
+    let (status, out) = build("on");
+    assert_eq!(status, Some(0), "{out}");
+    assert!(out.contains("nix-store cannot list the closure"), "{out}");
+    let args = sandbox.log("built");
+    assert!(!args.contains("sccache-bin="), "{args}");
+}
+
+#[test]
+fn ci_sh_finds_the_nix_profile_without_letting_it_shadow_the_toolchain() {
+    let ci = code("deploy/ci.sh");
+    let start = ci.find("case \":${PATH}:\" in").expect("a PATH block");
+    let end = ci.find("\nexport PATH\n").expect("export PATH");
+    let sandbox = Sandbox::new();
+    let out = sandbox
+        .command("bash")
+        .args(["-c", &format!("{}\nprintf %s \"$PATH\"", &ci[start..end])])
+        .env("PATH", "/usr/bin:/bin")
+        .output()
+        .expect("bash runs");
+    let path = String::from_utf8(out.stdout).unwrap();
+    let dirs: Vec<_> = path.split(':').map(Path::new).collect();
+    let home = sandbox.path("home");
+    let position = |dir: &str| {
+        dirs.iter()
+            .position(|d| *d == home.join(dir))
+            .unwrap_or_else(|| panic!("no {dir} on PATH: {path}"))
+    };
+    let nix = position(".nix-profile/bin");
+    assert!(position(".cargo/bin") < nix, "{path}");
+    assert!(position(".local/bin") < nix, "{path}");
+}
+
+/// The Containerfile's builder step up to its `cargo build`, as the shell sees
+/// it, then the wrapper it chose.
+fn containerfile_cache_gate() -> String {
+    let joined = code("Containerfile").replace("\\\n", " ");
+    let start = joined.find("cache=off; why=;").expect("the cache gate");
+    let end = start + joined[start..].find("&& cargo build").expect("cargo build");
+    let probe = repo().join("deploy/sccache-probe.sh");
+    format!(
+        "{} && echo \"wrapper=$RUSTC_WRAPPER\"",
+        joined[start..end].replace("/opt/sccache-probe.sh", probe.to_str().unwrap())
+    )
+}
+
+#[test]
+fn containerfile_turns_the_wrapper_on_only_for_a_sccache_that_works() {
+    let sandbox = Sandbox::new();
+    sandbox.stub("bin/rustc", "#!/bin/sh\n");
+    let working = sandbox.stub(
+        "working",
+        "#!/bin/sh\n[ \"$1\" = --version ] && exit 0\nexec \"$@\"\n",
+    );
+    let unrunnable = sandbox.stub("unrunnable", "#!/bin/sh\nexit 127\n");
+    let dead = sandbox.stub(
+        "dead",
+        "#!/bin/sh\n[ \"$1\" = --version ] && exit 0\nexit 2\n",
+    );
+    let gate = containerfile_cache_gate();
+    let run = |bin: &Path| {
+        let out = sandbox
+            .command("sh")
+            .args(["-c", &gate])
+            .env("PATH", sandbox.stub_path())
+            .env("SCCACHE_WEBDAV_ENDPOINT", "http://store.invalid")
+            .env("SCCACHE_BIN", bin)
+            .output()
+            .expect("sh runs");
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    };
+
+    let out = run(&working);
+    let wrapper = format!("wrapper={}\n", working.display());
+    assert!(out.ends_with(&wrapper), "{out}");
+
+    for (bin, why) in [
+        (Path::new(""), "SCCACHE_BIN ('') names no executable"),
+        (unrunnable.as_path(), "does not execute here"),
+        (dead.as_path(), "did not start"),
+    ] {
+        let out = run(bin);
+        assert!(out.contains(why), "{out}");
+        assert!(out.ends_with("wrapper=\n"), "{out}");
+    }
+}
+
+#[test]
 fn ci_sh_stops_when_a_required_cache_is_unavailable() {
     assert!(
         code("deploy/ci.sh")
@@ -510,6 +624,53 @@ fn a_nix_installer_matching_its_checksum_runs_and_its_nix_installs_sccache() {
         is_executable(&sandbox.path("sccache-dir/bin/sccache")),
         "{text}"
     );
+}
+
+#[test]
+fn a_root_bootstrap_creates_nix_itself_and_needs_no_build_users_group() {
+    // The bare tier container: root, no sudo, no nixbld group.
+    let sandbox = Sandbox::new();
+    let nix = sandbox.stub(
+        "nix.good",
+        &WORKING_NIX.replacen(
+            '\n',
+            "\nprintf %s \"$NIX_CONFIG\" >\"$HOME/nix.config\"\n",
+            1,
+        ),
+    );
+    let installer = sandbox.stub(
+        "installer",
+        &format!(
+            "printf %s \"$NIX_CONFIG\" >\"$HOME/installer.config\"\n\
+             mkdir -p \"$HOME/.nix-profile/bin\" && cp '{}' \"$HOME/.nix-profile/bin/nix\"\n",
+            nix.display()
+        ),
+    );
+    let digest = Command::new("sha256sum")
+        .arg(&installer)
+        .output()
+        .expect("sha256sum runs");
+    let digest = String::from_utf8(digest.stdout).unwrap();
+    let checksum = sandbox.stub("installer.sha256", &digest[..64]);
+    sandbox.nix_release(&installer, &checksum);
+    sandbox.stub("bin/id", "#!/bin/sh\necho 0\n");
+    // Records a request for /nix instead of touching the real one.
+    sandbox.stub(
+        "bin/mkdir",
+        r#"#!/bin/sh
+for a; do
+    [ "$a" = /nix ] && echo "$*" >>"$(dirname "$HOME")/mkdir.log" && exit 0
+done
+exec /bin/mkdir "$@"
+"#,
+    );
+    fs::create_dir(sandbox.path("home")).unwrap();
+    let (out, text) = sandbox.runner_deps("--sccache", &[]);
+    assert!(out.status.success(), "{text}");
+    assert_eq!(sandbox.log("mkdir.log"), "-p -m 0755 /nix\n", "{text}");
+    for seen in ["home/installer.config", "home/nix.config"] {
+        assert_eq!(sandbox.log(seen), "build-users-group =", "{seen}: {text}");
+    }
 }
 
 #[test]

@@ -505,6 +505,13 @@ fi
 #
 # $HOME-relative, never a literal /home/<user>: a hardcoded path would put one
 # box's layout back into the repo, which is the thing pd-rf7c took out.
+# nix-store, which hands sccache's closure to the image build (rust-cache.sh).
+# First, so each later prepend stays ahead of it: a Nix-profile cargo or node
+# must not shadow the toolchains below.
+case ":${PATH}:" in
+    *":${HOME}/.nix-profile/bin:"*) ;;
+    *) PATH="${HOME}/.nix-profile/bin:${PATH}" ;;
+esac
 case ":${PATH}:" in
     *":${HOME}/.cargo/bin:"*) ;;
     *) PATH="${HOME}/.cargo/bin:${PATH}" ;;
@@ -512,11 +519,6 @@ esac
 case ":${PATH}:" in
     *":${HOME}/.local/bin:"*) ;;
     *) PATH="${HOME}/.local/bin:${PATH}" ;;
-esac
-# nix-store, which hands sccache's closure to the image build (rust-cache.sh).
-case ":${PATH}:" in
-    *":${HOME}/.nix-profile/bin:"*) ;;
-    *) PATH="${HOME}/.nix-profile/bin:${PATH}" ;;
 esac
 export PATH
 

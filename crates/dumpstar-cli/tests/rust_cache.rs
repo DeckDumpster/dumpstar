@@ -77,6 +77,7 @@ impl Sandbox {
                 || name == "CARGO_INCREMENTAL"
                 || name.starts_with("SCCACHE_")
                 || name.starts_with("DUMPSTAR_")
+                || name == "SUDO_USER"
             {
                 cmd.env_remove(&key);
             }
@@ -1040,6 +1041,73 @@ fn full_install_fast_path_a_failed_nix_build_fails_the_run_and_names_sccache() {
     let (out, text) = baked_full_install(&sandbox);
     assert!(!out.status.success(), "{text}");
     assert!(text.contains("FAILED to install sccache"), "{text}");
+}
+
+/// uid 0 as sudo leaves it for the developer `dev`, with a `curl` that would
+/// record any fetch.
+fn sudo_root() -> Sandbox {
+    let sandbox = Sandbox::new();
+    sandbox.stub("bin/id", "#!/bin/sh\necho 0\n");
+    sandbox.recording_curl("exit 22");
+    sandbox
+}
+
+#[test]
+fn a_sudo_root_full_install_refuses_and_names_the_user_command() {
+    let sandbox = sudo_root();
+    // Were the guard to fail, these keep a full install off the real machine.
+    sandbox.stub("bin/nix", "#!/bin/sh\nexit 1\n");
+    for tool in [
+        "apt-get", "sudo", "cargo", "rustup", "loginctl", "usermod", "sysctl",
+    ] {
+        sandbox.stub(&format!("bin/{tool}"), "#!/bin/sh\nexit 1\n");
+    }
+    for mode in ["", "--sccache"] {
+        let (out, text) = sandbox.runner_deps(mode, &[("SUDO_USER", "dev")]);
+        assert!(!out.status.success(), "{mode:?}: {text}");
+        assert!(text.contains("REFUSED"), "{mode:?}: {text}");
+        assert!(
+            text.contains("bash deploy/runner-deps.sh"),
+            "{mode:?}: {text}"
+        );
+        assert_eq!(sandbox.log("curl.log"), "", "{mode:?}: {text}");
+    }
+}
+
+#[test]
+fn a_sudo_root_install_runs_when_root_is_claimed() {
+    let sandbox = sudo_root();
+    sandbox.stub("bin/nix", WORKING_NIX);
+    let (out, text) = sandbox.runner_deps(
+        "--sccache",
+        &[("SUDO_USER", "dev"), ("DUMPSTAR_RUNNER_DEPS_FOR_ROOT", "1")],
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(
+        is_executable(&sandbox.path("sccache-dir/bin/sccache")),
+        "{text}"
+    );
+}
+
+#[test]
+fn check_is_not_refused_under_sudo() {
+    let (_, text) = sudo_root().runner_deps(
+        "--check",
+        &[
+            ("SUDO_USER", "dev"),
+            ("DUMPSTAR_RUNNER_DEPS_ONLY", "sccache"),
+        ],
+    );
+    assert!(!text.contains("REFUSED"), "{text}");
+    assert!(text.contains("MISSING sccache"), "{text}");
+}
+
+#[test]
+fn roots_own_sudo_is_not_refused() {
+    let sandbox = sudo_root();
+    sandbox.stub("bin/nix", WORKING_NIX);
+    let (out, text) = sandbox.runner_deps("--sccache", &[("SUDO_USER", "root")]);
+    assert!(out.status.success(), "{text}");
 }
 
 #[test]

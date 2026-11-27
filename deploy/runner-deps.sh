@@ -13,6 +13,9 @@
 #   bash deploy/runner-deps.sh --check    report what is missing; exit 1 if any
 #   bash deploy/runner-deps.sh --sccache  install only sccache (and Nix, if absent)
 #
+# Run as yourself, not under sudo: the toolchains are per-user, and the script
+# uses sudo itself for the machine-level steps.
+#
 # WHY THIS EXISTS. CI used to run on one long-lived box where somebody had
 # installed cargo, node and podman by hand, under that user's $HOME. The
 # workflow knew it -- it carried a step called "Put the per-user toolchains on
@@ -41,6 +44,17 @@ case "${1:-}" in
     "")      MODE=install ;;
     *)       printf 'usage: runner-deps.sh [--check|--sccache]\n' >&2; exit 2 ;;
 esac
+
+# Under sudo, HOME and `id -un` are root's, so every per-user step would
+# provision root and leave the developer without it. Root with no SUDO_USER
+# (the testenv tier containers) is root provisioning itself.
+if [ "$MODE" != check ] && [ "$(id -u)" -eq 0 ] \
+   && [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ] \
+   && [ "${DUMPSTAR_RUNNER_DEPS_FOR_ROOT:-}" != 1 ]; then
+    printf 'runner-deps: REFUSED under sudo: the per-user toolchains (rustup, cargo-nextest, Nix, sccache, the podman drop-in, subuid and linger) would go to root, not %s. Run as %s: sudo -v && bash deploy/runner-deps.sh%s -- or set DUMPSTAR_RUNNER_DEPS_FOR_ROOT=1 to provision root itself\n' \
+        "$SUDO_USER" "$SUDO_USER" "${1:+ $1}" >&2
+    exit 2
+fi
 
 MISSING=()
 note()  { printf 'runner-deps: %s\n' "$*"; }

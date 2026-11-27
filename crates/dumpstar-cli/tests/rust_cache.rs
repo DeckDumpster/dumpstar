@@ -740,11 +740,15 @@ fn a_lost_server_under_on_is_said_once_and_the_run_goes_on_cold() {
         "echo \"server said: idle=$SCCACHE_IDLE_TIMEOUT\" >&2; exec sleep 30",
     );
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    // The port is this test's listener, so enable can return before the stub has run.
     let (status, out) = run_with_server(
         &sandbox,
         "on",
         listener.local_addr().unwrap().port(),
-        "dumpstar_rust_cache_enable && kill \"$DUMPSTAR_SCCACHE_SERVER_PID\" && wait; \
+        "dumpstar_rust_cache_enable && \
+         until [ -s \"$DUMPSTAR_SCCACHE_SERVER_LOG\" ] || \
+         ! kill -0 \"$DUMPSTAR_SCCACHE_SERVER_PID\" 2>/dev/null; do :; done && \
+         kill \"$DUMPSTAR_SCCACHE_SERVER_PID\" && wait; \
          dumpstar_rust_cache_report clippy && echo \"WRAPPER=${RUSTC_WRAPPER-unset}\" && \
          dumpstar_rust_cache_report doctest",
     );

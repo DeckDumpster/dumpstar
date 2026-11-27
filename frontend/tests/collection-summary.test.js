@@ -7,7 +7,6 @@ const base = {
 	loading: false,
 	valued: false,
 	ownedCards: 0,
-	valuedCards: '0',
 	ownedLabel: '0',
 	ownedMeta: '',
 	valueMeta: '',
@@ -43,11 +42,21 @@ test('a valued collection shows the figures', () => {
 		...base,
 		valued: true,
 		ownedCards: 2,
-		valuedCards: '2',
 		marketLabel: '$10.00',
 		unrealized: 6,
 		unrealizedLabel: '$6.00'
 	});
 	assert.match(html, /Market value/);
 	assert.doesNotMatch(html, /No cards registered yet/);
+});
+
+test('a valued collection shows the live count of cards owned', () => {
+	const html = markup(CollectionSummary, {
+		...base,
+		valued: true,
+		ownedCards: 3018,
+		ownedLabel: '3,018'
+	});
+	assert.match(html, /Cards owned/);
+	assert.match(html, /<strong[^>]*>3,018<\/strong>/);
 });

@@ -20,9 +20,13 @@ pub struct SetSummary {
     /// Distinct cards printed in the set.
     #[ts(type = "number")]
     pub total_cards: i64,
-    /// Distinct cards in the set the user owns at least one copy of.
+    /// Cards in the set the user owns: collection rows with `status = 'owned'`.
+    /// A card held as a custom variant counts in its card's set.
     #[ts(type = "number")]
     pub owned_cards: i64,
+    /// Distinct cards in the set the user owns at least one copy of.
+    #[ts(type = "number")]
+    pub owned_distinct: i64,
     /// Printings in the set (the master set), and how many are owned.
     #[ts(type = "number")]
     pub total_printings: i64,
@@ -38,7 +42,10 @@ pub struct SetSummary {
 /// category newest first, with card and owned-card counts. Requires a
 /// user connection (the owned count joins the collection).
 pub fn list_sets(conn: &Connection) -> Result<Vec<SetSummary>> {
-    let mut stmt = conn.prepare(
+    // `owned_cards`: CROSS JOIN and `+c.status` make each set walk its own
+    // printings. Otherwise SQLite takes `idx_collection_status` and reads every
+    // owned card once per set.
+    let mut stmt = conn.prepare(concat!(
         "SELECT s.set_code, s.name, s.release_date, s.category, \
                 (SELECT count(DISTINCT p.card_id) FROM printings p WHERE p.set_code = s.set_code), \
                 (SELECT count(DISTINCT p.card_id) FROM collection c \
@@ -47,10 +54,18 @@ pub fn list_sets(conn: &Connection) -> Result<Vec<SetSummary>> {
                 (SELECT count(*) FROM printings p WHERE p.set_code = s.set_code), \
                 (SELECT count(DISTINCT c.printing_id) FROM collection c \
                    JOIN printings p ON c.printing_id = p.printing_id \
-                  WHERE p.set_code = s.set_code) \
+                  WHERE p.set_code = s.set_code), \
+                (SELECT count(*) FROM printings p \
+                   CROSS JOIN collection c ON c.printing_id = p.printing_id \
+                  WHERE p.set_code = s.set_code AND +c.status = 'owned') \
+                + (SELECT count(*) FROM user_printings u \
+                     CROSS JOIN collection c ON c.printing_id = u.printing_id \
+                    WHERE +c.status = 'owned' AND s.set_code = ",
+        crate::lead_printing_column!("set_code", "u.card_id"),
+        ") \
          FROM sets s \
          ORDER BY s.release_date DESC NULLS LAST, s.sort_order DESC, s.set_code",
-    )?;
+    ))?;
     let rows = stmt.query_map([], |r| {
         Ok(SetSummary {
             set_code: r.get(0)?,
@@ -58,9 +73,10 @@ pub fn list_sets(conn: &Connection) -> Result<Vec<SetSummary>> {
             release_date: r.get(2)?,
             category: r.get(3)?,
             total_cards: r.get(4)?,
-            owned_cards: r.get(5)?,
+            owned_distinct: r.get(5)?,
             total_printings: r.get(6)?,
             owned_printings: r.get(7)?,
+            owned_cards: r.get(8)?,
             logo_url: None,
             art_url: None,
         })
@@ -366,7 +382,17 @@ mod tests {
             testkit::foil_of(&c, "SOR", "1");
         }
         let mut conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
-        own(&mut conn, &["SOR-1-normal"]);
+        own(&mut conn, &["SOR-1-normal", "SOR-1-normal"]);
+        collection::add(
+            &mut conn,
+            &NewCopy {
+                printing_id: "SOR-1-normal".into(),
+                source: "manual_id".into(),
+                status: Some("ordered".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
 
         let sets = list_sets(&conn).unwrap();
         assert_eq!(sets.len(), 1);
@@ -374,9 +400,48 @@ mod tests {
         assert_eq!(sets[0].name, "Spark of Rebellion");
         assert_eq!(sets[0].release_date.as_deref(), Some("2024-03-08"));
         assert_eq!(sets[0].total_cards, 2);
-        assert_eq!(sets[0].owned_cards, 1);
+        assert_eq!(sets[0].owned_cards, 2);
+        assert_eq!(sets[0].owned_distinct, 1);
         assert_eq!(sets[0].total_printings, 3);
         assert_eq!(sets[0].owned_printings, 1);
+    }
+
+    /// A "Missing Variant" printing is not in the catalog, and the card held
+    /// as one is still a card the user owns, in its card's set.
+    #[test]
+    fn list_sets_owned_cards_includes_a_card_held_as_a_custom_variant() {
+        let dir = tempfile::tempdir().unwrap();
+        let shared = dir.path().join("shared.sqlite");
+        {
+            let c = open_shared(&shared).unwrap();
+            testkit::set_on(&c, "SOR", "Spark of Rebellion", "2024-03-08");
+            testkit::set_on(&c, "SHD", "Shadows of the Galaxy", "2024-07-12");
+            testkit::simple(&c, "SOR", "1", "Luke Skywalker");
+        }
+        let mut conn = connect_user(&dir.path().join("collection.sqlite"), &shared).unwrap();
+        let card_id: String = conn
+            .query_row(
+                "SELECT card_id FROM printings WHERE printing_id = 'SOR-1-normal'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        let custom = crate::user_printings::insert(
+            &conn,
+            &crate::user_printings::NewUserPrinting {
+                card_id,
+                description: None,
+            },
+        )
+        .unwrap();
+        own(&mut conn, &["SOR-1-normal", &custom.printing_id]);
+
+        let owned: Vec<(String, i64)> = list_sets(&conn)
+            .unwrap()
+            .into_iter()
+            .map(|s| (s.set_code, s.owned_cards))
+            .collect();
+        assert_eq!(owned, [("SHD".into(), 0), ("SOR".into(), 2)]);
     }
 
     #[test]

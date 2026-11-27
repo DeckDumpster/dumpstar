@@ -51,6 +51,7 @@ test('the phone list is Name and Type, wrapped, with nothing clipped', async ({ 
 			json: {
 				rows: Array.from({ length: 60 }, (_, i) => row(i)),
 				total: 60,
+				total_cards: 60,
 				total_value: 90,
 				limit: 60,
 				offset: 0
@@ -66,6 +67,10 @@ test('the phone list is Name and Type, wrapped, with nothing clipped', async ({ 
 	});
 	await page.goto('/collection?q=set%3Asor');
 	await page.locator('table.dd').waitFor();
+
+	const line = await page.locator('[data-testid="collection-count"]').innerText();
+	expect(line, 'the count line is one line').not.toContain('\n');
+	expect(line).toMatch(/^[\d,]+ cards(, \$[\d,.]+)?$/);
 
 	const heads = await page.locator('table.dd thead th').allInnerTexts();
 	expect(heads.map((h) => h.replace(/[▲▼]/g, '').trim().toLowerCase())).toEqual(['name', 'type']);

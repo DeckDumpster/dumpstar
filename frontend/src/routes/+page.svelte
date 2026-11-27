@@ -117,14 +117,14 @@
 			.catch(() => {});
 	});
 
-	const setsStarted = $derived(sets.filter((s) => s.owned_cards > 0).length);
+	const setsStarted = $derived(sets.filter((s) => s.owned_distinct > 0).length);
 
 	/** Completion per set: distinct cards owned over distinct cards printed. */
 	const highlights = $derived.by(() => {
 		const rows = sets
 			.map((s) => {
 				const total = s.total_cards;
-				const owned = s.owned_cards;
+				const owned = s.owned_distinct;
 				return { set: s, owned, total, pct: total > 0 ? owned / total : 0 };
 			})
 			.filter((r) => r.owned > 0);
@@ -153,9 +153,9 @@
 	const marketValue = $derived((latest?.market_value ?? 0) + (sealedLatest?.market_value ?? 0));
 	const costBasis = $derived((latest?.cost_basis ?? 0) + (sealedLatest?.cost_basis ?? 0));
 	const unrealized = $derived(valuedOn == null ? null : marketValue - costBasis);
-	/** Distinct cards owned, from ownership itself — the sets already loaded
-	 *  here — never from the valuation snapshot, which lags additions by up to
-	 *  a day. */
+	/** Cards owned (physical cards, not distinct ones), from ownership itself —
+	 *  the sets already loaded here — never from the valuation snapshot, which
+	 *  lags additions by up to a day. */
 	const ownedCards = $derived(sets.reduce((n, s) => n + s.owned_cards, 0));
 	/** A valuation snapshot exists and covers at least one owned item. */
 	const valued = $derived(
@@ -189,7 +189,6 @@
 	{loading}
 	{valued}
 	{ownedCards}
-	valuedCards={count(latest?.card_count ?? 0)}
 	ownedLabel={count(ownedCards)}
 	{ownedMeta}
 	{valueMeta}

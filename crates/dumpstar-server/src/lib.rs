@@ -1503,6 +1503,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn search_counts_every_card_and_not_the_catalog_rows() {
+        let (_dir, router, fx) = test_app().await;
+        let tok = fx.valid_token("u@example.com");
+        let add = || async {
+            let resp = router
+                .clone()
+                .oneshot(request(
+                    "POST",
+                    "/api/collection",
+                    Some(&tok),
+                    Some(ADD_CARD),
+                ))
+                .await
+                .unwrap();
+            assert_eq!(resp.status(), StatusCode::CREATED);
+        };
+        let counts = || async {
+            let resp = router
+                .clone()
+                .oneshot(request(
+                    "GET",
+                    "/api/collection/search?limit=0",
+                    Some(&tok),
+                    None,
+                ))
+                .await
+                .unwrap();
+            assert_eq!(resp.status(), StatusCode::OK);
+            let body: serde_json::Value = serde_json::from_str(&body_string(resp).await).unwrap();
+            (body["total_cards"].clone(), body["total"].clone())
+        };
+
+        add().await;
+        add().await;
+        assert_eq!(counts().await, (2.into(), 1.into()));
+        add().await;
+        assert_eq!(counts().await, (3.into(), 1.into()));
+    }
+
+    #[tokio::test]
     async fn search_reports_where_its_time_went_in_server_timing() {
         let (_d, router, fx) = test_app().await;
         let tok = fx.valid_token("u@example.com");
@@ -3267,7 +3307,8 @@ mod tests {
                     let (s, page) = get(tok, format!("/api/sets/{code}/binder")).await;
                     assert_eq!(s, StatusCode::OK, "{who}: set {code} has no page");
                     if code == "two" {
-                        assert_eq!(row["owned_cards"], want_cards, "{who} index");
+                        assert_eq!(row["owned_cards"], want_copies, "{who} index");
+                        assert_eq!(row["owned_distinct"], want_cards, "{who} index");
                         let owned: i64 = page["slots"]
                             .as_array()
                             .unwrap()
@@ -3277,6 +3318,7 @@ mod tests {
                             .sum();
                         assert_eq!(owned, want_copies, "{who} set page overlay");
                     } else {
+                        assert_eq!(row["owned_distinct"], 0, "{who} {code}");
                         assert_eq!(row["owned_cards"], 0, "{who} {code}");
                     }
                 }

@@ -707,6 +707,67 @@ exec /bin/mkdir "$@"
     }
 }
 
+/// The full install on a box where every other checked dependency is present.
+fn baked_full_install(sandbox: &Sandbox) -> (Output, String) {
+    sandbox.stub(
+        "bin/rustup",
+        "#!/bin/sh\necho '1.99.1-x86_64-unknown-linux-gnu (default)'\n",
+    );
+    // The first thing past the fast path is apt's `dpkg -s`: a missed fast path
+    // ends there, before it can install anything on this machine.
+    sandbox.stub("bin/dpkg", "#!/bin/sh\nkill $PPID\n");
+    // An empty mode argument is the full install.
+    sandbox.runner_deps("", &[("DUMPSTAR_RUNNER_DEPS_ONLY", "sccache")])
+}
+
+/// An sccache left at the out-link by an earlier flake.lock.
+fn old_sccache(sandbox: &Sandbox) {
+    sandbox.stub(
+        "sccache-dir/bin/sccache",
+        "#!/bin/sh\necho 'sccache 0.17.0'\n",
+    );
+}
+
+fn assert_fast_path_built_sccache(sandbox: &Sandbox, out: &Output, text: &str) {
+    assert!(out.status.success(), "{text}");
+    assert!(
+        sandbox.log("nix.log").contains("build path:.#sccache"),
+        "{text}"
+    );
+    assert!(text.contains("everything already present"), "{text}");
+}
+
+#[test]
+fn full_install_fast_path_brings_an_existing_sccache_to_the_flake_pin() {
+    let sandbox = Sandbox::new();
+    sandbox.stub("bin/nix", WORKING_NIX);
+    old_sccache(&sandbox);
+    let (out, text) = baked_full_install(&sandbox);
+    assert_fast_path_built_sccache(&sandbox, &out, &text);
+}
+
+#[test]
+fn full_install_fast_path_installs_an_absent_sccache() {
+    let sandbox = Sandbox::new();
+    sandbox.stub("bin/nix", WORKING_NIX);
+    let (out, text) = baked_full_install(&sandbox);
+    assert_fast_path_built_sccache(&sandbox, &out, &text);
+    assert!(
+        is_executable(&sandbox.path("sccache-dir/bin/sccache")),
+        "{text}"
+    );
+}
+
+#[test]
+fn full_install_fast_path_a_failed_nix_build_fails_the_run_and_names_sccache() {
+    let sandbox = Sandbox::new();
+    sandbox.stub("bin/nix", "#!/bin/sh\nexit 1\n");
+    old_sccache(&sandbox);
+    let (out, text) = baked_full_install(&sandbox);
+    assert!(!out.status.success(), "{text}");
+    assert!(text.contains("FAILED to install sccache"), "{text}");
+}
+
 #[test]
 fn check_reports_a_missing_sccache() {
     let (out, text) =

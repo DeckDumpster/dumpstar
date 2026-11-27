@@ -707,6 +707,43 @@ exec /bin/mkdir "$@"
     }
 }
 
+/// The full install on a box where every checked dependency is present and an
+/// older sccache already sits at the out-link, so the fast path is taken.
+fn baked_full_install(sandbox: &Sandbox) -> (Output, String) {
+    sandbox.stub(
+        "bin/rustup",
+        "#!/bin/sh\necho '1.99.1-x86_64-unknown-linux-gnu (default)'\n",
+    );
+    sandbox.stub(
+        "sccache-dir/bin/sccache",
+        "#!/bin/sh\necho 'sccache 0.17.0'\n",
+    );
+    // An empty mode argument is the full install.
+    sandbox.runner_deps("", &[("DUMPSTAR_RUNNER_DEPS_ONLY", "sccache")])
+}
+
+#[test]
+fn full_install_fast_path_brings_an_existing_sccache_to_the_flake_pin() {
+    let sandbox = Sandbox::new();
+    sandbox.stub("bin/nix", WORKING_NIX);
+    let (out, text) = baked_full_install(&sandbox);
+    assert!(out.status.success(), "{text}");
+    assert!(
+        sandbox.log("nix.log").contains("build path:.#sccache"),
+        "{text}"
+    );
+    assert!(text.contains("everything already present"), "{text}");
+}
+
+#[test]
+fn full_install_fast_path_a_failed_nix_build_fails_the_run_and_names_sccache() {
+    let sandbox = Sandbox::new();
+    sandbox.stub("bin/nix", "#!/bin/sh\nexit 1\n");
+    let (out, text) = baked_full_install(&sandbox);
+    assert!(!out.status.success(), "{text}");
+    assert!(text.contains("FAILED to install sccache"), "{text}");
+}
+
 #[test]
 fn check_reports_a_missing_sccache() {
     let (out, text) =

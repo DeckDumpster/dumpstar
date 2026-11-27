@@ -660,15 +660,16 @@ trap phase_report EXIT
 note "installing dependencies for $(id -un) on $(hostname)"
 
 # FAST PATH FOR A BAKED IMAGE. A runner image/AMI that already carries the
-# toolchain passes every check, has the pinned Rust toolchain and has sccache:
-# there is nothing to install, so skip apt-get update, rustup and NodeSource
-# entirely (~4-10 min on a bare template). Anything missing falls through to
-# the install below, which is idempotent.
+# toolchain passes every check and has the pinned Rust toolchain: there is
+# nothing else to install, so skip apt-get update, rustup and NodeSource
+# entirely (~4-10 min on a bare template). sccache is always brought up to
+# flake.lock's pin (nix build fetches nothing when the out-link is current).
+# Anything missing falls through to the install below, which is idempotent.
 phase "fast path: is everything already baked in?"
 _pinned="$(sed -n 's/^channel[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' rust-toolchain.toml 2>/dev/null)"
 if run_checks >/dev/null 2>&1 && [ ${#MISSING[@]} -eq 0 ] \
-   && { [ -z "$_pinned" ] || [[ $'\n'"$(rustup toolchain list 2>/dev/null)" == *$'\n'"${_pinned}"* ]]; } \
-   && [ -x "$SCCACHE_BIN_DIR/bin/sccache" ]; then
+   && { [ -z "$_pinned" ] || [[ $'\n'"$(rustup toolchain list 2>/dev/null)" == *$'\n'"${_pinned}"* ]]; }; then
+    install_sccache || exit 1
     note "everything already present -- nothing to install"
     exit 0
 fi

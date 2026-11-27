@@ -638,6 +638,20 @@ check_machine() {
     return $rc
 }
 
+# How long each check took, so a log says where a slow fast path goes
+# (sp-ccmjgt). They go to fd 3, which a caller silencing the checks' own notes
+# leaves alone. The checks run with it closed, so nothing they leave running
+# holds the log open.
+exec 3>&2
+
+# <label> <$EPOCHREALTIME at the start>. Dropping the separator, which is
+# locale-dependent, leaves integer microseconds.
+check_time() {
+    local now=$EPOCHREALTIME cs
+    cs=$(( (${now//[!0-9]/} - ${2//[!0-9]/} + 5000) / 10000 ))
+    printf 'runner-deps: check %s %d.%02ds\n' "$1" $(( cs / 100 )) $(( cs % 100 )) >&3
+}
+
 # DUMPSTAR_RUNNER_DEPS_ONLY="base rust" checks just those groups (base podman
 # subid linger rust nextest sccache node chromium fonts machine). testenv runs the lint and rust
 # tiers in a bare rust image that has no podman, node or browser libraries and
@@ -646,13 +660,14 @@ check_machine() {
 # group to leave out.
 run_checks() {
     MISSING=()
-    local g
+    local g t0
     for g in base podman subid linger rust nextest sccache node chromium fonts machine; do
         case " ${DUMPSTAR_RUNNER_DEPS_ONLY:-$g} " in
             *" $g "*) ;;
             *) continue ;;
         esac
         [ "$g" != "${1:-}" ] || continue
+        t0=$EPOCHREALTIME
         case "$g" in
             base) check_base ;;       podman) check_podman ;;
             subid) check_subid ;;     linger) check_linger ;;
@@ -660,7 +675,8 @@ run_checks() {
             sccache) check_sccache ;;  node) check_node ;;
             chromium) check_chromium_libs ;;
             fonts) check_fonts ;;     machine) check_machine ;;
-        esac
+        esac 3>&-
+        check_time "$g" "$t0"
     done
 }
 
@@ -713,8 +729,14 @@ note "installing dependencies for $(id -un) on $(hostname)"
 # Anything missing falls through to the install below, which is idempotent.
 phase "fast path: is everything already baked in?"
 _pinned="$(sed -n 's/^channel[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' rust-toolchain.toml 2>/dev/null)"
+pinned_toolchain_installed() {
+    local t0=$EPOCHREALTIME installed
+    installed="$(rustup toolchain list 2>/dev/null 3>&-)"
+    check_time pinned-toolchain "$t0"
+    [[ $'\n'"$installed" == *$'\n'"${_pinned}"* ]]
+}
 if run_checks sccache >/dev/null 2>&1 && [ ${#MISSING[@]} -eq 0 ] \
-   && { [ -z "$_pinned" ] || [[ $'\n'"$(rustup toolchain list 2>/dev/null)" == *$'\n'"${_pinned}"* ]]; }; then
+   && { [ -z "$_pinned" ] || pinned_toolchain_installed; }; then
     install_sccache || exit 1
     note "everything already present -- nothing to install"
     exit 0

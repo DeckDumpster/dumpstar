@@ -15,6 +15,7 @@ export const COLUMNS = [
 	{ key: 'set', label: 'Set' },
 	{ key: 'number', label: '#' },
 	{ key: 'nm', label: 'Price' },
+	{ key: 'added', label: 'Added' },
 	{ key: 'adj', label: 'Adjusted' }
 ];
 
@@ -59,4 +60,13 @@ export function visibleColumns(hidden: readonly string[], adjusted: boolean): st
 	return COLUMNS.map((c) => c.key).filter(
 		(k) => !hidden.includes(k) && (k !== 'adj' || adjusted)
 	);
+}
+
+/**
+ * The day (`YYYY-MM-DD`) of the latest of some copies' `acquired_at`s, which
+ * hold both bare dates and RFC 3339 timestamps; null for no copies.
+ */
+export function addedDay(dates: readonly string[]): string | null {
+	const days = dates.map((d) => d.slice(0, 10)).sort();
+	return days.at(-1) ?? null;
 }

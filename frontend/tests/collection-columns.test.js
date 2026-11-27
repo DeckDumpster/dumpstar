@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { anyAdjusted, parseHidden, visibleColumns } from '../src/lib/collectionColumns.ts';
+import * as columns from '../src/lib/collectionColumns.ts';
+
+const { anyAdjusted, parseHidden, visibleColumns } = columns;
+const pageSrc = readFileSync(new URL('../src/routes/collection/+page.svelte', import.meta.url), 'utf8');
 
 test('Qty and Adjusted start hidden', () => {
 	assert.deepEqual(parseHidden(null), ['qty', 'adj']);
@@ -65,4 +68,21 @@ test('the default header order begins Name, Type, Aspects, Cost, Traits', () => 
 		head.search(new RegExp(`'${l}'|<th>${l}</th>`))
 	);
 	assert.ok(order.every((i, n) => i >= 0 && (n === 0 || i > order[n - 1])), order.join());
+});
+
+test('the grid sort row offers Added, newest first', () => {
+	assert.ok(pageSrc.includes("sortBtn('added', 'Added')"));
+	assert.match(pageSrc, /sortDir = [^;]*key === 'added'[^;]*\? 'desc' : 'asc';/);
+});
+
+test('the table offers an Added column: shown on desktop, hidden on a phone', () => {
+	assert.ok(visibleColumns(parseHidden(null), false).includes('added'));
+	assert.ok(!visibleColumns(parseHidden(null, true), false).includes('added'));
+	assert.ok(visibleColumns(parseHidden(JSON.stringify(['qty', 'adj'])), false).includes('added'));
+	assert.ok(pageSrc.includes("sortable('added', 'Added'"));
+});
+
+test('the Added cell shows the day of the newest copy', () => {
+	assert.equal(columns.addedDay(['2026-10-13', '2026-11-02T08:00:00Z', '2026-01-01']), '2026-11-02');
+	assert.equal(columns.addedDay([]), null);
 });

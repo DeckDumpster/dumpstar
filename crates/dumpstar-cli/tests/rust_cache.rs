@@ -691,6 +691,33 @@ fn ci_sh_asks_for_the_cache_server_between_the_test_build_and_the_test_run() {
     assert!(report < run, "the tests run before the report:\n{ci}");
 }
 
+#[test]
+fn ci_sh_reports_the_cache_and_stops_when_a_compile_fails() {
+    let ci = code("deploy/ci.sh");
+    for (step, label) in [("g_clippy", "clippy"), ("g_nextest", "nextest build")] {
+        let start = ci.find(&format!("{step}() {{")).expect(step);
+        let end = start + ci[start..].find("\n}\n").expect("the function's end") + 3;
+        // The report passes, as under `on`: the failed compile alone must stop
+        // the run.
+        let script = format!(
+            "set -euo pipefail; REPO_DIR=$PWD; tier() {{ :; }}; step() {{ :; }}\n\
+             cargo() {{ case \"$*\" in 'nextest --version') ;; \
+             clippy*|*--no-run*) return 101 ;; *) echo \"ran: $*\" ;; esac; }}\n\
+             dumpstar_rust_cache_report() {{ echo \"report: $1\"; }}\n\
+             {}{step}",
+            &ci[start..end]
+        );
+        let out = Sandbox::new()
+            .command("bash")
+            .args(["-c", &script])
+            .output()
+            .expect("bash runs");
+        assert_eq!(out.status.code(), Some(1), "{step}: {out:?}");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(stdout, format!("report: {label}\n"), "{step}: {out:?}");
+    }
+}
+
 /// A sccache whose server runs `server` in the foreground, as the real one does
 /// under `SCCACHE_NO_DAEMON`, and whose stats show one hit.
 fn sccache_with_server(sandbox: &Sandbox, server: &str) {
@@ -812,7 +839,7 @@ fn a_lost_server_under_on_is_said_once_and_the_run_goes_on_cold() {
 
 #[test_id(thx42i8)]
 #[test]
-fn only_a_cache_that_is_not_required_lets_a_lost_server_compile_locally() {
+fn only_a_cache_that_is_not_required_ignores_sccache_server_io_errors() {
     let sandbox = Sandbox::new();
     sccache_with_server(&sandbox, LIVE_SERVER);
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

@@ -600,7 +600,8 @@ check_machine() {
 # subid linger rust nextest sccache node chromium fonts machine). testenv runs the lint and rust
 # tiers in a bare rust image that has no podman, node or browser libraries and
 # never will; checking them there failed every run before the tier started.
-# Unset checks everything, which is what a CI runner needs.
+# Unset checks everything, which is what a CI runner needs. An argument names one
+# group to leave out.
 run_checks() {
     MISSING=()
     local g
@@ -609,6 +610,7 @@ run_checks() {
             *" $g "*) ;;
             *) continue ;;
         esac
+        [ "$g" != "${1:-}" ] || continue
         case "$g" in
             base) check_base ;;       podman) check_podman ;;
             subid) check_subid ;;     linger) check_linger ;;
@@ -660,14 +662,15 @@ trap phase_report EXIT
 note "installing dependencies for $(id -un) on $(hostname)"
 
 # FAST PATH FOR A BAKED IMAGE. A runner image/AMI that already carries the
-# toolchain passes every check and has the pinned Rust toolchain: there is
+# toolchain passes every other check and has the pinned Rust toolchain: there is
 # nothing else to install, so skip apt-get update, rustup and NodeSource
 # entirely (~4-10 min on a bare template). sccache is always brought up to
-# flake.lock's pin (nix build fetches nothing when the out-link is current).
+# flake.lock's pin (nix build fetches nothing when the out-link is current), so
+# it is not checked here.
 # Anything missing falls through to the install below, which is idempotent.
 phase "fast path: is everything already baked in?"
 _pinned="$(sed -n 's/^channel[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' rust-toolchain.toml 2>/dev/null)"
-if run_checks >/dev/null 2>&1 && [ ${#MISSING[@]} -eq 0 ] \
+if run_checks sccache >/dev/null 2>&1 && [ ${#MISSING[@]} -eq 0 ] \
    && { [ -z "$_pinned" ] || [[ $'\n'"$(rustup toolchain list 2>/dev/null)" == *$'\n'"${_pinned}"* ]]; }; then
     install_sccache || exit 1
     note "everything already present -- nothing to install"

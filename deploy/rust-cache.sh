@@ -57,7 +57,7 @@ _dumpstar_rust_cache_unavailable() {
 # the report's liveness check is what catches that one.
 _dumpstar_sccache_start_server() {
 	local bin="$1" deadline=$((SECONDS + 20))
-	SCCACHE_START_SERVER=1 SCCACHE_NO_DAEMON=1 SCCACHE_IDLE_TIMEOUT="${SCCACHE_IDLE_TIMEOUT:-7200}" \
+	SCCACHE_START_SERVER=1 SCCACHE_NO_DAEMON=1 SCCACHE_IDLE_TIMEOUT=7200 \
 		"$bin" </dev/null >"$DUMPSTAR_SCCACHE_SERVER_LOG" 2>&1 &
 	DUMPSTAR_SCCACHE_SERVER_PID=$!
 	while kill -0 "$DUMPSTAR_SCCACHE_SERVER_PID" 2>/dev/null; do

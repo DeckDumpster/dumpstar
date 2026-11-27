@@ -531,6 +531,8 @@ fn run_with_server(sandbox: &Sandbox, mode: &str, port: u16, call: &str) -> (Opt
         call,
         &[
             ("DUMPSTAR_RUST_CACHE", mode),
+            // Too short to outlast a test execution: enable overrides it.
+            ("SCCACHE_IDLE_TIMEOUT", "1"),
             ("DUMPSTAR_SCCACHE_SERVER_PORT", &port.to_string()),
             ("TMPDIR", sandbox.dir.path().to_str().unwrap()),
             ("PATH", &sandbox.stub_path()),
@@ -599,7 +601,7 @@ fn a_lost_server_under_on_is_said_once_and_the_run_goes_on_cold() {
     let sandbox = Sandbox::new();
     sccache_with_server(
         &sandbox,
-        "echo 'sccache: the server said this' >&2; exec sleep 30",
+        "echo \"server said: idle=$SCCACHE_IDLE_TIMEOUT\" >&2; exec sleep 30",
     );
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let (status, out) = run_with_server(
@@ -612,7 +614,8 @@ fn a_lost_server_under_on_is_said_once_and_the_run_goes_on_cold() {
     );
     assert_eq!(status, Some(0), "{out}");
     assert_eq!(out.matches("exited since enable").count(), 1, "{out}");
-    assert!(out.contains("the server said this"), "{out}");
+    // The server's whole log, with the idle exit put past any test execution.
+    assert!(out.contains("server said: idle=7200"), "{out}");
     assert!(out.contains("WRAPPER=unset"), "{out}");
     assert!(out.contains("(doctest): not in use"), "{out}");
 }

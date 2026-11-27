@@ -639,6 +639,8 @@ cleanup() {
     # cancelled run would otherwise leave a MinIO and a Nessie behind per gate.
     dumpstar_par_kill_all
     lanes_abort
+    # The sccache server this run started, if it did: do not leave it behind.
+    [ -z "${DUMPSTAR_SCCACHE_SERVER_PID:-}" ] || kill "$DUMPSTAR_SCCACHE_SERVER_PID" 2>/dev/null || true
     bash "$SCRIPT_DIR/teardown.sh" "$INSTANCE" --purge 2>/dev/null || true
     # The one name this run added purely to hand the image to the gates. Every
     # tier tagged the same image under its own name, and untagging one name of a

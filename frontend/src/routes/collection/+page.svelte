@@ -31,7 +31,7 @@
 	import type { Deck } from '$lib/types/Deck';
 	import StatFrame from '$lib/components/StatFrame.svelte';
 	import { tileCaption, tileFace } from '$lib/tileFace';
-	import { COLUMNS, PHONE_MAX_WIDTH, anyAdjusted, parseHidden, visibleColumns } from '$lib/collectionColumns';
+	import { COLUMNS, PHONE_MAX_WIDTH, addedDay, anyAdjusted, parseHidden, visibleColumns } from '$lib/collectionColumns';
 
 	// Server-side search results (one row per printing, owned or not). The
 	// page's existing rendering is per-copy, so owned printings are flattened
@@ -440,8 +440,8 @@
 			sortDir = sortDir === 'asc' ? 'desc' : 'asc';
 		} else {
 			sortKey = key;
-			// Counts and money default to high→low; everything else low→high.
-			sortDir = key === 'qty' || key === 'price' ? 'desc' : 'asc';
+			// Counts, money and recency default to high→low; everything else low→high.
+			sortDir = key === 'qty' || key === 'price' || key === 'added' ? 'desc' : 'asc';
 		}
 		// Re-ordering the whole result set puts different rows where you were
 		// looking. Start at the top of the new order.
@@ -501,6 +501,8 @@
 		    and the result set's total is `searchTotalValue`, which the server
 		    computes over the whole result rather than over a group. */
 		market_unit: number | null;
+		/** The day the group's newest copy was added (null when unowned). */
+		added: string | null;
 		printing_id: string;
 		card_id: string;
 		set_code: string;
@@ -541,6 +543,7 @@
 			if (existing) {
 				existing.ids.push(r.id);
 				existing.qty += 1;
+				existing.added = addedDay([existing.added!, r.acquired_at]);
 				if (r.purchase_price != null) {
 					existing.paid_total = (existing.paid_total ?? 0) + r.purchase_price;
 				}
@@ -552,6 +555,7 @@
 					paid_total: r.purchase_price,
 					nm_unit: r.market_price,
 					market_unit: condValue,
+					added: addedDay([r.acquired_at]),
 					printing_id: r.printing_id,
 					card_id: r.card_id,
 					set_code: r.set_code,
@@ -590,6 +594,7 @@
 			paid_total: null,
 			nm_unit: sr.market_price,
 			market_unit: sr.market_price,
+			added: null,
 			printing_id: sr.printing_id,
 			card_id: sr.card_id,
 			set_code: sr.set_code,
@@ -1393,6 +1398,7 @@
 			{@render sortBtn('set', 'Set')}
 			{@render sortBtn('number', '#')}
 			{@render sortBtn('price', 'Price')}
+			{@render sortBtn('added', 'Added')}
 		</div>
 		<!-- Sections are runs of `displayRows`, so tile order is exactly the
 		     server's sort order — owned and unowned printings still
@@ -1497,6 +1503,7 @@
 				{#if showCol('set')}<col class="c-set" />{/if}
 				{#if showCol('number')}<col class="c-number" />{/if}
 				{#if showCol('nm')}<col class="c-nm" />{/if}
+				{#if showCol('added')}<col class="c-added" />{/if}
 				{#if showCol('adj')}<col class="c-adj" />{/if}
 			</colgroup>
 			<thead>
@@ -1517,6 +1524,7 @@
 					{#if showCol('set')}{@render sortable('set', 'Set', 'center')}{/if}
 					{#if showCol('number')}{@render sortable('number', '#', 'num')}{/if}
 					{#if showCol('nm')}{@render sortable('price', 'Price', 'num', 'Near Mint market price (per copy)')}{/if}
+					{#if showCol('added')}{@render sortable('added', 'Added', 'center', 'Date the newest copy was added')}{/if}
 					<!-- The one price column that does not sort. Adj. is the
 					     copy's condition-adjusted price — the collection's
 					     market price joined to the tenant's own conditions
@@ -1573,6 +1581,7 @@
 									<span class="pricedash">—</span>
 								{/if}
 							</td>{/if}
+							{#if showCol('added')}<td class="center added">{a.added}</td>{/if}
 							{#if showCol('adj')}<td class="num">
 								{#if a.market_unit != null}
 									<span class="pricebox">{money(a.market_unit)}</span>
@@ -1625,6 +1634,7 @@
 								<span class="pricedash">—</span>
 							{/if}
 						</td>{/if}
+						{#if showCol('added')}<td class="center added">{a.added}</td>{/if}
 						{#if showCol('adj')}<td class="num">
 							{#if a.market_unit != null}
 								<span class="pricebox">{money(a.market_unit)}</span>
@@ -2326,6 +2336,7 @@
 		--col-set: 4.25rem;
 		--col-number: 3.75rem;
 		--col-nm: 5rem;
+		--col-added: 6.75rem;
 		--col-adj: 5.5rem;
 		/* Not a column width — the narrowest the flex column may be squeezed
 		   to before the table stops shrinking and `.tableScroll` scrolls
@@ -2349,7 +2360,7 @@
 		min-width: calc(
 			var(--col-sel-used) + var(--col-qty) + var(--col-name-min) + var(--col-type) + var(--col-traits) +
 				var(--col-aspects) + var(--col-cost) + var(--col-stats) + var(--col-rarity) + var(--col-set) +
-				var(--col-number) + var(--col-nm) + var(--col-adj)
+				var(--col-number) + var(--col-nm) + var(--col-added) + var(--col-adj)
 		);
 		/* The point of the exercise: widths come from the declarations above,
 		   not from the handful of rows the virtual scroller happens to have in
@@ -2416,6 +2427,12 @@
 	}
 	col.c-nm {
 		width: var(--col-nm);
+	}
+	col.c-added {
+		width: var(--col-added);
+	}
+	table.dd td.added {
+		white-space: nowrap;
 	}
 	col.c-adj {
 		width: var(--col-adj);
@@ -2665,6 +2682,7 @@
 			--col-set: 3.25rem;
 			--col-number: 3rem;
 			--col-nm: 4.5rem;
+			--col-added: 6.5rem;
 			--col-adj: 4.75rem;
 			/* The thumbnail (70px) + its gap + the longest single word a
 			   name is likely to carry plus one badge: the name wraps between

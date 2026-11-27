@@ -10,6 +10,12 @@ export type SearchPage = { rows: Array<SearchRow>,
  */
 total: number, 
 /**
+ * Owned copies (`status = 'owned'`) of every printing the query matches,
+ * ignoring `limit`/`offset`: the copy count beside [`SearchPage::total`]'s
+ * printing count.
+ */
+total_copies: number, 
+/**
  * [`SearchPage::total`] in money: the condition-adjusted market value of
  * every **owned** copy of every printing the query matches, ignoring
  * `limit`/`offset`. `None` when the result contains no owned, priced copy

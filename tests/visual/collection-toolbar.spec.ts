@@ -79,6 +79,7 @@ for (const width of [390, 1280]) {
 				json: {
 					rows: Array.from({ length: 20 }, (_, i) => row(i)),
 					total: 20,
+					total_copies: 20,
 					total_value: 30,
 					limit: 20,
 					offset: 0

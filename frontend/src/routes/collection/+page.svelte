@@ -1189,7 +1189,7 @@
 			>?</a
 		>
 	</Toolbar>
-	<Toolbar gap="md" wrap={false} class="controlsrow">
+	<Toolbar gap="md" wrap={false} class="controlsrow collection-controlsrow">
 		{#if searchRows.length > 0}
 			<div class="viewtoggle" role="group" aria-label="View">
 				<button
@@ -1945,8 +1945,10 @@
 		cursor: pointer;
 		border-radius: var(--radius-md);
 	}
-	/* The controls row's gap is deckdumpster's 10px, between Toolbar's 8 and 12. */
-	:global(.controlsrow) {
+	/* The controls row's gap is deckdumpster's 10px, between Toolbar's 8 and 12.
+	   Compound for the same reason as the search row's: the kit's `.g-md` gap
+	   outranks a bare class, and this CSS stays loaded after leaving. */
+	:global(.toolbar.d-row.collection-controlsrow) {
 		gap: var(--toolbar-gap);
 	}
 	.burger:hover,

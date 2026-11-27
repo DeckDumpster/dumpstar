@@ -6,9 +6,17 @@ import type { SearchRow } from "./SearchRow";
  */
 export type SearchPage = { rows: Array<SearchRow>, 
 /**
- * Rows the query matches in total, ignoring `limit`/`offset`.
+ * Rows the query matches in total, ignoring `limit`/`offset`. A row is a
+ * printing, so this is not a card count: that is
+ * [`SearchPage::total_cards`].
  */
 total: number, 
+/**
+ * The cards in the result: every collection row of every printing the
+ * query matches, whatever its status, ignoring `limit`/`offset`; the
+ * cards the list draws.
+ */
+total_cards: number, 
 /**
  * [`SearchPage::total`] in money: the condition-adjusted market value of
  * every **owned** copy of every printing the query matches, ignoring

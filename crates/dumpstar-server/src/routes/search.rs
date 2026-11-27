@@ -7,8 +7,9 @@
 //! and the help page render from data, not a hardcoded list.
 //!
 //! The search response is a **page**, not a bare array: `{rows, total,
-//! total_value, limit, offset}`, where `total` counts the whole result set and
-//! `total_value` prices the owned copies in it — both unbounded, so a client
+//! total_cards, total_value, limit, offset}`, where `total` counts the
+//! printings in the whole result set, `total_cards` the cards they hold and
+//! `total_value` prices the owned copies in it — all unbounded, so a client
 //! can say what the whole result is and what it is worth while holding one
 //! page of it (pd-2g84). `limit` defaults to
 //! [`search::DEFAULT_LIMIT`] when absent — bounded on purpose, because the

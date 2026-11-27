@@ -14,6 +14,7 @@ const s = (set_code, category) => ({
   release_date: null,
   total_cards: 0,
   owned_cards: 0,
+  owned_distinct: 0,
   total_printings: 0,
   owned_printings: 0,
   logo_url: null,
@@ -46,7 +47,7 @@ test("groupSets names an unmapped set rather than hiding it in another category"
 test("only groups whose sets hold an owned card start expanded", async () => {
   const { startsCollapsed } = await import("$lib/setGroups");
   /** @param {string} code @param {string} category @param {number} n */
-  const owned = (code, category, n) => ({ ...s(code, category), owned_cards: n });
+  const owned = (code, category, n) => ({ ...s(code, category), owned_distinct: n });
   const groups = groupSets([
     owned("SOR", "Main", 0),
     owned("LOF", "Main", 5),

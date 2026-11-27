@@ -16,9 +16,14 @@ category: string | null,
  */
 total_cards: number, 
 /**
- * Distinct cards in the set the user owns at least one copy of.
+ * Cards in the set the user owns: collection rows with `status = 'owned'`.
+ * A card held as a custom variant counts in its card's set.
  */
 owned_cards: number, 
+/**
+ * Distinct cards in the set the user owns at least one copy of.
+ */
+owned_distinct: number, 
 /**
  * Printings in the set (the master set), and how many are owned.
  */

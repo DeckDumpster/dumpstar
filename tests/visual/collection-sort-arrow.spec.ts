@@ -37,7 +37,7 @@ for (const dir of ['asc', 'desc'] as const) {
 		await stabilize(page);
 		await page.route('**/api/collection/search*', (route) =>
 			route.fulfill({
-				json: { rows: [row(0), row(1)], total: 2, total_value: 3, limit: 60, offset: 0 }
+				json: { rows: [row(0), row(1)], total: 2, total_cards: 2, total_value: 3, limit: 60, offset: 0 }
 			})
 		);
 		for (const key of KEYS) {

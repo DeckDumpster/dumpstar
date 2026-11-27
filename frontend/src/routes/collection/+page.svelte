@@ -57,6 +57,7 @@
 	// Printings the query matches in total — equal to `searchRows.length`, and
 	// kept as its own field because it is the endpoint that says so.
 	let searchTotal = $state(0);
+	let searchTotalCards = $state(0);
 
 	// The header figure beside the count. It comes from the endpoint, like the
 	// count does (pd-2g84): it is the condition-adjusted value of every OWNED
@@ -296,6 +297,7 @@
 			if (seq !== searchSeq) return;
 			searchRows = res.rows;
 			searchTotal = res.total;
+			searchTotalCards = res.total_cards;
 			searchTotalValue = res.total_value;
 		} catch (e) {
 			if (seq !== searchSeq) return;
@@ -303,6 +305,7 @@
 				searchError = { message: e.message, position: e.position };
 				searchRows = [];
 				searchTotal = 0;
+				searchTotalCards = 0;
 				searchTotalValue = null;
 			} else {
 				error = e instanceof Error ? e.message : String(e);
@@ -1225,7 +1228,8 @@
 				{/if}
 			</div>
 		{/if}
-		<!-- The count speaks for the whole result set, and so does the money
+		<!-- N is cards, not rows: a printing held three times counts three.
+		     The count speaks for the whole result set, and so does the money
 		     beside it, because the endpoint answers both (pd-2g84). The money
 		     is the value of the OWNED copies among those rows — the same
 		     copies the chart it opens values — so it is a figure this line and
@@ -1238,7 +1242,7 @@
 			onclick={() => (valueOpen = true)}
 			title="Collection value over time"
 		>
-			{count(searchTotal)}
+			{count(searchTotalCards)}
 			cards{#if searchTotalValue !== null}, {money(searchTotalValue)}{/if}
 		</button>
 		{#if searchRows.length > 0 && view === 'table'}

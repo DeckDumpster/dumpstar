@@ -41,6 +41,10 @@ const TOTAL = 100_000;
     (pd-2g84). */
 const TOTAL_VALUE = 84_952.5;
 
+/** The cards in those printings: more than `TOTAL`, as a collection with
+    duplicates is, so a line that counted rows would be caught. */
+const TOTAL_CARDS = 123_456;
+
 /** One synthetic owned printing. Distinct name/number per index so a tile is
     traceable back to its position, and every field the list draws is present. */
 function row(i: number) {
@@ -94,6 +98,7 @@ async function serveHugeResult(page: Page, rows = 4_000, make = row): Promise<As
 			json: {
 				rows: Array.from({ length: rows }, (_, i) => make(i)),
 				total: TOTAL,
+				total_cards: TOTAL_CARDS,
 				total_value: TOTAL_VALUE,
 				limit: TOTAL,
 				offset: 0
@@ -193,8 +198,7 @@ test('the client asks for the whole result, not a page of it', async ({ page }) 
 	// stub proves — the page is holding 4,000 rows worth $6,000 and printing
 	// $84,952.50, a figure it could not have added up itself.
 	const line = page.locator('[data-testid="collection-count"]');
-	await expect(line).toContainText('100,000 cards');
-	await expect(line).toContainText('$84,952.50');
+	await expect(line).toHaveText('123,456 cards, $84,952.50');
 });
 
 test('the grid renders a window, not the result set', async ({ page }) => {

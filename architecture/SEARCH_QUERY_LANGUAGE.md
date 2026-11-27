@@ -365,12 +365,17 @@ necessary in real use.)
 The response is an envelope, not a bare array:
 
 ```json
-{ "rows": [ /* SearchRow */ ], "total": 56635, "total_value": 12345.67,
-  "limit": 250, "offset": 0 }
+{ "rows": [ /* SearchRow */ ], "total": 56635, "total_cards": 2914,
+  "total_value": 12345.67, "limit": 250, "offset": 0 }
 ```
 
 - **`total` is the count of the unbounded query**, not of the page returned, so
-  a client renders "N results" and pages without a second request.
+  a client renders "N results" and pages without a second request. It counts
+  printings (rows), not cards.
+- **`total_cards` is the card count**, also unbounded: every collection row of
+  every matching printing, whatever its status. These are the cards the list
+  draws, and the number on the collection page's count line. A printing nobody
+  holds adds 0.
 - **`total_value` is that same fact in money** (pd-2g84): the
   condition-adjusted market value of every **owned** copy of every matching
   printing, also unbounded. It is `null` — never `0` — when the result holds no

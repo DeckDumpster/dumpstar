@@ -15,7 +15,6 @@
 		loading,
 		valued,
 		ownedCards,
-		valuedCards,
 		ownedLabel,
 		ownedMeta,
 		valueMeta,
@@ -27,7 +26,6 @@
 		loading: boolean;
 		valued: boolean;
 		ownedCards: number;
-		valuedCards: string;
 		ownedLabel: string;
 		ownedMeta: string;
 		valueMeta: string;
@@ -43,7 +41,7 @@
 		<Panel padding="md">
 			<div class="stat">
 				<span class="stat-label">Cards owned</span>
-				<strong class="stat-figure">{valuedCards}</strong>
+				<strong class="stat-figure">{ownedLabel}</strong>
 				<span class="stat-meta">{ownedMeta}</span>
 			</div>
 		</Panel>

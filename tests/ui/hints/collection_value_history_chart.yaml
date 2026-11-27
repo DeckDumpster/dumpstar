@@ -5,7 +5,7 @@ involves:
   - "chart container `[data-testid=value-history-chart]` with data-series-count"
   - "Escape closes the dialog"
 fixture_data:
-  header_text: "24 cards, $1,021.42"
+  header_text: "29 cards, $376.71"
   dialog_title: "Collection value over time"
   all_dimension_series_count: 1
   snapshot_date: "2024-01-15"

@@ -168,9 +168,16 @@ pub struct SearchRow {
 #[ts(export)]
 pub struct SearchPage {
     pub rows: Vec<SearchRow>,
-    /// Rows the query matches in total, ignoring `limit`/`offset`.
+    /// Rows the query matches in total, ignoring `limit`/`offset`. A row is a
+    /// printing, so this is not a card count: that is
+    /// [`SearchPage::total_cards`].
     #[ts(type = "number")]
     pub total: i64,
+    /// The cards in the result: every collection row of every printing the
+    /// query matches, whatever its status, ignoring `limit`/`offset`; the
+    /// cards the list draws.
+    #[ts(type = "number")]
+    pub total_cards: i64,
     /// [`SearchPage::total`] in money: the condition-adjusted market value of
     /// every **owned** copy of every printing the query matches, ignoring
     /// `limit`/`offset`. `None` when the result contains no owned, priced copy
@@ -386,7 +393,7 @@ pub fn search_page(
 }
 
 /// Wall time of each stage of [`search_page`], in milliseconds, for the
-/// `Server-Timing` header: `totals` (count + owned value), `rows` (the page
+/// `Server-Timing` header: `totals` (counts + owned value), `rows` (the page
 /// query) and `copies` (the per-printing copy expansion).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SearchTimings {
@@ -410,7 +417,7 @@ pub fn search_page_timed(
         return cursor_page(conn, compiled, limit, cursor.as_deref());
     }
     let t = std::time::Instant::now();
-    let (total, total_value) = totals(conn, compiled)?;
+    let (total, total_cards, total_value) = totals(conn, compiled)?;
     let mut timings = SearchTimings {
         totals_ms: Some(ms(t)),
         ..Default::default()
@@ -430,6 +437,7 @@ pub fn search_page_timed(
         SearchPage {
             rows,
             total,
+            total_cards,
             total_value,
             limit,
             offset,
@@ -445,6 +453,10 @@ pub fn search_page_timed(
 struct CursorBody {
     f: String,
     t: i64,
+    /// `None` only in a cursor issued before this field existed, so that a
+    /// counted zero is never mistaken for it and counted again on every page.
+    #[serde(default)]
+    c: Option<i64>,
     v: Option<f64>,
     k: Vec<serde_json::Value>,
     /// Pages already served, so the page this cursor opens has depth `d`.
@@ -552,12 +564,12 @@ fn cursor_page(
     let fp = fingerprint(compiled);
     let parts = order_parts(compiled);
     let mut timings = SearchTimings::default();
-    let (total, total_value, seek) = match cursor {
+    let (total, total_cards, total_value, seek) = match cursor {
         None => {
             let t = std::time::Instant::now();
-            let (total, value) = totals(conn, compiled)?;
+            let (total, cards, value) = totals(conn, compiled)?;
             timings.totals_ms = Some(ms(t));
-            (total, value, None)
+            (total, cards, value, None)
         }
         Some(raw) => {
             let invalid = || crate::error::DbError::Invalid("cursor is not valid".to_string());
@@ -573,7 +585,16 @@ fn cursor_page(
                 .filter(|k| k.len() == parts.len())
                 .ok_or_else(invalid)?;
             timings.depth = body.d;
-            (body.t, body.v, Some(keys))
+            let cards = match body.c {
+                Some(cards) => cards,
+                None => {
+                    let t = std::time::Instant::now();
+                    let (_, cards, _) = totals(conn, compiled)?;
+                    timings.totals_ms = Some(ms(t));
+                    cards
+                }
+            };
+            (body.t, cards, body.v, Some(keys))
         }
     };
 
@@ -605,6 +626,7 @@ fn cursor_page(
         (true, Some((_, keys))) => Some(encode_cursor(&CursorBody {
             f: fp,
             t: total,
+            c: Some(total_cards),
             v: total_value,
             k: keys.iter().map(to_json).collect(),
             d: timings.depth + 1,
@@ -621,6 +643,7 @@ fn cursor_page(
         SearchPage {
             rows,
             total,
+            total_cards,
             total_value,
             limit,
             offset: 0,
@@ -631,19 +654,21 @@ fn cursor_page(
 }
 
 /// Everything the compiled query matches, ignoring any paging: how many rows,
-/// and what the owned copies among them are worth
-/// ([`SearchPage::total`] and [`SearchPage::total_value`]).
+/// how many cards they hold, and what the owned copies among them are worth
+/// ([`SearchPage::total`], [`SearchPage::total_cards`] and
+/// [`SearchPage::total_value`]).
 ///
-/// One statement, because the two are the same fact counted in different units
+/// One statement, because these are the same fact counted in different units
 /// and a second statement would be a second execution of the same WHERE clause
 /// — and, worse, of a WHERE clause that could drift from this one.
-pub fn totals(conn: &Connection, compiled: &CompiledSearch) -> Result<(i64, Option<f64>)> {
+pub fn totals(conn: &Connection, compiled: &CompiledSearch) -> Result<(i64, i64, Option<f64>)> {
     let sql = format!(
-        "SELECT COUNT(*), SUM(({OWNED_VALUE_SUBQ})) {FROM_CLAUSE} WHERE {}",
+        "SELECT COUNT(*), COALESCE(SUM(({OWNED_COUNT_SUBQ})), 0), \
+                SUM(({OWNED_VALUE_SUBQ})) {FROM_CLAUSE} WHERE {}",
         where_clause(compiled)
     );
     let row = conn.query_row(&sql, params_from_iter(compiled.params.iter()), |r| {
-        Ok((r.get(0)?, r.get(1)?))
+        Ok((r.get(0)?, r.get(1)?, r.get(2)?))
     })?;
     Ok(row)
 }
@@ -3105,6 +3130,59 @@ mod tests {
         assert!(
             (got - 50.0).abs() < 1e-9,
             "only the owned copy is money the collection holds, got {got}"
+        );
+    }
+
+    /// The card count beside `total`'s printing count: every card the list
+    /// draws, whatever its status, over the whole result and whatever slice
+    /// was asked for.
+    #[test]
+    fn total_cards_counts_every_card_over_the_whole_result() {
+        let f = fixture();
+        f.conn
+            .execute(
+                "INSERT INTO collection (printing_id,condition,language,acquired_at,source,status)
+                 VALUES
+                 ('han-std','Near Mint','English','2024-03-01','manual_id','owned'),
+                 ('han-std','Near Mint','English','2024-03-02','manual_id','owned'),
+                 ('han-std','Near Mint','English','2024-03-03','manual_id','ordered'),
+                 ('han-std','Near Mint','English','2024-03-04','manual_id','sold')",
+                [],
+            )
+            .unwrap();
+        let han = search_page(&f.conn, &f.compile("han solo"), Slice::All).unwrap();
+        assert_eq!((han.total, han.total_cards), (1, 4));
+        assert_eq!(han.rows[0].copies.len(), 4);
+
+        // The fixture's three cards plus Han's four.
+        let c = all_printings();
+        let all = search_page(&f.conn, &c, Slice::All).unwrap();
+        let drawn: usize = all.rows.iter().map(|r| r.copies.len()).sum();
+        assert_eq!((all.total_cards, drawn), (7, 7));
+        let none = Slice::Page {
+            limit: 0,
+            offset: 0,
+        };
+        assert_eq!(search_page(&f.conn, &c, none).unwrap().total_cards, 7);
+
+        let walk = |cursor| {
+            let slice = Slice::Cursor { limit: 1, cursor };
+            search_page(&f.conn, &c, slice).unwrap()
+        };
+        let first = walk(None);
+        let second = walk(first.next_cursor.clone());
+        assert_eq!((first.total_cards, second.total_cards), (7, 7));
+
+        // A cursor issued before the card count existed is counted again, once.
+        let cursor = first.next_cursor.unwrap();
+        let mut old = serde_json::to_value(decode_cursor(&cursor).unwrap()).unwrap();
+        old.as_object_mut().unwrap().remove("c").unwrap();
+        let old = encode_cursor(&serde_json::from_value(old).unwrap());
+        let resumed = walk(Some(old));
+        assert_eq!(resumed.total_cards, 7);
+        assert_eq!(
+            decode_cursor(&resumed.next_cursor.unwrap()).unwrap().c,
+            Some(7)
         );
     }
 

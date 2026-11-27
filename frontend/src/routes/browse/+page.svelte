@@ -33,7 +33,7 @@
 		groupSets(visible).map((g) => ({
 			...g,
 			total_cards: g.sets.reduce((n, x) => n + x.total_cards, 0),
-			owned_cards: g.sets.reduce((n, x) => n + x.owned_cards, 0)
+			owned_distinct: g.sets.reduce((n, x) => n + x.owned_distinct, 0)
 		}))
 	);
 
@@ -123,7 +123,7 @@
 								<li>
 									<button
 										class="navlink"
-										class:owned={g.owned_cards > 0}
+										class:owned={g.owned_distinct > 0}
 										onclick={() => jumpTo(g)}
 									>
 										<span class="dot" aria-hidden="true"></span>
@@ -150,8 +150,8 @@
 									{g.sets.length}
 									{g.sets.length === 1 ? 'set' : 'sets'}
 									{#if g.total_cards > 0}
-										· {count(g.owned_cards)} / {count(g.total_cards)} cards ({pct(
-											g.owned_cards,
+										· {count(g.owned_distinct)} / {count(g.total_cards)} cards ({pct(
+											g.owned_distinct,
 											g.total_cards
 										)}%)
 									{/if}
@@ -184,8 +184,8 @@
 											<div class="meters">
 												<ProgressBar
 													tone="complete"
-													label="Cards {count(set.owned_cards)} / {count(set.total_cards)}"
-													value={set.owned_cards}
+													label="Cards {count(set.owned_distinct)} / {count(set.total_cards)}"
+													value={set.owned_distinct}
 													max={set.total_cards}
 												/>
 												<ProgressBar

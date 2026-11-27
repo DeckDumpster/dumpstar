@@ -31,5 +31,5 @@ export function groupSets(sets: SetSummary[]): SetGroup[] {
 
 /** A group starts collapsed unless the collection holds a card from one of its sets. */
 export function startsCollapsed(group: SetGroup): boolean {
-  return !group.sets.some((s) => s.owned_cards > 0);
+  return !group.sets.some((s) => s.owned_distinct > 0);
 }

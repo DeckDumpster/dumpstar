@@ -512,6 +512,13 @@ case ":${PATH}:" in
     *":${HOME}/.nix-profile/bin:"*) ;;
     *) PATH="${HOME}/.nix-profile/bin:${PATH}" ;;
 esac
+# A daemon install's profile (the CI runner images; see runner-deps.sh), which
+# only a login shell has on PATH. Last, so it shadows nothing.
+_nix_system_bin="${DUMPSTAR_NIX_SYSTEM_PROFILE:-/nix/var/nix/profiles/default}/bin"
+case ":${PATH}:" in
+    *":${_nix_system_bin}:"*) ;;
+    *) PATH="${PATH}:${_nix_system_bin}" ;;
+esac
 case ":${PATH}:" in
     *":${HOME}/.cargo/bin:"*) ;;
     *) PATH="${HOME}/.cargo/bin:${PATH}" ;;

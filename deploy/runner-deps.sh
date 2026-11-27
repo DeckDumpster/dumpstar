@@ -56,7 +56,12 @@ fi
 # The per-user toolchains install under $HOME and a non-login shell does not
 # have them on PATH. Doing this here rather than in the workflow means a
 # developer, a polecat and CI all get the same answer from `command -v cargo`.
-export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$HOME/.nix-profile/bin:$PATH"
+# A daemon install of Nix (the CI runner images: DeckDumpster/ephemeral-ci
+# scripts/runner-env.sh) keeps nix in the system default profile, which only a
+# login shell puts on PATH; /nix is root's, so installing a second one fails.
+# Last, so that profile shadows nothing.
+NIX_SYSTEM_PROFILE="${DUMPSTAR_NIX_SYSTEM_PROFILE:-/nix/var/nix/profiles/default}"
+export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$HOME/.nix-profile/bin:$PATH:$NIX_SYSTEM_PROFILE/bin"
 
 # sccache, the shared Rust compile cache (sp-2i16qf; see deploy/rust-cache.sh).
 # Pinned by flake.nix/flake.lock and installed only by `nix build`

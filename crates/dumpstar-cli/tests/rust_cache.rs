@@ -78,8 +78,11 @@ impl Sandbox {
                 cmd.env_remove(&key);
             }
         }
+        // The machine's own daemon-installed Nix, if it has one, is out of
+        // sight: a case that has one puts it under this directory.
         cmd.env("HOME", self.path("home"))
-            .env("DUMPSTAR_SCCACHE_DIR", self.path("sccache-dir"));
+            .env("DUMPSTAR_SCCACHE_DIR", self.path("sccache-dir"))
+            .env("DUMPSTAR_NIX_SYSTEM_PROFILE", self.path("nix-system"));
         cmd
     }
 
@@ -422,6 +425,13 @@ fn ci_sh_finds_the_nix_profile_without_letting_it_shadow_the_toolchain() {
     let nix = position(".nix-profile/bin");
     assert!(position(".cargo/bin") < nix, "{path}");
     assert!(position(".local/bin") < nix, "{path}");
+    // A daemon install's nix-store, behind the system tools: ci.sh is its own
+    // step on the runner and inherits nothing from runner-deps.sh.
+    assert_eq!(
+        dirs.last(),
+        Some(&sandbox.path("nix-system/bin").as_path()),
+        "{path}"
+    );
 }
 
 /// The Containerfile's builder step up to its `cargo build`, as the shell sees
@@ -548,6 +558,22 @@ fn sccache_flag_installs_with_nix_build_and_no_curl() {
     );
     assert!(
         sandbox.log("nix.log").contains("build path:.#sccache"),
+        "{text}"
+    );
+    assert_eq!(sandbox.log("curl.log"), "", "{text}");
+}
+
+#[test]
+fn sccache_flag_uses_a_daemon_installed_nix_that_is_not_on_path() {
+    // The CI runner images: /nix is root's, and only a login shell has nix on
+    // PATH. Installing a second Nix there fails.
+    let sandbox = Sandbox::new();
+    sandbox.stub("nix-system/bin/nix", WORKING_NIX);
+    sandbox.recording_curl("exit 22");
+    let (out, text) = sandbox.runner_deps("--sccache", &[]);
+    assert!(out.status.success(), "{text}");
+    assert!(
+        is_executable(&sandbox.path("sccache-dir/bin/sccache")),
         "{text}"
     );
     assert_eq!(sandbox.log("curl.log"), "", "{text}");

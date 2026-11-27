@@ -4,8 +4,11 @@
 # (tests/ci/select_test.sh holds this file to that list). Each tier is
 # `DUMPSTAR_CI_TIERS=<tier> bash deploy/ci.sh`, the explicit-list path, which runs
 # exactly that tier with no floor added.
-# The rust and isolation tiers also fetch sccache, so they compile against the
-# shared store.
+# The rust and isolation tiers also install sccache from flake.nix (runner-deps.sh
+# --sccache, which first installs Nix: the image has none), so they compile against
+# the shared store. The rust tier sets DUMPSTAR_RUST_CACHE=required, which turns it
+# red, naming the endpoint, when it would compile cold: cold, it cannot finish under
+# the suite cap.
 # The image is the builder base the Containerfile names. It stands in for CI's
 # host runner: lint, rust and isolation need only a toolchain, bash and git.
 # deploy, frontend and container need podman (and node, systemd) which this image
@@ -26,8 +29,9 @@ timeout = 1800
 # ci_entry is the command a queue.local round runs on a round VM (read by the
 # harness's gate::own::ci_entry): the whole of CI, every tier of
 # DUMPSTAR_CI_ALL_TIERS named explicitly. tests/ci/select_test.sh fails if it
-# names fewer. `default` below is only the subset testenv can run in a container.
-ci_entry = "DUMPSTAR_CI_TIERS='lint plan rust isolation deploy frontend ui container' bash deploy/ci.sh"
+# names fewer. It installs sccache first, which ci.sh's preflight requires.
+# `default` below is only the subset testenv can run in a container.
+ci_entry = "bash deploy/runner-deps.sh --sccache && DUMPSTAR_CI_TIERS='lint plan rust isolation deploy frontend ui container' bash deploy/ci.sh"
 default = ["lint", "plan", "rust", "frontend-check", "ui"]
 
 [tier.lint]
@@ -42,8 +46,8 @@ env = { DUMPSTAR_CI_TIERS = "plan", DUMPSTAR_RUNNER_DEPS_ONLY = "base rust" }
 timeout = 1200
 
 [tier.rust]
-argv = ["bash", "-c", "apt-get update -qq && apt-get install -y -qq git curl jq sqlite3 python3 make >/dev/null && cargo install --locked cargo-nextest --version 0.9.148 && bash deploy/runner-deps.sh --sccache && bash deploy/ci.sh"]
-env = { DUMPSTAR_CI_TIERS = "rust", DUMPSTAR_RUNNER_DEPS_ONLY = "base rust nextest" }
+argv = ["bash", "-c", "apt-get update -qq && apt-get install -y -qq git curl jq sqlite3 python3 make xz-utils ca-certificates >/dev/null && cargo install --locked cargo-nextest --version 0.9.148 && bash deploy/runner-deps.sh --sccache && bash deploy/ci.sh"]
+env = { DUMPSTAR_CI_TIERS = "rust", DUMPSTAR_RUNNER_DEPS_ONLY = "base rust nextest sccache", DUMPSTAR_RUST_CACHE = "required" }
 timeout = 1800
 
 [tier.frontend-check]
@@ -51,7 +55,7 @@ argv = ["bash", "-c", "set -euo pipefail; apt-get update -qq && apt-get install 
 timeout = 900
 
 [tier.isolation]
-argv = ["bash", "-c", "apt-get update -qq && apt-get install -y -qq git curl jq sqlite3 python3 make >/dev/null && bash deploy/runner-deps.sh --sccache && bash deploy/ci.sh"]
+argv = ["bash", "-c", "apt-get update -qq && apt-get install -y -qq git curl jq sqlite3 python3 make xz-utils ca-certificates >/dev/null && bash deploy/runner-deps.sh --sccache && bash deploy/ci.sh"]
 env = { DUMPSTAR_CI_TIERS = "isolation", DUMPSTAR_RUNNER_DEPS_ONLY = "base rust" }
 timeout = 1800
 

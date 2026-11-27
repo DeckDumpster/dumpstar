@@ -513,6 +513,11 @@ case ":${PATH}:" in
     *":${HOME}/.local/bin:"*) ;;
     *) PATH="${HOME}/.local/bin:${PATH}" ;;
 esac
+# nix-store, which hands sccache's closure to the image build (rust-cache.sh).
+case ":${PATH}:" in
+    *":${HOME}/.nix-profile/bin:"*) ;;
+    *) PATH="${HOME}/.nix-profile/bin:${PATH}" ;;
+esac
 export PATH
 
 echo "==> Runner dependencies"
@@ -905,7 +910,8 @@ fi
 }
 
 if tier -q rust || tier -q isolation || tier -q container; then
-    dumpstar_rust_cache_enable
+    # Non-zero only under DUMPSTAR_RUST_CACHE=required: stop, do not compile cold.
+    dumpstar_rust_cache_enable || exit 1
 fi
 
 # Cheapest and likeliest-to-fail first (sp-l2xovg): a one-word lint used to

@@ -9,9 +9,13 @@
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; overlays = [ rust-overlay.overlays.default ]; };
     in {
+      # deploy/runner-deps.sh installs the shared compile cache's client from here.
+      packages.${system}.sccache = pkgs.sccache;
+
       devShells.${system}.default = pkgs.mkShell {
         packages = [
           (pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml)
+          pkgs.sccache
         ];
       };
     };

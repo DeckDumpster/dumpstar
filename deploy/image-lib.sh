@@ -65,11 +65,16 @@ dumpstar_image_ensure() {
 		if declare -F dumpstar_rust_cache_buildargs >/dev/null; then
 			mapfile -t cache_args < <(dumpstar_rust_cache_buildargs)
 		fi
+		local rc=0 arg
 		dumpstar_image_build_collecting -t "$tag" \
 			"${cache_args[@]}" \
 			--build-arg "CARGO_TARGET_CACHE_SCOPE=${scope}" \
-			-f "${repo_dir}/Containerfile" "$repo_dir"
-		return
+			-f "${repo_dir}/Containerfile" "$repo_dir" || rc=$?
+		# The sccache-bin context is a copy of its whole store closure.
+		for arg in "${cache_args[@]}"; do
+			[[ "$arg" != sccache-bin=* ]] || rm -rf "${arg#sccache-bin=}"
+		done
+		return "$rc"
 	fi
 
 	if ! podman image exists "$prebuilt"; then

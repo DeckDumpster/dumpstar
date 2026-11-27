@@ -19,10 +19,12 @@ later** — see [Expanding to GitHub](#expanding-to-github-later).
 
 ## Prerequisites
 
-### Linux (one-time, needs sudo)
+### Linux (one-time, needs sudo rights)
 
 ```bash
-sudo bash deploy/runner-deps.sh    # everything deploy/ci.sh needs
+# Everything deploy/ci.sh needs. Runs as you and uses sudo itself for the system
+# packages; it refuses to run under sudo.
+sudo -v && bash deploy/runner-deps.sh
 bash deploy/runner-deps.sh --check # says what is still missing, and why
 ```
 

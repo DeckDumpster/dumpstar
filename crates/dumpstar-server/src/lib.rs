@@ -1628,6 +1628,78 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn search_sorted_by_added_orders_on_each_printings_newest_copy() {
+        let (dir, router, tenants_dir, fx) = multi_tenant_app(&["u"]).await;
+        let tok = fx.valid_token("u@example.com");
+        // Neither direction of name order matches the added order, so a fall
+        // back to names cannot pass.
+        dumpstar_db::open_shared(&dir.path().join("shared.sqlite"))
+            .unwrap()
+            .execute_batch(
+                "INSERT INTO cards (card_id, name, card_type, cost, aspects) \
+                   VALUES ('SOR-2', 'Chewbacca', 'Unit', 5, '[]'), \
+                          ('SOR-3', 'Darth Vader', 'Unit', 7, '[]'); \
+                 INSERT INTO printings (printing_id, card_id, set_code, number, variant, finish) \
+                   VALUES ('SOR-2-normal', 'SOR-2', 'SOR', '2', 'Standard', 'Normal'), \
+                          ('SOR-3-normal', 'SOR-3', 'SOR', '3', 'Standard', 'Normal');",
+            )
+            .unwrap();
+        let database_id = {
+            let reg = dumpstar_db::open_registry(&dir.path().join("registry.sqlite")).unwrap();
+            dumpstar_db::registry::lookup(&reg, "u")
+                .unwrap()
+                .unwrap()
+                .database_id
+        };
+        // Chewbacca holds an old copy and the newest of all.
+        dumpstar_db::open_user(&dumpstar_db::tenant_db_file(&tenants_dir, &database_id).unwrap())
+            .unwrap()
+            .execute_batch(
+                "INSERT INTO collection (printing_id, acquired_at, source) VALUES \
+               ('SOR-2-normal', '2025-01-01', 'manual_id'), \
+               ('SOR-1-normal', '2026-03-01T00:00:00Z', 'manual_id'), \
+               ('SOR-3-normal', '2026-02-01', 'manual_id'), \
+               ('SOR-2-normal', '2026-04-14T00:00:00Z', 'manual_id');",
+            )
+            .unwrap();
+
+        let ids = |query: &'static str| {
+            let router = router.clone();
+            let tok = tok.clone();
+            async move {
+                let uri = format!("/api/collection/search?sort=added&limit=all&{query}");
+                let resp = router
+                    .oneshot(request("GET", &uri, Some(&tok), None))
+                    .await
+                    .unwrap();
+                assert_eq!(resp.status(), StatusCode::OK, "{uri}");
+                let body: serde_json::Value =
+                    serde_json::from_str(&body_string(resp).await).unwrap();
+                body["rows"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|r| r["printing_id"].as_str().unwrap().to_string())
+                    .collect::<Vec<_>>()
+            }
+        };
+
+        assert_eq!(
+            ids("dir=desc").await,
+            ["SOR-2-normal", "SOR-1-normal", "SOR-3-normal"]
+        );
+        assert_eq!(
+            ids("dir=asc").await,
+            ["SOR-3-normal", "SOR-1-normal", "SOR-2-normal"]
+        );
+        // cost<=5 leaves out Darth Vader.
+        assert_eq!(
+            ids("dir=desc&q=cost%3C%3D5").await,
+            ["SOR-2-normal", "SOR-1-normal"]
+        );
+    }
+
+    #[tokio::test]
     async fn search_rejects_unknown_keyword_with_position() {
         let (_d, router, fx) = test_app().await;
         let tok = fx.valid_token("u@example.com");

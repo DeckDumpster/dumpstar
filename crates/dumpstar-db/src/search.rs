@@ -2415,6 +2415,30 @@ mod tests {
         );
     }
 
+    #[test]
+    fn order_by_added_sorts_on_the_newest_copy() {
+        let f = fixture();
+        // Luke's copies date from 2024-01 and 2024-02, the Falcon's from
+        // 2025-03. Han gets a copy between those and then the newest of all, so
+        // only the newest copy (not the oldest) puts Han ahead of the Falcon.
+        f.conn
+            .execute_batch(
+                "INSERT INTO collection (printing_id,condition,language,acquired_at,source,status)
+                 VALUES
+                 ('han-std','Near Mint','English','2023-05-01','manual_id','owned'),
+                 ('han-std','Near Mint','English','2026-04-14T00:00:00Z','manual_id','owned')",
+            )
+            .unwrap();
+        let owned = |dir: &str| -> Vec<String> {
+            ordered(&f, "added", dir)
+                .into_iter()
+                .filter(|id| ["han-std", "falcon-std", "luke-foil"].contains(&id.as_str()))
+                .collect()
+        };
+        assert_eq!(owned("desc"), vec!["han-std", "falcon-std", "luke-foil"]);
+        assert_eq!(owned("asc"), vec!["luke-foil", "falcon-std", "han-std"]);
+    }
+
     // --- sort=aspects ------------------------------------------------------
 
     /// Two sets numbered the way the real ones are (docs/aspect-order.md): per

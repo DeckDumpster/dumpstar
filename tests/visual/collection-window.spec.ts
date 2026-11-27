@@ -233,7 +233,7 @@ test('the table runs edge to edge under the header', async ({ page }) => {
     and pushed the table off the left edge, so QTY read as TY. */
 test.describe('phone width', () => {
 	test.use({ viewport: { width: 390, height: 844 } });
-	const ALL = ['qty', 'type', 'aspects', 'cost', 'stats', 'rarity', 'set', 'number', 'nm', 'adj'];
+	const ALL = ['qty', 'type', 'aspects', 'cost', 'stats', 'rarity', 'set', 'number', 'nm', 'added', 'adj'];
 	const configs: Record<string, string[]> = {
 		default: ['adj'],
 		'every column': [],

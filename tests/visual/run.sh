@@ -78,6 +78,16 @@ trap cleanup EXIT
 
 echo "==> Building and starting the fixture instance '${INSTANCE}'..."
 bash "$REPO_DIR/deploy/setup.sh" "$INSTANCE" --test
+
+# `--test` binds no identity, so every token is a 403. The fixture is a
+# handle-named collection: register it, then bind the identity the specs sign in
+# as (playwright.sh), before the server opens the databases.
+for words in "migrate" "identity add collection --email visual-test@example.com"; do
+    # shellcheck disable=SC2086
+    podman run --rm -v "${SERVICE_NAME}-data:/data:Z" --entrypoint dumpstar \
+        "localhost/dumpstar:${INSTANCE}" tenant $words >/dev/null
+done
+
 systemctl --user start "$SERVICE_NAME"
 
 echo "==> Waiting for the server..."

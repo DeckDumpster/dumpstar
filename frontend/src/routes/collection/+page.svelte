@@ -1716,7 +1716,8 @@
 	:global(.toolbar.topbar.sticky) {
 		padding: var(--toolbar-gap) var(--toolbar-bar-pad-x);
 	}
-	:global(.searchrow) {
+	/* Three classes: the kit Toolbar's own `.g-md` gap outranks a bare one. */
+	:global(.toolbar.d-row.searchrow) {
 		gap: var(--toolbar-search-gap);
 	}
 	.brand:hover .brandmark {
@@ -1749,6 +1750,7 @@
 		border-radius: var(--radius-md);
 		color: var(--color-control-text);
 		font-family: inherit;
+		line-height: var(--toolbar-search-line);
 	}
 	/* An invalid control reddens on the danger ramp, not the brand one —
 	   the same answer the Field primitive gives for `error`. Crimson here

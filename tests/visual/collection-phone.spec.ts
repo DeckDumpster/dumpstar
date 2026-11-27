@@ -20,7 +20,12 @@ function row(i: number) {
 		set_name: 'Spark of Rebellion',
 		set_symbol_url: null,
 		number: String(i + 1),
-		name: i % 3 === 0 ? `Darth Vader, Commanding the First Legion ${i}` : `Han Solo ${i}`,
+		// The long one must outrun the Name column (about 320px here) in any
+		// font, so that staying on one line can only mean it did not wrap.
+		name:
+			i % 3 === 0
+				? `Darth Vader, Commanding the First Legion of the Galactic Empire ${i}`
+				: `Han Solo ${i}`,
 		card_type: i % 2 ? 'Leader' : 'Unit',
 		rarity: 'Common',
 		market_price: 1.5,

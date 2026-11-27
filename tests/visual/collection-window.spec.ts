@@ -120,6 +120,12 @@ async function openCollection(
 	}, view);
 	await page.goto('/collection?q=set%3Asor');
 	await page.locator(view === 'grid' ? '[data-testid="collection-grid"]' : 'table.dd').waitFor();
+	// The rows are drawn before the page restores the saved scroll position, two
+	// frames after the search answers: a test that scrolled in between was sent
+	// back to the top. These two frames queue behind those two.
+	await page.evaluate(
+		() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+	);
 	return asked;
 }
 
@@ -454,8 +460,10 @@ test('the sort is executed by the server and returns the reader to the top', asy
  *
  * They are gone from this view for good, not hidden: the assertions below are
  * about what the page OFFERS, because a sort you can still reach is a sort
- * that still costs that. Adj. keeps drawing — computing it for the rows under
- * the viewport was never the expensive part.
+ * that still costs that. Adjusted still draws when a row is adjusted —
+ * computing it for the rows under the viewport was never the expensive part.
+ * The endpoint's refusal of both keys is held by the server test
+ * `search_refuses_a_sort_it_cannot_satisfy`.
  */
 
 test('no sort control on the grid offers value or adj', async ({ page }) => {
@@ -467,43 +475,50 @@ test('no sort control on the grid offers value or adj', async ({ page }) => {
 	}
 });
 
-test('the table has no Value column, and Adj. draws but does not sort', async ({ page }) => {
+/** The table's headings, upper-cased: `allInnerTexts` returns *rendered* text
+    and these headers are `text-transform: uppercase`, so a case-sensitive
+    assertion can only ever pass — including on the day the Value column comes
+    back as "VALUE" (pd-66hq). */
+async function headings(page: Page, selector = 'table.dd thead th'): Promise<string[]> {
+	return (await page.locator(selector).allInnerTexts()).map((h) => h.trim().toUpperCase());
+}
+
+/** Adjusted is hidden by default, so both tests below un-hide every column:
+    otherwise its absence would say nothing about the rows. */
+async function showEveryColumn(page: Page) {
+	await page.addInitScript(() => localStorage.setItem('collection.hiddenColumns', '[]'));
+}
+
+test('the table has no Value column, and no Adjusted one when nothing is adjusted', async ({
+	page
+}) => {
+	await showEveryColumn(page);
 	await openCollection(page, 'table');
-	// Compared upper-cased throughout this spec: `allInnerTexts` returns
-	// *rendered* text and these headers are `text-transform: uppercase`, so a
-	// case-sensitive assertion here can only ever pass — including on the day
-	// the Value column comes back as "VALUE" (pd-66hq).
-	const headers = (await page.locator('table.dd thead th').allInnerTexts()).map((h) =>
-		h.toUpperCase()
-	);
-	expect(headers, `headers: ${headers.join(' | ')}`).not.toContain('VALUE');
-
-	// Adj. is still a column — it is the last one, and it still draws a figure.
-	expect(headers.at(-1)).toMatch(/^ADJ\./);
-	await expect(page.locator('table.dd tbody tr:not(.vspace)').first()).toBeVisible();
-
-	// But it is not clickable: no `.sortable` header carries it, so there is no
-	// affordance to order 56k rows by a column no index can satisfy.
-	const sortable = await page.locator('table.dd thead th.sortable').allInnerTexts();
+	const heads = await headings(page);
+	expect(heads, 'every column is showing').toContain('QTY');
+	expect(heads, `headers: ${heads.join(' | ')}`).not.toContain('VALUE');
+	// Every stub copy is Near Mint, so Adjusted would only repeat Price.
+	expect(heads, `headers: ${heads.join(' | ')}`).not.toContain('ADJUSTED');
+	const sortable = await headings(page, 'table.dd thead th.sortable');
+	expect(sortable.length, 'the table still offers sorts').toBeGreaterThan(0);
 	for (const label of sortable) {
-		expect(label, `sortable headers: ${sortable.join(', ')}`).not.toMatch(/Value|Adj\./i);
+		expect(label, `sortable headers: ${sortable.join(', ')}`).not.toMatch(/VALUE|ADJ/);
 	}
 });
 
-test('the endpoint refuses a sort it cannot satisfy, naming the ones it can', async ({ page }) => {
-	// Straight at the API — the UI no longer offers these, so this is the guard
-	// against them coming back through a bookmarked URL or a stale client.
-	for (const key of ['value', 'adj']) {
-		const res = await page.request.get(`/api/collection/search?sort=${key}&limit=1`);
-		expect(res.status(), `sort=${key}`).toBe(400);
-		const body = (await res.json()) as { error: string };
-		expect(body.error, `sort=${key}`).toContain('price');
-		expect(body.error, `sort=${key}`).toContain('qty');
+test('Adjusted draws, and does not sort, once a row is adjusted', async ({ page }) => {
+	await showEveryColumn(page);
+	// A played copy is worth less than the Near Mint price the row carries.
+	await openCollection(page, 'table', (i) => {
+		const r = row(i);
+		return { ...r, copies: r.copies.map((c) => ({ ...c, condition: 'Lightly Played' })) };
+	});
+	await expect(page.locator('table.dd thead th', { hasText: 'Adjusted' })).toHaveCount(1);
+	const sortable = await headings(page, 'table.dd thead th.sortable');
+	expect(sortable.length, 'the table still offers sorts').toBeGreaterThan(0);
+	for (const label of sortable) {
+		expect(label, `sortable headers: ${sortable.join(', ')}`).not.toMatch(/VALUE|ADJ/);
 	}
-	// A surviving key still works, so the refusal is about the key and not
-	// about `sort=` having stopped being read.
-	const ok = await page.request.get('/api/collection/search?sort=price&limit=1');
-	expect(ok.status()).toBe(200);
 });
 
 /* ── The header is two rows at every width (sp-u08a8v) ─────────────────────

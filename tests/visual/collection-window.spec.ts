@@ -120,12 +120,9 @@ async function openCollection(
 	}, view);
 	await page.goto('/collection?q=set%3Asor');
 	await page.locator(view === 'grid' ? '[data-testid="collection-grid"]' : 'table.dd').waitFor();
-	// The rows are drawn before the page restores the saved scroll position, two
-	// frames after the search answers: a test that scrolled in between was sent
-	// back to the top. These two frames queue behind those two.
-	await page.evaluate(
-		() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
-	);
+	// The rows are drawn before the page restores the saved scroll position: a
+	// test that scrolled in between was sent back to the top.
+	await page.locator('html[data-scroll-restored]').waitFor({ state: 'attached' });
 	return asked;
 }
 

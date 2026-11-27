@@ -145,7 +145,7 @@ check "a route file" "$FE" "$(select_for "frontend/src/routes/browse/+page.svelt
 
 # THE pd-tf4h REGRESSION CHECK. Baselines were once not re-recorded because the
 # change did not look like a UI change. Each of these repaints every route at
-# once, and each must still take the browser tier.
+# once, and each must still take the `ui` tier.
 check "a design token (tokens.css)" "$FE" \
 	"$(select_for "frontend/src/lib/styles/tokens.css")"
 check "the global stylesheet (app.css)" "$FE" \
@@ -174,20 +174,10 @@ check "docs + a crate -> everything" "$ALL" \
 check "order does not matter" "$ALL" \
 	"$(select_for "crates/dumpstar-db/src/lib.rs" "README.md")"
 
-# The browser specs live OUTSIDE frontend/, so touching them is not a
-# frontend-only change — and must not be treated as one.
+# Specs under tests/ live OUTSIDE frontend/, so touching them is not a
+# frontend-only change: it runs every tier, `ui` among them.
 check "a browser spec -> everything" "$ALL" \
 	"$(select_for "tests/visual/routes.spec.ts")"
-
-# The browser tier drives the instance the container tier starts, so a
-# selection can never hold one without the other.
-for p in "frontend/src/app.css" "crates/x.rs" "README.md"; do
-	got="$(select_for "$p")"
-	has_browser="$(printf '%s\n' $got | grep -cx browser)"
-	has_container="$(printf '%s\n' $got | grep -cx container)"
-	check "browser implies container (${p})" "0" \
-		"$((has_browser > has_container ? 1 : 0))"
-done
 
 # ---------------------------------------------------------------------------
 log "4. deploy/ci.sh runs everything unless told otherwise"

@@ -41,5 +41,6 @@ Viewports live in `playwright.config.ts` (`desktop-1440`, `mobile-768`).
 
 ## Not the intents harness
 
-`tests/ui` needs an `ANTHROPIC_API_KEY` and is non-deterministic by design;
-this directory is offline Playwright and belongs in CI.
+`tests/ui` holds the use-case intents; CI replays them as the `ui` tier
+(`tests/ui/run.sh`), the one browser gate. This directory is separate: offline
+Playwright property specs, run by hand.

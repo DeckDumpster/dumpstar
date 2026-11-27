@@ -9,8 +9,7 @@ collection.
 > fixture's SWU ids (`SOR_005`, `SOR-521:Normal`, `/card/SOR/005`), but the
 > counts and stories some of them describe (batch sizes, deck contents,
 > copy numbers) were written against an earlier seeding and have not been
-> re-verified against this one. The visual baselines are stale until
-> `bash tests/visual/run.sh --update` runs on a test VM.
+> re-verified against this one.
 
 ## Building
 

@@ -125,14 +125,14 @@ Steps, in order, exiting non-zero on the first failure of a sequential step
 6. DR drill (`tests/litestream/drill.sh`): `deploy/RESTORE.md`'s procedure
    executed with the shipped scripts — one tenant restored in place while the
    others keep exactly their own data.
-7. Browser specs (`tests/visual/`): every route at 1440 and 768 renders, and
-   the layout properties hold. No pixel baselines.
+7. The `ui` tier (`tests/ui/run.sh`), on every run of the full suite: the
+   replay implementations in `tests/ui` run in Chromium, with no API key. It is
+   the one browser gate.
 
-The intents UI harness (`tests/ui`, Playwright) is deliberately not in the
-loop — it needs `ANTHROPIC_API_KEY` for Vision mode. Run it on its own:
+The property specs in `tests/visual/` are not part of the loop. Run them by hand:
 
 ```bash
-( cd tests/ui && npx playwright install chromium && npx playwright test )
+bash tests/visual/run.sh
 ```
 
 ### The container gates run in parallel

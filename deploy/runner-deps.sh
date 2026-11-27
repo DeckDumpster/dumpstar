@@ -59,9 +59,9 @@ fi
 # A daemon install of Nix (the CI runner images: DeckDumpster/ephemeral-ci
 # scripts/runner-env.sh) keeps nix in the system default profile, which only a
 # login shell puts on PATH; /nix is root's, so installing a second one fails.
-# Last, so that profile shadows nothing.
+# Both Nix profiles go last, so they shadow nothing.
 NIX_SYSTEM_PROFILE="${DUMPSTAR_NIX_SYSTEM_PROFILE:-/nix/var/nix/profiles/default}"
-export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$HOME/.nix-profile/bin:$PATH:$NIX_SYSTEM_PROFILE/bin"
+export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH:$HOME/.nix-profile/bin:$NIX_SYSTEM_PROFILE/bin"
 
 # sccache, the shared Rust compile cache (sp-2i16qf; see deploy/rust-cache.sh).
 # Pinned by flake.nix/flake.lock and installed only by `nix build`
@@ -104,7 +104,6 @@ install_nix() {
     fetch_and_run_nix_installer "$dir" || rc=1
     rm -rf "$dir"
     [ "$rc" -eq 0 ] || return 1
-    export PATH="$HOME/.nix-profile/bin:$PATH"
     command -v nix >/dev/null 2>&1 || failed "Nix installed, but there is no nix in $HOME/.nix-profile/bin"
 }
 

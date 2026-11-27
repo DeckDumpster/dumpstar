@@ -402,36 +402,44 @@ fn an_image_whose_closure_cannot_be_listed_is_not_built_cold_when_required() {
     assert!(!args.contains("sccache-bin="), "{args}");
 }
 
-#[test]
-fn ci_sh_finds_the_nix_profile_without_letting_it_shadow_the_toolchain() {
+/// `PATH` after `ci.sh`'s `PATH` block, run on `inherited`.
+fn ci_sh_path(sandbox: &Sandbox, inherited: &str) -> Vec<PathBuf> {
     let ci = code("deploy/ci.sh");
-    let start = ci.find("case \":${PATH}:\" in").expect("a PATH block");
+    let start = ci.find("for _nix_bin in").expect("a PATH block");
     let end = ci.find("\nexport PATH\n").expect("export PATH");
-    let sandbox = Sandbox::new();
     let out = sandbox
         .command("bash")
         .args(["-c", &format!("{}\nprintf %s \"$PATH\"", &ci[start..end])])
-        .env("PATH", "/usr/bin:/bin")
+        .env("PATH", inherited)
         .output()
         .expect("bash runs");
     let path = String::from_utf8(out.stdout).unwrap();
-    let dirs: Vec<_> = path.split(':').map(Path::new).collect();
+    path.split(':').map(PathBuf::from).collect()
+}
+
+#[test]
+fn ci_sh_finds_the_nix_profile_without_letting_it_shadow_the_toolchain() {
+    let sandbox = Sandbox::new();
     let home = sandbox.path("home");
-    let position = |dir: &str| {
-        dirs.iter()
-            .position(|d| *d == home.join(dir))
-            .unwrap_or_else(|| panic!("no {dir} on PATH: {path}"))
-    };
-    let nix = position(".nix-profile/bin");
-    assert!(position(".cargo/bin") < nix, "{path}");
-    assert!(position(".local/bin") < nix, "{path}");
-    // A daemon install's nix-store, behind the system tools: ci.sh is its own
-    // step on the runner and inherits nothing from runner-deps.sh.
-    assert_eq!(
-        dirs.last(),
-        Some(&sandbox.path("nix-system/bin").as_path()),
-        "{path}"
-    );
+    let cargo = home.join(".cargo/bin");
+    // A login shell, or a developer's, already has cargo on PATH.
+    let with_cargo = format!("{}:/usr/bin:/bin", cargo.display());
+    for inherited in ["/usr/bin:/bin", &with_cargo] {
+        let dirs = ci_sh_path(&sandbox, inherited);
+        let position = |dir: &Path| {
+            dirs.iter()
+                .position(|d| d == dir)
+                .unwrap_or_else(|| panic!("no {dir:?} on PATH: {dirs:?}"))
+        };
+        let nix = position(&home.join(".nix-profile/bin"));
+        for ahead in [&cargo, &home.join(".local/bin"), Path::new("/usr/bin")] {
+            assert!(position(ahead) < nix, "{dirs:?}");
+        }
+        // A daemon install's nix-store: ci.sh is its own step on the runner
+        // and inherits nothing from runner-deps.sh.
+        let system = position(&sandbox.path("nix-system/bin"));
+        assert!(position(Path::new("/usr/bin")) < system, "{dirs:?}");
+    }
 }
 
 /// The Containerfile's builder step up to its `cargo build`, as the shell sees

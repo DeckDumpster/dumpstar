@@ -665,6 +665,30 @@ fn ci_sh_stops_when_a_required_cache_is_unavailable() {
     }
 }
 
+#[test]
+fn ci_sh_asks_for_the_cache_server_between_the_test_build_and_the_test_run() {
+    let ci = code("deploy/ci.sh");
+    let lines: Vec<_> = ci.lines().map(str::trim).collect();
+    let after = |from: usize, what: &str, matches: &dyn Fn(&str) -> bool| {
+        from + lines[from..]
+            .iter()
+            .position(|line| matches(line))
+            .unwrap_or_else(|| panic!("no {what} from line {from} of ci.sh's code"))
+    };
+    let build = after(0, "`cargo nextest run --no-run`", &|line| {
+        line.contains("cargo nextest run") && line.contains("--no-run")
+    });
+    let report = after(
+        build + 1,
+        "report that stops a failed build's run",
+        &|line| line == r#"dumpstar_rust_cache_report "nextest build" || exit 1"#,
+    );
+    let run = after(0, "`cargo nextest run --no-fail-fast`", &|line| {
+        line.contains("cargo nextest run") && line.contains("--no-fail-fast")
+    });
+    assert!(report < run, "the tests run before the report:\n{ci}");
+}
+
 /// A sccache whose server runs `server` in the foreground, as the real one does
 /// under `SCCACHE_NO_DAEMON`, and whose stats show one hit.
 fn sccache_with_server(sandbox: &Sandbox, server: &str) {
@@ -785,6 +809,26 @@ fn a_lost_server_under_on_is_said_once_and_the_run_goes_on_cold() {
 }
 
 #[test_id(thx42i8)]
+#[test]
+fn only_a_cache_that_is_not_required_lets_a_lost_server_compile_locally() {
+    let sandbox = Sandbox::new();
+    sccache_with_server(&sandbox, LIVE_SERVER);
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    for (mode, ignore) in [("required", "unset"), ("on", "1")] {
+        let (status, out) = run_with_server(
+            &sandbox,
+            mode,
+            port,
+            "dumpstar_rust_cache_enable && \
+             echo \"IGNORE=${SCCACHE_IGNORE_SERVER_IO_ERROR-unset}\"",
+        );
+        assert_eq!(status, Some(0), "{mode}: {out}");
+        let want = format!("IGNORE={ignore}");
+        assert!(out.lines().any(|line| line == want), "{mode}: {out}");
+    }
+}
+
 #[test]
 fn a_live_server_reports_hits() {
     let sandbox = Sandbox::new();

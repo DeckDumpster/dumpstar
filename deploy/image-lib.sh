@@ -59,28 +59,32 @@ dumpstar_image_ensure() {
 		# build-once-and-tag benefit the id exists for.
 		local scope
 		scope="$(printf '%s' "$repo_dir" | sha1sum | cut -c1-8)"
-		# The shared compile cache, when on (deploy/rust-cache.sh): the image's
-		# release build reads the same sccache store the host's cargo does.
-		local -a cache_args=()
-		local cache_out
-		if declare -F dumpstar_rust_cache_buildargs >/dev/null; then
-			# Captured, not piped: a process substitution drops the status.
-			if cache_out="$(dumpstar_rust_cache_buildargs)"; then
-				[ -z "$cache_out" ] || mapfile -t cache_args <<<"$cache_out"
-			else
-				_dumpstar_rust_cache_unavailable || return 1
+		# The subshell owns the sccache build context: its EXIT trap removes it
+		# on success, failure and signal, and leaves the caller's traps alone.
+		(
+			context=""
+			# An interrupted copy of the read-only store is still read-only.
+			trap '[ -z "$context" ] || { chmod -R u+w "$context" 2>/dev/null; rm -rf "$context"; }' EXIT
+			trap 'exit 143' TERM
+			trap 'exit 130' INT
+			# The shared compile cache, when on (deploy/rust-cache.sh): the image's
+			# release build reads the same sccache store the host's cargo does.
+			cache_args=()
+			if declare -F dumpstar_rust_cache_buildargs >/dev/null; then
+				context="$(mktemp -d "${TMPDIR:-/tmp}/dumpstar-sccache.XXXXXX")" || exit 1
+				# Captured, not piped: a process substitution drops the status.
+				if cache_out="$(dumpstar_rust_cache_buildargs "$context")"; then
+					[ -z "$cache_out" ] || mapfile -t cache_args <<<"$cache_out"
+				else
+					_dumpstar_rust_cache_unavailable || exit 1
+				fi
 			fi
-		fi
-		local rc=0 arg
-		dumpstar_image_build_collecting -t "$tag" \
-			"${cache_args[@]}" \
-			--build-arg "CARGO_TARGET_CACHE_SCOPE=${scope}" \
-			-f "${repo_dir}/Containerfile" "$repo_dir" || rc=$?
-		# The sccache-bin context is a copy of its whole store closure.
-		for arg in "${cache_args[@]}"; do
-			[[ "$arg" != sccache-bin=* ]] || rm -rf "${arg#sccache-bin=}"
-		done
-		return "$rc"
+			dumpstar_image_build_collecting -t "$tag" \
+				"${cache_args[@]}" \
+				--build-arg "CARGO_TARGET_CACHE_SCOPE=${scope}" \
+				-f "${repo_dir}/Containerfile" "$repo_dir"
+		)
+		return
 	fi
 
 	if ! podman image exists "$prebuilt"; then

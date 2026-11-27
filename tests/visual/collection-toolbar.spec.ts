@@ -32,15 +32,15 @@ const CONTROLS = {
 	columns: { deck: '#cols-btn', star: '[data-testid="columns-button"]' }
 } as const;
 
-type Box = { width: number; height: number };
+type Box = { width: number; height: number; x: number; right: number };
 
 async function measure(page: Page, which: 'deck' | 'star'): Promise<Record<string, Box>> {
 	const selectors = Object.fromEntries(Object.entries(CONTROLS).map(([k, v]) => [k, v[which]]));
 	return page.evaluate((sel) => {
-		const out: Record<string, { width: number; height: number }> = {};
+		const out: Record<string, { width: number; height: number; x: number; right: number }> = {};
 		for (const [name, q] of Object.entries(sel)) {
 			const r = (document.querySelector(q) as HTMLElement).getBoundingClientRect();
-			out[name] = { width: r.width, height: r.height };
+			out[name] = { width: r.width, height: r.height, x: r.left, right: r.right };
 		}
 		return out;
 	}, selectors);
@@ -99,5 +99,11 @@ for (const width of [390, 1280]) {
 			expect(Math.abs(star[name].height - deck[name].height), `height — ${tag}`).toBeLessThanOrEqual(1);
 			expect(Math.abs(star[name].width - deck[name].width), `width — ${tag}`).toBeLessThanOrEqual(1);
 		}
+
+		// The view toggle and the options button are adjacent in deck's row, so
+		// the space between them is the row's gap.
+		const gap = (b: Record<string, Box>) => b.options.x - b['grid toggle'].right;
+		const tag = `grid toggle to options: deck ${gap(deck)}, dumpstar ${gap(star)}`;
+		expect(Math.abs(gap(star) - gap(deck)), `gap — ${tag}`).toBeLessThanOrEqual(1);
 	});
 }

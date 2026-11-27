@@ -11,9 +11,11 @@
 use std::fs;
 use std::net::TcpListener;
 use std::os::unix::fs::{PermissionsExt, symlink};
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::time::Duration;
 
 use tempfile::TempDir;
 
@@ -75,6 +77,7 @@ impl Sandbox {
                 || name == "CARGO_INCREMENTAL"
                 || name.starts_with("SCCACHE_")
                 || name.starts_with("DUMPSTAR_")
+                || name == "SUDO_USER"
             {
                 cmd.env_remove(&key);
             }
@@ -194,6 +197,59 @@ esac"#,
         sccache
     }
 
+    /// Run `dumpstar_image_ensure` in its own process group, send the group
+    /// `signal` once a stub has touched `marker`, and return what `TMPDIR` then
+    /// holds.
+    fn interrupt_image_ensure(&self, signal: &str) -> Vec<std::ffi::OsString> {
+        let tmp = self.path("ctx-tmp");
+        fs::create_dir(&tmp).unwrap();
+        // A shell cannot trap a signal it inherited as ignored, as a
+        // background job inherits INT.
+        let mut child = self
+            .command("env")
+            .args([
+                "--default-signal=INT",
+                "bash",
+                "-c",
+                ". deploy/rust-cache.sh; . deploy/image-lib.sh; DUMPSTAR_RUST_CACHE_STATE=on; \
+                 dumpstar_image_ensure probe:x \"$PWD\"",
+            ])
+            .env("SCCACHE_WEBDAV_ENDPOINT", "http://store.invalid")
+            .env("TMPDIR", &tmp)
+            .env("PATH", self.stub_path())
+            .process_group(0)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("bash runs");
+        let marker = self.path("marker");
+        while !marker.exists() {
+            if child.try_wait().unwrap().is_some() {
+                let out = child.wait_with_output().unwrap();
+                panic!("exited before the marker: {out:?}");
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let status = Command::new("/bin/kill")
+            .args([&format!("-{signal}"), "--", &format!("-{}", child.id())])
+            .status()
+            .expect("kill runs");
+        assert!(status.success());
+        // The outer shell can die before the subshell has cleaned up. The pipes
+        // reach EOF only once every process holding them has exited.
+        child.wait_with_output().unwrap();
+        self.chmod_fake("u+w");
+        fs::read_dir(&tmp)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect()
+    }
+
+    /// A stub body that touches `marker`, then stays busy until signalled.
+    fn mark_and_hang(&self) -> String {
+        format!("touch '{}'\nsleep 5", self.path("marker").display())
+    }
+
     fn chmod_fake(&self, mode: &str) {
         let status = Command::new("/bin/chmod")
             .args(["-R", mode])
@@ -291,14 +347,14 @@ fn required_cache_ignores_a_sccache_on_path() {
 fn image_build_context_carries_the_store_closure() {
     let sandbox = Sandbox::new();
     let sccache = sandbox.fake_closure();
-    let tmp = sandbox.path("ctx-tmp");
-    fs::create_dir(&tmp).unwrap();
+    let dir = sandbox.path("ctx");
+    fs::create_dir(&dir).unwrap();
     // Sourcing `rust-cache.sh` resets the state, so the call sets it.
     let (status, out) = sandbox.run_rust_cache(
-        "DUMPSTAR_RUST_CACHE_STATE=on dumpstar_rust_cache_buildargs",
+        "DUMPSTAR_RUST_CACHE_STATE=on dumpstar_rust_cache_buildargs \"$CTX\"",
         &[
             ("SCCACHE_WEBDAV_ENDPOINT", "http://store.invalid"),
-            ("TMPDIR", tmp.to_str().unwrap()),
+            ("CTX", dir.to_str().unwrap()),
             ("PATH", &sandbox.stub_path()),
         ],
     );
@@ -308,7 +364,8 @@ fn image_build_context_carries_the_store_closure() {
         .lines()
         .find_map(|line| line.strip_prefix("sccache-bin="))
         .unwrap_or_else(|| panic!("no sccache-bin context: {out}"));
-    let store = Path::new(context).join("store");
+    assert_eq!(Path::new(context), dir, "{out}");
+    let store = dir.join("store");
     assert!(
         is_executable(&store.join("aaa-sccache/bin/sccache")),
         "{out}"
@@ -351,6 +408,85 @@ exit 9
         assert!(left.is_empty(), "build exiting {build_rc} left {left:?}");
     }
     sandbox.chmod_fake("u+w");
+}
+
+/// What a signal during `podman build` leaves in `TMPDIR`.
+fn left_by_an_interrupted_build(signal: &str) -> Vec<std::ffi::OsString> {
+    let sandbox = Sandbox::new();
+    sandbox.fake_closure();
+    sandbox.stub(
+        "bin/podman",
+        &format!(
+            "#!/bin/sh\n[ \"$1\" = build ] || exit 0\n{}\n",
+            sandbox.mark_and_hang()
+        ),
+    );
+    sandbox.interrupt_image_ensure(signal)
+}
+
+#[test]
+fn image_build_context_is_removed_when_the_build_is_interrupted() {
+    let left = left_by_an_interrupted_build("TERM");
+    assert!(left.is_empty(), "interrupted build left {left:?}");
+}
+
+#[test]
+fn image_build_context_is_removed_when_the_build_gets_int() {
+    let left = left_by_an_interrupted_build("INT");
+    assert!(left.is_empty(), "interrupted build left {left:?}");
+}
+
+#[test]
+fn image_build_context_is_removed_when_the_copy_is_interrupted() {
+    let sandbox = Sandbox::new();
+    sandbox.fake_closure();
+    sandbox.stub("bin/podman", "#!/bin/sh\n");
+    // The real copy runs first, so the half-built store is read-only.
+    sandbox.stub(
+        "bin/cp",
+        &format!("#!/bin/sh\n/bin/cp \"$@\"\n{}\n", sandbox.mark_and_hang()),
+    );
+    // Root, as in the testenv rust tier, removes read-only trees. This `rm`
+    // refuses them, as they refuse any other user.
+    sandbox.stub(
+        "bin/rm",
+        r#"#!/bin/sh
+for a; do
+    [ -d "$a" ] && [ -n "$(find "$a" -type d ! -perm -u+w)" ] && exit 1
+done
+exec /bin/rm "$@"
+"#,
+    );
+    let left = sandbox.interrupt_image_ensure("TERM");
+    assert!(left.is_empty(), "interrupted copy left {left:?}");
+}
+
+#[test]
+fn image_ensure_keeps_the_callers_traps_and_returns_the_build_status() {
+    let sandbox = Sandbox::new();
+    sandbox.fake_closure();
+    sandbox.stub("bin/podman", "#!/bin/sh\n[ \"$1\" != build ]\n");
+    let tmp = sandbox.path("ctx-tmp");
+    fs::create_dir(&tmp).unwrap();
+    let (status, out) = sandbox.run_rust_cache(
+        ". deploy/image-lib.sh; DUMPSTAR_RUST_CACHE_STATE=on; \
+         trap 'echo caller-trap' EXIT; trap 'echo caller-term' TERM; trap 'echo caller-int' INT; \
+         before=\"$(trap -p EXIT TERM INT)\"; \
+         rc=0; dumpstar_image_ensure probe:x \"$PWD\" || rc=$?; \
+         [ \"$(trap -p EXIT TERM INT)\" = \"$before\" ] && echo traps-kept; \
+         echo returned; exit \"$rc\"",
+        &[
+            ("SCCACHE_WEBDAV_ENDPOINT", "http://store.invalid"),
+            ("TMPDIR", tmp.to_str().unwrap()),
+            ("PATH", &sandbox.stub_path()),
+        ],
+    );
+    sandbox.chmod_fake("u+w");
+    assert_eq!(status, Some(1), "{out}");
+    assert!(
+        out.ends_with("traps-kept\nreturned\ncaller-trap\n"),
+        "{out}"
+    );
 }
 
 #[test]
@@ -905,6 +1041,73 @@ fn full_install_fast_path_a_failed_nix_build_fails_the_run_and_names_sccache() {
     let (out, text) = baked_full_install(&sandbox);
     assert!(!out.status.success(), "{text}");
     assert!(text.contains("FAILED to install sccache"), "{text}");
+}
+
+/// uid 0 as sudo leaves it for the developer `dev`, with a `curl` that would
+/// record any fetch.
+fn sudo_root() -> Sandbox {
+    let sandbox = Sandbox::new();
+    sandbox.stub("bin/id", "#!/bin/sh\necho 0\n");
+    sandbox.recording_curl("exit 22");
+    sandbox
+}
+
+#[test]
+fn a_sudo_root_full_install_refuses_and_names_the_user_command() {
+    let sandbox = sudo_root();
+    // Were the guard to fail, these keep a full install off the real machine.
+    sandbox.stub("bin/nix", "#!/bin/sh\nexit 1\n");
+    for tool in [
+        "apt-get", "sudo", "cargo", "rustup", "loginctl", "usermod", "sysctl",
+    ] {
+        sandbox.stub(&format!("bin/{tool}"), "#!/bin/sh\nexit 1\n");
+    }
+    for mode in ["", "--sccache"] {
+        let (out, text) = sandbox.runner_deps(mode, &[("SUDO_USER", "dev")]);
+        assert!(!out.status.success(), "{mode:?}: {text}");
+        assert!(text.contains("REFUSED"), "{mode:?}: {text}");
+        assert!(
+            text.contains("bash deploy/runner-deps.sh"),
+            "{mode:?}: {text}"
+        );
+        assert_eq!(sandbox.log("curl.log"), "", "{mode:?}: {text}");
+    }
+}
+
+#[test]
+fn a_sudo_root_install_runs_when_root_is_claimed() {
+    let sandbox = sudo_root();
+    sandbox.stub("bin/nix", WORKING_NIX);
+    let (out, text) = sandbox.runner_deps(
+        "--sccache",
+        &[("SUDO_USER", "dev"), ("DUMPSTAR_RUNNER_DEPS_FOR_ROOT", "1")],
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(
+        is_executable(&sandbox.path("sccache-dir/bin/sccache")),
+        "{text}"
+    );
+}
+
+#[test]
+fn check_is_not_refused_under_sudo() {
+    let (_, text) = sudo_root().runner_deps(
+        "--check",
+        &[
+            ("SUDO_USER", "dev"),
+            ("DUMPSTAR_RUNNER_DEPS_ONLY", "sccache"),
+        ],
+    );
+    assert!(!text.contains("REFUSED"), "{text}");
+    assert!(text.contains("MISSING sccache"), "{text}");
+}
+
+#[test]
+fn roots_own_sudo_is_not_refused() {
+    let sandbox = sudo_root();
+    sandbox.stub("bin/nix", WORKING_NIX);
+    let (out, text) = sandbox.runner_deps("--sccache", &[("SUDO_USER", "root")]);
+    assert!(out.status.success(), "{text}");
 }
 
 #[test]

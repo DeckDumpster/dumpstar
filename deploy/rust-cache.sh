@@ -13,7 +13,8 @@
 #
 #   dumpstar_rust_cache_enable   export RUSTC_WRAPPER + endpoint, or say why not
 #   dumpstar_rust_cache_report   print the hit/miss summary
-#   dumpstar_rust_cache_buildargs  podman build args that hand the image the same cache
+#   dumpstar_rust_cache_buildargs <dir>  podman build args that hand the image the
+#                                same cache; copies the context into <dir>/store
 #
 # sccache is pinned by flake.nix/flake.lock and installed by
 # deploy/runner-deps.sh as nix build's out-link, DUMPSTAR_SCCACHE_DIR. That is
@@ -147,21 +148,20 @@ dumpstar_rust_cache_report() {
 # Build args for `podman build`: sccache's whole /nix/store closure as a named
 # build context (a Nix binary runs in the bookworm builder only with its own
 # libc beside it), the binary's path in it, and the endpoint. Empty when the
-# cache is off, which the Containerfile reads as "compile cold".
+# cache is off, which the Containerfile reads as "compile cold". <dir> is the
+# caller's, and so is its removal, including after a failed or interrupted copy.
 dumpstar_rust_cache_buildargs() {
 	[ "$DUMPSTAR_RUST_CACHE_STATE" = on ] || return 0
-	local out dir closure path
+	local dir="$1" out closure path
 	out="$(readlink -f "$DUMPSTAR_SCCACHE_DIR")"
 	if ! closure="$(nix-store --query --requisites "$out")"; then
 		echo "==> rust cache: nix-store cannot list the closure of ${out}; the image compiles cold" >&2
 		return 1
 	fi
-	dir="$(mktemp -d "${TMPDIR:-/tmp}/dumpstar-sccache.XXXXXX")"
 	mkdir "$dir/store"
 	for path in $closure; do
 		if ! cp -a "$path" "$dir/store/"; then
 			echo "==> rust cache: cannot copy ${path}; the image compiles cold" >&2
-			chmod -R u+w "$dir" && rm -rf "$dir"
 			return 1
 		fi
 	done

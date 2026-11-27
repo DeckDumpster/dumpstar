@@ -11,9 +11,9 @@
 # is builder glibc <= runtime glibc, and the only thing that holds it is these
 # two FROM lines naming the same release. Change one, change the other — and
 # the target cache id below with them.
-# The default is a non-executable placeholder, which the build reads as "no cache".
+# The default is an empty directory, which the build reads as "no cache".
 FROM docker.io/library/debian:bookworm-slim AS sccache-default
-RUN mkdir /out && : > /out/sccache
+RUN mkdir /out
 LABEL dumpstar.build="1"
 FROM scratch AS sccache-bin
 COPY --from=sccache-default /out/ /
@@ -116,12 +116,14 @@ COPY data/ data/
 # is a deployment change to make when the machines actually split, not before.
 ARG CARGO_TARGET_CACHE_SCOPE=unscoped
 # The shared compile cache (sp-2i16qf). `sccache-bin` is a named build context
-# deploy/image-lib.sh supplies (the host's static sccache); without it the stage
-# below is an empty directory and the release build simply compiles cold.
+# deploy/image-lib.sh supplies: the /nix/store closure of the host's sccache
+# (flake.nix), mounted at /nix, where SCCACHE_BIN names the binary. Without it
+# /nix is empty and the release build simply compiles cold.
 # SCCACHE_WEBDAV_ENDPOINT is the store, empty meaning "no cache".
 ARG SCCACHE_WEBDAV_ENDPOINT=
+ARG SCCACHE_BIN=
 ENV DUMPSTAR_SOURCES="Cargo.toml Cargo.lock rust-toolchain.toml .cargo crates data"
-RUN --mount=type=bind,from=sccache-bin,source=/,target=/opt/sccache-ctx \
+RUN --mount=type=bind,from=sccache-bin,source=/,target=/nix,ro \
     --mount=type=bind,source=deploy/sccache-probe.sh,target=/opt/sccache-probe.sh \
     --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target,sharing=locked,id=dumpstar-target-bookworm-${CARGO_TARGET_CACHE_SCOPE} \
@@ -134,16 +136,14 @@ RUN --mount=type=bind,from=sccache-bin,source=/,target=/opt/sccache-ctx \
  && rm -f target/.dumpstar-source-stamp \
  && cache=off; why=; \
     if [ -z "$SCCACHE_WEBDAV_ENDPOINT" ]; then why="no SCCACHE_WEBDAV_ENDPOINT build arg (the host's cache was off: see the 'rust cache:' line earlier in the run)"; \
-    elif [ ! -s /opt/sccache-ctx/sccache ]; then why="the sccache-bin build context is empty"; \
-    else \
-        cp /opt/sccache-ctx/sccache /tmp/sccache && chmod 755 /tmp/sccache; \
-        if ! /tmp/sccache --version >/dev/null 2>&1; then why="the sccache binary does not execute here: $(/tmp/sccache --version 2>&1 | head -1)"; \
-        elif probe="$(SCCACHE_WEBDAV_ENDPOINT="$SCCACHE_WEBDAV_ENDPOINT" SCCACHE_WEBDAV_KEY_PREFIX=/ SCCACHE_IGNORE_SERVER_IO_ERROR=1 sh /opt/sccache-probe.sh /tmp/sccache)"; then cache=on; \
-        else why="$probe"; fi; \
+    elif [ ! -x "$SCCACHE_BIN" ]; then why="SCCACHE_BIN ('$SCCACHE_BIN') names no executable in the sccache-bin build context"; \
+    elif ! "$SCCACHE_BIN" --version >/dev/null 2>&1; then why="the sccache binary does not execute here: $("$SCCACHE_BIN" --version 2>&1 | head -1)"; \
+    elif probe="$(SCCACHE_WEBDAV_ENDPOINT="$SCCACHE_WEBDAV_ENDPOINT" SCCACHE_WEBDAV_KEY_PREFIX=/ SCCACHE_IGNORE_SERVER_IO_ERROR=1 sh /opt/sccache-probe.sh "$SCCACHE_BIN")"; then cache=on; \
+    else why="$probe"; \
     fi \
  && if [ "$cache" = on ]; then \
         echo "==> rust cache: sccache -> $SCCACHE_WEBDAV_ENDPOINT"; \
-        export RUSTC_WRAPPER=/tmp/sccache SCCACHE_WEBDAV_KEY_PREFIX=/ \
+        export RUSTC_WRAPPER="$SCCACHE_BIN" SCCACHE_WEBDAV_KEY_PREFIX=/ \
                SCCACHE_IGNORE_SERVER_IO_ERROR=1 CARGO_INCREMENTAL=0; \
     else \
         echo "==> rust cache: not in use for the image build — compiling cold: $why"; \
@@ -151,7 +151,7 @@ RUN --mount=type=bind,from=sccache-bin,source=/,target=/opt/sccache-ctx \
  && cargo build --release --locked --bin dumpstar --bin dumpstar-lake-derive \
         --bin dumpstar-ship --bin dumpstar-erase \
  && if [ "$cache" = on ]; then echo "==> rust cache summary (image build):"; \
-        /tmp/sccache --show-stats | grep -E '^Cache (hits|misses) |^Cache hits rate'; fi \
+        "$SCCACHE_BIN" --show-stats | grep -E '^Cache (hits|misses) |^Cache hits rate'; fi \
  && printf '%s\n' "$stamp" > target/.dumpstar-source-stamp \
  && mkdir -p /out \
  && cp target/release/dumpstar /out/dumpstar \

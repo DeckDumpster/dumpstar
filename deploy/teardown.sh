@@ -61,6 +61,14 @@ systemctl --user disable --now "dumpstar-heartbeat@${INSTANCE}.timer" 2>/dev/nul
 # Stop the Litestream backup sidecar (dumpstar-8ch.3).
 systemctl --user stop "dumpstar-litestream-${INSTANCE}.service" 2>/dev/null || true
 
+# Stop the test JWKS unit a --test setup recorded, before --purge deletes the
+# record. Gated on the record, so an instance without one never sources tests/.
+if [ -f "$HOME/.config/dumpstar/${INSTANCE}/test-jwks.unit" ]; then
+    # shellcheck source=tests/lib/access.sh
+    . "$SCRIPT_DIR/../tests/lib/access.sh"
+    access_unit_stop "$HOME/.config/dumpstar/${INSTANCE}/test-jwks"
+fi
+
 rm -f "$QUADLET_FILE" \
       "$HOME/.config/containers/systemd/dumpstar-litestream-${INSTANCE}.container"
 systemctl --user daemon-reload

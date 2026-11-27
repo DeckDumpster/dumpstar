@@ -22,6 +22,17 @@ export function count(n: number | null | undefined): string {
 	return n == null ? '—' : INT.format(n);
 }
 
+/** The collection page's count line: copies owned and distinct printings, then
+ *  the value of those copies when there is one. */
+export function collectionCountLine(
+	copies: number,
+	printings: number,
+	value: number | null
+): string {
+	const line = `${count(copies)} ${copies === 1 ? 'copy' : 'copies'} owned · ${count(printings)} distinct ${printings === 1 ? 'printing' : 'printings'}`;
+	return value === null ? line : `${line}, ${money(value)}`;
+}
+
 /** A printing's human label: its variant, plus the finish when it is not the
  *  plain one — `Standard`, `Standard Foil`, `Hyperspace Foil`. */
 export function printingLabel(variant: string, finish: string): string {

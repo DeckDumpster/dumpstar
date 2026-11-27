@@ -11,7 +11,7 @@
 		import { CONDITIONS } from '$lib/conditions';
 	import { conditionMultiplier } from '$lib/conditions.svelte';
 	import VariantBadges from '$lib/components/VariantBadges.svelte';
-	import { money, count, printingLabel, jsonList } from '$lib/format';
+	import { money, count, printingLabel, jsonList, collectionCountLine } from '$lib/format';
 	import TypeLines from '$lib/components/TypeLines.svelte';
 	import TraitLinks from '$lib/components/TraitLinks.svelte';
 	import { stackOffsets, windowOf } from '$lib/virtual';
@@ -57,6 +57,8 @@
 	// Printings the query matches in total — equal to `searchRows.length`, and
 	// kept as its own field because it is the endpoint that says so.
 	let searchTotal = $state(0);
+	/** Owned copies across the whole result, from the same envelope. */
+	let searchTotalCopies = $state(0);
 
 	// The header figure beside the count. It comes from the endpoint, like the
 	// count does (pd-2g84): it is the condition-adjusted value of every OWNED
@@ -296,6 +298,7 @@
 			if (seq !== searchSeq) return;
 			searchRows = res.rows;
 			searchTotal = res.total;
+			searchTotalCopies = res.total_copies;
 			searchTotalValue = res.total_value;
 		} catch (e) {
 			if (seq !== searchSeq) return;
@@ -303,6 +306,7 @@
 				searchError = { message: e.message, position: e.position };
 				searchRows = [];
 				searchTotal = 0;
+				searchTotalCopies = 0;
 				searchTotalValue = null;
 			} else {
 				error = e instanceof Error ? e.message : String(e);
@@ -1233,8 +1237,7 @@
 			onclick={() => (valueOpen = true)}
 			title="Collection value over time"
 		>
-			{count(searchTotal)}
-			cards{#if searchTotalValue !== null}, {money(searchTotalValue)}{/if}
+			{collectionCountLine(searchTotalCopies, searchTotal, searchTotalValue)}
 		</button>
 		{#if searchRows.length > 0 && view === 'table'}
 			<div class="burgerWrap">
@@ -1848,10 +1851,9 @@
 	}
 	.countline {
 		margin: var(--space-0) var(--space-0) var(--space-0) auto;
-		white-space: nowrap;
 		min-width: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
+		overflow-wrap: anywhere;
+		text-align: right;
 		font-size: var(--text-md);
 		background: none;
 		border: none;

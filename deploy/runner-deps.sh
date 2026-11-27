@@ -478,19 +478,19 @@ check_chromium_libs() {
         missing+=("$p")
     done
     [ ${#missing[@]} -eq 0 ] && return 0
-    lack "chromium libraries (${missing[*]})" "the visual tier launches headless Chromium via Playwright"
+    lack "chromium libraries (${missing[*]})" "the ui tier launches headless Chromium via Playwright"
     return 1
 }
 
 # ---------------------------------------------------------------------------
-# The fonts the visual baselines were recorded against.
+# The fonts the app's pages are rendered with.
 #
 # Separate from CHROMIUM_LIBS because it is a different failure mode: a missing
 # library stops the browser from launching and says so, while a missing font
-# launches fine and renders the page in a substitute -- so the suite fails as a
-# diff against the baselines, which reads as a CSS regression and is not one.
-# That is how this arrived: the first ephemeral run put 34 of 82 visual tests
-# red with the page chrome around the changed pixels byte-identical.
+# launches fine and renders the page in a substitute. That is how this arrived,
+# when tests/visual still compared pixel baselines: the first ephemeral run put
+# 34 of 82 of its tests red with the page chrome around the changed pixels
+# byte-identical.
 #
 # Two independent gaps, two packages:
 #
@@ -529,7 +529,7 @@ FONT_GLYPHS=(1f6d2 1f389)   # shopping cart, party popper
 check_fonts() {
     command -v fc-match >/dev/null 2>&1 || {
         lack "fontconfig (fc-match, fc-list)" \
-             "the visual baselines depend on which faces fontconfig picks"
+             "rendering depends on which faces fontconfig picks"
         return 1
     }
 
@@ -537,7 +537,7 @@ check_fonts() {
     case "$(fc-match -f '%{family}' Arial 2>/dev/null)" in
         *Liberation*|*Arimo*|*Arial*) ;;
         *)  lack "a metric-compatible Arial (fonts-liberation)" \
-                 "without it Blink draws every form control in DejaVu and the visual tier fails as a diff"
+                 "without it Blink draws every form control in DejaVu"
             rc=1 ;;
     esac
 
@@ -701,8 +701,7 @@ command -v podman >/dev/null 2>&1 || apt_install podman uidmap fuse-overlayfs
 # lack pasta, and a bridge network is the only thing that notices.
 apt_install passt slirp4netns
 apt_install "${CHROMIUM_LIBS[@]}"
-# See check_fonts: not cosmetic. Without these the visual tier goes red on a
-# third of its routes and reads as a CSS regression.
+# See check_fonts: without these, pages render in substitute faces.
 apt_install "${FONT_PKGS[@]}"
 
 phase "rustup"

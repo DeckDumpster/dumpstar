@@ -23,9 +23,9 @@
  * Everything else on the page — binders, decks, the keyword registry, the
  * conditions table — still comes from the real instance.
  *
- * This is the deterministic browser tier's non-visual gate: same Playwright
- * config and same throwaway instance as the screenshot suite, offline and with
- * no Vision call, but it asserts on the DOM rather than on pixels.
+ * Same Playwright config and same throwaway instance as the rest of this
+ * suite, offline and with no Vision call; it asserts on the DOM rather than on
+ * pixels.
  */
 
 import { test, expect, type Page, type Locator } from '@playwright/test';

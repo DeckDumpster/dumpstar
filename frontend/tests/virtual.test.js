@@ -1,8 +1,8 @@
 /**
  * The virtual scroller's geometry (pd-7z4o).
  *
- * The browser tier proves the DOM stays bounded; this proves the arithmetic
- * that bounds it. The property that matters in every case below is the same
+ * tests/visual/collection-window.spec.ts (run by hand) checks that the DOM
+ * stays bounded; this proves the arithmetic that bounds it. The property that matters in every case below is the same
  * one: rendering the window and its two spacers must occupy exactly the height
  * the whole stack would have, and must leave the first rendered block at
  * exactly the y it would have had — otherwise the list shifts under the reader

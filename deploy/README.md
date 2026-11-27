@@ -115,6 +115,9 @@ Steps, in order, exiting non-zero on the first failure of a sequential step
 2. `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`.
    Then `tests/deploy/run.sh` — the store resolution and the low-disk guard.
 3. Frontend: `npm ci && npm test && npm run check && npm run build`.
+   Then the `ui` tier (`tests/ui/run.sh`), the one browser gate: the replay
+   implementations in `tests/ui` run in Chromium, with no API key, on every run
+   of the full suite.
    Then the shipped image, built **once** — five gates below need it and each
    wants its own tag, so they tag this one (see
    [The image, once](#the-image-once)).
@@ -125,14 +128,11 @@ Steps, in order, exiting non-zero on the first failure of a sequential step
 6. DR drill (`tests/litestream/drill.sh`): `deploy/RESTORE.md`'s procedure
    executed with the shipped scripts — one tenant restored in place while the
    others keep exactly their own data.
-7. Browser specs (`tests/visual/`): every route at 1440 and 768 renders, and
-   the layout properties hold. No pixel baselines.
 
-The intents UI harness (`tests/ui`, Playwright) is deliberately not in the
-loop — it needs `ANTHROPIC_API_KEY` for Vision mode. Run it on its own:
+The property specs in `tests/visual/` are not part of the loop. Run them by hand:
 
 ```bash
-( cd tests/ui && npx playwright install chromium && npx playwright test )
+bash tests/visual/run.sh
 ```
 
 ### The container gates run in parallel

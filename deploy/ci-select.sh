@@ -33,19 +33,17 @@
 #
 # ── WHY frontend/** IS NOT SUBDIVIDED (pd-tf4h) ─────────────────────────────
 #
-# The obvious refinement — routes trigger the browser tier, everything else
+# The obvious refinement — routes trigger the `ui` tier, everything else
 # under frontend/ does not — is exactly the mistake pd-tf4h already cost this
 # repo once: visual baselines were not re-recorded alongside a change because
 # the change did not look like it touched the UI. It did. A design token, a
 # shared component in $lib/components/ui/, a rule in tokens.css or app.css
-# repaints every route at once, which is the widest possible screenshot diff
+# repaints every route at once, which is the widest possible visual change
 # and the one least likely to be predicted from the file name.
 #
-# So the frontend bucket is whole-directory and always carries the browser
-# tier. Any change under frontend/ screenshots every route. The container tier
-# rides along because the browser tier drives a real instance and the SvelteKit
-# build is baked into the image — screenshotting the previous build would be
-# worse than not screenshotting at all.
+# So the frontend bucket is whole-directory and always carries the `ui` tier
+# (tests/ui/run.sh). The container tier rides along because the SvelteKit build
+# is baked into the shipped image.
 #
 # ── SELECTION IS OPT-IN, PER RUN ────────────────────────────────────────────
 #
@@ -139,22 +137,6 @@ dumpstar_ci_select_tiers() {
         dumpstar_ci_all_tiers
         return 0
     fi
-
-    # The browser tier drives the container the container tier starts. Nothing
-    # in the buckets above can currently violate that, which is exactly when an
-    # invariant is worth writing down — the next edit to a bucket list is the
-    # one that would.
-    case "$selected" in
-        *" browser "*)
-            case "$selected" in
-                *" container "*) ;;
-                *)
-                    echo "ci-select: browser selected without container — refusing to guess" >&2
-                    return 1
-                    ;;
-            esac
-            ;;
-    esac
 
     for t in $DUMPSTAR_CI_ALL_TIERS; do
         case "$selected" in

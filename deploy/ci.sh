@@ -69,11 +69,6 @@
 #                      REVOKED while a live one reads as an OPERATIONAL failure.
 #                      A lost key never reports as a deleted tenant. See
 #                      tests/keys/run.sh.
-#  10. Browser gate:   load every route at 1440 and 768 against that
-#                      same instance and assert the DOM bounds —
-#                      /collection renders a viewport-sized WINDOW of a
-#                      56,635-row result, with no pager anywhere and the far
-#                      end a scroll away. See tests/visual/README.md.
 #  11. Schema-version gate: start a prod-shaped instance against a deliberately
 #                      UNVERSIONED data volume — the shape every database on
 #                      disk has, prod's included — and assert every database is
@@ -1156,9 +1151,6 @@ else
 fi
 
 # --- 4. Container gate ------------------------------------------------------
-# Selected whenever the browser tier is — the screenshots are taken against
-# this instance, and the SvelteKit build they are screenshotting is baked into
-# its image. ci-select.sh refuses a selection that has one without the other.
 
 PORT=""
 if tier container; then
@@ -1187,16 +1179,17 @@ if tier container; then
 fi
 
 # --- 5. Gates not armed yet --------------------------------------------------
-# The backup, tenant-isolation, schema-version, lakehouse, refresh and browser
-# gates this script was copied with each drive a Pokémon catalog fixture, a
+# The backup, tenant-isolation, schema-version, lakehouse and refresh gates
+# this script was copied with each drive a Pokémon catalog fixture, a
 # pokemontcg.io upstream or a tenant layout that dumpstar does not have yet.
 # They are not run here, and they are not run half-armed: a gate whose reds are
 # its own fixture's is worse than no gate (it trains everyone to re-run). Each is
 # re-armed by the dumpstar bead that gives it something real to assert —
 # tenancy (the isolation gate), the backup drill, the catalog seam (the lakehouse
-# and refresh gates), the SWU UI fixture (the browser tier). Their scripts stay
-# under tests/ so that bead starts from a working harness rather than a blank
-# page, and deploy/ci-select.sh is the single list of what runs.
+# and refresh gates). Their scripts stay under tests/ so that bead starts from a
+# working harness rather than a blank page, and deploy/ci-select.sh is the single
+# list of what runs.
+# The one browser gate is the `ui` tier (tests/ui/run.sh); tests/visual is run by hand.
 
 # --- 16. Run the queued gates -----------------------------------------------
 # Everything queued above, two at a time, with the disk floor checked before

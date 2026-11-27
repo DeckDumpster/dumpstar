@@ -11,8 +11,8 @@
  * Asserts, at each width, that tiles per row equal what auto-fill yields for
  * the container (floor((width + gap) / (200 + gap)), the CSS formula, which
  * is floor(width / 200) when the gap is zero) and that the page does not
- * scroll sideways. Runs in the browser tier (deploy/ci.sh step 10, the
- * `container` tier), against the fixture instance.
+ * scroll sideways. Runs by hand (tests/visual/run.sh), against the fixture
+ * instance.
  */
 
 import { test, expect } from '@playwright/test';

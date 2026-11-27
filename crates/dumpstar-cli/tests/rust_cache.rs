@@ -233,8 +233,10 @@ esac"#,
             }
             std::thread::sleep(Duration::from_millis(5));
         }
-        let status = Command::new("/bin/kill")
-            .args([&format!("-{signal}"), "--", &format!("-{}", child.id())])
+        // bash's builtin: the tier's image ships no procps.
+        let status = Command::new("bash")
+            .args(["-c", "kill -\"$1\" -- \"$2\"", "kill", signal])
+            .arg(format!("-{}", child.id()))
             .status()
             .expect("kill runs");
         assert!(status.success());
@@ -849,7 +851,10 @@ fn a_live_server_reports_hits() {
         .unwrap_or_else(|| panic!("no PID: {out}"));
     // The server outlived the call, so `output()` did not wait on it: its
     // stdio is not the caller's.
-    let killed = Command::new("/bin/kill").arg(pid).status().expect("kill");
+    let killed = Command::new("bash")
+        .args(["-c", "kill \"$1\"", "kill", pid])
+        .status()
+        .expect("kill runs");
     assert!(killed.success(), "server {pid} was not running: {out}");
 }
 

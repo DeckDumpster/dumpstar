@@ -1043,6 +1043,131 @@ fn full_install_fast_path_a_failed_nix_build_fails_the_run_and_names_sccache() {
     assert!(text.contains("FAILED to install sccache"), "{text}");
 }
 
+/// The sha256 of the checkout's `flake.nix` followed by its `flake.lock`.
+fn flake_sha256(sandbox: &Sandbox) -> String {
+    let out = sandbox
+        .command("bash")
+        .args(["-c", "cat flake.nix flake.lock | sha256sum | cut -d' ' -f1"])
+        .output()
+        .expect("bash runs");
+    assert!(out.status.success(), "{out:?}");
+    String::from_utf8(out.stdout).unwrap().trim().to_owned()
+}
+
+const STAMP: &str = "sccache-dir.flake-sha256";
+
+/// What a build of the current flake inputs leaves beside the out-link.
+fn current_stamp(sandbox: &Sandbox) {
+    fs::write(sandbox.path(STAMP), format!("{}\n", flake_sha256(sandbox))).unwrap();
+}
+
+fn assert_sccache_reported_current(sandbox: &Sandbox, out: &Output, text: &str) {
+    assert!(out.status.success(), "{text}");
+    assert_eq!(sandbox.log("nix.log"), "", "{text}");
+    assert!(
+        text.contains("sccache current (flake inputs unchanged): sccache 0.17.0"),
+        "{text}"
+    );
+}
+
+#[test]
+fn full_install_fast_path_runs_no_nix_for_a_current_sccache() {
+    let sandbox = Sandbox::new();
+    sandbox.stub("bin/nix", WORKING_NIX);
+    old_sccache(&sandbox);
+    current_stamp(&sandbox);
+    let (out, text) = baked_full_install(&sandbox);
+    assert_sccache_reported_current(&sandbox, &out, &text);
+    assert!(text.contains("everything already present"), "{text}");
+}
+
+#[test]
+fn sccache_flag_runs_no_nix_for_a_current_sccache() {
+    let sandbox = Sandbox::new();
+    sandbox.stub("bin/nix", WORKING_NIX);
+    old_sccache(&sandbox);
+    current_stamp(&sandbox);
+    let (out, text) = sandbox.runner_deps("--sccache", &[]);
+    assert_sccache_reported_current(&sandbox, &out, &text);
+}
+
+#[test]
+fn full_install_fast_path_rebuilds_a_sccache_stamped_for_other_flake_inputs() {
+    let sandbox = Sandbox::new();
+    sandbox.stub("bin/nix", WORKING_NIX);
+    old_sccache(&sandbox);
+    fs::write(sandbox.path(STAMP), format!("{}\n", "0".repeat(64))).unwrap();
+    let (out, text) = baked_full_install(&sandbox);
+    assert_fast_path_built_sccache(&sandbox, &out, &text);
+    assert_eq!(sandbox.log(STAMP).trim(), flake_sha256(&sandbox), "{text}");
+}
+
+#[test]
+fn full_install_fast_path_rebuilds_a_stamped_sccache_that_does_not_run() {
+    let sandbox = Sandbox::new();
+    sandbox.stub("bin/nix", WORKING_NIX);
+    sandbox.stub("sccache-dir/bin/sccache", "#!/bin/sh\nexit 126\n");
+    current_stamp(&sandbox);
+    let (out, text) = baked_full_install(&sandbox);
+    assert_fast_path_built_sccache(&sandbox, &out, &text);
+}
+
+#[test]
+fn a_successful_sccache_build_stamps_the_flake_inputs() {
+    let sandbox = Sandbox::new();
+    sandbox.stub("bin/nix", WORKING_NIX);
+    let (out, text) = sandbox.runner_deps("--sccache", &[]);
+    assert!(out.status.success(), "{text}");
+    assert_eq!(sandbox.log(STAMP).trim(), flake_sha256(&sandbox), "{text}");
+}
+
+#[test]
+fn the_stamp_names_the_inputs_that_were_built_when_the_checkout_changes_mid_build() {
+    let sandbox = Sandbox::new();
+    // A checkout of its own, so the build can change its lock.
+    let script = sandbox.stub(
+        "checkout/deploy/runner-deps.sh",
+        &read("deploy/runner-deps.sh"),
+    );
+    let lock = sandbox.stub("checkout/flake.lock", "built\n");
+    sandbox.stub("checkout/flake.nix", "{ }\n");
+    sandbox.stub(
+        "bin/nix",
+        &WORKING_NIX.replacen("\n", &format!("\necho pulled >'{}'\n", lock.display()), 1),
+    );
+    let out = sandbox
+        .command("bash")
+        .arg(&script)
+        .arg("--sccache")
+        .env("PATH", sandbox.stub_path())
+        .output()
+        .expect("bash runs");
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(fs::read_to_string(&lock).unwrap(), "pulled\n");
+    let built = sandbox
+        .command("bash")
+        .args(["-c", "printf '{ }\\nbuilt\\n' | sha256sum | cut -d' ' -f1"])
+        .output()
+        .expect("bash runs");
+    assert_eq!(
+        sandbox.log(STAMP),
+        String::from_utf8_lossy(&built.stdout),
+        "{out:?}"
+    );
+}
+
+#[test]
+fn a_failed_sccache_build_leaves_no_stamp() {
+    let sandbox = Sandbox::new();
+    sandbox.stub("bin/nix", "#!/bin/sh\nexit 1\n");
+    // A matching stamp with no binary behind it, so the build is attempted.
+    current_stamp(&sandbox);
+    let (out, text) = sandbox.runner_deps("--sccache", &[]);
+    assert!(!out.status.success(), "{text}");
+    assert!(text.contains("FAILED to install sccache"), "{text}");
+    assert!(!sandbox.path(STAMP).exists(), "{text}");
+}
+
 /// uid 0 as sudo leaves it for the developer `dev`, with a `curl` that would
 /// record any fetch.
 fn sudo_root() -> Sandbox {

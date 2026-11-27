@@ -930,7 +930,7 @@ g_clippy() {
 if tier rust; then
     step "cargo clippy --all-targets"
     ( cd "$REPO_DIR" && cargo clippy --all-targets --profile test -- -D warnings )
-    dumpstar_rust_cache_report "clippy"
+    dumpstar_rust_cache_report "clippy" || exit 1
 fi
 }
 
@@ -972,7 +972,7 @@ if tier rust; then
     echo "test execution wall time: $((SECONDS - _t0))s"
     step "cargo test --doc"
     ( cd "$REPO_DIR" && cargo test --doc --workspace )
-    dumpstar_rust_cache_report "cargo test"
+    dumpstar_rust_cache_report "cargo test" || exit 1
 fi
 }
 

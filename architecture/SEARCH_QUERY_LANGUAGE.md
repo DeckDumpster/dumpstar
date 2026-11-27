@@ -365,16 +365,12 @@ necessary in real use.)
 The response is an envelope, not a bare array:
 
 ```json
-{ "rows": [ /* SearchRow */ ], "total": 56635, "total_copies": 2914,
-  "total_value": 12345.67, "limit": 250, "offset": 0 }
+{ "rows": [ /* SearchRow */ ], "total": 56635, "total_value": 12345.67,
+  "limit": 250, "offset": 0 }
 ```
 
 - **`total` is the count of the unbounded query**, not of the page returned, so
   a client renders "N results" and pages without a second request.
-- **`total_copies` counts copies where `total` counts printings**: the
-  `status = 'owned'` copies of every matching printing, also unbounded. It comes
-  from the same statement as `total` and, like the other totals, rides in the
-  cursor. The homepage reads it with `limit=0`.
 - **`total_value` is that same fact in money** (pd-2g84): the
   condition-adjusted market value of every **owned** copy of every matching
   printing, also unbounded. It is `null` — never `0` — when the result holds no

@@ -51,7 +51,6 @@ test('the phone list is Name and Type, wrapped, with nothing clipped', async ({ 
 			json: {
 				rows: Array.from({ length: 60 }, (_, i) => row(i)),
 				total: 60,
-				total_copies: 60,
 				total_value: 90,
 				limit: 60,
 				offset: 0

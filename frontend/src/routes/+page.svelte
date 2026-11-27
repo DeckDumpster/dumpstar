@@ -8,12 +8,7 @@
 	Where the numbers come from, and why (pd-glae is presentation work — no new
 	backend surface was added for it):
 
-	  copies owned      /api/collection/search?limit=0, a count-only request:
-	                    `total_copies` and the distinct printings (`total`),
-	                    live, the same two figures /collection's count line
-	                    prints. Never the snapshot's card_count, which lags
-	                    additions by up to a day.
-	  money figures     /api/collection/value-history?dimension=all, latest
+	  headline figures  /api/collection/value-history?dimension=all, latest
 	                    point of EACH series it returns. This is the app's OWN
 	                    canonical answer for "what is the collection worth" —
 	                    the same series the /collection value chart draws,
@@ -41,7 +36,7 @@
 	import DeathStar from '$lib/components/DeathStar.svelte';
 	import CollectionSummary from '$lib/components/CollectionSummary.svelte';
 	import { api } from '$lib/api';
-	import { money, count, distinctPrintings } from '$lib/format';
+	import { money, count } from '$lib/format';
 	import { Badge, Button, EmptyState, Panel, ProgressBar, SectionHeader } from '$lib/components/ui';
 	import type { CollectionRow } from '$lib/types/CollectionRow';
 	import { tileCaption, tileFace } from '$lib/tileFace';
@@ -74,23 +69,17 @@
 	let sealedLatest = $state<ValuePoint | null>(null);
 	let valuedOn = $state<string | null>(null);
 	let sets = $state<SetSummary[]>([]);
-	/** Live, from ownership itself. */
-	let copiesOwned = $state(0);
-	let printingsOwned = $state(0);
 	let recent = $state<CollectionRow[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
 	onMount(async () => {
 		try {
-			const [series, allSets, batches, owned] = await Promise.all([
+			const [series, allSets, batches] = await Promise.all([
 				api.valueHistory('all'),
 				api.sets(),
-				api.batches(RECENT_BATCHES),
-				api.collectionSearch('', undefined, undefined, false, 0)
+				api.batches(RECENT_BATCHES)
 			]);
-			copiesOwned = owned.total_copies;
-			printingsOwned = owned.total;
 			// The `all` dimension answers with the loose cards (bucket null) and,
 			// when the tenant owns any, the sealed product. Told apart by
 			// `bucket`, never by order.
@@ -145,13 +134,13 @@
 
 	/**
 	 * The split, under the figures it explains. Built here rather than in the
-	 * markup so a collection with no sealed product gets no sealed text at all —
-	 * this page is screenshotted, and a conditional block in the template would
-	 * move pixels for every tenant who owns no sealed product.
+	 * markup so a collection with no sealed product renders EXACTLY the string
+	 * it always did — this page is screenshotted, and a conditional block in
+	 * the template would move pixels for every tenant who owns no sealed
+	 * product.
 	 */
 	const ownedMeta = $derived(
-		`${distinctPrintings(printingsOwned)} · ` +
-			(sealedLatest ? `${count(sealedLatest.card_count)} sealed · ` : '') +
+		(sealedLatest ? `${count(sealedLatest.card_count)} sealed · ` : '') +
 			`${count(setsStarted)} of ${count(sets.length)} sets started`
 	);
 	const valueMeta = $derived(
@@ -164,6 +153,10 @@
 	const marketValue = $derived((latest?.market_value ?? 0) + (sealedLatest?.market_value ?? 0));
 	const costBasis = $derived((latest?.cost_basis ?? 0) + (sealedLatest?.cost_basis ?? 0));
 	const unrealized = $derived(valuedOn == null ? null : marketValue - costBasis);
+	/** Distinct cards owned, from ownership itself — the sets already loaded
+	 *  here — never from the valuation snapshot, which lags additions by up to
+	 *  a day. */
+	const ownedCards = $derived(sets.reduce((n, s) => n + s.owned_cards, 0));
 	/** A valuation snapshot exists and covers at least one owned item. */
 	const valued = $derived(
 		valuedOn != null && (latest?.card_count ?? 0) + (sealedLatest?.card_count ?? 0) > 0
@@ -195,8 +188,9 @@
 <CollectionSummary
 	{loading}
 	{valued}
-	{copiesOwned}
-	ownedLabel={count(copiesOwned)}
+	{ownedCards}
+	valuedCards={count(latest?.card_count ?? 0)}
+	ownedLabel={count(ownedCards)}
 	{ownedMeta}
 	{valueMeta}
 	marketLabel={money(marketValue)}

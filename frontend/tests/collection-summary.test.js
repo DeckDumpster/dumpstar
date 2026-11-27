@@ -6,7 +6,8 @@ import { markup } from './support/render.js';
 const base = {
 	loading: false,
 	valued: false,
-	copiesOwned: 0,
+	ownedCards: 0,
+	valuedCards: '0',
 	ownedLabel: '0',
 	ownedMeta: '',
 	valueMeta: '',
@@ -17,10 +18,10 @@ const base = {
 };
 
 test('owned cards with no valuation yet show the count and the note, not the empty state', () => {
-	const html = markup(CollectionSummary, { ...base, copiesOwned: 2, ownedLabel: '2' });
+	const html = markup(CollectionSummary, { ...base, ownedCards: 2, ownedLabel: '2' });
 	assert.doesNotMatch(html, /No cards registered yet/);
 	assert.doesNotMatch(html, /Import a CSV/);
-	assert.match(html, /Copies owned/);
+	assert.match(html, /Cards owned/);
 	assert.match(html, /<strong[^>]*>2<\/strong>/);
 	assert.match(html, /after the next valuation/);
 	assert.match(html, /07:30 UTC/);
@@ -41,14 +42,12 @@ test('a valued collection shows the figures', () => {
 	const html = markup(CollectionSummary, {
 		...base,
 		valued: true,
-		copiesOwned: 2914,
-		ownedLabel: '2,914',
+		ownedCards: 2,
+		valuedCards: '2',
 		marketLabel: '$10.00',
 		unrealized: 6,
 		unrealizedLabel: '$6.00'
 	});
 	assert.match(html, /Market value/);
-	assert.match(html, /Copies owned/);
-	assert.match(html, /<strong[^>]*>2,914<\/strong>/);
 	assert.doesNotMatch(html, /No cards registered yet/);
 });

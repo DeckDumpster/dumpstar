@@ -2305,6 +2305,11 @@ mod tests {
         /// A [`Site`] whose catalog offers one preconstructed deck, `test`: two
         /// copies of SOR 1 and one of SOR 2.
         async fn site_with_precon(handles: &[&str]) -> Site {
+            site_with_precon_extras(handles, json!([])).await
+        }
+
+        /// [`site_with_precon`], with `extras` in the box.
+        async fn site_with_precon_extras(handles: &[&str], extras: Value) -> Site {
             let product = format!(
                 "{SECOND_CARD} INSERT INTO sealed_products (product_id, name, category, \
                  fetched_at) VALUES (9001, 'Spotlight Deck', 'sealed', '');"
@@ -2318,6 +2323,7 @@ mod tests {
                     {"set": "SOR", "number": "1", "qty": 2},
                     {"set": "SOR", "number": "2", "qty": 1},
                 ],
+                "extras": extras,
             })
             .to_string();
             let shared = dumpstar_db::open_shared(&site._dir.path().join("shared.sqlite")).unwrap();
@@ -2355,6 +2361,7 @@ mod tests {
             assert_eq!(listed[0]["set_name"], "Spark of Rebellion");
             assert_eq!(listed[0]["kind"], "spotlight");
             assert_eq!(listed[0]["card_count"], 3);
+            assert_eq!(listed[0]["extra_count"], 0);
 
             let r = site
                 .send("POST", "/api/precons/test/add", Some(ADD_PRECON))
@@ -2397,6 +2404,29 @@ mod tests {
                 .send("POST", "/api/precons/nope/add", Some(ADD_PRECON))
                 .await;
             assert_eq!(r.status(), StatusCode::NOT_FOUND);
+        }
+
+        /// sp-o69ge5: a box holding more than its deck is listed with both
+        /// counts, and the add reports how many extra copies it made.
+        #[tokio::test]
+        async fn a_precon_with_extras_reports_both_counts() {
+            let extras = json!([{"set": "SOR", "number": "2", "qty": 1}]);
+            let mut site = site_with_precon_extras(&["alice"], extras).await;
+            site.sign_in(member("alice@example.com")).await;
+
+            let listed = json_of(site.get("/api/precons").await).await;
+            assert_eq!(listed[0]["card_count"], 3, "{listed}");
+            assert_eq!(listed[0]["extra_count"], 1, "{listed}");
+
+            let alice = site.token_for("alice@example.com");
+            let added = site
+                .tool(&alice, "add_precon", json!({"id": "test"}))
+                .await
+                .unwrap();
+            assert_eq!(added["extra_count"], 1, "{added}");
+            assert_every_line_reserved(&added["lines"]);
+            let batches = json_of(site.get("/api/batches").await).await;
+            assert_eq!(batches[0]["card_count"], 4, "{batches}");
         }
 
         /// sp-1d2msd: what one tenant adds is theirs alone, and does not count as
@@ -2442,7 +2472,10 @@ mod tests {
                 .tool(&alice, "get_deck", json!({"id": added["deck"]["id"]}))
                 .await
                 .unwrap();
-            assert_eq!(added, read);
+            let mut deck_only = added.clone();
+            let extra = deck_only.as_object_mut().unwrap().remove("extra_count");
+            assert_eq!(extra, Some(json!(0)), "{added}");
+            assert_eq!(deck_only, read);
 
             let refused = site
                 .tool(&alice, "add_precon", json!({"id": "test"}))

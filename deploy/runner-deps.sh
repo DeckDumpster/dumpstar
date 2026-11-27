@@ -121,22 +121,50 @@ install_nix() {
     command -v nix >/dev/null 2>&1 || failed "Nix installed, but there is no nix in $HOME/.nix-profile/bin"
 }
 
+# What the out-link was built from. Beside it, not inside: the out-link is nix's
+# symlink into the read-only store.
+SCCACHE_STAMP="${SCCACHE_BIN_DIR}.flake-sha256"
+
+flake_sha256() { # <dir holding flake.nix and flake.lock>
+    local sum
+    sum="$(cat "$1/flake.nix" "$1/flake.lock" | sha256sum)" || return 1
+    printf '%s\n' "${sum%% *}"
+}
+
+# Prints the version when the out-link was built from these flake inputs and its
+# binary still runs (the store path can be garbage-collected from under it).
+current_sccache() {
+    local want
+    want="$(flake_sha256 "$REPO_ROOT" 2>/dev/null)" || return 1
+    [ "$(cat "$SCCACHE_STAMP" 2>/dev/null)" = "$want" ] || return 1
+    "$SCCACHE_BIN_DIR/bin/sccache" --version 2>/dev/null
+}
+
 # From a scratch copy of the flake and its lock, as a path: flake. `.#` in the
 # checkout is a git flake, and testenv mounts a worktree whose .git names a host
 # directory the container does not have.
 build_sccache() {
     local dir link rc=0
+    # Gone before the build, so one that fails or is killed leaves none.
+    rm -f "$SCCACHE_STAMP" || return 1
     dir="$(mktemp -d)" || return 1
     link="$(realpath -ms "$SCCACHE_BIN_DIR")" \
         && cp "$REPO_ROOT/flake.nix" "$REPO_ROOT/flake.lock" "$dir/" \
         && ( cd "$dir" && nix --extra-experimental-features 'nix-command flakes' \
                  build path:.#sccache --no-update-lock-file --out-link "$link" ) \
+        && flake_sha256 "$dir" >"$SCCACHE_STAMP.tmp" \
+        && mv "$SCCACHE_STAMP.tmp" "$SCCACHE_STAMP" \
         || rc=1
     rm -rf "$dir"
     return "$rc"
 }
 
 install_sccache() {
+    local version
+    if version="$(current_sccache)"; then
+        note "sccache current (flake inputs unchanged): $version"
+        return 0
+    fi
     install_nix || { failed "to install sccache: no Nix to install it with"; return 1; }
     note "installing sccache (flake.nix) at ${SCCACHE_BIN_DIR}"
     # The curl-era install left a real directory where nix has to put its link.
@@ -678,9 +706,10 @@ note "installing dependencies for $(id -un) on $(hostname)"
 # FAST PATH FOR A BAKED IMAGE. A runner image/AMI that already carries the
 # toolchain passes every other check and has the pinned Rust toolchain: there is
 # nothing else to install, so skip apt-get update, rustup and NodeSource
-# entirely (~4-10 min on a bare template). sccache is always brought up to
-# flake.lock's pin (nix build fetches nothing when the out-link is current), so
-# it is not checked here.
+# entirely (~4-10 min on a bare template). sccache is not checked here:
+# install_sccache brings it up to flake.lock's pin, running no nix at all when
+# the out-link is stamped with the current flake inputs and its binary runs, and
+# `nix build` otherwise.
 # Anything missing falls through to the install below, which is idempotent.
 phase "fast path: is everything already baked in?"
 _pinned="$(sed -n 's/^channel[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' rust-toolchain.toml 2>/dev/null)"

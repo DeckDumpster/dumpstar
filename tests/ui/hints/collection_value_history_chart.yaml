@@ -1,6 +1,6 @@
 start_page: /collection
 involves:
-  - "header total button `button.countline`, text '{N} cards, {$X}'"
+  - "header total button `button.countline`, text '{N} copies owned · {M} distinct printings, {$X}'"
   - "dialog `[role=dialog][aria-label='Collection value over time']`"
   - "chart container `[data-testid=value-history-chart]` with data-series-count"
   - "Escape closes the dialog"

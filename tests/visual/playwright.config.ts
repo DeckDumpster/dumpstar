@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
 /**
- * The deterministic browser tier — the safety net for the aesthetic
+ * The deterministic property specs — the safety net for the aesthetic
  * overhaul, and for anything else that needs a real DOM.
  *
  * This suite loads every route in `routes.json` at both breakpoints against
@@ -15,9 +15,9 @@ import { defineConfig } from '@playwright/test';
  * over in DUMPSTAR_BASE_URL. Running `npx playwright test` directly works too,
  * against an instance you already have.
  *
- * Deliberately separate from `tests/ui` (the intents harness): that one needs
- * an ANTHROPIC_API_KEY and is non-deterministic by design. This one is pure
- * Playwright, offline, and belongs in CI.
+ * Deliberately separate from `tests/ui` (the intents harness), whose replay
+ * implementations are CI's `ui` tier. This one is pure Playwright, offline,
+ * and run by hand.
  */
 export default defineConfig({
 	testDir: '.',

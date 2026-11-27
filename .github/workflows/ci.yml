@@ -169,7 +169,7 @@ jobs:
 
       # Tier selection (pd-s2mj). Which tiers ci.sh runs is decided from the
       # paths this PR touched — docs-only runs the lint tier, a change confined
-      # to frontend/ runs frontend + container + browser, and ANYTHING ELSE runs
+      # to frontend/ runs frontend + ui + container, and ANYTHING ELSE runs
       # the whole suite. deploy/ci-select.sh holds the rule and explains why it
       # is shaped to fail closed.
       #

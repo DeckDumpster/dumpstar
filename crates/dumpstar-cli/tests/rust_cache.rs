@@ -9,6 +9,7 @@
 //! answer from them.
 
 use std::fs;
+use std::net::TcpListener;
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -498,11 +499,149 @@ fn containerfile_turns_the_wrapper_on_only_for_a_sccache_that_works() {
 
 #[test]
 fn ci_sh_stops_when_a_required_cache_is_unavailable() {
-    assert!(
-        code("deploy/ci.sh")
-            .lines()
-            .any(|line| line.trim() == "dumpstar_rust_cache_enable || exit 1")
+    let ci = code("deploy/ci.sh");
+    for call in [
+        "dumpstar_rust_cache_enable || exit 1",
+        r#"dumpstar_rust_cache_report "clippy" || exit 1"#,
+        r#"dumpstar_rust_cache_report "cargo test" || exit 1"#,
+    ] {
+        assert!(ci.lines().any(|line| line.trim() == call), "no `{call}`");
+    }
+}
+
+/// A sccache whose server runs `server` in the foreground, as the real one does
+/// under `SCCACHE_NO_DAEMON`, and whose stats show one hit.
+fn sccache_with_server(sandbox: &Sandbox, server: &str) {
+    sandbox.stub("bin/curl", "#!/bin/sh\n");
+    sandbox.stub(
+        "sccache-dir/bin/sccache",
+        &format!(
+            "#!/bin/sh\nif [ \"$SCCACHE_START_SERVER\" = 1 ]; then {server}; fi\n\
+             [ \"$1\" = --show-stats ] && printf 'Cache hits 1\\nCache misses 0\\n'\nexit 0\n"
+        ),
     );
+}
+
+const LIVE_SERVER: &str = "exec sleep 30";
+const PORT_TAKEN: &str = "echo 'sccache: error: Address already in use (os error 98)' >&2; exit 2";
+
+/// Run `call` against the stubbed sccache, with `port` as the server's.
+fn run_with_server(sandbox: &Sandbox, mode: &str, port: u16, call: &str) -> (Option<i32>, String) {
+    sandbox.run_rust_cache(
+        call,
+        &[
+            ("DUMPSTAR_RUST_CACHE", mode),
+            // Too short to outlast a test execution: enable overrides it.
+            ("SCCACHE_IDLE_TIMEOUT", "1"),
+            ("DUMPSTAR_SCCACHE_SERVER_PORT", &port.to_string()),
+            ("TMPDIR", sandbox.dir.path().to_str().unwrap()),
+            ("PATH", &sandbox.stub_path()),
+        ],
+    )
+}
+
+/// A port nothing listens on, for a server that never comes up: an answering
+/// one could be taken for it before its process had exited.
+const SILENT_PORT: u16 = 1;
+
+#[test]
+fn required_cache_fails_when_the_server_does_not_start() {
+    let sandbox = Sandbox::new();
+    sccache_with_server(&sandbox, PORT_TAKEN);
+    let (status, out) = run_with_server(
+        &sandbox,
+        "required",
+        SILENT_PORT,
+        "dumpstar_rust_cache_enable",
+    );
+    assert_eq!(status, Some(1), "{out}");
+    assert!(out.contains("did not start"), "{out}");
+    assert!(out.contains("Address already in use"), "{out}");
+}
+
+#[test]
+fn a_server_that_does_not_start_compiles_cold_and_says_so() {
+    let sandbox = Sandbox::new();
+    sccache_with_server(&sandbox, PORT_TAKEN);
+    let (status, out) = run_with_server(
+        &sandbox,
+        "on",
+        SILENT_PORT,
+        "dumpstar_rust_cache_enable && \
+         echo \"STATE=$DUMPSTAR_RUST_CACHE_STATE WRAPPER=${RUSTC_WRAPPER-unset}\"",
+    );
+    assert_eq!(status, Some(0), "{out}");
+    assert!(out.contains("did not start"), "{out}");
+    assert!(out.contains("STATE=off WRAPPER=unset"), "{out}");
+}
+
+#[test]
+fn required_cache_fails_when_the_server_dies_before_the_report() {
+    let sandbox = Sandbox::new();
+    sccache_with_server(&sandbox, LIVE_SERVER);
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let (status, out) = run_with_server(
+        &sandbox,
+        "required",
+        listener.local_addr().unwrap().port(),
+        "dumpstar_rust_cache_enable && echo \"PID=$DUMPSTAR_SCCACHE_SERVER_PID\" && \
+         kill \"$DUMPSTAR_SCCACHE_SERVER_PID\" && wait; dumpstar_rust_cache_report clippy",
+    );
+    assert_eq!(status, Some(1), "{out}");
+    let pid = out
+        .lines()
+        .find_map(|line| line.strip_prefix("PID="))
+        .unwrap_or_default();
+    let lost = format!("sccache server (pid {pid}) exited since enable");
+    assert!(out.contains(&lost), "{out}");
+}
+
+#[test]
+fn a_lost_server_under_on_is_said_once_and_the_run_goes_on_cold() {
+    let sandbox = Sandbox::new();
+    sccache_with_server(
+        &sandbox,
+        "echo \"server said: idle=$SCCACHE_IDLE_TIMEOUT\" >&2; exec sleep 30",
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let (status, out) = run_with_server(
+        &sandbox,
+        "on",
+        listener.local_addr().unwrap().port(),
+        "dumpstar_rust_cache_enable && kill \"$DUMPSTAR_SCCACHE_SERVER_PID\" && wait; \
+         dumpstar_rust_cache_report clippy && echo \"WRAPPER=${RUSTC_WRAPPER-unset}\" && \
+         dumpstar_rust_cache_report doctest",
+    );
+    assert_eq!(status, Some(0), "{out}");
+    assert_eq!(out.matches("exited since enable").count(), 1, "{out}");
+    // The server's whole log, with the idle exit put past any test execution.
+    assert!(out.contains("server said: idle=7200"), "{out}");
+    assert!(out.contains("WRAPPER=unset"), "{out}");
+    assert!(out.contains("(doctest): not in use"), "{out}");
+}
+
+#[test]
+fn a_live_server_reports_hits() {
+    let sandbox = Sandbox::new();
+    sccache_with_server(&sandbox, LIVE_SERVER);
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let (status, out) = run_with_server(
+        &sandbox,
+        "required",
+        listener.local_addr().unwrap().port(),
+        "dumpstar_rust_cache_enable && echo \"PID=$DUMPSTAR_SCCACHE_SERVER_PID\" && \
+         dumpstar_rust_cache_report clippy",
+    );
+    assert_eq!(status, Some(0), "{out}");
+    assert!(out.contains("hits=1 misses=0"), "{out}");
+    let pid = out
+        .lines()
+        .find_map(|line| line.strip_prefix("PID="))
+        .unwrap_or_else(|| panic!("no PID: {out}"));
+    // The server outlived the call, so `output()` did not wait on it: its
+    // stdio is not the caller's.
+    let killed = Command::new("/bin/kill").arg(pid).status().expect("kill");
+    assert!(killed.success(), "server {pid} was not running: {out}");
 }
 
 #[test]

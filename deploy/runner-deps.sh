@@ -103,6 +103,21 @@ install_nix() {
     command -v nix >/dev/null 2>&1 || failed "Nix installed, but there is no nix in $HOME/.nix-profile/bin"
 }
 
+# From a scratch copy of the flake and its lock, as a path: flake. `.#` in the
+# checkout is a git flake, and testenv mounts a worktree whose .git names a host
+# directory the container does not have.
+build_sccache() {
+    local dir link rc=0
+    dir="$(mktemp -d)" || return 1
+    link="$(realpath -ms "$SCCACHE_BIN_DIR")" \
+        && cp "$REPO_ROOT/flake.nix" "$REPO_ROOT/flake.lock" "$dir/" \
+        && ( cd "$dir" && nix --extra-experimental-features 'nix-command flakes' \
+                 build path:.#sccache --no-update-lock-file --out-link "$link" ) \
+        || rc=1
+    rm -rf "$dir"
+    return "$rc"
+}
+
 install_sccache() {
     install_nix || { failed "to install sccache: no Nix to install it with"; return 1; }
     note "installing sccache (flake.nix) at ${SCCACHE_BIN_DIR}"
@@ -111,9 +126,7 @@ install_sccache() {
         rm "$SCCACHE_BIN_DIR/sccache" && rmdir "$SCCACHE_BIN_DIR" \
             || { failed "to install sccache: cannot remove the old install at $SCCACHE_BIN_DIR"; return 1; }
     fi
-    mkdir -p "$(dirname "$SCCACHE_BIN_DIR")" \
-        && ( cd "$REPO_ROOT" && nix --extra-experimental-features 'nix-command flakes' \
-                 build .#sccache --out-link "$SCCACHE_BIN_DIR" ) \
+    mkdir -p "$(dirname "$SCCACHE_BIN_DIR")" && build_sccache \
         || { failed "to install sccache: nix build .#sccache"; return 1; }
     note "sccache installed"
 }

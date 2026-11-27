@@ -203,6 +203,7 @@ esac"#,
 /// A `nix` whose `build` leaves `bin/sccache` at the out-link.
 const WORKING_NIX: &str = r#"#!/bin/sh
 echo "$*" >>"$(dirname "$HOME")/nix.log"
+ls -A >"$(dirname "$HOME")/nix.cwd"
 while [ $# -gt 0 ]; do
     if [ "$1" = --out-link ]; then
         mkdir -p "$2/bin" && printf '#!/bin/sh\n' >"$2/bin/sccache" && chmod +x "$2/bin/sccache"
@@ -431,8 +432,25 @@ fn sccache_flag_installs_with_nix_build_and_no_curl() {
         is_executable(&sandbox.path("sccache-dir/bin/sccache")),
         "{text}"
     );
-    assert!(sandbox.log("nix.log").contains("build .#sccache"), "{text}");
+    assert!(
+        sandbox.log("nix.log").contains("build path:.#sccache"),
+        "{text}"
+    );
     assert_eq!(sandbox.log("curl.log"), "", "{text}");
+}
+
+#[test]
+fn sccache_builds_without_reading_the_checkouts_git_directory() {
+    // testenv mounts a worktree whose .git names a host path the container
+    // lacks, so nix must not resolve the flake through git.
+    let sandbox = Sandbox::new();
+    sandbox.stub("bin/nix", WORKING_NIX);
+    let (out, text) = sandbox.runner_deps("--sccache", &[]);
+    assert!(out.status.success(), "{text}");
+    let args = sandbox.log("nix.log");
+    assert!(args.contains("build path:.#sccache"), "{args}");
+    assert!(args.contains("--no-update-lock-file"), "{args}");
+    assert_eq!(sandbox.log("nix.cwd"), "flake.lock\nflake.nix\n", "{text}");
 }
 
 #[test]

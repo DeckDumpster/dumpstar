@@ -1122,6 +1122,41 @@ fn a_successful_sccache_build_stamps_the_flake_inputs() {
 }
 
 #[test]
+fn the_stamp_names_the_inputs_that_were_built_when_the_checkout_changes_mid_build() {
+    let sandbox = Sandbox::new();
+    // A checkout of its own, so the build can change its lock.
+    let script = sandbox.stub(
+        "checkout/deploy/runner-deps.sh",
+        &read("deploy/runner-deps.sh"),
+    );
+    let lock = sandbox.stub("checkout/flake.lock", "built\n");
+    sandbox.stub("checkout/flake.nix", "{ }\n");
+    sandbox.stub(
+        "bin/nix",
+        &WORKING_NIX.replacen("\n", &format!("\necho pulled >'{}'\n", lock.display()), 1),
+    );
+    let out = sandbox
+        .command("bash")
+        .arg(&script)
+        .arg("--sccache")
+        .env("PATH", sandbox.stub_path())
+        .output()
+        .expect("bash runs");
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(fs::read_to_string(&lock).unwrap(), "pulled\n");
+    let built = sandbox
+        .command("bash")
+        .args(["-c", "printf '{ }\\nbuilt\\n' | sha256sum | cut -d' ' -f1"])
+        .output()
+        .expect("bash runs");
+    assert_eq!(
+        sandbox.log(STAMP),
+        String::from_utf8_lossy(&built.stdout),
+        "{out:?}"
+    );
+}
+
+#[test]
 fn a_failed_sccache_build_leaves_no_stamp() {
     let sandbox = Sandbox::new();
     sandbox.stub("bin/nix", "#!/bin/sh\nexit 1\n");

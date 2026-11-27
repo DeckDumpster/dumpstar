@@ -125,9 +125,9 @@ install_nix() {
 # symlink into the read-only store.
 SCCACHE_STAMP="${SCCACHE_BIN_DIR}.flake-sha256"
 
-flake_sha256() {
+flake_sha256() { # <dir holding flake.nix and flake.lock>
     local sum
-    sum="$(cat "$REPO_ROOT/flake.nix" "$REPO_ROOT/flake.lock" | sha256sum)" || return 1
+    sum="$(cat "$1/flake.nix" "$1/flake.lock" | sha256sum)" || return 1
     printf '%s\n' "${sum%% *}"
 }
 
@@ -135,7 +135,7 @@ flake_sha256() {
 # binary still runs (the store path can be garbage-collected from under it).
 current_sccache() {
     local want
-    want="$(flake_sha256 2>/dev/null)" || return 1
+    want="$(flake_sha256 "$REPO_ROOT" 2>/dev/null)" || return 1
     [ "$(cat "$SCCACHE_STAMP" 2>/dev/null)" = "$want" ] || return 1
     "$SCCACHE_BIN_DIR/bin/sccache" --version 2>/dev/null
 }
@@ -152,7 +152,7 @@ build_sccache() {
         && cp "$REPO_ROOT/flake.nix" "$REPO_ROOT/flake.lock" "$dir/" \
         && ( cd "$dir" && nix --extra-experimental-features 'nix-command flakes' \
                  build path:.#sccache --no-update-lock-file --out-link "$link" ) \
-        && flake_sha256 >"$SCCACHE_STAMP.tmp" \
+        && flake_sha256 "$dir" >"$SCCACHE_STAMP.tmp" \
         && mv "$SCCACHE_STAMP.tmp" "$SCCACHE_STAMP" \
         || rc=1
     rm -rf "$dir"

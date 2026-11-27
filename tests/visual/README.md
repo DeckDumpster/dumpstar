@@ -16,8 +16,14 @@ bash tests/visual/run.sh --keep       # ...and leave the instance up
 DUMPSTAR_BASE_URL=http://localhost:8099 bash tests/visual/playwright.sh
 ```
 
-`run.sh` refuses to run against `prod`. `deploy/ci.sh` runs the specs against
-the container it already started for the smoke test. After a failure,
+`playwright.sh` runs Chromium in the `mcr.microsoft.com/playwright` image that
+matches the `@playwright/test` in `package-lock.json`; the host needs rootless
+podman, node and `jq`. An instance you started yourself must admit
+`visual-test@example.com`, with its test JWKS directory in `UI_TEST_JWKS_DIR`
+(or a token in `UI_TEST_ACCESS_TOKEN`).
+
+`run.sh` refuses to run against `prod`. `deploy/ci.sh` does not run these
+specs. After a failure,
 `(cd tests/visual && npm run report)` opens the HTML report.
 
 ## What is covered

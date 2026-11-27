@@ -27,8 +27,10 @@ import type { Page } from '@playwright/test';
 /**
  * The Access JWT the instance demands on every /api request. A `--test`
  * instance is verified against a throwaway JWKS (deploy/setup.sh), and run.sh
- * hands its directory over in UI_TEST_JWKS_DIR; a token is minted per call
- * because the issued ones expire after an hour. Without it every data fetch is
+ * hands its directory over in UI_TEST_JWKS_DIR. playwright.sh mints one on the
+ * host, because the issuer cannot run in the browser container, and passes it
+ * in UI_TEST_ACCESS_TOKEN; a bare `npx playwright test` mints one per call here.
+ * Issued tokens expire after an hour. Without it every data fetch is
  * a 401 and the page never leaves its loading state — which is what a
  * recording run looked like when this was missing: each data route timed out.
  * Null when there is neither a token nor a JWKS directory (an instance run
@@ -38,8 +40,8 @@ function accessToken(): string | null {
 	if (process.env.UI_TEST_ACCESS_TOKEN) return process.env.UI_TEST_ACCESS_TOKEN;
 	const dir = process.env.UI_TEST_JWKS_DIR;
 	if (!dir || !existsSync(join(dir, 'jwks.json'))) return null;
-	const issuer = join(dirname(fileURLToPath(import.meta.url)), '../lib/test_jwks.py');
-	return execFileSync('python3', [issuer, 'issue', dir, 'visual-test@example.com'], {
+	const issuer = join(dirname(fileURLToPath(import.meta.url)), '../lib/test-jwks.sh');
+	return execFileSync('bash', [issuer, 'issue', dir, 'visual-test@example.com'], {
 		encoding: 'utf8'
 	}).trim();
 }

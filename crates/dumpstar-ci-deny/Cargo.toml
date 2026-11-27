@@ -8,3 +8,4 @@ description = "Turns spira's test-registry deny list into the arguments deploy/c
 
 [dev-dependencies]
 spira-test-id = { path = "../spira-test-id" }
+tempfile.workspace = true

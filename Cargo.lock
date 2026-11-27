@@ -1184,6 +1184,7 @@ name = "dumpstar-ci-deny"
 version = "0.1.0"
 dependencies = [
  "spira-test-id",
+ "tempfile",
 ]
 
 [[package]]

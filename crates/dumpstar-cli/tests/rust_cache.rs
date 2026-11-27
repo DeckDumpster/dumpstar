@@ -1224,6 +1224,7 @@ fn a_failed_sccache_build_leaves_no_stamp() {
     assert!(!sandbox.path(STAMP).exists(), "{text}");
 }
 
+#[test_id(t6x2e5g)]
 #[test]
 fn full_install_fast_path_reports_how_long_each_check_group_took() {
     let sandbox = Sandbox::new();

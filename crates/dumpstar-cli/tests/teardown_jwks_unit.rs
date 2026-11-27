@@ -4,6 +4,9 @@
 //! law-a-unit-test-calls-no-binary. `systemctl` and `podman` are stubs that log
 //! their argv, so no real unit or container store is touched.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -91,6 +94,7 @@ impl Teardown {
     }
 }
 
+#[test_id(t2c8yw3)]
 #[test]
 fn teardown_stops_the_recorded_jwks_unit() {
     let t = Teardown::new();
@@ -102,6 +106,7 @@ fn teardown_stops_the_recorded_jwks_unit() {
     );
 }
 
+#[test_id(tm77386)]
 #[test]
 fn purge_stops_the_recorded_jwks_unit_before_deleting_its_record() {
     let t = Teardown::new();
@@ -114,6 +119,7 @@ fn purge_stops_the_recorded_jwks_unit_before_deleting_its_record() {
     assert!(!t.conf_dir().exists(), "--purge left the conf dir");
 }
 
+#[test_id(t0qtwwm)]
 #[test]
 fn teardown_without_a_record_never_sources_the_access_lib() {
     let t = Teardown::new();

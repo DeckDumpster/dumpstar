@@ -1,5 +1,12 @@
 //! A test with no `#[test_id]` has no id for a deny-list row to name, so it could never be
 //! disabled. This refuses one by file and line, over every `.rs` file under `crates/`.
+//!
+//! It reads source, so it cannot see a test a derive generates: ts-rs's `export_bindings_*`
+//! (one per `#[ts(export)]` type) have no `#[test]` to stamp, carry no id and cannot be denied.
+//!
+//! `code_only` is not shared with `strip` in `dumpstar-lakehouse/tests/tenant_isolation.rs`:
+//! that one is private to an integration target and reads no char or byte-string literal,
+//! either of which can hold the quote that would hide every test after it.
 
 use std::path::{Path, PathBuf};
 

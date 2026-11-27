@@ -123,6 +123,69 @@ impl Deny {
     }
 }
 
+const USAGE: &str = "usage: dumpstar-ci-deny --deny-list FILE --form nextest|libtest";
+
+#[derive(Clone, Copy)]
+enum Form {
+    Nextest,
+    Libtest,
+}
+
+fn arguments(args: &[String]) -> Option<(&str, Form)> {
+    let (mut file, mut form) = (None, None);
+    let mut it = args.iter();
+    while let Some(flag) = it.next() {
+        let value = it.next()?.as_str();
+        match (flag.as_str(), value) {
+            ("--deny-list", _) if file.is_none() => file = Some(value),
+            ("--form", "nextest") if form.is_none() => form = Some(Form::Nextest),
+            ("--form", "libtest") if form.is_none() => form = Some(Form::Libtest),
+            _ => return None,
+        }
+    }
+    Some((file?, form?))
+}
+
+/// What one invocation of the binary exits with and prints.
+#[derive(Debug, PartialEq)]
+pub struct Outcome {
+    pub code: u8,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+/// The `dumpstar-ci-deny` command: `args` without the program name, `read` for the named file.
+/// Stdout is one runner argument per line; stderr names the ids left out, for the CI log.
+pub fn run(args: &[String], read: impl FnOnce(&str) -> Result<String, String>) -> Outcome {
+    let refused = |code, why: String| Outcome {
+        code,
+        stdout: String::new(),
+        stderr: format!("{why}\n"),
+    };
+    let Some((file, form)) = arguments(args) else {
+        return refused(2, USAGE.to_string());
+    };
+    let deny = match read(file).and_then(|text| parse(&text)) {
+        Ok(deny) => deny,
+        Err(e) => return refused(1, format!("dumpstar-ci-deny: {file}: {e}")),
+    };
+    let lines = match form {
+        Form::Nextest => deny.nextest_args(),
+        Form::Libtest => deny.libtest_skips(),
+    };
+    let ids = deny.ids();
+    let left_out = if ids.is_empty() {
+        "left out none".to_string()
+    } else {
+        format!("left out {} test(s): {}", ids.len(), ids.join(" "))
+    };
+    Outcome {
+        code: 0,
+        stdout: lines.iter().map(|line| format!("{line}\n")).collect(),
+        stderr: format!("deny list at={}: {left_out}\n", deny.at()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -254,5 +317,91 @@ mod tests {
     fn a_row_without_four_fields_is_refused_by_line() {
         let e = refusal(&format!("{HEAD1}disabled\ttest:t0aaaaa\n"));
         assert_eq!(e, "deny list line 2: want 4 tab-separated fields, got 2");
+    }
+
+    const ONE_EACH: &str = "# test-registry deny-list at=9 rows=3\n\
+                            disabled\ttest:t0aaaaa\tsp-x\t-\n\
+                            disabled\tsuite:test-a.sh\tsp-x\t-\n\
+                            quarantined\ttest:t0bbbbb\tsp-y\t-\n";
+
+    fn invoke(args: &str, list: &str) -> Outcome {
+        let args: Vec<String> = args.split_whitespace().map(String::from).collect();
+        run(&args, |file| {
+            assert_eq!(file, "LIST");
+            Ok(list.to_string())
+        })
+    }
+
+    #[test_id(tdzeyp9)]
+    #[test]
+    fn each_form_prints_one_argument_per_line_and_names_the_ids_left_out() {
+        for (form, stdout) in [
+            (
+                "nextest",
+                "-E\nnot (test(/::t0aaaaa$/) | test(/::t0bbbbb$/))\n",
+            ),
+            ("libtest", "--skip\n::t0aaaaa\n--skip\n::t0bbbbb\n"),
+        ] {
+            let o = invoke(&format!("--deny-list LIST --form {form}"), ONE_EACH);
+            assert_eq!(
+                o,
+                Outcome {
+                    code: 0,
+                    stdout: stdout.to_string(),
+                    stderr: "deny list at=9: left out 2 test(s): t0aaaaa t0bbbbb\n".to_string(),
+                }
+            );
+        }
+    }
+
+    #[test_id(ti3woer)]
+    #[test]
+    fn a_run_that_leaves_nothing_out_says_so_and_prints_no_argument() {
+        let o = invoke(
+            "--form nextest --deny-list LIST",
+            "# test-registry deny-list at=9 rows=0\n",
+        );
+        assert_eq!((o.code, o.stdout.as_str()), (0, ""));
+        assert_eq!(o.stderr, "deny list at=9: left out none\n");
+    }
+
+    #[test_id(ttpg1u9)]
+    #[test]
+    fn a_malformed_list_exits_1_naming_the_file_and_line_and_prints_no_argument() {
+        let o = invoke(
+            "--deny-list LIST --form nextest",
+            &format!("{HEAD1}frozen\ttest:t0aaaaa\tsp-x\t-\n"),
+        );
+        assert_eq!((o.code, o.stdout.as_str()), (1, ""));
+        assert!(
+            o.stderr
+                .starts_with("dumpstar-ci-deny: LIST: deny list line 2:"),
+            "{}",
+            o.stderr
+        );
+    }
+
+    #[test_id(tvhbttz)]
+    #[test]
+    fn anything_but_the_two_named_arguments_exits_2_with_usage() {
+        for args in [
+            "",
+            "LIST nextest",
+            "--deny-list LIST",
+            "--form nextest",
+            "--deny-list LIST --form pytest",
+            "--deny-list LIST --form nextest --form libtest",
+            "--deny-list LIST --form nextest --verbose",
+        ] {
+            let o = run(
+                &args
+                    .split_whitespace()
+                    .map(String::from)
+                    .collect::<Vec<_>>(),
+                |_| panic!("usage is settled before the file is read: {args:?}"),
+            );
+            assert_eq!((o.code, o.stdout.as_str()), (2, ""), "{args:?}");
+            assert!(o.stderr.starts_with("usage:"), "{}", o.stderr);
+        }
     }
 }

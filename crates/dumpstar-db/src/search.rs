@@ -3150,6 +3150,17 @@ mod tests {
         )
         .unwrap();
         assert_eq!((first.total_copies, second.total_copies), (5, 5));
+
+        // A cursor issued before the copy count existed is still accepted.
+        let cursor = first.next_cursor.unwrap();
+        let mut old = serde_json::to_value(decode_cursor(&cursor).unwrap()).unwrap();
+        old.as_object_mut().unwrap().remove("c").unwrap();
+        let old = encode_cursor(&serde_json::from_value(old).unwrap());
+        let slice = Slice::Cursor {
+            limit: 1,
+            cursor: Some(old),
+        };
+        assert_eq!(search_page(&f.conn, &c, slice).unwrap().rows.len(), 1);
     }
 
     /// A result with no owned, priced copy answers `None`, not `Some(0.0)`.

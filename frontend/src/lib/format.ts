@@ -22,6 +22,11 @@ export function count(n: number | null | undefined): string {
 	return n == null ? '—' : INT.format(n);
 }
 
+/** `1,635 distinct printings`: the words the homepage and the collection page share. */
+export function distinctPrintings(n: number): string {
+	return `${count(n)} distinct ${n === 1 ? 'printing' : 'printings'}`;
+}
+
 /** The collection page's count line: copies owned and distinct printings, then
  *  the value of those copies when there is one. */
 export function collectionCountLine(
@@ -29,7 +34,7 @@ export function collectionCountLine(
 	printings: number,
 	value: number | null
 ): string {
-	const line = `${count(copies)} ${copies === 1 ? 'copy' : 'copies'} owned · ${count(printings)} distinct ${printings === 1 ? 'printing' : 'printings'}`;
+	const line = `${count(copies)} ${copies === 1 ? 'copy' : 'copies'} owned · ${distinctPrintings(printings)}`;
 	return value === null ? line : `${line}, ${money(value)}`;
 }
 

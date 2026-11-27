@@ -94,7 +94,7 @@ async function serveHugeResult(page: Page, rows = 4_000, make = row): Promise<As
 			json: {
 				rows: Array.from({ length: rows }, (_, i) => make(i)),
 				total: TOTAL,
-				total_copies: TOTAL,
+				total_copies: TOTAL + 7,
 				total_value: TOTAL_VALUE,
 				limit: TOTAL,
 				offset: 0
@@ -194,7 +194,7 @@ test('the client asks for the whole result, not a page of it', async ({ page }) 
 	// stub proves — the page is holding 4,000 rows worth $6,000 and printing
 	// $84,952.50, a figure it could not have added up itself.
 	const line = page.locator('[data-testid="collection-count"]');
-	await expect(line).toContainText('100,000 copies owned · 100,000 distinct printings');
+	await expect(line).toContainText('100,007 copies owned · 100,000 distinct printings');
 	await expect(line).toContainText('$84,952.50');
 });
 

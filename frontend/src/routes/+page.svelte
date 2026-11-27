@@ -41,7 +41,7 @@
 	import DeathStar from '$lib/components/DeathStar.svelte';
 	import CollectionSummary from '$lib/components/CollectionSummary.svelte';
 	import { api } from '$lib/api';
-	import { money, count } from '$lib/format';
+	import { money, count, distinctPrintings } from '$lib/format';
 	import { Badge, Button, EmptyState, Panel, ProgressBar, SectionHeader } from '$lib/components/ui';
 	import type { CollectionRow } from '$lib/types/CollectionRow';
 	import { tileCaption, tileFace } from '$lib/tileFace';
@@ -76,7 +76,7 @@
 	let sets = $state<SetSummary[]>([]);
 	/** Live, from ownership itself. */
 	let copiesOwned = $state(0);
-	let distinctPrintings = $state(0);
+	let printingsOwned = $state(0);
 	let recent = $state<CollectionRow[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
@@ -90,7 +90,7 @@
 				api.collectionSearch('', undefined, undefined, false, 0)
 			]);
 			copiesOwned = owned.total_copies;
-			distinctPrintings = owned.total;
+			printingsOwned = owned.total;
 			// The `all` dimension answers with the loose cards (bucket null) and,
 			// when the tenant owns any, the sealed product. Told apart by
 			// `bucket`, never by order.
@@ -150,7 +150,7 @@
 	 * move pixels for every tenant who owns no sealed product.
 	 */
 	const ownedMeta = $derived(
-		`${count(distinctPrintings)} distinct ${distinctPrintings === 1 ? 'printing' : 'printings'} · ` +
+		`${distinctPrintings(printingsOwned)} · ` +
 			(sealedLatest ? `${count(sealedLatest.card_count)} sealed · ` : '') +
 			`${count(setsStarted)} of ${count(sets.length)} sets started`
 	);

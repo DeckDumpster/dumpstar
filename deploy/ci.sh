@@ -505,6 +505,13 @@ fi
 #
 # $HOME-relative, never a literal /home/<user>: a hardcoded path would put one
 # box's layout back into the repo, which is the thing pd-rf7c took out.
+# nix-store, which hands sccache's closure to the image build (rust-cache.sh).
+# First, so each later prepend stays ahead of it: a Nix-profile cargo or node
+# must not shadow the toolchains below.
+case ":${PATH}:" in
+    *":${HOME}/.nix-profile/bin:"*) ;;
+    *) PATH="${HOME}/.nix-profile/bin:${PATH}" ;;
+esac
 case ":${PATH}:" in
     *":${HOME}/.cargo/bin:"*) ;;
     *) PATH="${HOME}/.cargo/bin:${PATH}" ;;
@@ -905,7 +912,8 @@ fi
 }
 
 if tier -q rust || tier -q isolation || tier -q container; then
-    dumpstar_rust_cache_enable
+    # Non-zero only under DUMPSTAR_RUST_CACHE=required: stop, do not compile cold.
+    dumpstar_rust_cache_enable || exit 1
 fi
 
 # Cheapest and likeliest-to-fail first (sp-l2xovg): a one-word lint used to

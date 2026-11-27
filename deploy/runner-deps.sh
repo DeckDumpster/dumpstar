@@ -11,7 +11,7 @@
 #
 #   bash deploy/runner-deps.sh            install anything missing (idempotent)
 #   bash deploy/runner-deps.sh --check    report what is missing; exit 1 if any
-#   bash deploy/runner-deps.sh --sccache  install only sccache (optional; exit 0)
+#   bash deploy/runner-deps.sh --sccache  install only sccache (and Nix, if absent)
 #
 # WHY THIS EXISTS. CI used to run on one long-lived box where somebody had
 # installed cargo, node and podman by hand, under that user's $HOME. The
@@ -56,34 +56,83 @@ fi
 # The per-user toolchains install under $HOME and a non-login shell does not
 # have them on PATH. Doing this here rather than in the workflow means a
 # developer, a polecat and CI all get the same answer from `command -v cargo`.
-export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
+export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$HOME/.nix-profile/bin:$PATH"
 
 # sccache, the shared Rust compile cache (sp-2i16qf; see deploy/rust-cache.sh).
-# The OFFICIAL static (musl) release, because the same binary is handed to the
-# image's bookworm builder, which a build linked against this host's newer glibc
-# would not run in. OPTIONAL: without it CI compiles cold and says so, so a failed
-# download is a note, never a failed install.
-SCCACHE_VERSION=0.10.0
+# Pinned by flake.nix/flake.lock and installed only by `nix build`
+# (law-install-installs-every-dependency), so a failed install is a failed run.
+# SCCACHE_BIN_DIR is nix build's out-link: the binary is $SCCACHE_BIN_DIR/bin/sccache.
+# Nix is the one bootstrap: the official installer for a pinned release.
+NIX_VERSION=2.35.2
 SCCACHE_BIN_DIR="${DUMPSTAR_SCCACHE_DIR:-$HOME/.cache/dumpstar-sccache-bin}"
-install_sccache() {
-    [ ! -x "$SCCACHE_BIN_DIR/sccache" ] && [ "$(uname -m)" = x86_64 ] || return 0
-    note "installing sccache ${SCCACHE_VERSION} (static) into ${SCCACHE_BIN_DIR}"
-    local dir name="sccache-v${SCCACHE_VERSION}-x86_64-unknown-linux-musl"
-    dir="$(mktemp -d)"
-    if curl -fsSL --retry 3 -o "$dir/sccache.tgz" \
-           "https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/${name}.tar.gz" \
-       && tar -xzf "$dir/sccache.tgz" -C "$dir" \
-       && mkdir -p "$SCCACHE_BIN_DIR" \
-       && install -m 0755 "$dir/${name}/sccache" "$SCCACHE_BIN_DIR/sccache"; then
-        note "sccache installed"
-    else
-        note "could not install sccache -- CI will compile Rust cold"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# A single-user Nix run as root (the testenv tier containers) has no `nixbld`
+# group, which Nix otherwise requires of root.
+if [ "$(id -u)" -eq 0 ]; then
+    export NIX_CONFIG="build-users-group =${NIX_CONFIG:+$'\n'$NIX_CONFIG}"
+fi
+
+failed() { printf 'runner-deps: FAILED %s\n' "$*" >&2; return 1; }
+
+fetch_and_run_nix_installer() { # <empty scratch dir>
+    local url="https://releases.nixos.org/nix/nix-${NIX_VERSION}" f
+    for f in install install.sha256; do
+        curl -fsSL --retry 3 -o "$1/$f" "$url/$f" || { failed "to download $url/$f"; return 1; }
+    done
+    # The published checksum file is the bare hex digest, with no file name.
+    printf '%s  %s\n' "$(cut -c1-64 "$1/install.sha256")" "$1/install" | sha256sum --check --status \
+        || { failed "the Nix ${NIX_VERSION} installer does not match its published checksum; not running it"; return 1; }
+    # As root the installer would still reach for sudo, which a bare container lacks.
+    if [ "$(id -u)" -eq 0 ]; then
+        mkdir -p -m 0755 /nix || { failed "to create /nix"; return 1; }
     fi
+    # No channel: it is unpinned, and nothing here reads one.
+    sh "$1/install" --no-daemon --no-channel-add || failed "the Nix ${NIX_VERSION} installer"
+}
+
+install_nix() {
+    command -v nix >/dev/null 2>&1 && return 0
+    note "installing Nix ${NIX_VERSION}"
+    local dir rc=0
+    dir="$(mktemp -d)" || return 1
+    fetch_and_run_nix_installer "$dir" || rc=1
     rm -rf "$dir"
+    [ "$rc" -eq 0 ] || return 1
+    export PATH="$HOME/.nix-profile/bin:$PATH"
+    command -v nix >/dev/null 2>&1 || failed "Nix installed, but there is no nix in $HOME/.nix-profile/bin"
+}
+
+# From a scratch copy of the flake and its lock, as a path: flake. `.#` in the
+# checkout is a git flake, and testenv mounts a worktree whose .git names a host
+# directory the container does not have.
+build_sccache() {
+    local dir link rc=0
+    dir="$(mktemp -d)" || return 1
+    link="$(realpath -ms "$SCCACHE_BIN_DIR")" \
+        && cp "$REPO_ROOT/flake.nix" "$REPO_ROOT/flake.lock" "$dir/" \
+        && ( cd "$dir" && nix --extra-experimental-features 'nix-command flakes' \
+                 build path:.#sccache --no-update-lock-file --out-link "$link" ) \
+        || rc=1
+    rm -rf "$dir"
+    return "$rc"
+}
+
+install_sccache() {
+    install_nix || { failed "to install sccache: no Nix to install it with"; return 1; }
+    note "installing sccache (flake.nix) at ${SCCACHE_BIN_DIR}"
+    # The curl-era install left a real directory where nix has to put its link.
+    if [ -d "$SCCACHE_BIN_DIR" ] && [ ! -L "$SCCACHE_BIN_DIR" ] && [ -f "$SCCACHE_BIN_DIR/sccache" ]; then
+        rm "$SCCACHE_BIN_DIR/sccache" && rmdir "$SCCACHE_BIN_DIR" \
+            || { failed "to install sccache: cannot remove the old install at $SCCACHE_BIN_DIR"; return 1; }
+    fi
+    mkdir -p "$(dirname "$SCCACHE_BIN_DIR")" && build_sccache \
+        || { failed "to install sccache: nix build .#sccache"; return 1; }
+    note "sccache installed"
 }
 
 if [ "$MODE" = sccache ]; then
-    install_sccache
+    install_sccache || exit 1
     exit 0
 fi
 
@@ -358,6 +407,13 @@ check_nextest() {
     esac
 }
 
+check_sccache() {
+    local v
+    v="$("$SCCACHE_BIN_DIR/bin/sccache" --version 2>/dev/null)" \
+        || { lack sccache "the shared Rust compile cache (deploy/rust-cache.sh); install: bash deploy/runner-deps.sh --sccache"; return 1; }
+    note "$v"
+}
+
 # ---------------------------------------------------------------------------
 # Node.
 #
@@ -537,14 +593,14 @@ check_machine() {
 }
 
 # DUMPSTAR_RUNNER_DEPS_ONLY="base rust" checks just those groups (base podman
-# subid linger rust nextest node chromium fonts machine). testenv runs the lint and rust
+# subid linger rust nextest sccache node chromium fonts machine). testenv runs the lint and rust
 # tiers in a bare rust image that has no podman, node or browser libraries and
 # never will; checking them there failed every run before the tier started.
 # Unset checks everything, which is what a CI runner needs.
 run_checks() {
     MISSING=()
     local g
-    for g in base podman subid linger rust nextest node chromium fonts machine; do
+    for g in base podman subid linger rust nextest sccache node chromium fonts machine; do
         case " ${DUMPSTAR_RUNNER_DEPS_ONLY:-$g} " in
             *" $g "*) ;;
             *) continue ;;
@@ -553,7 +609,7 @@ run_checks() {
             base) check_base ;;       podman) check_podman ;;
             subid) check_subid ;;     linger) check_linger ;;
             rust) check_rust ;;       nextest) check_nextest ;;
-            node) check_node ;;
+            sccache) check_sccache ;;  node) check_node ;;
             chromium) check_chromium_libs ;;
             fonts) check_fonts ;;     machine) check_machine ;;
         esac
@@ -608,7 +664,7 @@ phase "fast path: is everything already baked in?"
 _pinned="$(sed -n 's/^channel[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' rust-toolchain.toml 2>/dev/null)"
 if run_checks >/dev/null 2>&1 && [ ${#MISSING[@]} -eq 0 ] \
    && { [ -z "$_pinned" ] || [[ $'\n'"$(rustup toolchain list 2>/dev/null)" == *$'\n'"${_pinned}"* ]]; } \
-   && { [ "$(uname -m)" != x86_64 ] || [ -x "$SCCACHE_BIN_DIR/sccache" ]; }; then
+   && [ -x "$SCCACHE_BIN_DIR/bin/sccache" ]; then
     note "everything already present -- nothing to install"
     exit 0
 fi
@@ -733,7 +789,8 @@ if command -v loginctl >/dev/null 2>&1 && [ ! -d "/run/user/$(id -u)" ]; then
         || note "WARNING: /run/user/$(id -u) still absent after enabling linger"
 fi
 
-install_sccache
+phase "sccache (nix build .#sccache)"
+install_sccache || exit 1
 
 # Re-check and report. A partial install is a failure HERE rather than a
 # surprise three gates into ci.sh on a machine that no longer exists.

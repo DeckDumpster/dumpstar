@@ -36,11 +36,7 @@ impl Teardown {
 
     fn plant_record(&self) {
         std::fs::create_dir_all(self.conf_dir()).unwrap();
-        std::fs::write(
-            self.conf_dir().join("test-jwks.unit"),
-            format!("{UNIT}\n"),
-        )
-        .unwrap();
+        std::fs::write(self.conf_dir().join("test-jwks.unit"), format!("{UNIT}\n")).unwrap();
     }
 
     /// Runs `teardown.sh t1 <args>`, requires success and returns the stub log.

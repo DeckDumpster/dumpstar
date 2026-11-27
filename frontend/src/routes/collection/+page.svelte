@@ -915,7 +915,14 @@
 	function restoreScroll() {
 		if (typeof window === 'undefined') return;
 		const saved = Number(sessionStorage.getItem(scrollKey()) ?? 0);
-		requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo({ top: saved })));
+		requestAnimationFrame(() =>
+			requestAnimationFrame(() => {
+				window.scrollTo({ top: saved });
+				// The browser specs scroll only after this: before it, the
+				// restore undoes their scroll.
+				document.documentElement.dataset.scrollRestored = '';
+			})
+		);
 	}
 
 	function groupChecked(ids: number[]): boolean {
@@ -1121,7 +1128,7 @@
 	sticky
 	surface="panel"
 >
-	<Toolbar gap="md" wrap={false} class="searchrow">
+	<Toolbar gap="md" wrap={false} class="searchrow collection-searchrow">
 		<a class="brand" href="/" aria-label="Home" title="Home">
 			<span class="brandmark"><DeathStar size={26} /></span>
 		</a>
@@ -1720,7 +1727,10 @@
 	:global(.toolbar.topbar.sticky) {
 		padding: var(--toolbar-gap) var(--toolbar-bar-pad-x);
 	}
-	:global(.searchrow) {
+	/* The kit Toolbar's own `.g-md` gap outranks a bare class. The class is this
+	   page's alone: this CSS stays loaded after leaving, and /browse/[set] has
+	   a `.searchrow` of its own. */
+	:global(.toolbar.d-row.collection-searchrow) {
 		gap: var(--toolbar-search-gap);
 	}
 	.brand:hover .brandmark {
@@ -1753,6 +1763,7 @@
 		border-radius: var(--radius-md);
 		color: var(--color-control-text);
 		font-family: inherit;
+		line-height: var(--toolbar-search-line);
 	}
 	/* An invalid control reddens on the danger ramp, not the brand one —
 	   the same answer the Field primitive gives for `error`. Crimson here

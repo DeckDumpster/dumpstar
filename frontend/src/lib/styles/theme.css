@@ -53,6 +53,10 @@
 	--toolbar-menu-font: 1.3rem;
 	--toolbar-gap: 0.625rem; /* between the controls row's buttons */
 	--toolbar-search-font: 1rem;
+	/* deck's input keeps the browser's own font, whose `normal` line is 18px at
+	   16px. Ours inherits the site stack, whose `normal` differs by machine
+	   (21px in the Playwright image), so the line is stated. */
+	--toolbar-search-line: 1.125rem;
 	--toolbar-search-pad-y: 0.625rem;
 	--toolbar-search-pad-l: 0.875rem;
 	--toolbar-search-pad-r: 0.875rem;

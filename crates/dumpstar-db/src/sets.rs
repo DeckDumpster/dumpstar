@@ -45,7 +45,7 @@ pub fn list_sets(conn: &Connection) -> Result<Vec<SetSummary>> {
     // `owned_cards`: CROSS JOIN and `+c.status` make each set walk its own
     // printings. Otherwise SQLite takes `idx_collection_status` and reads every
     // owned card once per set.
-    let mut stmt = conn.prepare(
+    let mut stmt = conn.prepare(concat!(
         "SELECT s.set_code, s.name, s.release_date, s.category, \
                 (SELECT count(DISTINCT p.card_id) FROM printings p WHERE p.set_code = s.set_code), \
                 (SELECT count(DISTINCT p.card_id) FROM collection c \
@@ -60,12 +60,12 @@ pub fn list_sets(conn: &Connection) -> Result<Vec<SetSummary>> {
                   WHERE p.set_code = s.set_code AND +c.status = 'owned') \
                 + (SELECT count(*) FROM user_printings u \
                      CROSS JOIN collection c ON c.printing_id = u.printing_id \
-                    WHERE +c.status = 'owned' AND s.set_code = \
-                          (SELECT x.set_code FROM printings x WHERE x.card_id = u.card_id \
-                            ORDER BY x.variant <> 'Standard', x.printing_id LIMIT 1)) \
+                    WHERE +c.status = 'owned' AND s.set_code = ",
+        crate::lead_printing_column!("set_code", "u.card_id"),
+        ") \
          FROM sets s \
          ORDER BY s.release_date DESC NULLS LAST, s.sort_order DESC, s.set_code",
-    )?;
+    ))?;
     let rows = stmt.query_map([], |r| {
         Ok(SetSummary {
             set_code: r.get(0)?,

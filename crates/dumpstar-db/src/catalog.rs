@@ -51,19 +51,36 @@ pub fn sealed_product_exists(conn: &Connection, product_id: i64) -> Result<bool>
 #[macro_export]
 macro_rules! printing_rel {
     () => {
-        "( \
+        concat!(
+            "( \
      SELECT printing_id, card_id, set_code, number, variant, finish, rarity, artist, \
             image_url, NULL AS variant_description, back_image_url \
        FROM printings \
      UNION ALL \
-     SELECT up.printing_id, up.card_id, \
-            (SELECT x.set_code FROM printings x WHERE x.card_id = up.card_id \
-              ORDER BY x.variant <> 'Standard', x.printing_id LIMIT 1), \
-            (SELECT x.number FROM printings x WHERE x.card_id = up.card_id \
-              ORDER BY x.variant <> 'Standard', x.printing_id LIMIT 1), \
+     SELECT up.printing_id, up.card_id, ",
+            $crate::lead_printing_column!("set_code", "up.card_id"),
+            ", ",
+            $crate::lead_printing_column!("number", "up.card_id"),
+            ", \
             up.variant, 'Normal', NULL, NULL, NULL, up.description, NULL \
        FROM user_printings up \
      )"
+        )
+    };
+}
+
+/// One column of the catalog printing a card's custom variants borrow their
+/// set and number from. `$card` is a SQL expression naming a `card_id`.
+#[macro_export]
+macro_rules! lead_printing_column {
+    ($column:literal, $card:literal) => {
+        concat!(
+            "(SELECT x.",
+            $column,
+            " FROM printings x WHERE x.card_id = ",
+            $card,
+            " ORDER BY x.variant <> 'Standard', x.printing_id LIMIT 1)"
+        )
     };
 }
 

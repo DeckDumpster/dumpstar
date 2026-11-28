@@ -667,6 +667,7 @@ fn ci_sh_stops_when_a_required_cache_is_unavailable() {
     }
 }
 
+#[test_id(txwtnif)]
 #[test]
 fn ci_sh_asks_for_the_cache_server_between_the_test_build_and_the_test_run() {
     let ci = code("deploy/ci.sh");
@@ -691,6 +692,7 @@ fn ci_sh_asks_for_the_cache_server_between_the_test_build_and_the_test_run() {
     assert!(report < run, "the tests run before the report:\n{ci}");
 }
 
+#[test_id(tt9asf7)]
 #[test]
 fn ci_sh_reports_the_cache_and_stops_when_a_compile_fails() {
     let ci = code("deploy/ci.sh");
@@ -701,6 +703,7 @@ fn ci_sh_reports_the_cache_and_stops_when_a_compile_fails() {
         // the run.
         let script = format!(
             "set -euo pipefail; REPO_DIR=$PWD; tier() {{ :; }}; step() {{ :; }}\n\
+             require_deny_list() {{ :; }}; deny_args() {{ _deny=(); }}\n\
              cargo() {{ case \"$*\" in 'nextest --version') ;; \
              clippy*|*--no-run*) return 101 ;; *) echo \"ran: $*\" ;; esac; }}\n\
              dumpstar_rust_cache_report() {{ echo \"report: $1\"; }}\n\
@@ -837,7 +840,7 @@ fn a_lost_server_under_on_is_said_once_and_the_run_goes_on_cold() {
     assert!(out.contains("(doctest): not in use"), "{out}");
 }
 
-#[test_id(thx42i8)]
+#[test_id(tq3dozm)]
 #[test]
 fn only_a_cache_that_is_not_required_ignores_sccache_server_io_errors() {
     let sandbox = Sandbox::new();
@@ -858,6 +861,7 @@ fn only_a_cache_that_is_not_required_ignores_sccache_server_io_errors() {
     }
 }
 
+#[test_id(thx42i8)]
 #[test]
 fn a_live_server_reports_hits() {
     let sandbox = Sandbox::new();

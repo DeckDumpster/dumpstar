@@ -931,7 +931,10 @@ fi
 g_clippy() {
 if tier rust; then
     step "cargo clippy --all-targets"
-    ( cd "$REPO_DIR" && cargo clippy --all-targets --profile test -- -D warnings )
+    if ! ( cd "$REPO_DIR" && cargo clippy --all-targets --profile test -- -D warnings ); then
+        dumpstar_rust_cache_report "clippy"
+        exit 1
+    fi
     dumpstar_rust_cache_report "clippy" || exit 1
 fi
 }
@@ -991,6 +994,14 @@ if tier rust; then
         exit 1
     fi
     deny_args nextest
+    # Built first, so a server lost during the build is reported before the
+    # tests run. A failed build is reported too: the lost server may be why.
+    step "cargo nextest run --no-run (build the test binaries)"
+    if ! ( cd "$REPO_DIR" && cargo nextest run --profile ci --workspace --no-run ); then
+        dumpstar_rust_cache_report "nextest build"
+        exit 1
+    fi
+    dumpstar_rust_cache_report "nextest build" || exit 1
     _t0=$SECONDS
     step "cargo nextest run (all test binaries in parallel)"
     ( cd "$REPO_DIR" && cargo nextest run --profile ci --workspace --no-fail-fast "${_deny[@]}" )

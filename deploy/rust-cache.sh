@@ -26,7 +26,13 @@
 #                             a server that does not start or is gone by a report
 #                             compiles cold, slower, and the line printed says so
 # DUMPSTAR_RUST_CACHE=required  the same print the same line and return 1
-#                             (the testenv rust tier, which cannot finish cold)
+#                             (the testenv rust tier, which cannot finish cold).
+#                             SCCACHE_IGNORE_SERVER_IO_ERROR, set under `on`, is
+#                             left unset, so a server I/O error fails the compile.
+#                             Not every loss does: sccache compiles locally if the
+#                             connection just closes mid-compile, and a later
+#                             compile starts a new server. The report's check on
+#                             enable's server is what turns those red.
 # DUMPSTAR_RUST_CACHE=off     compile cold, deliberately
 #
 # A clean cache is never a failure. Silence would read as "cache working".
@@ -91,7 +97,8 @@ dumpstar_rust_cache_enable() {
 	fi
 	export SCCACHE_WEBDAV_ENDPOINT="$endpoint"
 	export SCCACHE_WEBDAV_KEY_PREFIX="${SCCACHE_WEBDAV_KEY_PREFIX:-/}"
-	export SCCACHE_IGNORE_SERVER_IO_ERROR=1
+	# Under required, a server I/O error fails the compile (see the mode block).
+	[ "${DUMPSTAR_RUST_CACHE:-on}" = required ] || export SCCACHE_IGNORE_SERVER_IO_ERROR=1
 	# The server, every client compile and the readiness check use one port.
 	export SCCACHE_SERVER_PORT="$DUMPSTAR_SCCACHE_SERVER_PORT"
 	"$bin" --stop-server >/dev/null 2>&1 || true

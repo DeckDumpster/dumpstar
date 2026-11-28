@@ -413,6 +413,7 @@ mod tests {
         }
     }
 
+    #[test_id(t7m6776)]
     #[test]
     fn park_list_then_resolve_single_replays_metadata() {
         let (_d, mut conn) = db();
@@ -460,6 +461,7 @@ mod tests {
         );
     }
 
+    #[test_id(tsyhtsg)]
     #[test]
     fn resolve_sealed_replays_quantity_and_metadata() {
         let (_d, mut conn) = db();
@@ -496,6 +498,7 @@ mod tests {
         assert_eq!(sealed::list(&conn).unwrap().len(), 1);
     }
 
+    #[test_id(t67aaax)]
     #[test]
     fn dismiss_drops_row_without_writing_a_copy() {
         let (_d, conn) = db();
@@ -523,6 +526,7 @@ mod tests {
         assert!(dismiss(&conn, id).is_err());
     }
 
+    #[test_id(ti2vs0g)]
     #[test]
     fn resolve_rejects_wrong_kind() {
         let (_d, mut conn) = db();
@@ -546,6 +550,7 @@ mod tests {
         assert!(resolve_sealed(&mut conn, id, 7001).is_err());
     }
 
+    #[test_id(taol69f)]
     #[test]
     fn park_unmatched_on_selected_commit_parks_the_misses() {
         // A ManaBox CSV: line 2 resolves (normal), line 3 misses (Foil has no

@@ -306,6 +306,7 @@ async fn watch_pushes(cfg: Config, log: impl Fn(&str)) {
 mod tests {
     use super::*;
 
+    #[test_id(tv7xaf4)]
     #[test]
     fn probes_are_not_activity() {
         assert!(is_probe_path("/health"));
@@ -316,6 +317,7 @@ mod tests {
         assert!(!is_probe_path("/"));
     }
 
+    #[test_id(tnryxve)]
     #[test]
     fn depth_buckets() {
         assert_eq!(depth_bucket(60, 0), "0");
@@ -328,6 +330,7 @@ mod tests {
         assert_eq!(depth_bucket(0, 500), "0");
     }
 
+    #[test_id(tr4r1fa)]
     #[test]
     fn failure_log_is_rate_limited() {
         let mut l = FailureLog::new(Duration::from_secs(300));
@@ -337,6 +340,7 @@ mod tests {
         assert!(l.due(t + Duration::from_secs(300)));
     }
 
+    #[test_id(ti5jrxn)]
     #[test]
     fn endpoint_splits() {
         assert_eq!(
@@ -346,6 +350,7 @@ mod tests {
         assert_eq!(split_endpoint("https://h/x"), None);
     }
 
+    #[test_id(tl097qn)]
     #[tokio::test]
     async fn unreachable_endpoint_logs_endpoint_and_error() {
         let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -369,6 +374,7 @@ mod tests {
     }
 
     /// With every request worker blocked, the exporter still pushes.
+    #[test_id(txd637q)]
     #[test]
     fn exporter_pushes_while_the_request_runtime_is_blocked() {
         let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();

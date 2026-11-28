@@ -1,5 +1,8 @@
 //! Acceptance for the SWU catalog seam (design row S6).
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -70,6 +73,7 @@ fn env() -> Env {
     }
 }
 
+#[test_id(twu8fv9)]
 #[test]
 fn applying_the_fake_catalog_twice_is_a_noop_the_second_time() {
     let e = env();
@@ -90,6 +94,7 @@ fn applying_the_fake_catalog_twice_is_a_noop_the_second_time() {
     );
 }
 
+#[test_id(tn2uxpt)]
 #[test]
 fn identical_content_under_a_new_hash_writes_nothing() {
     let e = env();
@@ -122,6 +127,7 @@ fn identical_content_under_a_new_hash_writes_nothing() {
     assert_eq!(before, after);
 }
 
+#[test_id(txmjp1p)]
 #[test]
 fn raw_payload_is_on_disk_with_hash_and_provenance_before_apply() {
     let e = env();
@@ -149,6 +155,7 @@ fn raw_payload_is_on_disk_with_hash_and_provenance_before_apply() {
     assert_eq!(meta, landed.provenance);
 }
 
+#[test_id(t0n6cit)]
 #[test]
 fn a_payload_that_fails_to_parse_is_still_landed() {
     struct Bad;
@@ -189,6 +196,7 @@ fn tree_bytes(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     out
 }
 
+#[test_id(t2rn87v)]
 #[test]
 fn no_tenant_file_changes_across_a_run() {
     let e = env();
@@ -206,6 +214,7 @@ fn no_tenant_file_changes_across_a_run() {
     assert_eq!(before, tree_bytes(&tenants));
 }
 
+#[test_id(tulowgc)]
 #[test]
 fn every_printing_kind_is_its_own_row_with_crosswalk() {
     let e = env();
@@ -241,6 +250,7 @@ fn every_printing_kind_is_its_own_row_with_crosswalk() {
     );
 }
 
+#[test_id(t4cvx2t)]
 #[test]
 fn prices_are_append_only_and_unmatched_rows_are_counted() {
     let e = env();
@@ -257,6 +267,7 @@ fn prices_are_append_only_and_unmatched_rows_are_counted() {
     assert_eq!(count(w.conn(), "SELECT COUNT(*) FROM prices"), 4);
 }
 
+#[test_id(tcc9o89)]
 #[test]
 fn fts_and_legality_are_populated() {
     let e = env();
@@ -287,6 +298,7 @@ fn fts_and_legality_are_populated() {
     );
 }
 
+#[test_id(t91c2f8)]
 #[test]
 fn the_serving_connection_cannot_write() {
     let e = env();
@@ -298,6 +310,7 @@ fn the_serving_connection_cannot_write() {
 /// The serving crate must not reach the write path. `Catalog::open_writer`,
 /// `apply` and `run_once` are the only ways to write; none may appear in
 /// dumpstar-server or in a crate it serves requests from.
+#[test_id(tqli6nu)]
 #[test]
 fn no_request_handler_opens_the_catalog_for_writing() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../dumpstar-server/src");
@@ -333,6 +346,7 @@ fn no_request_handler_opens_the_catalog_for_writing() {
     );
 }
 
+#[test_id(tdyzgyo)]
 #[test]
 fn landing_twice_keeps_the_first_provenance() {
     let e = env();

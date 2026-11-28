@@ -214,6 +214,7 @@ mod tests {
     /// anything. A seed added to `open_shared` and not to `inputs()` is
     /// silent: the hash goes on matching, a running server goes on skipping
     /// the read-write open, and the new seed never reaches it.
+    #[test_id(tvzbk2o)]
     #[test]
     fn every_catalog_seed_is_in_the_fingerprint() {
         let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
@@ -290,6 +291,7 @@ mod tests {
         }
     }
 
+    #[test_id(t75h3c6)]
     #[test]
     fn the_fingerprint_is_stable_across_calls() {
         assert_eq!(fingerprint(), fingerprint());
@@ -300,6 +302,7 @@ mod tests {
     /// inputs whose bytes run together must not hash to what one longer input
     /// would. Asserted over the real digest so it survives a rewrite of the
     /// hasher.
+    #[test_id(tu2hzpx)]
     #[test]
     fn concatenating_two_inputs_is_not_the_same_as_one() {
         let joined = {

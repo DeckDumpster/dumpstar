@@ -7,6 +7,9 @@
 //! - `compiler_supported`  → the compiled WHERE has no `1=0` sentinel; otherwise
 //!   it must contain one (the documented parse-but-unsupported cases).
 
+#[macro_use]
+extern crate spira_test_id;
+
 use dumpstar_core::query::{KeywordRegistry, parse};
 use dumpstar_db::search::{compile, search};
 use dumpstar_db::search_meta::{self, SearchFlag};
@@ -102,6 +105,7 @@ fn fixture() -> (
     (dir, conn, registry, flags)
 }
 
+#[test_id(tltamo2)]
 #[test]
 fn corpus_parses_compiles_and_executes() {
     let (_dir, conn, registry, flags) = fixture();

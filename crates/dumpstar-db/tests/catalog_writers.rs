@@ -17,6 +17,9 @@
 //! Without those, a `open_shared_for_serving` that had quietly stopped
 //! converging anything at all would pass the whole file.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::time::Duration;
 
 use rusqlite::Connection;
@@ -46,6 +49,7 @@ fn catalog_with_the_write_lock_held(dir: &std::path::Path) -> (std::path::PathBu
 
 /// The control. A read-write open of a catalog somebody else is writing fails
 /// — which is what `dumpstar serve` used to do on every single start.
+#[test_id(ta9zctv)]
 #[test]
 fn a_read_write_open_loses_to_a_writer_that_is_already_there() {
     let dir = tempfile::tempdir().unwrap();
@@ -64,6 +68,7 @@ fn a_read_write_open_loses_to_a_writer_that_is_already_there() {
 
 /// The fix. A start that has nothing to converge does not compete for the
 /// lock at all, so the same catalog opens while the derive is mid-transaction.
+#[test_id(tzw4pde)]
 #[test]
 fn a_serving_open_of_a_converged_catalog_does_not_wait_for_the_writer() {
     let dir = tempfile::tempdir().unwrap();
@@ -95,6 +100,7 @@ fn a_serving_open_of_a_converged_catalog_does_not_wait_for_the_writer() {
 /// and nothing else — a `converged_at` would make two derives of one raw/
 /// partition differ, which is the property `dumpstar-lake-derive diff` exists to
 /// check — so the observable is the connection itself.
+#[test_id(tifrmse)]
 #[test]
 fn a_serving_open_of_a_converged_catalog_hands_back_a_handle_that_cannot_write() {
     let dir = tempfile::tempdir().unwrap();
@@ -125,6 +131,7 @@ fn a_serving_open_of_a_converged_catalog_hands_back_a_handle_that_cannot_write()
 /// wait is what turns that collision into a start that is a minute late
 /// instead of one that fails after five seconds and is retried for the rest
 /// of the build.
+#[test_id(t63hohb)]
 #[test]
 fn a_serving_open_of_an_unconverged_catalog_waits_for_the_writer_and_then_converges() {
     let dir = tempfile::tempdir().unwrap();
@@ -187,6 +194,7 @@ fn a_serving_open_of_an_unconverged_catalog_waits_for_the_writer_and_then_conver
 /// A catalog from a build older than the fingerprint table converges rather
 /// than being taken on trust. Every existing box is in exactly this state on
 /// the deploy that lands this change.
+#[test_id(t1t6sgm)]
 #[test]
 fn a_catalog_with_no_fingerprint_table_is_converged_not_trusted() {
     let dir = tempfile::tempdir().unwrap();
@@ -214,6 +222,7 @@ fn a_catalog_with_no_fingerprint_table_is_converged_not_trusted() {
 /// nothing else, so a second open is a no-op and a third is too. Stated
 /// because "converged" is a claim about work already done: if the value
 /// moved on every open, nothing could ever be skipped.
+#[test_id(t7fg8my)]
 #[test]
 fn converging_twice_records_the_same_fingerprint() {
     let dir = tempfile::tempdir().unwrap();
@@ -240,6 +249,7 @@ fn converging_twice_records_the_same_fingerprint() {
 /// one call later" is exactly the kind of claim that is true when written and
 /// quietly false after a refactor — and the failure would be a server happily
 /// serving a schema it does not understand.
+#[test_id(ttzdpn7)]
 #[test]
 fn a_catalog_from_a_newer_build_is_still_refused() {
     let dir = tempfile::tempdir().unwrap();
@@ -272,6 +282,7 @@ fn a_catalog_from_a_newer_build_is_still_refused() {
 /// sufficient and is not: it reports converged a catalog this build has never
 /// stamped, so the stamp never arrives and the file goes on claiming a shape
 /// it does not have.
+#[test_id(tjrltnk)]
 #[test]
 fn a_fingerprint_without_the_version_stamp_is_not_a_converged_catalog() {
     let dir = tempfile::tempdir().unwrap();

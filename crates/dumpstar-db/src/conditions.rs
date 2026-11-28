@@ -98,6 +98,7 @@ mod tests {
 
     /// A brand-new collection is born with the five defaults — no `dumpstar
     /// setup`, no catalog, nothing attached.
+    #[test_id(tdv428p)]
     #[test]
     fn a_new_collection_is_seeded_with_the_five_conditions() {
         let dir = tempfile::tempdir().unwrap();
@@ -118,6 +119,7 @@ mod tests {
     }
 
     /// The seed runs on every open, so the second one must insert nothing.
+    #[test_id(tfk4fa2)]
     #[test]
     fn seeding_an_already_seeded_collection_inserts_nothing() {
         let dir = tempfile::tempdir().unwrap();
@@ -130,6 +132,7 @@ mod tests {
     /// this build's to replace on the next open. (Editing is a separate,
     /// deliberately unbuilt feature — this pins the seed's behaviour so the
     /// day it lands the seed does not quietly undo it.)
+    #[test_id(t7u1beo)]
     #[test]
     fn seeding_never_overwrites_a_multiplier_the_collection_already_holds() {
         let dir = tempfile::tempdir().unwrap();
@@ -150,6 +153,7 @@ mod tests {
     /// A row that went missing comes back — the seed fills gaps, which is
     /// what makes it a migration for a collection that predates the table
     /// as well as the birth state of a new one.
+    #[test_id(ts94xtv)]
     #[test]
     fn a_missing_condition_is_restored_on_the_next_open() {
         let dir = tempfile::tempdir().unwrap();

@@ -39,6 +39,9 @@
 //! materialised prices and the provenance — and the refusals, which are the
 //! part of this file that does not depend on a catalog at all.
 
+#[macro_use]
+extern crate spira_test_id;
+
 // The fake upstream is the one `dumpstar-ingest`'s landing-zone gates already
 // drive the real clients with. A second HTTP server would be a second thing
 // that can be subtly wrong.
@@ -344,6 +347,7 @@ fn scalar<T: rusqlite::types::FromSql>(db: &Path, sql: &str) -> T {
 
 /// **The acceptance criterion.** Land a day through the online path, rebuild
 /// it from what landed, and compare the two catalogs row for row.
+#[test_id(tjlyiyt)]
 #[test]
 fn a_catalog_derived_from_raw_is_row_identical_to_the_online_one() {
     let h = Harness::start();
@@ -384,6 +388,7 @@ fn a_catalog_derived_from_raw_is_row_identical_to_the_online_one() {
 
 /// The catalog has ONE builder: the refresh lands and nothing else, so the
 /// partition it leaves has to stand on its own.
+#[test_id(tordlv1)]
 #[test]
 fn a_catalog_derived_from_a_landing_only_refresh_is_row_identical_to_a_fetched_one() {
     let h = Harness::start();
@@ -418,6 +423,7 @@ fn a_catalog_derived_from_a_landing_only_refresh_is_row_identical_to_a_fetched_o
 }
 
 /// The same claim on the SECOND pass, with different numbers.
+#[test_id(tacosw2)]
 #[test]
 fn the_second_day_is_row_identical_too() {
     let h = Harness::start();
@@ -444,6 +450,7 @@ fn the_second_day_is_row_identical_too() {
 
 /// Deriving the same date twice changes nothing but the provenance, and the
 /// provenance says it happened.
+#[test_id(tn51id8)]
 #[test]
 fn deriving_the_same_date_twice_changes_nothing_but_says_it_happened() {
     let h = Harness::start();
@@ -492,6 +499,7 @@ fn deriving_the_same_date_twice_changes_nothing_but_says_it_happened() {
 /// The failure this is aimed at is the reverse of a rerun: a job that reached
 /// for the newest partition when asked for an older one would look like it
 /// worked, and would quietly file the wrong day's prices.
+#[test_id(t0z71x8)]
 #[test]
 fn an_older_date_rebuilds_that_date_and_not_the_newest_one() {
     let h = Harness::start();
@@ -526,6 +534,7 @@ fn an_older_date_rebuilds_that_date_and_not_the_newest_one() {
 /// 200 groups of an unknown 450 is precisely the quietly-smaller catalog the
 /// refusal exists for, and it is the half of a night that no later run can
 /// re-fetch.
+#[test_id(tq9xbws)]
 #[test]
 fn an_incomplete_partition_is_refused_rather_than_half_derived() {
     let h = Harness::start();
@@ -571,6 +580,7 @@ fn an_incomplete_partition_is_refused_rather_than_half_derived() {
 /// The flag itself is asserted gone too. Leaving it accepted-but-ignored would
 /// be worse than removing it: `deploy/derive.sh` invocations and runbooks
 /// carrying it would keep passing while meaning nothing.
+#[test_id(tdarnjm)]
 #[test]
 fn a_gap_in_raw_is_fatal_with_the_upstream_sitting_right_there() {
     let h = Harness::start();
@@ -637,6 +647,7 @@ fn a_gap_in_raw_is_fatal_with_the_upstream_sitting_right_there() {
 /// recorded — the shape a corrupted or tampered lake has. It is the case where
 /// a silent wrong answer would be worst: the bytes still parse, the rows still
 /// look like rows, and nothing downstream could tell.
+#[test_id(tbf7uu4)]
 #[test]
 fn a_corrupted_payload_stops_the_derive_instead_of_deriving_from_it() {
     let h = Harness::start();
@@ -669,6 +680,7 @@ fn a_corrupted_payload_stops_the_derive_instead_of_deriving_from_it() {
 /// here, so identity alone cannot prove this; the upstream's own request log
 /// does. (Replaces the podman `--internal` network of the retired
 /// `tests/lake/derive.sh`.)
+#[test_id(tdxns3j)]
 #[test]
 fn the_offline_derive_never_asks_the_upstream_for_anything() {
     let h = Harness::start();
@@ -701,6 +713,7 @@ fn the_offline_derive_never_asks_the_upstream_for_anything() {
 
 /// A date nobody landed is a refusal that names the date — never a rebuild
 /// from whatever else the lake happens to hold.
+#[test_id(tlvlh37)]
 #[test]
 fn a_date_that_was_never_landed_refuses_by_name() {
     let h = Harness::start();
@@ -736,6 +749,7 @@ fn a_date_that_was_never_landed_refuses_by_name() {
 /// fetch did. In production that is automatic — both sides are the compiled-in
 /// constant — but a fixture upstream's port is ephemeral, so the container gate
 /// has to be told what it was.
+#[test_id(thm12gz)]
 #[test]
 fn the_fixture_the_container_gate_reads() {
     let out = std::env::var("DUMPSTAR_DERIVE_FIXTURE_OUT")
@@ -772,6 +786,7 @@ fn the_fixture_the_container_gate_reads() {
 /// There is no default `--ingest-date`. Deriving an older day is the same
 /// operation as deriving today's, and a job that could read the clock would
 /// have two behaviours where it should have one.
+#[test_id(trr79yo)]
 #[test]
 fn the_ingest_date_has_no_default() {
     let out = Command::new(env!("CARGO_BIN_EXE_dumpstar-lake-derive"))
@@ -832,6 +847,7 @@ fn find(dir: &Path, needle: &str, suffix: &str) -> PathBuf {
 /// finding B), and it is why the assertion below insists the file still EXISTS
 /// as well as being empty. In production the connection this stands in for is
 /// the server's.
+#[test_id(t1kfmln)]
 #[test]
 fn a_derive_leaves_no_wal_behind_on_the_catalog_it_built() {
     let h = Harness::start();

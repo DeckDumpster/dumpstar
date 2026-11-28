@@ -274,6 +274,7 @@ fn query_shape(qs: &str) -> (String, String) {
 mod tests {
     use super::*;
 
+    #[test_id(tubyz1b)]
     #[test]
     fn tool_call_logs_done_line_and_slow_call_logs_inflight_first() {
         set_slow_ms(50);

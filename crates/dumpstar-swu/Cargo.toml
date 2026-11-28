@@ -20,5 +20,6 @@ dumpster-kit-catalog.workspace = true
 dumpster-kit-tcgcsv.workspace = true
 
 [dev-dependencies]
+spira-test-id = { path = "../spira-test-id" }
 tempfile.workspace = true
 flate2.workspace = true

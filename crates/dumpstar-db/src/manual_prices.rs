@@ -155,6 +155,7 @@ mod tests {
         (dir, conn)
     }
 
+    #[test_id(tzksdd7)]
     #[test]
     fn insert_defaults_observed_at_to_now() {
         let (_d, conn) = conn();
@@ -186,6 +187,7 @@ mod tests {
         );
     }
 
+    #[test_id(tj79p5u)]
     #[test]
     fn insert_honors_explicit_observed_at() {
         let (_d, conn) = conn();
@@ -203,6 +205,7 @@ mod tests {
         assert_eq!(rows[0].observed_at, "2024-03-01T00:00:00Z");
     }
 
+    #[test_id(tvku706)]
     #[test]
     fn list_returns_newest_first() {
         let (_d, conn) = conn();
@@ -231,6 +234,7 @@ mod tests {
     /// pd-m4gw: a catalog printing's price is the catalog's business. Before
     /// this change the insert succeeded and the row then priced the printing
     /// for this tenant alone.
+    #[test_id(tvp3gfu)]
     #[test]
     fn insert_refuses_a_catalog_printing_and_says_the_price_is_the_catalogs() {
         let (_d, conn) = conn();
@@ -258,6 +262,7 @@ mod tests {
         );
     }
 
+    #[test_id(t9lhorh)]
     #[test]
     fn insert_rejects_unknown_printing() {
         let (_d, conn) = conn();
@@ -274,6 +279,7 @@ mod tests {
         assert!(matches!(err, DbError::NotFound(_)));
     }
 
+    #[test_id(t6pwtrr)]
     #[test]
     fn delete_removes_row() {
         let (_d, conn) = conn();

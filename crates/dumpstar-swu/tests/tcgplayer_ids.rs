@@ -5,6 +5,9 @@
 //! sets and the official entries trimmed to the fields the parser reads
 //! (`fixtures/swu/README.md`).
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::collections::BTreeMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -136,6 +139,7 @@ fn rows<T>(conn: &Connection, sql: &str, f: impl Fn(&rusqlite::Row) -> T) -> Vec
         .collect()
 }
 
+#[test_id(tcmh4u1)]
 #[test]
 fn the_costco_leia_is_linked_to_its_tcgplayer_product_and_gets_its_market_price() {
     let l = loaded();
@@ -161,6 +165,7 @@ fn the_costco_leia_is_linked_to_its_tcgplayer_product_and_gets_its_market_price(
     assert_eq!(market, 10.38);
 }
 
+#[test_id(tisetrt)]
 #[test]
 fn every_main_set_has_at_least_95_percent_of_its_printings_carrying_a_product_id() {
     let l = loaded();
@@ -174,6 +179,7 @@ fn every_main_set_has_at_least_95_percent_of_its_printings_carrying_a_product_id
     assert_eq!((s.linked, s.printings), (2, 2));
 }
 
+#[test_id(t848vj1)]
 #[test]
 fn the_coverage_report_names_every_printing_left_without_a_product_id() {
     let l = loaded();
@@ -204,6 +210,7 @@ fn the_coverage_report_names_every_printing_left_without_a_product_id() {
     }
 }
 
+#[test_id(texrb42)]
 #[test]
 fn a_set_whose_coverage_falls_below_its_floor_fails_the_check() {
     let l = loaded();
@@ -230,6 +237,7 @@ fn a_set_whose_coverage_falls_below_its_floor_fails_the_check() {
     assert!(all.iter().any(|a| a.kind == "set_coverage_dropped"));
 }
 
+#[test_id(tw6o5kr)]
 #[test]
 fn a_foil_and_a_prestige_listing_are_matched_across_the_group_by_name_and_parenthetical() {
     let l = loaded();
@@ -266,6 +274,7 @@ fn printing(id: &str, name: &str) -> OfficialPrinting {
     }
 }
 
+#[test_id(tvez0c8)]
 #[test]
 fn a_printing_the_rules_cannot_place_is_resolved_by_the_remedial_crosswalk() {
     let groups = BTreeMap::from([(
@@ -323,6 +332,7 @@ fn a_printing_the_rules_cannot_place_is_resolved_by_the_remedial_crosswalk() {
     );
 }
 
+#[test_id(twxhu1n)]
 #[test]
 fn every_row_of_the_remedial_crosswalk_names_a_source_and_a_reason() {
     let table = dumpstar_swu::crosswalk::remedial_table();
@@ -340,6 +350,7 @@ fn every_row_of_the_remedial_crosswalk_names_a_source_and_a_reason() {
 /// Production's state after sp-9uiu2z deployed: the catalog was last joined by
 /// the old code, nothing upstream has moved since, so no payload applies and
 /// no join runs (sp-ogwa3i).
+#[test_id(tuylene)]
 #[test]
 fn a_catalog_joined_by_older_code_is_rejoined_and_repriced_on_the_next_sync() {
     use dumpstar_swu::swu::KEY_TCGCSV_LAST_UPDATED;
@@ -413,6 +424,7 @@ fn a_catalog_joined_by_older_code_is_rejoined_and_repriced_on_the_next_sync() {
     );
 }
 
+#[test_id(tcppypc)]
 #[test]
 fn every_unlinked_printing_of_every_set_is_in_the_unmatched_report() {
     let l = loaded();

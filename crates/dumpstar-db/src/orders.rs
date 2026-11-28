@@ -222,6 +222,7 @@ mod tests {
         (dir, conn)
     }
 
+    #[test_id(t4czahi)]
     #[test]
     fn commit_then_receive() {
         let (_d, mut conn) = conn();
@@ -254,6 +255,7 @@ mod tests {
         assert_eq!(list(&conn).unwrap().len(), 1);
     }
 
+    #[test_id(tihbh2r)]
     #[test]
     fn create_rejects_unknown_printing() {
         let (_d, mut conn) = conn();

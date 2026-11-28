@@ -27,6 +27,7 @@ pub fn number_sort_key(number: &str) -> i64 {
 mod tests {
     use super::number_sort_key;
 
+    #[test_id(tur38px)]
     #[test]
     fn plain_numbers_sort_by_value() {
         assert_eq!(number_sort_key("4"), 4);
@@ -34,6 +35,7 @@ mod tests {
         assert_eq!(number_sort_key(" 7 "), 7); // whitespace tolerated
     }
 
+    #[test_id(t90felw)]
     #[test]
     fn lettered_numbers_sort_after_every_plain_one() {
         assert_eq!(number_sort_key("P01"), 1_000_001);

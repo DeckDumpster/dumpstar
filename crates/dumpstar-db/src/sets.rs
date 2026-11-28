@@ -369,6 +369,7 @@ mod tests {
         }
     }
 
+    #[test_id(tbeij4u)]
     #[test]
     fn list_sets_reports_card_and_owned_counts() {
         let dir = tempfile::tempdir().unwrap();
@@ -408,6 +409,7 @@ mod tests {
 
     /// A "Missing Variant" printing is not in the catalog, and the card held
     /// as one is still a card the user owns, in its card's set.
+    #[test_id(tzaxm39)]
     #[test]
     fn list_sets_owned_cards_includes_a_card_held_as_a_custom_variant() {
         let dir = tempfile::tempdir().unwrap();
@@ -444,6 +446,7 @@ mod tests {
         assert_eq!(owned, [("SHD".into(), 0), ("SOR".into(), 2)]);
     }
 
+    #[test_id(t4ruji7)]
     #[test]
     fn list_sets_groups_by_category_main_expansions_first() {
         let dir = tempfile::tempdir().unwrap();
@@ -480,6 +483,7 @@ mod tests {
         );
     }
 
+    #[test_id(t1pa5ce)]
     #[test]
     fn list_sets_orders_newest_release_first() {
         let dir = tempfile::tempdir().unwrap();
@@ -499,6 +503,7 @@ mod tests {
         assert_eq!(codes, ["TWI", "SHD", "SOR"]);
     }
 
+    #[test_id(tdnt4a9)]
     #[test]
     fn analytics_breaks_down_completion_value_and_rarity() {
         let dir = tempfile::tempdir().unwrap();
@@ -573,6 +578,7 @@ mod tests {
         assert!(analytics(&conn, "nope").unwrap().is_none());
     }
 
+    #[test_id(twrhim1)]
     #[test]
     fn rarity_split_folds_upstream_spelling_onto_one_canonical_tier() {
         // Upstream ships the same tier two ways — "Legendary" from the
@@ -601,6 +607,7 @@ mod tests {
         assert_eq!(a.copy_counts[1].rarity_grp.as_deref(), Some("legendary"));
     }
 
+    #[test_id(tjbizqv)]
     #[test]
     fn unranked_rarity_keeps_its_string_and_sorts_last() {
         // A tier missing from data/rarities.json is a gap in the seed, not
@@ -631,6 +638,7 @@ mod tests {
         assert_eq!(unknown.grp, None);
     }
 
+    #[test_id(t1dab1s)]
     #[test]
     fn rarity_and_number_come_from_the_standard_printing_of_each_card() {
         // A card with a Hyperspace printing at its own collector number is
@@ -668,6 +676,7 @@ mod tests {
         assert_eq!(a.rarities[0].owned_cards, 1);
     }
 
+    #[test_id(tms1dxj)]
     #[test]
     fn market_value_takes_cheapest_printing_per_card_not_sum_of_printings() {
         // A card printed as Standard, Hyperspace and Showcase must contribute

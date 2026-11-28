@@ -307,6 +307,7 @@ mod tests {
 
     /// Printing a secret is a decision. Without `--yes` and without `--out`,
     /// nothing is emitted.
+    #[test_id(tne77fb)]
     #[test]
     fn backup_refuses_to_print_without_yes() {
         let KeysCommand::Backup(a) = parse(&["backup"]) else {
@@ -320,6 +321,7 @@ mod tests {
 
     /// A revocation is never implicit either — and the refusal says the thing
     /// an operator most needs to know before typing `--yes`.
+    #[test_id(tpfjxvf)]
     #[test]
     fn tombstone_refuses_without_yes() {
         let KeysCommand::Tombstone(a) = parse(&["tombstone", "01J0000000000000000000000A"]) else {
@@ -334,6 +336,7 @@ mod tests {
     /// The two paths do not share a confirmation flag by accident: `backup`
     /// has an escape hatch that writes a file instead of printing, and
     /// `tombstone` has none, because there is no safer way to revoke.
+    #[test_id(tzgrbep)]
     #[test]
     fn the_two_paths_take_different_arguments() {
         let KeysCommand::Backup(b) = parse(&["backup", "-o", "/tmp/k"]) else {
@@ -356,6 +359,7 @@ mod tests {
 
     /// `derive` takes a database_id, and a handle is not one — the same rule
     /// the registry itself holds every writer to.
+    #[test_id(t61d5id)]
     #[test]
     fn derive_refuses_a_handle() {
         let KeysCommand::Derive(a) = parse(&["derive", "alice"]) else {

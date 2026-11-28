@@ -124,6 +124,7 @@ Quantity,Name,Set,Card Number,Set Code,Printing,Condition,Language,Price
 3,Luke Skywalker,Spark of Rebellion,5,SOR,Foil,Near Mint,English,$12.50
 1,Vanquish,Spark of Rebellion,63,SOR,Normal,Lightly Played Foil,English,";
 
+    #[test_id(tqpxh3f)]
     #[test]
     fn parses_printing_price_and_quantity() {
         let rows = parse(SAMPLE).unwrap();
@@ -143,6 +144,7 @@ Quantity,Name,Set,Card Number,Set Code,Printing,Condition,Language,Price
         assert_eq!(squirtle.purchase_price, None);
     }
 
+    #[test_id(tnitwm5)]
     #[test]
     fn missing_card_number_column_is_an_error() {
         let csv = "Quantity,Set\n1,Spark of Rebellion";

@@ -3,6 +3,9 @@
 //! test, so no Python (or nc) is needed; `tests/lib/ports_test.sh` §4 held the
 //! same fixture before 2026-10-15.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::process::Command;
@@ -19,6 +22,7 @@ fn bash(script: &str) -> std::process::Output {
         .expect("bash runs")
 }
 
+#[test_id(t47lodf)]
 #[test]
 fn port_in_use_sees_a_live_listener() {
     let held = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -30,6 +34,7 @@ fn port_in_use_sees_a_live_listener() {
     );
 }
 
+#[test_id(tu3vska)]
 #[test]
 fn free_port_never_returns_a_listening_port() {
     let held = TcpListener::bind("127.0.0.1:0").unwrap();

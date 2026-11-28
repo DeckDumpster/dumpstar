@@ -121,6 +121,7 @@ mod tests {
         (dir, conn)
     }
 
+    #[test_id(tmnm2ve)]
     #[test]
     fn create_then_detail_with_cards() {
         let (_d, mut conn) = conn();

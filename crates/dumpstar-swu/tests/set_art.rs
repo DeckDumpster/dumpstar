@@ -1,6 +1,9 @@
 //! Every catalog set has a set-art manifest entry — a logo/crop, or an explicit
 //! `none` with its reason — so a new set cannot reach the site unaccounted for.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::collections::BTreeSet;
 use std::path::Path;
 
@@ -10,6 +13,7 @@ fn manifest_codes() -> BTreeSet<String> {
     art::sources().into_iter().map(|s| s.set_code).collect()
 }
 
+#[test_id(th6hp89)]
 #[test]
 fn every_tcgcsv_group_and_fake_set_has_an_entry() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/swu/swu-groups.json");
@@ -33,6 +37,7 @@ fn every_tcgcsv_group_and_fake_set_has_an_entry() {
     );
 }
 
+#[test_id(tck1wvf)]
 #[test]
 fn an_entry_is_art_or_says_why_not() {
     for s in art::sources() {
@@ -53,6 +58,7 @@ const NO_LOGO_REVIEWED: &[&str] = &[
     "P26", "C26", "GFT", "CE2025", "SN1", "CE2024", "EEP", "JDG", "OPP", "PRE",
 ];
 
+#[test_id(tqvu9jg)]
 #[test]
 fn a_set_without_a_logo_is_a_reviewed_exception() {
     let mut unreviewed = vec![];
@@ -76,6 +82,7 @@ fn a_set_without_a_logo_is_a_reviewed_exception() {
     );
 }
 
+#[test_id(t0o43dh)]
 #[test]
 fn every_logo_names_its_official_source() {
     for s in art::sources() {
@@ -97,6 +104,7 @@ fn every_logo_names_its_official_source() {
     }
 }
 
+#[test_id(tkm7gi8)]
 #[test]
 fn every_set_has_a_banner_crop_or_says_why_not() {
     for s in art::sources() {
@@ -120,6 +128,7 @@ fn every_set_has_a_banner_crop_or_says_why_not() {
     }
 }
 
+#[test_id(tiq968l)]
 #[test]
 fn fetching_the_manifest_stores_a_crop_for_every_set_that_lists_one() {
     use chrono::NaiveDate;

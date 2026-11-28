@@ -2,6 +2,9 @@
 //! (the printed order); other printings list them by aspect id and must not
 //! reorder them (sp-mmro2r).
 
+#[macro_use]
+extern crate spira_test_id;
+
 use dumpstar_swu::Catalog;
 use dumpstar_swu::apply::apply;
 use dumpstar_swu::landing::Provenance;
@@ -51,6 +54,7 @@ fn stored(c: &Catalog) -> Vec<String> {
 
 const PRINTED: [&str; 3] = ["Cunning", "Vigilance", "Villainy"];
 
+#[test_id(t9g6c5b)]
 #[test]
 fn a_non_standard_entry_never_reorders_the_standard_entrys_aspects() {
     let standard = page(
@@ -81,6 +85,7 @@ fn a_non_standard_entry_never_reorders_the_standard_entrys_aspects() {
     }
 }
 
+#[test_id(t5cacf9)]
 #[test]
 fn a_standard_entrys_source_order_is_stored_unchanged() {
     let dir = tempfile::tempdir().unwrap();

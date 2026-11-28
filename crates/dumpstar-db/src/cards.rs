@@ -371,6 +371,7 @@ mod tests {
         (dir, conn)
     }
 
+    #[test_id(t5mbewg)]
     #[test]
     fn card_detail_includes_printings_and_copies() {
         let (_d, mut conn) = user_conn();
@@ -416,6 +417,7 @@ mod tests {
     // by this payload) is what does draw them, one card at a time. If this
     // ever thinned out to match the list, the rules text and the artist
     // facet link would silently go blank.
+    #[test_id(thyaxu6)]
     #[test]
     fn a_shared_number_resolves_to_the_base_printing_unless_a_variant_is_named() {
         let (_d, conn) = {
@@ -446,6 +448,7 @@ mod tests {
         );
     }
 
+    #[test_id(tzdz2kw)]
     #[test]
     fn card_detail_carries_the_full_rules_the_modal_renders() {
         let (_d, conn) = user_conn();
@@ -476,12 +479,14 @@ mod tests {
         );
     }
 
+    #[test_id(t08tb9p)]
     #[test]
     fn missing_card_returns_none() {
         let (_d, conn) = user_conn();
         assert!(get_card_detail(&conn, "SOR", "999").unwrap().is_none());
     }
 
+    #[test_id(trnslc9)]
     #[test]
     fn card_detail_resolves_per_printing_market_price() {
         let dir = tempfile::tempdir().unwrap();
@@ -512,6 +517,7 @@ mod tests {
         assert_eq!(foil.market_price, Some(25.0));
     }
 
+    #[test_id(tlrsa8h)]
     #[test]
     fn card_detail_leaves_an_unpriced_catalog_printing_null_and_gap_fills_only_user_printings() {
         // A catalog printing prices identically for every tenant: with no
@@ -565,6 +571,7 @@ mod tests {
         assert_eq!(user.description.as_deref(), Some("Convention stamp"));
     }
 
+    #[test_id(tr5fpgg)]
     #[test]
     fn get_card_prices_returns_ordered_series_per_printing() {
         let dir = tempfile::tempdir().unwrap();
@@ -600,6 +607,7 @@ mod tests {
         assert!(series.iter().all(|s| s.price_type == "market"));
     }
 
+    #[test_id(tcbhj9i)]
     #[test]
     fn get_card_prices_returns_empty_for_unknown_card() {
         let (_d, conn) = user_conn();
@@ -614,6 +622,7 @@ mod tests {
         shared
     }
 
+    #[test_id(tg9o33h)]
     #[test]
     fn get_card_prices_has_no_series_for_a_catalog_printing_without_a_quote() {
         let dir = tempfile::tempdir().unwrap();
@@ -625,6 +634,7 @@ mod tests {
     /// A tenant that holds a manual price against a catalog printing. Nothing
     /// reads it, so the chart must not draw it either — a line that does not
     /// price the card is worse than no line.
+    #[test_id(t077zqs)]
     #[test]
     fn get_card_prices_ignores_a_stale_tenant_manual_price_on_a_catalog_printing() {
         let dir = tempfile::tempdir().unwrap();
@@ -644,6 +654,7 @@ mod tests {
 
     /// …while a printing the tenant invented still charts from its own rows,
     /// alongside the catalog printing's market series.
+    #[test_id(tuywii5)]
     #[test]
     fn get_card_prices_charts_a_user_created_printings_manual_series() {
         let dir = tempfile::tempdir().unwrap();

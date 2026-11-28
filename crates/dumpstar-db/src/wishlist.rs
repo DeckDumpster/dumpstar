@@ -302,6 +302,7 @@ mod tests {
         (dir, conn)
     }
 
+    #[test_id(t91mg0r)]
     #[test]
     fn add_list_fulfill_delete() {
         let (_d, conn) = conn();
@@ -358,6 +359,7 @@ mod tests {
         list(conn, false).unwrap().len()
     }
 
+    #[test_id(t8nmlsj)]
     #[test]
     fn any_printing_want_is_fulfilled_by_any_matching_copy() {
         let (_d, mut conn) = with_printings();
@@ -374,6 +376,7 @@ mod tests {
         assert_eq!(active(&conn), 0);
     }
 
+    #[test_id(tud4imw)]
     #[test]
     fn specific_printing_want_is_not_fulfilled_by_a_different_printing() {
         let (_d, mut conn) = with_printings();
@@ -390,6 +393,7 @@ mod tests {
         assert_eq!(active(&conn), 0);
     }
 
+    #[test_id(tmyps5v)]
     #[test]
     fn condition_price_and_quantity_gate_fulfilment() {
         let (_d, mut conn) = with_printings();
@@ -424,6 +428,7 @@ mod tests {
         assert_eq!((all[0].id, all[0].quantity_have), (id, 2));
     }
 
+    #[test_id(tlof3df)]
     #[test]
     fn add_rejects_foreign_printing_bad_condition_and_zero_quantity() {
         let (_d, conn) = with_printings();
@@ -455,6 +460,7 @@ mod tests {
         ));
     }
 
+    #[test_id(t5oq0su)]
     #[test]
     fn add_rejects_unknown_card() {
         let (_d, conn) = conn();

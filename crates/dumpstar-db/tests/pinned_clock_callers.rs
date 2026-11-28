@@ -10,6 +10,9 @@
 //! A pin that reached production would stamp rows with an instant that is not
 //! the time, and every one of them would look completely ordinary.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::path::{Path, PathBuf};
 
 /// The one file allowed to pin, relative to the workspace root.
@@ -42,6 +45,7 @@ fn rust_sources(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
+#[test_id(tr99j5s)]
 #[test]
 fn only_the_fixture_seeder_pins_the_clock() {
     let root = workspace_root();

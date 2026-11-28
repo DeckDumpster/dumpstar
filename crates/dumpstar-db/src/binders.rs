@@ -152,6 +152,7 @@ mod tests {
         (dir, conn)
     }
 
+    #[test_id(tc5xizl)]
     #[test]
     fn crud_round_trip() {
         let (_d, conn) = conn();

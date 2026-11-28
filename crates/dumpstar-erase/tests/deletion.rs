@@ -21,6 +21,9 @@
 //! throwaway data directory, and the zone is a directory that goes away with
 //! the test.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
@@ -197,6 +200,7 @@ fn proof(verdict: &Verdict, check: Check) -> &dumpster_kit_erase::Proof {
 
 /// The headline: holdings that were really shipped are unreachable by every
 /// path after a deletion.
+#[test_id(t8f7uom)]
 #[test]
 fn a_deleted_tenant_s_shipped_holdings_are_unreachable_by_every_path() {
     let world = World::new();
@@ -236,6 +240,7 @@ fn a_deleted_tenant_s_shipped_holdings_are_unreachable_by_every_path() {
 /// The check the crypto-shredding layer exists for. A byte-for-byte copy of a
 /// real shipped part, taken before the deletion, survives the drop — and is
 /// unopenable afterwards because there is no key left to open it.
+#[test_id(tcg56eb)]
 #[test]
 fn a_copy_that_survived_the_drop_is_ciphertext_nobody_holds_a_key_for() {
     let world = World::new();
@@ -290,6 +295,7 @@ fn a_copy_that_survived_the_drop_is_ciphertext_nobody_holds_a_key_for() {
 /// SEEN RED. Every single one of those checks, run one moment earlier, must
 /// report the path OPEN — and the stray-copy check must do it by actually
 /// opening the copy rather than by inferring anything.
+#[test_id(tq5t9ct)]
 #[test]
 fn before_the_deletion_every_one_of_those_checks_reports_the_path_open() {
     let world = World::new();
@@ -346,6 +352,7 @@ fn before_the_deletion_every_one_of_those_checks_reports_the_path_open() {
 
 /// "Derived artifacts inherit the obligation." Valuations are tenant data and
 /// go with one prefix, which is why `database_id` sits above `dataset=`.
+#[test_id(tch99fc)]
 #[test]
 fn a_deletion_takes_the_valuations_with_the_holdings() {
     let world = World::new();
@@ -379,6 +386,7 @@ fn a_deletion_takes_the_valuations_with_the_holdings() {
 
 /// One tenant's deletion is one tenant's deletion — the property a shared
 /// master key makes worth asserting rather than assuming.
+#[test_id(t8nbm3f)]
 #[test]
 fn deleting_one_tenant_leaves_the_others_shipped_data_readable() {
     let world = World::new();
@@ -435,6 +443,7 @@ fn deleting_one_tenant_leaves_the_others_shipped_data_readable() {
 /// The deletion has to stick against the thing that would otherwise undo it:
 /// tomorrow night's shipper. A tombstoned tenant is not shipped, so new
 /// holdings never reach a prefix that was dropped.
+#[test_id(thmmgd6)]
 #[test]
 fn a_deleted_tenant_is_not_shipped_again() {
     let world = World::new();
@@ -481,6 +490,7 @@ fn a_deleted_tenant_is_not_shipped_again() {
 /// The offline half only. Removing the collection database and releasing the
 /// handle is `dumpstar tenant purge`/`detach`, in the online CLI, deliberately
 /// not here — see the crate docs.
+#[test_id(t2f2mds)]
 #[test]
 fn the_deletion_touches_no_collection_database_and_no_user_row() {
     let world = World::new();
@@ -520,6 +530,7 @@ fn the_deletion_touches_no_collection_database_and_no_user_row() {
 ///
 /// SEEN RED: add the identity binding but skip the assertion, or run
 /// dumpster_kit_erase::delete without the identity_delete_all call.
+#[test_id(t66uqjm)]
 #[test]
 fn a_deletion_removes_identity_bindings() {
     let world = World::new();
@@ -570,6 +581,7 @@ fn a_deletion_removes_identity_bindings() {
 
 /// A tenant who never shipped anything is deleted successfully, and proven.
 /// Deletion must not depend on the tenant having had data.
+#[test_id(tvzqcv0)]
 #[test]
 fn a_tenant_who_never_shipped_is_still_deleted_and_still_proven() {
     let world = World::new();

@@ -29,5 +29,6 @@ image.workspace = true
 test-support = []
 
 [dev-dependencies]
+spira-test-id = { path = "../spira-test-id" }
 dumpstar-ingest = { path = ".", features = ["test-support"] }
 zstd.workspace = true

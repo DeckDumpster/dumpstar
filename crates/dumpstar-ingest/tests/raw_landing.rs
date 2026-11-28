@@ -9,6 +9,9 @@
 //! So these tests drive `TcgcsvClient` against a
 //! local server (`tests/support`), twice, and compare.
 
+#[macro_use]
+extern crate spira_test_id;
+
 // As in the three other test binaries that share this module: it serves four
 // of them, so a helper only some of them need is not dead code.
 #[allow(dead_code)]
@@ -70,6 +73,7 @@ fn manifest_of(
 /// Landing changes nothing about what the client returns. This is the
 /// "refresh behaviour is otherwise byte-identical" claim, made where it can
 /// actually be checked: the parsed values on both sides of the tee.
+#[test_id(tdv6a9t)]
 #[test]
 fn landing_does_not_change_what_the_client_parses() {
     let upstream = FakeUpstream::start(tcgcsv_route);
@@ -94,6 +98,7 @@ fn landing_does_not_change_what_the_client_parses() {
 /// Every part's recorded SHA-256 and byte count match the object actually
 /// stored, and the stored object decompresses to exactly what the upstream
 /// sent. "Did we get everything" is answerable from the manifest alone.
+#[test_id(tlov3po)]
 #[test]
 fn the_manifest_describes_the_bytes_that_were_stored() {
     let upstream = FakeUpstream::start(tcgcsv_route);
@@ -159,6 +164,7 @@ fn the_manifest_describes_the_bytes_that_were_stored() {
 /// silently short run. The manifest is on disk *before* anything finalizes,
 /// because a failing upstream is exactly when the process is likeliest to be
 /// killed before it tidies up.
+#[test_id(tfd0bvi)]
 #[test]
 fn a_run_that_fails_partway_leaves_a_manifest_that_says_so() {
     // Groups, then the first group's products, then a 503.
@@ -215,6 +221,7 @@ fn a_run_that_fails_partway_leaves_a_manifest_that_says_so() {
 /// at different scales and this test is about the outer one, which is why the
 /// first run is given no request-level budget: with one, the client would
 /// simply ask again and there would be no failed run to land beside.
+#[test_id(tobor8d)]
 #[test]
 fn a_retry_lands_beside_the_first_attempt_not_on_it() {
     let upstream = FakeUpstream::start(|target, n| match (target, n) {
@@ -274,6 +281,7 @@ fn a_retry_lands_beside_the_first_attempt_not_on_it() {
 
 /// With no landing zone the clients behave exactly as they did before this
 /// feature existed: nothing is written anywhere.
+#[test_id(tj18jn3)]
 #[test]
 fn without_a_landing_zone_nothing_is_written() {
     let upstream = FakeUpstream::start(tcgcsv_route);

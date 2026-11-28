@@ -2,6 +2,9 @@
 //! check still fires on a planted defect of each kind it was corrected for, and an
 //! accepted alarm is exactly the one the table names.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use chrono::{TimeZone, Utc};
 use dumpstar_swu::{Catalog, check};
 
@@ -25,6 +28,7 @@ fn printing(id: &str, number: u32, variant: &str, code: &str, finish: &str) -> S
     )
 }
 
+#[test_id(tfjauao)]
 #[test]
 fn foils_and_serialized_parallels_are_not_out_of_range_but_a_stray_normal_is() {
     let (_d, c) = catalog();
@@ -58,6 +62,7 @@ fn foils_and_serialized_parallels_are_not_out_of_range_but_a_stray_normal_is() {
     );
 }
 
+#[test_id(t5lfrjj)]
 #[test]
 fn a_clause_said_twice_in_one_line_is_a_card_but_a_line_said_twice_is_a_defect() {
     let (_d, c) = catalog();
@@ -91,6 +96,7 @@ fn alarm(c: &Catalog, kind: &str, key: &str, severity: &str) {
         .unwrap();
 }
 
+#[test_id(tt1tb1x)]
 #[test]
 fn an_accepted_alarm_passes_a_new_key_of_its_kind_fails_and_a_note_never_does() {
     let (_d, c) = catalog();
@@ -111,6 +117,7 @@ fn an_accepted_alarm_passes_a_new_key_of_its_kind_fails_and_a_note_never_does() 
     assert_eq!(r.info.len(), 1);
 }
 
+#[test_id(tf9rm7t)]
 #[test]
 fn a_printing_tcgcsv_lacks_is_expected_only_before_its_set_is_on_sale() {
     let (_d, c) = catalog();
@@ -142,6 +149,7 @@ fn a_printing_tcgcsv_lacks_is_expected_only_before_its_set_is_on_sale() {
     assert_eq!(r.accepted.len(), 1);
 }
 
+#[test_id(tf7yd3l)]
 #[test]
 fn the_accepted_table_names_each_alarm_once_with_a_reason() {
     let table = check::accepted_table();

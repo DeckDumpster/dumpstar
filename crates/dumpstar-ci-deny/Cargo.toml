@@ -1,0 +1,11 @@
+[package]
+name = "dumpstar-ci-deny"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Turns spira's test-registry deny list into the arguments deploy/ci.sh leaves tests out with"
+
+[dev-dependencies]
+spira-test-id = { path = "../spira-test-id" }
+tempfile.workspace = true

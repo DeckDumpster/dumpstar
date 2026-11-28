@@ -1,0 +1,10 @@
+[package]
+name = "spira-test-id"
+version = "0.1.0"
+edition = "2021"
+autotests = false
+description = "spira-test-id — #[test_id(<id>)]: pins a test's identity to an id that is not its name."
+
+[lib]
+proc-macro = true
+test = false

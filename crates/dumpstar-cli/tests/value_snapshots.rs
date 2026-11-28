@@ -1,6 +1,9 @@
 //! `dumpstar value-snapshots` against the shipped binary: the claim is about an
 //! exit status and about each tenant's own file, so it is stated there.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::path::Path;
 use std::process::Output;
 
@@ -43,6 +46,7 @@ fn setup(home: &Path) -> (std::path::PathBuf, std::path::PathBuf) {
     (tenant_path(home, "alice"), tenant_path(home, "bob"))
 }
 
+#[test_id(t93gcb9)]
 #[test]
 fn a_run_with_an_unreadable_tenant_exits_2_and_names_it() {
     let home = tempfile::tempdir().unwrap();
@@ -70,6 +74,7 @@ fn a_run_with_an_unreadable_tenant_exits_2_and_names_it() {
     assert!(n >= 1, "the readable tenant was not valued");
 }
 
+#[test_id(tioctis)]
 #[test]
 fn two_readable_tenants_exit_0_and_both_get_a_series() {
     let home = tempfile::tempdir().unwrap();

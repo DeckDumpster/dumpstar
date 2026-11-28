@@ -936,6 +936,7 @@ mod tests {
         (dir, conn)
     }
 
+    #[test_id(td9ri37)]
     #[test]
     fn a_collection_from_before_the_precon_origin_column_grows_one_on_open() {
         let dir = tempfile::tempdir().unwrap();
@@ -958,6 +959,7 @@ mod tests {
         assert_eq!(decks[0].precon_id, None);
     }
 
+    #[test_id(tif4f7s)]
     #[test]
     fn list_orders_names_naturally() {
         let (_d, conn) = conn();
@@ -975,6 +977,7 @@ mod tests {
         assert_eq!(names, ["Pack 1", "Pack 2", "Pack 10"]);
     }
 
+    #[test_id(tezheoc)]
     #[test]
     fn crud_round_trip() {
         let (_d, conn) = conn();
@@ -1010,6 +1013,7 @@ mod tests {
         assert!(get(&conn, id).unwrap().is_none());
     }
 
+    #[test_id(trlkkl4)]
     #[test]
     fn rejects_invalid_state() {
         let (_d, conn) = conn();
@@ -1027,6 +1031,7 @@ mod tests {
         );
     }
 
+    #[test_id(tacobt8)]
     #[test]
     fn owned_missing_counts_the_card_across_printings_and_reserves_nothing() {
         let dir = tempfile::tempdir().unwrap();
@@ -1165,6 +1170,7 @@ mod tests {
             .unwrap()
     }
 
+    #[test_id(t3egd3t)]
     #[test]
     fn swap_copy_moves_the_reservation_and_leaves_the_lines() {
         let (_d, conn, a, _b) = stocked_with_c2();
@@ -1239,6 +1245,7 @@ mod tests {
         assert_eq!((held(out), held(free)), (None, Some(a)));
     }
 
+    #[test_id(t93gl3r)]
     #[test]
     fn swap_copy_takes_a_binder_copy_out_of_its_binder_and_refuses_one_not_owned() {
         let (_d, conn, a, _b) = stocked_with_c2();
@@ -1291,6 +1298,7 @@ mod tests {
         assert_eq!((binder, from_binder), (None, Some(7)));
     }
 
+    #[test_id(tt99kkv)]
     #[test]
     fn swap_copy_refusals_change_nothing() {
         let (_d, conn, a, b) = stocked_with_c2();
@@ -1375,6 +1383,7 @@ mod tests {
             .unwrap()
     }
 
+    #[test_id(thu6sfb)]
     #[test]
     fn one_card_on_two_lines_reserves_the_foil_and_a_normal_copy() {
         let (conn, a, _b) = stocked_with_foil();
@@ -1389,6 +1398,7 @@ mod tests {
         assert_eq!(held_ids(&conn, a), vec![1, 3]);
     }
 
+    #[test_id(tejij1v)]
     #[test]
     fn finish_and_variant_together_match_only_that_printing_and_name_both_when_short() {
         let (_d, shared, _u, conn, a, _b) = stocked(2);
@@ -1428,6 +1438,7 @@ mod tests {
         assert_eq!(short[0].available, 1);
     }
 
+    #[test_id(tl89k4s)]
     #[test]
     fn a_selector_with_too_few_matching_copies_refuses_and_moves_nothing() {
         let (conn, a, _b) = stocked_with_foil();
@@ -1444,6 +1455,7 @@ mod tests {
         assert_eq!(deck_ids(&conn), before);
     }
 
+    #[test_id(tjad6b4)]
     #[test]
     fn rerunning_set_lines_keeps_the_copies_the_deck_already_holds() {
         let (conn, a, b) = stocked_with_foil();
@@ -1463,6 +1475,7 @@ mod tests {
         assert_eq!(held_ids(&conn, a), vec![2, 3]);
     }
 
+    #[test_id(t9qhnxo)]
     #[test]
     fn set_lines_reserves_and_refuses_over_reservation_naming_the_line() {
         let (_d, _s, _u, conn, a, b) = stocked(3);
@@ -1537,6 +1550,7 @@ mod tests {
         ));
     }
 
+    #[test_id(tvz14nl)]
     #[test]
     fn line_states_name_the_reserved_copies_with_their_finish() {
         let (_d, shared, _u, conn, a, _b) = stocked(1);
@@ -1583,6 +1597,7 @@ mod tests {
         );
     }
 
+    #[test_id(tpd0gp9)]
     #[test]
     fn a_card_in_main_and_sideboard_shows_the_same_copies_on_both_lines() {
         let (_d, _s, _u, conn, a, _b) = stocked(4);
@@ -1615,6 +1630,7 @@ mod tests {
         }
     }
 
+    #[test_id(t0fltlf)]
     #[test]
     fn release_and_delete_free_the_copies() {
         let (_d, _s, _u, conn, a, b) = stocked(2);
@@ -1633,6 +1649,7 @@ mod tests {
         ));
     }
 
+    #[test_id(t6mfeg6)]
     #[test]
     fn a_binder_copy_is_used_last_and_leaves_its_binder() {
         let (_d, _s, _u, conn, a, _b) = stocked(2);
@@ -1659,6 +1676,7 @@ mod tests {
         assert_eq!(binder, None);
     }
 
+    #[test_id(tchumt6)]
     #[test]
     fn two_racing_set_lines_for_the_last_copy_have_exactly_one_winner() {
         let (_d, shared, user, _conn, a, b) = stocked(1);
@@ -1682,6 +1700,7 @@ mod tests {
         assert_eq!(wins, 1, "{results:?}");
     }
 
+    #[test_id(tirno4y)]
     #[test]
     fn user_defined_formats_get_no_rule_checks_and_premier_does() {
         let (_d, _s, _u, conn, a, _b) = stocked(1);

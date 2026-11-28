@@ -230,6 +230,7 @@ Main,Star Wars Unlimited,Shadows of the Galaxy,Vanquish,026,Common,Normal,Ungrad
 Sealed Star Wars Unlimited,Star Wars Unlimited,Spark of Rebellion,Spark of Rebellion Booster Box,,,Normal,Ungraded,Near Mint,75.0000,1,135.35,0,false,2026-02-28,
 Sealed Star Wars Unlimited,Star Wars Unlimited,Shadows of the Galaxy,Shadows of the Galaxy Carbonite Box,,,Normal,Ungraded,Near Mint,200.0000,2,200.26,0,false,2026-03-23,; ";
 
+    #[test_id(tum6d5p)]
     #[test]
     fn splits_singles_sealed_and_skips_other_games() {
         let out = parse(SAMPLE).unwrap();
@@ -244,6 +245,7 @@ Sealed Star Wars Unlimited,Star Wars Unlimited,Shadows of the Galaxy,Shadows of 
         assert_eq!(out.sealed.len(), 2);
     }
 
+    #[test_id(ts4pr7p)]
     #[test]
     fn normalizes_numbers_and_finishes() {
         let out = parse(SAMPLE).unwrap();
@@ -263,6 +265,7 @@ Sealed Star Wars Unlimited,Star Wars Unlimited,Shadows of the Galaxy,Shadows of 
         assert_eq!(vanquish.finish, "Normal");
     }
 
+    #[test_id(twuyt3j)]
     #[test]
     fn strips_zero_padding_but_not_alphanumeric() {
         assert_eq!(normalize_number("090/252"), "90");
@@ -272,6 +275,7 @@ Sealed Star Wars Unlimited,Star Wars Unlimited,Shadows of the Galaxy,Shadows of 
         assert_eq!(normalize_number("T02/T03"), "T02");
     }
 
+    #[test_id(t1v0rkr)]
     #[test]
     fn category_spellings() {
         assert!(is_swu_category("Star Wars Unlimited"));
@@ -279,6 +283,7 @@ Sealed Star Wars Unlimited,Star Wars Unlimited,Shadows of the Galaxy,Shadows of 
         assert!(!is_swu_category("Lorcana"));
     }
 
+    #[test_id(tcdoujs)]
     #[test]
     fn sealed_keeps_quantity_and_cleans_notes() {
         let out = parse(SAMPLE).unwrap();

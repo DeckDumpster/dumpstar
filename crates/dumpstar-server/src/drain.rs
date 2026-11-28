@@ -218,6 +218,7 @@ mod tests {
         Harness { addr, stop, server }
     }
 
+    #[test_id(tmqiqz1)]
     #[tokio::test]
     async fn in_flight_finishes_new_requests_get_503_then_exit() {
         let h = start(Duration::from_millis(800), Duration::from_secs(10)).await;
@@ -248,6 +249,7 @@ mod tests {
             .unwrap();
     }
 
+    #[test_id(tq5idsi)]
     #[tokio::test]
     async fn a_request_longer_than_the_timeout_is_cut() {
         let h = start(Duration::from_secs(30), Duration::from_millis(500)).await;

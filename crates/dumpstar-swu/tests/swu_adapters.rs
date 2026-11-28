@@ -1,6 +1,9 @@
 //! Acceptance for the official-API and tcgcsv adapters (design row S7), built on
 //! the recorded payloads in `fixtures/swu/`.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
@@ -56,6 +59,7 @@ fn keyword_page(keywords: &[&str], text: &str, extra: Value) -> Vec<u8> {
     .unwrap()
 }
 
+#[test_id(t4v04yx)]
 #[test]
 fn every_known_keyword_parses_with_its_number() {
     let all: Vec<&str> = official::KNOWN_KEYWORDS.to_vec();
@@ -81,6 +85,7 @@ fn every_known_keyword_parses_with_its_number() {
     );
 }
 
+#[test_id(t7t3k4j)]
 #[test]
 fn support_and_plot_are_derived_as_keywords() {
     for (kw, title) in [
@@ -101,6 +106,7 @@ fn support_and_plot_are_derived_as_keywords() {
     }
 }
 
+#[test_id(t3d4dai)]
 #[test]
 fn a_base_with_its_epic_action_in_text_has_epic_action_populated() {
     let text = "Epic Action: Give a Shield token to a non-leader unit.";
@@ -116,6 +122,7 @@ fn a_base_with_its_epic_action_in_text_has_epic_action_populated() {
     assert_eq!(page.payload.cards[0].epic_action, None);
 }
 
+#[test_id(tmeb1ne)]
 #[test]
 fn an_unparseable_keyword_is_an_alarm_not_silence() {
     let page =
@@ -126,6 +133,7 @@ fn an_unparseable_keyword_is_an_alarm_not_silence() {
     assert!(!page.payload.cards[0].unique);
 }
 
+#[test_id(tgdvxgr)]
 #[test]
 fn keywords_survive_apply() {
     let raw = keyword_page(&["Raid"], "Raid 2", json!({"unique": true}));
@@ -303,6 +311,7 @@ fn all_ids(conn: &Connection) -> BTreeSet<String> {
 
 // ---- parsers on the recorded payloads -------------------------------------
 
+#[test_id(twpg5on)]
 #[test]
 fn the_single_card_fetch_parses_to_one_hyperspace_printing() {
     let page = official::parse_page(&read("off-single-uid.json")).unwrap();
@@ -325,6 +334,7 @@ fn the_single_card_fetch_parses_to_one_hyperspace_printing() {
     assert!(page.max_updated_at.is_some());
 }
 
+#[test_id(t5d5n8j)]
 #[test]
 fn anakin_tempted_by_the_dark_side_has_no_color_in_the_official_record() {
     let page = official::parse_page(&read("off-lof-18.json.gz")).unwrap();
@@ -344,6 +354,7 @@ fn anakin_tempted_by_the_dark_side_has_no_color_in_the_official_record() {
     assert_eq!(c.aspects, ["Heroism"]);
 }
 
+#[test_id(tjzkrsb)]
 #[test]
 fn the_bulk_page_parses_both_entries_and_reports_the_page_count() {
     let page = official::parse_page(&read("off-cards-p2.json.gz")).unwrap();
@@ -352,6 +363,7 @@ fn the_bulk_page_parses_both_entries_and_reports_the_page_count() {
     assert!(page.payload.alarms.is_empty());
 }
 
+#[test_id(teaj2ez)]
 #[test]
 fn a_malformed_official_entry_is_an_alarm_not_a_dropped_row() {
     let bytes = serde_json::to_vec(&json!({"data": [{"id": 7, "attributes": {"title": "x"}}],
@@ -364,6 +376,7 @@ fn a_malformed_official_entry_is_an_alarm_not_a_dropped_row() {
 
 // ---- the load --------------------------------------------------------------
 
+#[test_id(thuon8y)]
 #[test]
 fn a_full_sor_load_has_every_official_printing_and_keeps_ids_across_a_second_load() {
     let e = env();
@@ -455,6 +468,7 @@ fn synthetic_pages(total: usize) -> Vec<Vec<u8>> {
         .collect()
 }
 
+#[test_id(thbfxpn)]
 #[test]
 fn a_full_crawl_is_10193_printings_and_every_one_keeps_its_id_on_a_second_load() {
     let e = env();
@@ -497,6 +511,7 @@ fn a_full_crawl_is_10193_printings_and_every_one_keeps_its_id_on_a_second_load()
     assert_eq!(all_ids(c.conn()), before);
 }
 
+#[test_id(tbf9w6g)]
 #[test]
 fn at_most_one_official_crawl_a_day() {
     let e = env();
@@ -509,6 +524,7 @@ fn at_most_one_official_crawl_a_day() {
     assert_eq!(http.asked.borrow().len(), n, "no request on the same day");
 }
 
+#[test_id(t4vx07z)]
 #[test]
 fn the_official_urls_are_the_prescribed_query() {
     let http = sor();
@@ -545,6 +561,7 @@ fn loaded() -> (Env, Recorded) {
     (e, http)
 }
 
+#[test_id(tqlo5dx)]
 #[test]
 fn at_least_99_percent_of_non_token_printings_get_a_price_row() {
     let (e, _) = loaded();
@@ -570,6 +587,7 @@ fn at_least_99_percent_of_non_token_printings_get_a_price_row() {
     assert!(cov.ratio() >= 0.99, "{cov:?}");
 }
 
+#[test_id(tb2uxaa)]
 #[test]
 fn official_identity_wins_and_tcgcsv_only_supplies_ids_and_prices() {
     let (e, _) = loaded();
@@ -607,6 +625,7 @@ fn official_identity_wins_and_tcgcsv_only_supplies_ids_and_prices() {
     );
 }
 
+#[test_id(tmgsq34)]
 #[test]
 fn weekly_play_and_event_exclusive_printings_are_filed_by_their_tcgplayer_group() {
     let (e, _) = loaded();
@@ -638,6 +657,7 @@ fn weekly_play_and_event_exclusive_printings_are_filed_by_their_tcgplayer_group(
     assert!(alarms(c.conn(), "group_set_mismatch").is_empty());
 }
 
+#[test_id(tolmku6)]
 #[test]
 fn token_backs_are_handled_not_counted_as_misses() {
     let (e, _) = loaded();
@@ -678,6 +698,7 @@ fn token_backs_are_handled_not_counted_as_misses() {
     );
 }
 
+#[test_id(tncg6xn)]
 #[test]
 fn the_recorded_sor_load_raises_no_alarm_of_its_own() {
     let (e, _) = loaded();
@@ -694,6 +715,7 @@ fn the_recorded_sor_load_raises_no_alarm_of_its_own() {
     assert!(info > 0, "unlisted promos are counted, not hidden");
 }
 
+#[test_id(tj6gvjj)]
 #[test]
 fn sealed_products_get_their_own_price_series_and_the_card_prices_are_unchanged() {
     let (e, _) = loaded();
@@ -747,6 +769,7 @@ impl Fetch for Pictures {
     }
 }
 
+#[test_id(tsixhnp)]
 #[test]
 fn a_refresh_stores_each_sealed_products_picture_locally_with_its_source() {
     let (e, _) = loaded();
@@ -817,6 +840,7 @@ impl Fetch for Forbidden {
     }
 }
 
+#[test_id(tyse93f)]
 #[test]
 fn a_forbidden_sealed_picture_is_reported_and_alarmed_not_fatal() {
     let (e, _) = loaded();
@@ -843,6 +867,7 @@ fn edit_products(http: &mut Recorded, f: impl FnOnce(&mut Vec<Value>)) {
     http.products.insert(23405, serde_json::to_vec(&v).unwrap());
 }
 
+#[test_id(tfcwij0)]
 #[test]
 fn a_printing_missing_from_tcgcsv_raises_an_alarm() {
     let e = env();
@@ -861,6 +886,7 @@ fn a_printing_missing_from_tcgcsv_raises_an_alarm() {
     assert!(!check::stored(c.conn()).unwrap().is_empty());
 }
 
+#[test_id(tu76o5s)]
 #[test]
 fn a_tcgcsv_product_with_no_official_printing_raises_an_alarm_and_is_never_merged() {
     let e = env();
@@ -888,6 +914,7 @@ fn a_tcgcsv_product_with_no_official_printing_raises_an_alarm_and_is_never_merge
     );
 }
 
+#[test_id(tyeq1p9)]
 #[test]
 fn a_number_that_points_at_another_card_is_not_merged() {
     let e = env();
@@ -911,6 +938,7 @@ fn a_number_that_points_at_another_card_is_not_merged() {
     );
 }
 
+#[test_id(tvh4s9i)]
 #[test]
 fn a_group_that_maps_to_no_official_set_raises_an_alarm() {
     let e = env();
@@ -930,6 +958,7 @@ fn a_group_that_maps_to_no_official_set_raises_an_alarm() {
     );
 }
 
+#[test_id(tt6ay0c)]
 #[test]
 fn an_unchanged_last_updated_stamp_fetches_nothing_else() {
     let (e, http) = loaded();
@@ -941,6 +970,7 @@ fn an_unchanged_last_updated_stamp_fetches_nothing_else() {
     assert!(asked[0].ends_with("/last-updated.txt"));
 }
 
+#[test_id(tc0nrmo)]
 #[test]
 fn the_tcgcsv_calls_follow_the_prescribed_order() {
     let e = env();
@@ -968,6 +998,7 @@ fn priced_on(e: &Env, http: &Recorded, stamp: &str, now: DateTime<Utc>) {
     sync_tcgcsv(e, &http, now);
 }
 
+#[test_id(tknyzsw)]
 #[test]
 fn a_skipped_price_day_raises_an_alarm_within_the_next_check_window() {
     let e = env();
@@ -1018,6 +1049,7 @@ fn a_skipped_price_day_raises_an_alarm_within_the_next_check_window() {
     );
 }
 
+#[test_id(tdcf2x3)]
 #[test]
 fn a_thin_price_day_raises_a_coverage_alarm() {
     let (e, mut http) = loaded();
@@ -1038,6 +1070,7 @@ fn a_thin_price_day_raises_a_coverage_alarm() {
 
 // ---- sp-5zcm06: two official printings that share a display variant ---------
 
+#[test_id(tf86bmo)]
 #[test]
 fn two_printings_sharing_set_number_variant_name_and_finish_both_apply() {
     use dumpstar_swu::apply::apply;
@@ -1091,6 +1124,7 @@ fn two_printings_sharing_set_number_variant_name_and_finish_both_apply() {
 
 // ---- release dates ----------------------------------------------------------
 
+#[test_id(t6yahn5)]
 #[test]
 fn the_recorded_load_carries_each_sets_release_date_and_names_a_set_without_one() {
     let (e, _) = loaded();
@@ -1146,6 +1180,7 @@ fn the_recorded_load_carries_each_sets_release_date_and_names_a_set_without_one(
     assert_eq!(alarms(c.conn(), "set_without_release_date"), vec!["ZZZ"]);
 }
 
+#[test_id(tzdyg84)]
 #[test]
 fn a_set_no_source_dates_takes_its_date_from_the_remedial_dataset() {
     let (e, _) = loaded();
@@ -1178,6 +1213,7 @@ fn a_set_no_source_dates_takes_its_date_from_the_remedial_dataset() {
     assert!(alarms(c.conn(), "set_without_release_date").is_empty());
 }
 
+#[test_id(tg1d2ry)]
 #[test]
 fn the_styled_text_keeps_the_official_inline_icons() {
     let page = official::parse_page(&read("off-single-uid.json")).unwrap();
@@ -1189,6 +1225,7 @@ fn the_styled_text_keeps_the_official_inline_icons() {
 
 /// Every icon the catalog's styled text references has a manifest entry whose
 /// file is in the repository's remedial asset set (sp-el3uaa).
+#[test_id(teijmdk)]
 #[test]
 fn every_inline_icon_in_the_styled_text_has_a_manifest_entry() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/remedial/inline-icons");
@@ -1233,6 +1270,7 @@ fn every_inline_icon_in_the_styled_text_has_a_manifest_entry() {
     );
 }
 
+#[test_id(t0ygp3g)]
 #[test]
 fn the_apply_job_stores_the_styled_text_and_updates_it_in_place() {
     use dumpstar_swu::landing::Provenance;
@@ -1268,6 +1306,7 @@ fn the_apply_job_stores_the_styled_text_and_updates_it_in_place() {
     assert!(html.contains("Shield tokens"));
 }
 
+#[test_id(tc8uyvx)]
 #[test]
 fn apply_stores_the_official_mark_and_sort_value_of_every_rarity() {
     let (e, _) = loaded();
@@ -1310,6 +1349,7 @@ fn card_at(conn: &Connection, set: &str, number: &str, variant: &str) -> Vec<Str
         .collect()
 }
 
+#[test_id(t5asxqi)]
 #[test]
 fn sor_base_numbers_are_the_real_set_and_promos_live_in_sorp() {
     let (e, _) = loaded();
@@ -1362,6 +1402,7 @@ fn sor_base_numbers_are_the_real_set_and_promos_live_in_sorp() {
     assert_eq!(check::numbering(conn).unwrap(), vec![]);
 }
 
+#[test_id(t1weciu)]
 #[test]
 fn the_numbering_alarm_names_a_collision_and_a_gap() {
     let (e, _) = loaded();
@@ -1387,6 +1428,7 @@ fn the_numbering_alarm_names_a_collision_and_a_gap() {
     assert_eq!(kinds, ["number_collision", "standard_numbering_gap"]);
 }
 
+#[test_id(te2fsi4)]
 #[test]
 fn datalint_flags_an_out_of_range_standard_number_and_a_truncated_subtitle() {
     let (e, _) = loaded();
@@ -1416,6 +1458,7 @@ fn datalint_flags_an_out_of_range_standard_number_and_a_truncated_subtitle() {
     );
 }
 
+#[test_id(tu3fx6e)]
 #[test]
 fn a_foil_printing_never_keeps_its_foil_scan_where_a_normal_one_exists() {
     let (e, _) = loaded();
@@ -1457,6 +1500,7 @@ fn a_foil_printing_never_keeps_its_foil_scan_where_a_normal_one_exists() {
     assert_eq!(check::wrong_group(conn).unwrap(), vec![]);
 }
 
+#[test_id(td72a5u)]
 #[test]
 fn an_image_of_another_card_and_a_wrong_group_are_alarmed() {
     let (e, _) = loaded();
@@ -1493,6 +1537,7 @@ fn an_image_of_another_card_and_a_wrong_group_are_alarmed() {
     assert_eq!(grp[0].kind, "wrong_group");
 }
 
+#[test_id(tc0pfc2)]
 #[test]
 fn the_two_real_misfiled_hyperspace_printings_stay_in_sorp_and_foil_scans_stay_off_across_a_rederive()
  {
@@ -1613,6 +1658,7 @@ fn apply_weekly_play_set() -> (tempfile::TempDir, Catalog) {
     (dir, catalog)
 }
 
+#[test_id(tf3r5e1)]
 #[test]
 fn a_weekly_play_hyperspace_foil_keeps_its_own_art_not_the_standard_cards() {
     let (_dir, c) = apply_weekly_play_set();
@@ -1636,6 +1682,7 @@ fn a_weekly_play_hyperspace_foil_keeps_its_own_art_not_the_standard_cards() {
     assert_eq!(check::variant_image_shared(c.conn()).unwrap(), vec![]);
 }
 
+#[test_id(t60ne3c)]
 #[test]
 fn the_variant_image_alarm_names_a_weekly_play_printing_sharing_its_siblings_art() {
     let (_dir, c) = apply_weekly_play_set();
@@ -1703,6 +1750,7 @@ fn apply_bytes(bytes: Vec<u8>) -> (tempfile::TempDir, Catalog) {
     (dir, catalog)
 }
 
+#[test_id(tg7bg74)]
 #[test]
 fn a_main_set_hyperspace_foil_above_the_standard_range_keeps_its_own_art() {
     let (_dir, c) = apply_bytes(main_set_variants());
@@ -1722,6 +1770,7 @@ fn a_main_set_hyperspace_foil_above_the_standard_range_keeps_its_own_art() {
     assert_eq!(check::variant_image_shared(c.conn()).unwrap(), vec![]);
 }
 
+#[test_id(t1m56cy)]
 #[test]
 fn the_variant_image_alarm_covers_main_sets_and_names_the_set() {
     let (_dir, c) = apply_bytes(main_set_variants());
@@ -1762,6 +1811,7 @@ fn rules_of(title: &str, ty: &str, fields: Value) -> Option<String> {
         .clone()
 }
 
+#[test_id(tpqvr21)]
 #[test]
 fn director_krennics_clause_is_stated_once() {
     let t = rules_of(
@@ -1778,6 +1828,7 @@ fn director_krennics_clause_is_stated_once() {
     assert!(t.contains("Restore 2") && t.contains("Epic Action"), "{t}");
 }
 
+#[test_id(tt8ofzp)]
 #[test]
 fn an_upgrade_without_text_prints_its_stat_line() {
     let t = rules_of(
@@ -1802,6 +1853,7 @@ fn an_upgrade_without_text_prints_its_stat_line() {
     assert_eq!(t, "Attach to a Force unit.\nAttached unit gets +1/+1.");
 }
 
+#[test_id(tz7lytm)]
 #[test]
 fn a_leaders_sides_are_kept_apart() {
     let t = rules_of(
@@ -1820,6 +1872,7 @@ fn a_leaders_sides_are_kept_apart() {
     );
 }
 
+#[test_id(t0opies)]
 #[test]
 fn a_stripped_icon_leaves_no_stray_space() {
     let t = rules_of(
@@ -1834,6 +1887,7 @@ fn a_stripped_icon_leaves_no_stray_space() {
     );
 }
 
+#[test_id(tqraxni)]
 #[test]
 fn devotions_granted_restore_has_its_number() {
     let raw = keyword_page(
@@ -1846,6 +1900,7 @@ fn devotions_granted_restore_has_its_number() {
     assert!(page.payload.alarms.is_empty(), "{:?}", page.payload.alarms);
 }
 
+#[test_id(tpu92tq)]
 #[test]
 fn an_arena_less_unit_that_attaches_is_an_upgrade() {
     let page = official::parse_page(&keyword_page(
@@ -1865,6 +1920,7 @@ fn an_arena_less_unit_that_attaches_is_an_upgrade() {
     assert_eq!(page.payload.cards[0].card_type.as_deref(), Some("Unit"));
 }
 
+#[test_id(twk6a0x)]
 #[test]
 fn the_unique_mark_in_rules_text_reads_as_the_word() {
     let page = official::parse_page(&keyword_page(
@@ -1892,6 +1948,7 @@ fn classified(keywords: &[&str], text: &str) -> Vec<(String, bool, bool)> {
         .collect()
 }
 
+#[test_id(t9x3sql)]
 #[test]
 fn a_keyword_the_card_has_under_a_condition_is_own_and_conditional() {
     // Moff Gideon (ASH-8), Shin Hati (ASH-49), Mandalorian Flagship (ASH-113).
@@ -1917,6 +1974,7 @@ fn a_keyword_the_card_has_under_a_condition_is_own_and_conditional() {
     }
 }
 
+#[test_id(tre35u3)]
 #[test]
 fn a_unit_that_gains_each_listed_keyword_has_them_as_its_own() {
     // Moff Gideon (ASH-8), sp-eu0o9a.
@@ -1941,6 +1999,7 @@ fn a_unit_that_gains_each_listed_keyword_has_them_as_its_own() {
     }
 }
 
+#[test_id(tqxch5u)]
 #[test]
 fn a_keyword_given_to_another_unit_is_granted() {
     // Vigilant Honor Guards (SOR-48) gains Sentinel only on a condition: own.
@@ -1964,6 +2023,7 @@ fn a_keyword_given_to_another_unit_is_granted() {
     );
 }
 
+#[test_id(tc7dacr)]
 #[test]
 fn a_keyword_the_text_removes_is_neither() {
     // Poe Dameron (ASH-40).
@@ -1974,6 +2034,7 @@ fn a_keyword_the_text_removes_is_neither() {
     );
 }
 
+#[test_id(tojwxoz)]
 #[test]
 fn a_clause_tail_is_not_a_keyword_list() {
     assert_eq!(
@@ -1982,6 +2043,7 @@ fn a_clause_tail_is_not_a_keyword_list() {
     );
 }
 
+#[test_id(twj9piy)]
 #[test]
 fn icons_are_written_in_one_canonical_form() {
     let t = |s: &str| rules_of("Test", "Event", json!({"text": s})).unwrap();

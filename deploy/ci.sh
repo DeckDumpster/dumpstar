@@ -28,6 +28,11 @@
 #                     tests/ci/unit_diagnostics_test.sh.
 #   2. Rust gates:     cargo fmt --check, cargo clippy --all-targets, frontend
 #                      check, then cargo test (cheapest-first; sp-l2xovg).
+#  2b. Deny list:     the nextest run and the isolation tier leave out every
+#                      `test:<id>` row of the spira test-registry deny list in
+#                      the file SPIRA_TEST_DENY_LIST names, and name each id
+#                      left out (crates/dumpstar-ci-deny, sp-kn9imf.1). Both
+#                      refuse to run without that file: there is no default list.
 #   3. Frontend gate:  npm ci && npm test && npm run check && npm run build.
 #  3b. The image:      built ONCE, here. Five gates below need the shipped image
 #                      and each wants its own tag; they tag this one rather than
@@ -950,9 +955,31 @@ if tier frontend; then
 fi
 }
 
+# --- The flip deny list (sp-kn9imf.1) -----------------------------------------
+# A test the registry has disabled as flipping is not run again. The list is the
+# caller's to hand over, so a missing one is refused, never read as empty.
+require_deny_list() {
+    if [ -z "${SPIRA_TEST_DENY_LIST:-}" ] || [ ! -f "$SPIRA_TEST_DENY_LIST" ] || [ ! -r "$SPIRA_TEST_DENY_LIST" ]; then
+        echo "!! SPIRA_TEST_DENY_LIST ('${SPIRA_TEST_DENY_LIST:-}') names no readable file. Make one with:" >&2
+        echo "!!   test-registry deny-list --at \"\$(date +%s)\" > <file>" >&2
+        exit 1
+    fi
+}
+
+# deny_args <nextest|libtest>: sets _deny to the arguments that leave those tests
+# out. The ids are named on stderr.
+deny_args() {
+    local list
+    list="$(realpath "$SPIRA_TEST_DENY_LIST")"
+    mapfile -t _deny < <(cd "$REPO_DIR" && cargo run -q --locked -p dumpstar-ci-deny -- --deny-list "$list" --form "$1")
+    # mapfile succeeds whatever its input did: a refused list must not run every test.
+    wait "$!" || exit 1
+}
+
 # --- 2. Rust tests ---
 g_nextest() {
 if tier rust; then
+    require_deny_list
     # cargo-nextest schedules every test of every binary across the vCPUs at
     # once; `cargo test` ran the binaries one after another (~11 of CI's 40
     # minutes, sp-7xm13h, sp-0vmtef). deploy/runner-deps.sh installs it at a
@@ -963,9 +990,10 @@ if tier rust; then
         echo "!! cargo-nextest is missing: run deploy/runner-deps.sh (it installs the pinned version)" >&2
         exit 1
     fi
+    deny_args nextest
     _t0=$SECONDS
     step "cargo nextest run (all test binaries in parallel)"
-    ( cd "$REPO_DIR" && cargo nextest run --profile ci --workspace --no-fail-fast )
+    ( cd "$REPO_DIR" && cargo nextest run --profile ci --workspace --no-fail-fast "${_deny[@]}" )
     echo "test execution wall time: $((SECONDS - _t0))s"
     step "cargo test --doc"
     ( cd "$REPO_DIR" && cargo test --doc --workspace )
@@ -995,15 +1023,17 @@ fi
 # selected by that module path, so a test added there is in the gate.
 g_isolation() {
 if tier isolation; then
+    require_deny_list
+    deny_args libtest
     step "Cross-tenant isolation gate (cargo test -p dumpstar-server tests::isolation)"
     # A filter that matches nothing passes. Refuse that: renaming the module
     # must break this step, not empty it.
-    _iso_n="$(cd "$REPO_DIR" && cargo test -p dumpstar-server --lib -- tests::isolation:: --list 2>/dev/null | grep -c ': test$' || true)"
+    _iso_n="$(cd "$REPO_DIR" && cargo test -p dumpstar-server --lib -- tests::isolation:: "${_deny[@]}" --list 2>/dev/null | grep -c ': test$' || true)"
     if [ "${_iso_n:-0}" -lt 8 ]; then
         echo "ERROR: the isolation gate selects ${_iso_n:-0} tests (expected at least 8); tests::isolation was renamed or emptied." >&2
         exit 1
     fi
-    ( cd "$REPO_DIR" && cargo test -p dumpstar-server --lib -- tests::isolation:: )
+    ( cd "$REPO_DIR" && cargo test -p dumpstar-server --lib -- tests::isolation:: "${_deny[@]}" )
 fi
 }
 

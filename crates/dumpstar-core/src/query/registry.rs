@@ -159,6 +159,7 @@ fn edit_distance(a: &str, b: &str) -> usize {
 mod tests {
     use super::*;
 
+    #[test_id(tcbuy60)]
     #[test]
     fn resolves_aliases_and_canonical_case_insensitively() {
         let reg = KeywordRegistry::new(vec![KeywordDef::new("card_type", &["t", "type"])]);
@@ -168,6 +169,7 @@ mod tests {
         assert_eq!(reg.resolve("nope"), None);
     }
 
+    #[test_id(t902c9y)]
     #[test]
     fn nearest_names_a_near_miss() {
         let reg = KeywordRegistry::new(vec![

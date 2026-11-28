@@ -25,6 +25,9 @@
 //! The credential half of the boundary (the catalog role cannot read
 //! `tenant/`) is an IAM property against a real bucket and is not here.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use dumpster_kit_lake::keys::{self, PartFormat, Source};
 use dumpster_kit_lake::tenant::{self, Dataset as TenantDataset};
 use std::path::{Path, PathBuf};
@@ -258,6 +261,7 @@ fn dep_hits(toml: &Path, names: &[&str]) -> Vec<String> {
         .collect()
 }
 
+#[test_id(t0iz6i6)]
 #[test]
 fn lake_crate_cannot_open_a_database() {
     let lake = package_dir("dumpster-kit-lake");
@@ -274,6 +278,7 @@ fn lake_crate_cannot_open_a_database() {
     none("the kit's lake crate depends on a SQLite crate", hits);
 }
 
+#[test_id(t74tb7v)]
 #[test]
 fn catalog_zone_names_no_tenant() {
     let lake = package_dir("dumpster-kit-lake");
@@ -290,6 +295,7 @@ fn catalog_zone_names_no_tenant() {
     );
 }
 
+#[test_id(tb90ccm)]
 #[test]
 fn offline_derive_calls_no_tenant_resolving_api() {
     let mut needles = IDENT.to_vec();
@@ -307,6 +313,7 @@ fn offline_derive_calls_no_tenant_resolving_api() {
     );
 }
 
+#[test_id(t6tpdi5)]
 #[test]
 fn catalog_keys_carry_no_tenant_and_tenant_keys_always_do() {
     let mut catalog = Vec::new();
@@ -363,6 +370,7 @@ fn catalog_keys_carry_no_tenant_and_tenant_keys_always_do() {
     }
 }
 
+#[test_id(tmokitd)]
 #[test]
 fn zone_roots_do_not_contain_one_another() {
     let mut roots = vec![tenant::TENANT_ROOT];
@@ -378,6 +386,7 @@ fn zone_roots_do_not_contain_one_another() {
     }
 }
 
+#[test_id(t0zlsvd)]
 #[test]
 fn no_iceberg_schema_exists_to_carry_a_tenant_column() {
     let mut files = rust_sources(&package_dir("dumpster-kit-lake"));
@@ -395,6 +404,7 @@ fn no_iceberg_schema_exists_to_carry_a_tenant_column() {
     );
 }
 
+#[test_id(tadlknw)]
 #[test]
 fn tenant_zone_is_keyed_by_tenant_and_resolves_none() {
     let lake = package_dir("dumpster-kit-lake");
@@ -428,6 +438,7 @@ fn tenant_zone_is_keyed_by_tenant_and_resolves_none() {
     );
 }
 
+#[test_id(t134i6z)]
 #[test]
 fn shipper_writes_tenant_zone_and_reaches_no_catalog_prefix() {
     let mut files = rust_sources(&repo().join("crates/dumpstar-ship"));
@@ -478,6 +489,7 @@ fn shipper_writes_tenant_zone_and_reaches_no_catalog_prefix() {
     );
 }
 
+#[test_id(t74m49z)]
 #[test]
 fn online_path_links_neither_zone() {
     let mut found = 0;
@@ -503,6 +515,7 @@ fn online_path_links_neither_zone() {
     assert_eq!(found, ONLINE_CRATES.len());
 }
 
+#[test_id(thrj8ai)]
 #[test]
 fn the_two_zones_do_not_reach_each_other() {
     let lake = package_dir("dumpster-kit-lake");
@@ -554,6 +567,7 @@ fn the_two_zones_do_not_reach_each_other() {
     );
 }
 
+#[test_id(trrzjzt)]
 #[test]
 fn every_lake_source_is_classified_into_exactly_one_zone() {
     let lake = package_dir("dumpster-kit-lake");
@@ -579,6 +593,7 @@ fn every_lake_source_is_classified_into_exactly_one_zone() {
     );
 }
 
+#[test_id(t5psax7)]
 #[test]
 fn the_scanner_sees_what_it_claims_to() {
     let src = "// tenant in a comment\nlet a = \"tenant\"; /* tenant */ let b = '\"'; let c = r#\"raw/x\"#;\nlet tenant_id = 1;\n";

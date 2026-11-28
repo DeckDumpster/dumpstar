@@ -179,6 +179,7 @@ mod raw_coverage {
     }
 
     /// The gate. See the module docs for what each assertion is for.
+    #[test_id(txjj8af)]
     #[test]
     fn a_night_lands_every_dataset_the_catalog_is_derived_from() {
         let upstream = FakeUpstream::start(route);

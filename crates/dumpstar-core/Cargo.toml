@@ -11,4 +11,5 @@ thiserror.workspace = true
 csv.workspace = true
 
 [dev-dependencies]
+spira-test-id = { path = "../spira-test-id" }
 serde_json.workspace = true

@@ -268,6 +268,7 @@ mod tests {
         .sets
     }
 
+    #[test_id(t9x0nsh)]
     #[test]
     fn fetch_records_provenance_and_resolve_serves_only_what_exists() {
         let dir = tempfile::tempdir().unwrap();
@@ -286,6 +287,7 @@ mod tests {
         assert_eq!((again.fetched, again.already), (0, 1));
     }
 
+    #[test_id(t9maram)]
     #[test]
     fn coverage_reports_a_set_whose_art_is_not_in_the_store() {
         let dir = tempfile::tempdir().unwrap();
@@ -301,6 +303,7 @@ mod tests {
         assert_eq!(after.line(), "set art: 1/1 sets");
     }
 
+    #[test_id(tqi7iio)]
     #[test]
     fn weekly_play_sets_resolve_to_their_parents_art() {
         let dir = tempfile::tempdir().unwrap();
@@ -327,6 +330,7 @@ mod tests {
         }
     }
 
+    #[test_id(tz8fhzz)]
     #[test]
     fn no_store_is_no_art() {
         assert_eq!(

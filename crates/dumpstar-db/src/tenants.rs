@@ -1036,6 +1036,7 @@ mod tests {
             .collect()
     }
 
+    #[test_id(t11td20)]
     #[test]
     fn create_list_detach_purge_round_trip() {
         with_home(|home| {
@@ -1089,6 +1090,7 @@ mod tests {
     /// have destroyed — the database and its replication state — survives,
     /// which is what turns the retention window from a liability into a
     /// safety net.
+    #[test_id(tckoxay)]
     #[test]
     fn detach_keeps_the_database_and_its_replication_state() {
         with_home(|_| {
@@ -1109,6 +1111,7 @@ mod tests {
         });
     }
 
+    #[test_id(tykhw4z)]
     #[test]
     fn purge_refuses_a_live_user() {
         with_home(|_| {
@@ -1120,6 +1123,7 @@ mod tests {
         });
     }
 
+    #[test_id(tde9gnx)]
     #[test]
     fn purge_refuses_a_handle() {
         with_home(|_| {
@@ -1135,6 +1139,7 @@ mod tests {
         });
     }
 
+    #[test_id(t85dyht)]
     #[test]
     fn reattach_makes_a_detached_tenant_live_again_with_its_data() {
         with_home(|_| {
@@ -1149,6 +1154,7 @@ mod tests {
         });
     }
 
+    #[test_id(t9b7kub)]
     #[test]
     fn reattach_refuses_a_handle_and_a_live_user() {
         with_home(|_| {
@@ -1160,6 +1166,7 @@ mod tests {
 
     /// The acceptance criterion of `pd-zr9n`, and the whole point of the
     /// epic: a recycled handle cannot inherit its predecessor's storage.
+    #[test_id(t6orop0)]
     #[test]
     fn a_recreated_handle_gets_a_different_database() {
         with_home(|_| {
@@ -1205,6 +1212,7 @@ mod tests {
     }
 
     /// The capability the split buys: a rename is one column.
+    #[test_id(t2i3w8r)]
     #[test]
     fn rename_moves_nothing_on_disk() {
         with_home(|_| {
@@ -1234,6 +1242,7 @@ mod tests {
 
     /// A user whose database could not be written must not be left in the
     /// registry: the row and the file land together or not at all.
+    #[test_id(tr6apew)]
     #[test]
     fn create_leaves_no_row_behind_when_the_database_cannot_be_written() {
         with_home(|home| {
@@ -1245,6 +1254,7 @@ mod tests {
         });
     }
 
+    #[test_id(ty72n8j)]
     #[test]
     fn a_created_tenant_has_the_user_schema() {
         with_home(|_| {
@@ -1263,6 +1273,7 @@ mod tests {
 
     /// A registered database is not "unregistered", and neither are the
     /// files that live beside it: sidecars, snapshots and stray notes.
+    #[test_id(tp0zji1)]
     #[test]
     fn unregistered_reports_only_unclaimed_databases() {
         with_home(|home| {
@@ -1290,6 +1301,7 @@ mod tests {
     /// The property the whole approach exists to preserve: the catalog is
     /// ONE file, at an unchanged path, attached identically by every
     /// tenant — not a copy per tenant.
+    #[test_id(te3c9wd)]
     #[test]
     fn every_tenant_attaches_the_same_unchanged_catalog() {
         with_home(|home| {
@@ -1335,6 +1347,7 @@ mod tests {
 
     /// Provisioning is isolation: a write through one tenant's connection
     /// is invisible to another's.
+    #[test_id(tl6sxgu)]
     #[test]
     fn tenants_do_not_see_each_others_collections() {
         with_home(|_| {
@@ -1359,6 +1372,7 @@ mod tests {
 
     /// The production migration and its rollback, both actually run, with
     /// the collection's rows checked at every step.
+    #[test_id(ty2veep)]
     #[test]
     fn adopt_then_revert_round_trips_the_data() {
         with_home(|home| {
@@ -1420,6 +1434,7 @@ mod tests {
     /// Moving a database out from under a server that is reading it leaves
     /// that server writing to an unlinked inode. The TRUNCATE checkpoint is
     /// what catches it — an in-flight reader makes it report busy.
+    #[test_id(tt1a2pd)]
     #[test]
     fn adopt_refuses_while_the_database_is_being_read() {
         with_home(|home| {
@@ -1443,6 +1458,7 @@ mod tests {
     /// Prod's data directory has a `.collection.sqlite-litestream` beside
     /// the database. If it does not travel with the file, the sidecar sees
     /// a brand-new database against an S3 prefix that already has history.
+    #[test_id(tktx7fk)]
     #[test]
     fn adopt_takes_the_litestream_directory_with_it() {
         with_home(|home| {
@@ -1473,6 +1489,7 @@ mod tests {
     /// The drift report: three users at three different versions, each read
     /// off their own file. One database per user means they can legitimately
     /// differ, and until this there was no way to see it.
+    #[test_id(thlfjvn)]
     #[test]
     fn versions_reports_each_users_own_schema_version() {
         with_home(|_| {
@@ -1518,6 +1535,7 @@ mod tests {
     /// A user this build refuses to OPEN must still be REPORTED — that user
     /// is the whole reason an operator is running this command. A report that
     /// failed the same way the server did would name nobody.
+    #[test_id(ttgw9ex)]
     #[test]
     fn a_user_from_the_future_is_reported_not_refused() {
         with_home(|_| {
@@ -1546,6 +1564,7 @@ mod tests {
     /// report — and must not take the whole listing down with it. Drift shows
     /// up as a blank column next to `(DATABASE MISSING)`, not as an error
     /// that hides every other row.
+    #[test_id(tv3goqn)]
     #[test]
     fn a_missing_database_reports_no_version_rather_than_failing() {
         with_home(|_| {
@@ -1568,6 +1587,7 @@ mod tests {
     /// applies the schema and stamps, so a report routed through it would
     /// silently migrate every database on the box just by being asked what
     /// version they are.
+    #[test_id(tgqz4qj)]
     #[test]
     fn reporting_versions_does_not_stamp_or_migrate() {
         with_home(|_| {
@@ -1598,6 +1618,7 @@ mod tests {
     /// Every user's version comes from that user's own file. A report that
     /// read one database N times would look perfectly healthy while hiding
     /// exactly the drift it exists to surface.
+    #[test_id(te979hh)]
     #[test]
     fn no_user_reports_another_users_version() {
         with_home(|_| {
@@ -1626,6 +1647,7 @@ mod tests {
             .unwrap();
     }
 
+    #[test_id(tlb772o)]
     #[test]
     fn adopt_refuses_to_overwrite_an_existing_tenant() {
         with_home(|home| {
@@ -1640,6 +1662,7 @@ mod tests {
         });
     }
 
+    #[test_id(t8u5izi)]
     #[test]
     fn adopt_reports_a_missing_database_rather_than_inventing_one() {
         with_home(|_| {
@@ -1681,6 +1704,7 @@ mod tests {
     /// **The bead's first acceptance criterion, and prod's actual state.**
     /// An existing handle-named database gets a registry row and an opaque
     /// id, the file is renamed to match, and the rows survive.
+    #[test_id(tu1xnbo)]
     #[test]
     fn migrate_registers_and_renames_an_existing_database() {
         with_home(|home| {
@@ -1716,6 +1740,7 @@ mod tests {
 
     /// **Idempotent** — the bead asks for it by name. A second run neither
     /// duplicates a row nor moves a database that is already on its id.
+    #[test_id(t6kko34)]
     #[test]
     fn migrate_twice_changes_nothing_the_second_time() {
         with_home(|_| {
@@ -1752,6 +1777,7 @@ mod tests {
     /// Every file goes back under its handle, every row goes away, and the
     /// data is still there at both ends. That is what a build predating the
     /// registry needs to find.
+    #[test_id(tgo9d23)]
     #[test]
     fn unmigrate_puts_every_database_back_under_its_handle() {
         with_home(|home| {
@@ -1784,6 +1810,7 @@ mod tests {
     /// state directory across that is what left prod replicating nothing at
     /// `txid.replica=0` while reporting healthy — so a rename clears it, in
     /// both directions. `pd-1717`.
+    #[test_id(t32o9h6)]
     #[test]
     fn migrating_clears_litestream_state_rather_than_carrying_it() {
         with_home(|home| {
@@ -1815,6 +1842,7 @@ mod tests {
     /// The same refusal `adopt` has, for the same reason: renaming a database
     /// out from under a process that is reading it leaves that process writing
     /// to an unlinked inode. Stop the app first.
+    #[test_id(t9tgra9)]
     #[test]
     fn migrate_refuses_while_the_database_is_being_read() {
         with_home(|_| {
@@ -1850,6 +1878,7 @@ mod tests {
 
     /// A handle-named database whose handle is already registered to some
     /// other database is two databases claiming one user. Refuse; do not pick.
+    #[test_id(t34bana)]
     #[test]
     fn migrate_refuses_when_the_handle_is_already_registered() {
         with_home(|_| {
@@ -1866,6 +1895,7 @@ mod tests {
 
     /// A file whose name is neither an id nor a handle gets reported, not
     /// registered under an invented name.
+    #[test_id(tfv6807)]
     #[test]
     fn migrate_refuses_a_database_that_is_not_named_like_anything() {
         with_home(|home| {
@@ -1884,6 +1914,7 @@ mod tests {
     /// **Production's upgrade path.** The binary meets a data directory it has
     /// not migrated and serves the real collection, because a migration the
     /// app refuses to start without is how the last epic took prod down.
+    #[test_id(tdv5ror)]
     #[test]
     fn an_unmigrated_data_dir_is_served_as_it_is() {
         with_home(|_| {
@@ -1899,6 +1930,7 @@ mod tests {
 
     /// ...and after migrating, the same handle resolves to the id-named file
     /// with the same rows. The two halves of "prod survives the upgrade".
+    #[test_id(toqcs9u)]
     #[test]
     fn a_migrated_data_dir_resolves_through_the_registry() {
         with_home(|_| {
@@ -1925,6 +1957,7 @@ mod tests {
 
     /// A fresh data directory registers its handle, so a new install is born
     /// on the two-identifier model instead of needing a migration later.
+    #[test_id(tbbd1j4)]
     #[test]
     fn a_fresh_data_dir_registers_the_handle_it_serves() {
         with_home(|home| {
@@ -1949,6 +1982,7 @@ mod tests {
     /// other people, must not quietly become a new empty collection. This is
     /// the one behaviour change an operator can notice, and it closes a
     /// silent-empty that a typo in `$DUMPSTAR_USER` reaches today.
+    #[test_id(tm07112)]
     #[test]
     fn an_unknown_handle_does_not_become_an_empty_collection() {
         with_home(|home| {
@@ -1962,6 +1996,7 @@ mod tests {
 
     /// The `pd-gckl` refusal, unchanged: a database still at the pre-tenants
     /// location is never shadowed by an empty new one.
+    #[test_id(t9ehgeu)]
     #[test]
     fn resolve_refuses_an_unadopted_legacy_database() {
         with_home(|home| {
@@ -1980,6 +2015,7 @@ mod tests {
 
     /// A registry row whose database is gone is a fault to surface with a way
     /// out in it — not a fresh empty collection, and not a crash.
+    #[test_id(twg69ka)]
     #[test]
     fn a_registered_user_whose_database_vanished_fails_with_a_way_out() {
         with_home(|_| {
@@ -1997,6 +2033,7 @@ mod tests {
         });
     }
 
+    #[test_id(txfmbwl)]
     #[test]
     fn provisioning_rejects_a_traversing_name() {
         with_home(|home| {
@@ -2023,6 +2060,7 @@ mod tests {
         .unwrap();
     }
 
+    #[test_id(tte8rc5)]
     #[test]
     fn clone_copies_collection_and_leaves_source_untouched() {
         with_home(|_| {
@@ -2062,6 +2100,7 @@ mod tests {
         });
     }
 
+    #[test_id(tyejtp2)]
     #[test]
     fn clone_with_decks_keeps_reservations() {
         with_home(|_| {
@@ -2083,6 +2122,7 @@ mod tests {
         });
     }
 
+    #[test_id(t386r0g)]
     #[test]
     fn clone_refuses_self_and_unknown() {
         with_home(|_| {

@@ -1795,6 +1795,7 @@ mod tests {
         }
     }
 
+    #[test_id(t8555v2)]
     #[test]
     fn one_per_card_takes_the_lowest_number_among_standard_printings() {
         // Serialized printings carry no variant type and read as Standard (SEC-1143).
@@ -1836,6 +1837,7 @@ mod tests {
             .unwrap();
     }
 
+    #[test_id(taudxk5)]
     #[test]
     fn avail_counts_unreserved_copies() {
         let f = fixture();
@@ -1846,6 +1848,7 @@ mod tests {
         assert!(f.ids("qty>=2").contains(&"luke-foil".to_string()));
     }
 
+    #[test_id(t9sx32v)]
     #[test]
     fn id_term_matches_exact_card_ids_and_ors() {
         let f = fixture();
@@ -1874,6 +1877,7 @@ mod tests {
         );
     }
 
+    #[test_id(t1s0zf0)]
     #[test]
     fn owned_counts_copies_of_the_card_across_printings() {
         let f = fixture();
@@ -1894,6 +1898,7 @@ mod tests {
         assert_eq!(f.ids("owned>=2 name:luke"), vec!["luke-foil"]);
     }
 
+    #[test_id(t54yeri)]
     #[test]
     fn keyword_matches_own_keywords_not_granted_ones() {
         let f = fixture();
@@ -1909,6 +1914,7 @@ mod tests {
         assert_eq!(f.ids("grants:sentinel"), vec!["falcon-std"]);
     }
 
+    #[test_id(t3ozjhe)]
     #[test]
     fn mechanics_terms_split_makers_users_and_needers() {
         let f = fixture();
@@ -1932,6 +1938,7 @@ mod tests {
         );
     }
 
+    #[test_id(tdjdy6s)]
     #[test]
     fn unconditional_keyword_excludes_conditional_ones() {
         let f = fixture();
@@ -1947,6 +1954,7 @@ mod tests {
         assert_eq!(f.ids("ku:sentinel"), vec!["falcon-std"]);
     }
 
+    #[test_id(tf9afev)]
     #[test]
     fn avail_counts_copies_of_the_card_across_printings() {
         let f = fixture();
@@ -1962,6 +1970,7 @@ mod tests {
         );
     }
 
+    #[test_id(t6e9yx5)]
     #[test]
     fn negated_any_deck_means_in_no_deck() {
         let f = fixture();
@@ -1972,6 +1981,7 @@ mod tests {
         assert_eq!(f.ids("deck:*"), vec!["luke-foil"]);
     }
 
+    #[test_id(t57rjy2)]
     #[test]
     fn group_matches_decks_of_that_group() {
         let f = fixture();
@@ -1984,6 +1994,7 @@ mod tests {
 
     // --- compile-shape assertions ------------------------------------------
 
+    #[test_id(t4w20ov)]
     #[test]
     fn compiles_card_predicates_to_sql() {
         let f = fixture();
@@ -2013,6 +2024,7 @@ mod tests {
         );
     }
 
+    #[test_id(t6179am)]
     #[test]
     fn status_sets_flag_and_is_missing_sets_catalog_wide() {
         let f = fixture();
@@ -2024,6 +2036,7 @@ mod tests {
         assert!(m.where_sql.contains("= 0"));
     }
 
+    #[test_id(t6opks8)]
     #[test]
     fn modifiers_extracted_out_of_where() {
         let f = fixture();
@@ -2031,6 +2044,7 @@ mod tests {
         assert_eq!(c.where_sql, "1=1");
     }
 
+    #[test_id(tv0dra1)]
     #[test]
     fn invalid_and_unknown_emit_sentinel() {
         let f = fixture();
@@ -2040,6 +2054,7 @@ mod tests {
 
     // --- execution against the fixture -------------------------------------
 
+    #[test_id(tlclyje)]
     #[test]
     fn owned_mode_only_returns_owned_printings() {
         let f = fixture();
@@ -2049,6 +2064,7 @@ mod tests {
         assert!(f.ids("a:aggression").is_empty());
     }
 
+    #[test_id(tf4jgzm)]
     #[test]
     fn is_missing_surfaces_unowned() {
         let f = fixture();
@@ -2068,6 +2084,7 @@ mod tests {
     // The UI fixture is too small to trip the limit. Drive attach_copies past
     // it directly here; one of the synthetic rows matches an owned copy so we
     // also prove copies still attach correctly across chunk boundaries.
+    #[test_id(t5rjigs)]
     #[test]
     fn attach_copies_handles_more_rows_than_sqlite_variable_limit() {
         let f = fixture();
@@ -2120,6 +2137,7 @@ mod tests {
     // (32766) and run the real `is:missing` query end to end (build_full_sql +
     // attach_copies). Regresses loudly with "too many SQL variables" -> 500 if
     // any stage stops chunking.
+    #[test_id(t446lfs)]
     #[test]
     fn is_missing_survives_prod_scale_catalog() {
         const N: usize = 35_000; // > 32_766 default SQLITE_MAX_VARIABLE_NUMBER
@@ -2172,6 +2190,7 @@ mod tests {
         assert!(rows.iter().all(|r| !r.owned));
     }
 
+    #[test_id(txlprjv)]
     #[test]
     fn owned_row_carries_copies_and_count() {
         let f = fixture();
@@ -2194,6 +2213,7 @@ mod tests {
     // Named explicitly, not size-asserted: a byte budget rots, a key set does
     // not. Adding a field to SearchRow fails this test, which is the point —
     // the addition should be a decision, not a diff nobody measured.
+    #[test_id(ttogjbo)]
     #[test]
     fn list_payload_carries_only_what_the_list_renders() {
         let f = fixture();
@@ -2247,6 +2267,7 @@ mod tests {
     // Aspects and arenas ride the list as the raw JSON arrays the catalog
     // stores; the client parses them. A card with none (an Event has no arena)
     // carries the empty array, not NULL.
+    #[test_id(tj3wq6i)]
     #[test]
     fn aspects_and_arenas_ride_as_json_arrays() {
         let f = fixture();
@@ -2271,6 +2292,7 @@ mod tests {
         assert_eq!((event[0].power, event[0].hp), (None, None));
     }
 
+    #[test_id(twjvt69)]
     #[test]
     fn qty_counts_per_printing() {
         let f = fixture();
@@ -2280,6 +2302,7 @@ mod tests {
         assert_eq!(f.ids("is:dupe"), vec!["luke-foil"]);
     }
 
+    #[test_id(tcjxy4m)]
     #[test]
     fn keyword_unique_and_epic_terms() {
         let f = fixture();
@@ -2304,6 +2327,7 @@ mod tests {
         assert_eq!(f.ids("is:missing has:epic"), vec!["han-std"]);
     }
 
+    #[test_id(twkmxei)]
     #[test]
     fn numeric_and_rarity_ordinals() {
         let f = fixture();
@@ -2313,6 +2337,7 @@ mod tests {
         assert_eq!(f.ids("rarity>=rare"), vec!["luke-foil"]);
     }
 
+    #[test_id(t6vuuw2)]
     #[test]
     fn finish_and_variant_flags() {
         let f = fixture();
@@ -2330,6 +2355,7 @@ mod tests {
         assert_eq!(f.ids("v:standard c:3"), vec!["luke-foil"]);
     }
 
+    #[test_id(turzz2d)]
     #[test]
     fn set_by_code_and_name() {
         let f = fixture();
@@ -2339,6 +2365,7 @@ mod tests {
         assert_eq!(f.ids("s:sor"), vec!["luke-foil"]);
     }
 
+    #[test_id(t6pbhc2)]
     #[test]
     fn swu_vocabulary_compiles_and_filters() {
         let f = fixture();
@@ -2353,6 +2380,7 @@ mod tests {
         assert_eq!(f.ids("a:heroism"), vec!["falcon-std", "luke-foil"]);
     }
 
+    #[test_id(t4a1p5e)]
     #[test]
     fn negation_and_boolean() {
         let f = fixture();
@@ -2392,6 +2420,7 @@ mod tests {
     // 56,635 rows in the browser orders the wrong 250. Every column it offers
     // therefore has to be expressible here.
 
+    #[test_id(tvt44yd)]
     #[test]
     fn order_by_type_sorts_on_card_type() {
         let f = fixture();
@@ -2406,6 +2435,7 @@ mod tests {
         assert_eq!(desc.last().map(String::as_str), Some("vanquish-std"));
     }
 
+    #[test_id(tg5fadw)]
     #[test]
     fn order_by_cost_sorts_on_resource_cost() {
         let f = fixture();
@@ -2423,6 +2453,7 @@ mod tests {
         );
     }
 
+    #[test_id(t0uffa2)]
     #[test]
     fn order_by_power_puts_the_unpowered_first_ascending() {
         let f = fixture();
@@ -2440,6 +2471,7 @@ mod tests {
         );
     }
 
+    #[test_id(tbi7oae)]
     #[test]
     fn order_by_added_sorts_on_the_newest_copy() {
         let f = fixture();
@@ -2571,6 +2603,7 @@ mod tests {
         sets.into_iter().map(|s| s.1).collect()
     }
 
+    #[test_id(tf10k2i)]
     #[test]
     fn aspect_order_constant_matches_the_set_numbering() {
         let f = aspect_fixture();
@@ -2584,6 +2617,7 @@ mod tests {
         }
     }
 
+    #[test_id(t05cdrl)]
     #[test]
     fn order_by_aspects_sorts_the_list_then_cost_with_unaspected_last() {
         let f = aspect_fixture();
@@ -2600,6 +2634,7 @@ mod tests {
         assert_eq!(ordered(&f, "aspects", "desc"), want_desc);
     }
 
+    #[test_id(tuv102h)]
     #[test]
     fn order_by_aspects_compares_the_printed_list_not_a_set() {
         let dir = tempfile::tempdir().unwrap();
@@ -2739,6 +2774,7 @@ mod tests {
     /// which interleaves sets by collector number instead of grouping them.
     ///
     /// This test would fail on the pre-fix code and passes after the fix.
+    #[test_id(t9ib49o)]
     #[test]
     fn sort_by_set_groups_each_set_as_a_contiguous_run_asc() {
         let f = set_sort_fixture();
@@ -2791,6 +2827,7 @@ mod tests {
         );
     }
 
+    #[test_id(t89wp6q)]
     #[test]
     fn sort_by_set_desc_reverses_set_order_and_keeps_runs() {
         let f = set_sort_fixture();
@@ -2843,6 +2880,7 @@ mod tests {
 
     /// Paging across a set boundary must not drop or duplicate any card
     /// (regression guard for pd-tjym / pd-tsqd).
+    #[test_id(t31xmw1)]
     #[test]
     fn sort_by_set_paged_walk_has_no_gaps_or_repeats() {
         let f = set_sort_fixture();
@@ -2881,6 +2919,7 @@ mod tests {
     /// Every advertised key has its own arm. An entry with no arm falls through
     /// to the name fallback, which is a caller being served a different order
     /// than it asked for without being told.
+    #[test_id(to2d2n9)]
     #[test]
     fn every_sortable_key_orders_by_something_other_than_the_name_fallback() {
         let fallback = order_sql(None);
@@ -2899,6 +2938,7 @@ mod tests {
 
     /// The two the epic removed. They are not sortable, and nothing quietly
     /// orders by them under another name.
+    #[test_id(t4x8yfv)]
     #[test]
     fn value_and_adj_are_not_sortable() {
         assert!(!is_sortable("value"));
@@ -2910,6 +2950,7 @@ mod tests {
     /// `override_order` lowercases what it stores, so the validator a caller
     /// runs first has to agree with it or a header click that arrives
     /// capitalised is refused for a column that does sort.
+    #[test_id(t5kqjtg)]
     #[test]
     fn sortable_keys_are_matched_case_insensitively() {
         assert!(is_sortable("PRICE"));
@@ -2921,6 +2962,7 @@ mod tests {
     /// multiplier was only ever read to order by `value`/`adj`. The table is
     /// still there and still read at render time for one card — this asserts
     /// the 56k-row ordering path does not touch it.
+    #[test_id(tr5dygl)]
     #[test]
     fn no_sort_reads_the_conditions_table() {
         for key in SORT_KEYS {
@@ -2939,6 +2981,7 @@ mod tests {
     /// `shared` (pd-m4gw). The newest catalog quote prices it; a tenant
     /// `manual_prices` row against the same printing — the residue a
     /// collection may still carry — cannot move it.
+    #[test_id(t03vf3e)]
     #[test]
     fn order_by_price_reads_the_catalog_quote_and_not_a_tenant_manual_price() {
         let f = fixture();
@@ -2966,6 +3009,7 @@ mod tests {
     /// structural half of the assertion above. `manual_prices` is still
     /// reachable, but only behind the `user_printings` guard, so a printing
     /// the catalog knows about cannot reach across the ATTACH boundary.
+    #[test_id(tpmgb4i)]
     #[test]
     fn order_by_price_reaches_a_tenant_table_only_through_the_user_printings_guard() {
         let sql = order_sql(Some("price"));
@@ -2981,6 +3025,7 @@ mod tests {
         );
     }
 
+    #[test_id(teckas0)]
     #[test]
     fn limit_bounds_the_page_and_total_counts_the_whole_result() {
         let f = fixture();
@@ -3036,6 +3081,7 @@ mod tests {
     /// pd-7z4o. `Slice::All` is the whole result, and the envelope says so by
     /// echoing the row count as the limit — a client that windows the DOM needs
     /// to know it holds everything, not merely that it got a lot.
+    #[test_id(tmwhlkp)]
     #[test]
     fn slice_all_returns_every_row_and_echoes_what_it_served() {
         let f = fixture();
@@ -3059,6 +3105,7 @@ mod tests {
     /// Fails if `total_value` is computed over the returned rows: the fixture
     /// owns copies of two different printings, and a page of one holds only
     /// one of them.
+    #[test_id(t8qahlw)]
     #[test]
     fn total_value_is_the_whole_result_whatever_slice_was_asked_for() {
         let f = fixture();
@@ -3101,6 +3148,7 @@ mod tests {
     /// chart values `status = 'owned'` copies. So this does too — an `ordered`
     /// copy is listed by owned mode and counted by `total`, and is not money
     /// the collection holds; a `sold` one is neither.
+    #[test_id(tlzigc6)]
     #[test]
     fn total_value_counts_owned_copies_and_not_the_others() {
         let f = fixture();
@@ -3136,6 +3184,7 @@ mod tests {
     /// The card count beside `total`'s printing count: every card the list
     /// draws, whatever its status, over the whole result and whatever slice
     /// was asked for.
+    #[test_id(t2fahnn)]
     #[test]
     fn total_cards_counts_every_card_over_the_whole_result() {
         let f = fixture();
@@ -3189,6 +3238,7 @@ mod tests {
     /// A result with no owned, priced copy answers `None`, not `Some(0.0)`.
     /// "Worth nothing" and "no figure to show" are the same answer here, and
     /// `$0.00` beside a page of cards nobody has priced is a claim.
+    #[test_id(trljdkb)]
     #[test]
     fn a_result_with_nothing_owned_or_nothing_priced_has_no_value() {
         let f = fixture();
@@ -3215,6 +3265,7 @@ mod tests {
     /// An owned copy the catalog does not price contributes nothing — it does
     /// not zero the printing it shares with a priced copy, and it does not
     /// zero the result.
+    #[test_id(tsnysc6)]
     #[test]
     fn an_unpriced_copy_costs_the_sum_nothing_rather_than_emptying_it() {
         let f = fixture();
@@ -3228,6 +3279,7 @@ mod tests {
         );
     }
 
+    #[test_id(thau64t)]
     #[test]
     fn offset_past_the_end_is_an_empty_page_with_an_honest_total() {
         let f = fixture();
@@ -3256,6 +3308,7 @@ mod tests {
     // sorter happens to be stable at four rows, so the walk below passes with
     // or without a unique key and cannot be the guard. Uniqueness of the sort
     // key is the property; the walk is what it buys.
+    #[test_id(tgw1e6j)]
     #[test]
     fn order_by_is_a_total_order() {
         let sql = build_full_sql(&all_printings(), Some((1, 0)));
@@ -3294,6 +3347,7 @@ mod tests {
         (ids, timings)
     }
 
+    #[test_id(tpkuxmr)]
     #[test]
     fn cursor_walk_returns_every_row_once_for_every_sort_and_direction() {
         let f = fixture();
@@ -3314,6 +3368,7 @@ mod tests {
         }
     }
 
+    #[test_id(tm9z4xy)]
     #[test]
     fn cursor_walk_over_the_set_fixture_matches_the_full_order() {
         let f = set_sort_fixture();
@@ -3331,6 +3386,7 @@ mod tests {
         }
     }
 
+    #[test_id(ttifips)]
     #[test]
     fn only_the_first_cursor_page_counts_and_the_totals_ride_along() {
         let f = fixture();
@@ -3362,6 +3418,7 @@ mod tests {
         assert_eq!(second.total_value, first.total_value);
     }
 
+    #[test_id(tq33gzp)]
     #[test]
     fn a_cursor_from_another_query_or_sort_is_refused() {
         let f = fixture();
@@ -3402,6 +3459,7 @@ mod tests {
     // over a printings union, so SQLite plans a scan and a sorter either way
     // (EXPLAIN QUERY PLAN shows `USE TEMP B-TREE FOR ORDER BY`). What the
     // cursor removes is the OFFSET discard and the recount.
+    #[test_id(t8t7wxv)]
     #[test]
     fn a_later_cursor_page_filters_past_the_cursor_and_has_no_offset() {
         let f = fixture();
@@ -3431,6 +3489,7 @@ mod tests {
         assert!(sql.contains(&seek), "{sql}");
     }
 
+    #[test_id(tyz7rb0)]
     #[test]
     fn offset_walks_the_full_result_without_gaps_or_repeats() {
         let f = fixture();
@@ -3466,6 +3525,7 @@ mod tests {
         assert_eq!(walked3, expected);
     }
 
+    #[test_id(tj7di4p)]
     #[test]
     fn paging_survives_a_sort_column_that_is_null_for_every_row() {
         let f = fixture();
@@ -3486,6 +3546,7 @@ mod tests {
         assert_eq!(walked, expected, "all-NULL sort still pages coherently");
     }
 
+    #[test_id(tiw1m8u)]
     #[test]
     fn paging_respects_the_query_filter() {
         let f = fixture();
@@ -3640,6 +3701,7 @@ mod tests {
     /// property the offset walk below depends on. Asserted per key rather than
     /// once for the default, because `order_sql` is a match arm per key and a
     /// new arm is exactly where the tiebreak would go missing.
+    #[test_id(tpjmn3x)]
     #[test]
     fn every_sort_key_carries_the_printing_id_tiebreak() {
         for key in SORT_KEYS {
@@ -3671,6 +3733,7 @@ mod tests {
     /// The tiebreak is only worth having if the column it names is unique —
     /// `printing_id` is the primary key of *both* tables the search reads
     /// printings from, so it is unique across their union as well.
+    #[test_id(tf0l2et)]
     #[test]
     fn the_tiebreak_column_is_unique_in_every_table_it_comes_from() {
         let f = tie_dense_fixture();
@@ -3705,6 +3768,7 @@ mod tests {
     /// land mid-tie — and the catalog is built so that every key has long
     /// ties for them to land in ([`tie_dense_fixture`], which also says what
     /// this walk does and does not prove).
+    #[test_id(txya7al)]
     #[test]
     fn offset_walk_over_every_sort_key_has_no_gaps_or_repeats() {
         let f = tie_dense_fixture();
@@ -3790,6 +3854,7 @@ mod tests {
     /// so neither a regression nor an unclaimed win can pass quietly.
     const SORTS_THAT_STILL_SORT: &[&str] = SORT_KEYS;
 
+    #[test_id(ty2zwzj)]
     #[test]
     fn query_plan_pins_which_sorts_are_still_temp_b_tree_sorted() {
         let f = tie_dense_fixture();
@@ -3875,6 +3940,7 @@ mod tests {
     /// `printings`) inside the subquery runs it once per catalog printing, which
     /// took longer than the 30s request bound on the real data. Asserted on the
     /// plan, not a timer (law-no-wall-clock-budgets-in-the-corpus).
+    #[test_id(t9bax3a)]
     #[test]
     fn availability_filters_never_scan_inside_the_per_card_count() {
         let f = prod_size_fixture();

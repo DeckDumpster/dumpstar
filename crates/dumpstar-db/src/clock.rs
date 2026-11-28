@@ -81,6 +81,7 @@ mod tests {
         DateTime::parse_from_rfc3339(s).unwrap().with_timezone(&Utc)
     }
 
+    #[test_id(t0ycni0)]
     #[test]
     fn a_pinned_clock_advances_one_step_per_read() {
         pin(at("2024-01-15T09:00:00Z"), TimeDelta::minutes(1));
@@ -92,6 +93,7 @@ mod tests {
 
     /// Two runs of the same sequence of reads produce the same timestamps.
     /// This is the property `seed-fixture` rests on, stated on its own.
+    #[test_id(tu4s0op)]
     #[test]
     fn two_pinned_runs_read_the_same_instants() {
         let run = || {
@@ -103,6 +105,7 @@ mod tests {
         assert_eq!(run(), run());
     }
 
+    #[test_id(th0u5q2)]
     #[test]
     fn unpinning_gives_the_wall_clock_back() {
         pin(at("2024-01-15T09:00:00Z"), TimeDelta::minutes(1));
@@ -115,6 +118,7 @@ mod tests {
 
     /// A thread that never pinned is never pinned by one that did — the
     /// property that makes this safe to call from a test in a suite.
+    #[test_id(toz18i6)]
     #[test]
     fn a_pin_does_not_leak_into_another_thread() {
         pin(at("2024-01-15T09:00:00Z"), TimeDelta::minutes(1));
@@ -137,6 +141,7 @@ mod tests {
     ///
     /// Stated over the TREE rather than over the files that were wrong on the
     /// day: the failure mode is a repository function nobody has written yet.
+    #[test_id(trfmhzg)]
     #[test]
     fn the_wall_clock_is_read_in_one_place() {
         let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");

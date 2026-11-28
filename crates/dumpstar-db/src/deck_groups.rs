@@ -318,6 +318,7 @@ mod tests {
         .unwrap()
     }
 
+    #[test_id(tvuh9xy)]
     #[test]
     fn existing_group_strings_become_groups_with_their_decks() {
         let (dir, conn) = conn();
@@ -362,6 +363,7 @@ mod tests {
         assert_eq!(free, None);
     }
 
+    #[test_id(ti37wom)]
     #[test]
     fn crudl_with_rename_carrying_the_decks() {
         let (_d, conn) = conn();
@@ -447,6 +449,7 @@ mod tests {
         assert_eq!(list(&conn).unwrap().len(), 2);
     }
 
+    #[test_id(tjv97we)]
     #[test]
     fn naming_an_unknown_group_on_a_deck_creates_it() {
         let (_d, conn) = conn();
@@ -454,6 +457,7 @@ mod tests {
         assert!(find_by_name(&conn, "Fresh").unwrap().is_some());
     }
 
+    #[test_id(t6m1tgi)]
     #[test]
     fn delete_ungroups_or_takes_the_decks_with_it() {
         let (_d, conn) = conn();

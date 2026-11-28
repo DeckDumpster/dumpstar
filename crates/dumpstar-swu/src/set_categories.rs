@@ -49,6 +49,7 @@ pub fn unmapped<'a>(codes: impl IntoIterator<Item = &'a str>) -> Vec<&'a str> {
 mod tests {
     use super::*;
 
+    #[test_id(t9i4f3b)]
     #[test]
     fn every_production_set_has_a_category() {
         let codes: Vec<&str> = include_str!("../../../fixtures/swu/production-sets.txt")
@@ -59,12 +60,14 @@ mod tests {
         assert_eq!(unmapped(codes.iter().copied()), Vec::<&str>::new());
     }
 
+    #[test_id(t42v9kk)]
     #[test]
     fn a_set_with_no_category_is_reported() {
         assert_eq!(unmapped(["SOR", "ZZZ9"]), ["ZZZ9"]);
         assert_eq!(category_for("ZZZ9"), None);
     }
 
+    #[test_id(t7v7phk)]
     #[test]
     fn every_mapped_category_is_ordered_and_main_expansions_lead() {
         for (code, cat) in table() {

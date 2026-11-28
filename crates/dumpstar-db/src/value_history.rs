@@ -786,6 +786,7 @@ mod tests {
             .clone()
     }
 
+    #[test_id(tp1zgk5)]
     #[test]
     fn snapshot_today_computes_value_cost_and_count() {
         let (_d, mut conn, shared) = fixture();
@@ -823,6 +824,7 @@ mod tests {
         assert_eq!(sor.card_count, 3);
     }
 
+    #[test_id(tbimijj)]
     #[test]
     fn snapshot_today_is_idempotent() {
         let (_d, mut conn, shared) = fixture();
@@ -841,6 +843,7 @@ mod tests {
         assert_eq!(rows, 2, "re-run replaces, not duplicates (1 all + 1 set)");
     }
 
+    #[test_id(t853hor)]
     #[test]
     fn snapshot_excludes_non_owned_copies() {
         let (_d, mut conn, shared) = fixture();
@@ -859,6 +862,7 @@ mod tests {
         assert!((all.market_value - 10.00).abs() < 1e-9);
     }
 
+    #[test_id(t32qx1z)]
     #[test]
     fn snapshot_groups_by_binder() {
         let (_d, mut conn, shared) = fixture();
@@ -886,6 +890,7 @@ mod tests {
         assert!((series[0].points[0].market_value - 10.00).abs() < 1e-9);
     }
 
+    #[test_id(tiqtm00)]
     #[test]
     fn backfill_reconstructs_value_over_dates() {
         let (_d, mut conn, shared) = fixture();
@@ -948,6 +953,7 @@ mod tests {
         assert!((d2.cost_basis - 32.00).abs() < 1e-9);
     }
 
+    #[test_id(tshnnat)]
     #[test]
     fn backfill_respects_sold_status_from_log() {
         let (_d, mut conn, shared) = fixture();
@@ -1019,6 +1025,7 @@ mod tests {
     /// which a stray `manual_prices` row for it must NOT price (a gap in the
     /// feed is the catalog's to fill, not one tenant's). `snapshot_today` for
     /// D and `backfill` ending on D must write byte-identical rows for D.
+    #[test_id(tqwxtss)]
     #[test]
     fn snapshot_today_and_backfill_agree_on_the_same_date() {
         let (_d, mut conn, shared) = fixture();
@@ -1082,6 +1089,7 @@ mod tests {
     /// identical to the last bit. An accidental blend — a sealed lot joined
     /// into `_snap_owned`, a widened `all` — changes the first set of rows and
     /// not the second, and this is where that shows up.
+    #[test_id(t9a8gul)]
     #[test]
     fn sealed_holdings_do_not_move_the_cards_dimensions() {
         let (_d, mut conn, shared) = fixture();
@@ -1120,6 +1128,7 @@ mod tests {
     /// A sealed lot whose product nobody quotes is **skipped and counted**:
     /// out of the money, still in the unit count. Valuing it at zero would be
     /// indistinguishable from a box that is worthless.
+    #[test_id(t04ye13)]
     #[test]
     fn an_unpriced_sealed_lot_is_skipped_and_still_counted() {
         let (_d, mut conn, shared) = fixture();
@@ -1148,6 +1157,7 @@ mod tests {
     /// TCGCSV quotes many sealed products a mid and no market, so the rule is
     /// `COALESCE(market, mid)` — off ONE observation, never market from one
     /// day and mid from another.
+    #[test_id(ty8aoww)]
     #[test]
     fn a_sealed_lot_falls_back_to_the_mid_price() {
         let (_d, mut conn, shared) = fixture();
@@ -1164,6 +1174,7 @@ mod tests {
     /// pd-3lg8's rule, extended to the row pd-bbv7 adds: the live path and the
     /// backfill must be the same arithmetic on the sealed side too, or every
     /// historical sealed point disagrees with today's.
+    #[test_id(tgl7aab)]
     #[test]
     fn snapshot_today_and_backfill_agree_on_the_sealed_row() {
         let (_d, mut conn, shared) = fixture();
@@ -1201,6 +1212,7 @@ mod tests {
     /// A tenant who owns sealed product and no loose cards still has a value
     /// history. Reading `collection` alone for the earliest date would report
     /// that they have none.
+    #[test_id(tczwgxp)]
     #[test]
     fn a_sealed_only_collection_still_backfills() {
         let (_d, mut conn, shared) = fixture();
@@ -1220,6 +1232,7 @@ mod tests {
     /// The API's `all` dimension answers with the collection's two priced
     /// halves. The cards series stays first and keeps `bucket = None`, which
     /// is what every existing reader indexes.
+    #[test_id(t6fsv9d)]
     #[test]
     fn value_history_all_returns_the_sealed_series_beside_the_cards() {
         let (_d, mut conn, shared) = fixture();
@@ -1255,6 +1268,7 @@ mod tests {
         );
     }
 
+    #[test_id(t0v5zzs)]
     #[test]
     fn value_history_all_returns_single_series_even_when_empty() {
         let (_d, conn, _shared) = fixture();
@@ -1265,6 +1279,7 @@ mod tests {
         assert!(series[0].points.is_empty());
     }
 
+    #[test_id(thshml3)]
     #[test]
     fn value_history_sets_sorted_by_latest_value_desc() {
         // Two sets; the more valuable one must come first.
@@ -1304,6 +1319,7 @@ mod tests {
 
     /// Acceptance, half one: two tenants each get their own value series, from
     /// their own copies, and neither's rows carry the other's holdings.
+    #[test_id(tz31fpl)]
     #[test]
     fn two_tenants_each_get_a_value_series() {
         let (dir, mut alice, shared) = fixture();
@@ -1338,6 +1354,7 @@ mod tests {
 
     /// Acceptance, half two: a tenant whose file cannot be read is skipped and
     /// named, and the others are still valued.
+    #[test_id(twlp0to)]
     #[test]
     fn an_unreadable_tenant_is_skipped_and_reported() {
         let (dir, mut alice, shared) = fixture();

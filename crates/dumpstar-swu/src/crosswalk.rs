@@ -990,6 +990,7 @@ mod tests {
 
     /// sp-5zcm06: two official printings sharing set, number, display variant
     /// and finish, and one tcgcsv product for them: an alarm, not a guess.
+    #[test_id(tg20t9t)]
     #[test]
     fn one_product_for_two_printings_of_one_finish_is_ambiguous_not_guessed() {
         let groups = BTreeMap::from([(

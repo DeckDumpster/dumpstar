@@ -72,6 +72,7 @@ mod tests {
 
     const KEY: &str = "DUMPSTAR_TEST_BASE_URL_UNIT";
 
+    #[test_id(t2iboyt)]
     #[test]
     fn unset_is_the_default() {
         assert_eq!(
@@ -80,6 +81,7 @@ mod tests {
         );
     }
 
+    #[test_id(tmnu8nm)]
     #[test]
     fn an_override_wins_and_loses_its_trailing_slash() {
         assert_eq!(
@@ -93,6 +95,7 @@ mod tests {
 
     /// Empty and whitespace are not origins. Taking one would build every
     /// request against a bare path and fail somewhere far from here.
+    #[test_id(tztlyu4)]
     #[test]
     fn blank_is_treated_as_unset() {
         assert_eq!(

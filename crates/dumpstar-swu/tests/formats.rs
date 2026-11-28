@@ -4,6 +4,9 @@
 //! wrong row in `data/formats.json` fails here, and every citation in that file
 //! is checked against the retrieved Comprehensive Rules text.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::collections::HashMap;
 use std::io::Read;
 
@@ -383,6 +386,7 @@ fn cases() -> Vec<Case> {
     v
 }
 
+#[test_id(tg42vjj)]
 #[test]
 fn every_format_case_matches() {
     let (_d, c) = catalog();
@@ -411,6 +415,7 @@ fn every_format_case_matches() {
     }
 }
 
+#[test_id(th735yy)]
 #[test]
 fn printings_do_not_multiply_a_card() {
     // Entries are card_ids: the same card listed twice (as two lines) is one card.
@@ -433,6 +438,7 @@ fn printings_do_not_multiply_a_card() {
     );
 }
 
+#[test_id(t8db6ix)]
 #[test]
 fn unknown_card_and_missing_format_are_reported_not_assumed() {
     let (_d, c) = catalog();
@@ -444,6 +450,7 @@ fn unknown_card_and_missing_format_are_reported_not_assumed() {
     }));
 }
 
+#[test_id(tgn6i7a)]
 #[test]
 fn seeding_is_idempotent() {
     let (_d, mut c) = catalog();
@@ -463,6 +470,7 @@ fn rules_text() -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+#[test_id(tw6pg1j)]
 #[test]
 fn the_cited_rules_say_what_the_data_says() {
     let t = rules_text();
@@ -493,6 +501,7 @@ fn the_cited_rules_say_what_the_data_says() {
     }
 }
 
+#[test_id(t7ki6uu)]
 #[test]
 fn every_format_rule_set_parses() {
     let (_d, c) = catalog();

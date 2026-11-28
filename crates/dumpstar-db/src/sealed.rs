@@ -260,6 +260,7 @@ mod tests {
 
     /// A page is handed the stored file once the refresh has fetched it, and
     /// never the source CDN URL before that.
+    #[test_id(t316k07)]
     #[test]
     fn pages_get_the_stored_picture_never_the_source_url() {
         let (d, conn) = conn();
@@ -287,6 +288,7 @@ mod tests {
         assert!(!url.unwrap().contains("tcgplayer"));
     }
 
+    #[test_id(t7oy6le)]
     #[test]
     fn add_list_update_dispose_delete() {
         let (_d, conn) = conn();
@@ -334,6 +336,7 @@ mod tests {
     /// joined on `tcgplayer_product_id = product_id`, preferring the market
     /// price and falling back to the mid price. Products with no snapshot
     /// report `None` (no silent zero).
+    #[test_id(tmeuwsp)]
     #[test]
     fn market_price_join_prefers_market_then_mid() {
         let dir = tempfile::tempdir().unwrap();
@@ -409,6 +412,7 @@ mod tests {
         assert_eq!(by_id[&no_price], None);
     }
 
+    #[test_id(tndenow)]
     #[test]
     fn add_rejects_unknown_product() {
         let (_d, conn) = conn();

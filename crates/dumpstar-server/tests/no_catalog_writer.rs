@@ -14,6 +14,9 @@
 //! right today, for the same reason `crates/dumpstar-keys/tests/separation.rs`
 //! is: it has to stay true of code nobody has written yet.
 
+#[macro_use]
+extern crate spira_test_id;
+
 /// Every `.rs` under `crates/dumpstar-server/src`, with each file truncated at
 /// its first `#[cfg(test)]` — test code legitimately builds catalogs to serve
 /// from, and a fixture is not the serving path.
@@ -46,6 +49,7 @@ fn serving_source() -> Vec<(String, String)> {
     out
 }
 
+#[test_id(tctwvzl)]
 #[test]
 fn the_server_never_opens_the_catalog_read_write() {
     for (file, text) in serving_source() {
@@ -72,6 +76,7 @@ fn the_server_never_opens_the_catalog_read_write() {
 /// And the positive half: the one call that is allowed is still there. A guard
 /// that only forbids passes just as happily on a server that opens no catalog
 /// at all — which would be a server whose data-only migrations never apply.
+#[test_id(t9404nx)]
 #[test]
 fn the_server_still_converges_the_catalog_before_it_serves() {
     let found = serving_source()

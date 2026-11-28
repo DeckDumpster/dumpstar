@@ -2,6 +2,9 @@
 //! (dumpster-kit-tenancy's `AccessState`): its token is accepted, a token
 //! signed by a key the JWKS does not publish is rejected.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
 
@@ -32,6 +35,7 @@ fn issue(dir: &std::path::Path, email: &str, forged: bool) -> String {
     String::from_utf8(out.stdout).unwrap().trim().to_string()
 }
 
+#[test_id(t8fyqhv)]
 #[tokio::test]
 async fn issued_token_is_accepted_and_forged_one_rejected() {
     let dir = tempfile::tempdir().unwrap();

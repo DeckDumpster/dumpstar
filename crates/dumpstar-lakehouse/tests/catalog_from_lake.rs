@@ -14,6 +14,9 @@
 //! `raw_derivation` (the offline job's provenance, which the online path never
 //! wrote).
 
+#[macro_use]
+extern crate spira_test_id;
+
 #[allow(dead_code)]
 #[path = "../../dumpstar-ingest/tests/support/mod.rs"]
 mod support;
@@ -307,6 +310,7 @@ fn scalar<T: rusqlite::types::FromSql>(db: &Path, sql: &str) -> T {
 /// **The acceptance criterion.** The catalog built from the lake is the one
 /// today's online apply builds: its cards (mechanics included), its printings
 /// and its prices.
+#[test_id(tzbua6x)]
 #[test]
 fn the_catalog_derived_from_the_lake_is_row_identical_to_the_online_apply() {
     let h = Harness::start(true);
@@ -346,6 +350,7 @@ fn the_catalog_derived_from_the_lake_is_row_identical_to_the_online_apply() {
 }
 
 /// The derive reaches no upstream: the fixture upstream sees no request from it.
+#[test_id(tlez1j5)]
 #[test]
 fn the_derive_never_asks_an_upstream() {
     let h = Harness::start(true);
@@ -362,6 +367,7 @@ fn the_derive_never_asks_an_upstream() {
 
 /// A night with a dead official API still lands and derives the prices, and the
 /// derive says the card list is stale by exiting 2.
+#[test_id(tch2hcx)]
 #[test]
 fn a_dead_official_api_still_derives_the_prices_and_exits_2() {
     let h = Harness::start(false);
@@ -380,6 +386,7 @@ fn a_dead_official_api_still_derives_the_prices_and_exits_2() {
 /// A derivation-version bump re-derives everything from raw: forget one
 /// payload as applied under the current version, derive the same date again,
 /// and it is applied again.
+#[test_id(tb2w572)]
 #[test]
 fn a_derivation_bump_rederives_from_raw() {
     let h = Harness::start(true);
@@ -440,6 +447,7 @@ fn files(dir: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
 /// **sp-m1fuer's acceptance.** The set art and sealed pictures the derive
 /// replays from the lake are the ones the online `--assets` job fetched: the
 /// same files, byte for byte, and the derive asked no upstream for them.
+#[test_id(t8obn1j)]
 #[test]
 fn the_pictures_replayed_from_the_lake_are_those_the_online_job_fetched() {
     let h = Harness::start(true);
@@ -480,6 +488,7 @@ fn the_pictures_replayed_from_the_lake_are_those_the_online_job_fetched() {
 }
 
 /// A night with no pictures landed still derives the catalog, and says so.
+#[test_id(tpoma64)]
 #[test]
 fn a_partition_without_pictures_still_derives_the_catalog() {
     let h = Harness::start(true);

@@ -7,8 +7,12 @@
 //!   that stopped a holding source going undeclared);
 //! * a guard that the copies this repository was forked with stay deleted.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::path::{Path, PathBuf};
 
+#[test_id(twumgo5)]
 #[test]
 fn the_lake_reads_the_names_the_deploy_units_already_use() {
     let env = dumpstar_ship::lake_env();
@@ -18,6 +22,7 @@ fn the_lake_reads_the_names_the_deploy_units_already_use() {
     assert_eq!(env.config_relative_path, ".config/dumpstar/lake.env");
 }
 
+#[test_id(ttomspf)]
 #[test]
 fn key_custody_reads_the_names_and_format_the_existing_master_key_uses() {
     let env = dumpstar_ship::key_env();
@@ -29,6 +34,7 @@ fn key_custody_reads_the_names_and_format_the_existing_master_key_uses() {
     assert_eq!(env.format_tag(), "dumpstar-master-key-v1:");
 }
 
+#[test_id(tsawb4a)]
 #[test]
 fn every_outbox_source_has_a_staging_table() {
     use dumpstar_db::outbox::{SOURCE_TABLES, ZONE_SOURCES};
@@ -59,6 +65,7 @@ fn rust_under(dir: &Path, out: &mut Vec<PathBuf>) {
 
 /// These are the fingerprints of the copies this repository was forked with; none may
 /// reappear under `crates/`.
+#[test_id(tc6a7ep)]
 #[test]
 fn the_forked_lakehouse_copies_are_gone() {
     const COPIES: &[(&str, &str)] = &[

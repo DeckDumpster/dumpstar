@@ -240,6 +240,7 @@ mod tests {
         (dir, conn)
     }
 
+    #[test_id(twic55f)]
     #[test]
     fn singles_export_is_collectr_shaped() {
         let (_d, mut conn) = db();
@@ -266,6 +267,7 @@ mod tests {
         assert!(row.contains("2026-04-14"));
     }
 
+    #[test_id(t6cphw0)]
     #[test]
     fn sealed_export_keeps_quantity_and_marks_blank_number() {
         let (_d, conn) = db();
@@ -294,6 +296,7 @@ mod tests {
         assert!(row.contains("2026-02-28"));
     }
 
+    #[test_id(tllm72m)]
     #[test]
     fn disposed_rows_are_not_exported() {
         let (_d, mut conn) = db();
@@ -316,6 +319,7 @@ mod tests {
     /// the right tables, exports back out as two Collectr files, and those
     /// files re-parse to exactly the same singles/sealed split — cards never
     /// leak into the sealed file, sealed never leaks into the cards file.
+    #[test_id(tjprsp6)]
     #[test]
     fn collectr_round_trip_holds_the_garden_wall() {
         use dumpstar_core::import::collectr;
@@ -364,6 +368,7 @@ Main,Lorcana,Foo,Bar,1,Promo,Holofoil,Ungraded,Near Mint,0,1,1.00,0,false,2026-0
 
     /// The singles export groups cards by set, oldest release first, however
     /// the sets were inserted. Uses two sets so interleaving is detectable.
+    #[test_id(tketwfo)]
     #[test]
     fn singles_export_groups_by_set_in_release_order() {
         let dir = tempfile::tempdir().unwrap();

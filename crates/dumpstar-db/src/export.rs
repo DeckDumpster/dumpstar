@@ -101,6 +101,7 @@ mod tests {
     use crate::testkit;
     use crate::{connect_user, open_shared};
 
+    #[test_id(thj5js2)]
     #[test]
     fn exports_a_manabox_shaped_csv() {
         let dir = tempfile::tempdir().unwrap();

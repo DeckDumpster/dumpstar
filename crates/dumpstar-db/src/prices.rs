@@ -177,6 +177,7 @@ mod tests {
         .unwrap()
     }
 
+    #[test_id(tduer1t)]
     #[test]
     fn feed_market_prices_a_catalog_printing() {
         let (_d, shared, conn) = db();
@@ -191,6 +192,7 @@ mod tests {
         assert_eq!(price_of(&conn, "SOR-2-normal"), None);
     }
 
+    #[test_id(t4mhdko)]
     #[test]
     fn newest_feed_day_wins() {
         let (_d, shared, conn) = db();
@@ -201,6 +203,7 @@ mod tests {
         assert_eq!(price_of(&conn, "SOR-1-normal"), Some(6.0));
     }
 
+    #[test_id(tgx5asn)]
     #[test]
     fn newest_non_null_market_wins_over_a_newer_empty_quote() {
         let (_d, shared, conn) = db();
@@ -217,6 +220,7 @@ mod tests {
         assert_eq!(price_of(&conn, "SOR-1-normal"), Some(4.0));
     }
 
+    #[test_id(teoplyu)]
     #[test]
     fn a_tenant_manual_price_cannot_price_a_catalog_printing() {
         let (_d, shared, conn) = db();
@@ -233,6 +237,7 @@ mod tests {
         assert_eq!(price_of(&conn, "SOR-1-normal"), Some(4.5));
     }
 
+    #[test_id(toojvd2)]
     #[test]
     fn a_user_printing_prices_from_the_newest_manual_row() {
         let (_d, _shared, conn) = db();

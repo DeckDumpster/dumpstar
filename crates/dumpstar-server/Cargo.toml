@@ -27,6 +27,7 @@ ts-rs.workspace = true
 base64 = "0.22"
 
 [dev-dependencies]
+spira-test-id = { path = "../spira-test-id" }
 dumpster-kit-tenancy = { workspace = true, features = ["testing"] }
 dumpster-kit-conformance.workspace = true
 dumpster-kit-oidc = { workspace = true, features = ["testing"] }

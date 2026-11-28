@@ -1,6 +1,9 @@
 //! The real HTTP client against a local server: identified User-Agent, gzip
 //! accepted and decoded, and the pause between calls honoured.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
@@ -41,6 +44,7 @@ fn serve(n: usize) -> (String, Arc<Mutex<Vec<String>>>, std::thread::JoinHandle<
     (base, seen, h)
 }
 
+#[test_id(to8dpv3)]
 #[test]
 fn identifies_itself_accepts_gzip_decodes_it_and_pauses_between_calls() {
     let (base, seen, h) = serve(3);

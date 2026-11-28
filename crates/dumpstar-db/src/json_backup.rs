@@ -560,6 +560,7 @@ mod tests {
         envelope
     }
 
+    #[test_id(tlkdv23)]
     #[test]
     fn round_trip_reproduces_every_table() {
         let fx = Fixture::new();
@@ -587,6 +588,7 @@ mod tests {
         );
     }
 
+    #[test_id(tlsish3)]
     #[test]
     fn every_user_table_is_covered() {
         // The round-trip test is only as good as its seed data: assert the
@@ -611,6 +613,7 @@ mod tests {
         }
     }
 
+    #[test_id(tqaxppo)]
     #[test]
     fn export_preserves_nulls_and_types() {
         let fx = Fixture::new();
@@ -628,6 +631,7 @@ mod tests {
         assert_eq!(envelope[KEY_VERSION], Value::from(VERSION));
     }
 
+    #[test_id(tqrd643)]
     #[test]
     fn export_excludes_the_shared_catalog() {
         let fx = Fixture::new();
@@ -646,6 +650,7 @@ mod tests {
         }
     }
 
+    #[test_id(tcuexb4)]
     #[test]
     fn import_refuses_a_non_empty_target_by_default() {
         let fx = Fixture::new();
@@ -659,6 +664,7 @@ mod tests {
         );
     }
 
+    #[test_id(trqcq5n)]
     #[test]
     fn import_replaces_existing_contents() {
         let fx = Fixture::new();
@@ -703,6 +709,7 @@ mod tests {
         );
     }
 
+    #[test_id(to3xvc7)]
     #[test]
     fn import_is_order_independent_across_foreign_keys() {
         // `collection` references `binders`/`orders`/`batches`; the envelope's
@@ -723,6 +730,7 @@ mod tests {
         assert_eq!(violations, 0);
     }
 
+    #[test_id(tchbrw7)]
     #[test]
     fn import_rejects_a_foreign_envelope() {
         let fx = Fixture::new();
@@ -747,6 +755,7 @@ mod tests {
         }
     }
 
+    #[test_id(tyrdb1g)]
     #[test]
     fn a_rejected_import_leaves_the_database_untouched() {
         let fx = Fixture::new();
@@ -767,6 +776,7 @@ mod tests {
         );
     }
 
+    #[test_id(t5l71ga)]
     #[test]
     fn an_empty_collection_round_trips() {
         let fx = Fixture::new();
@@ -795,6 +805,7 @@ mod tests {
     /// (pd-s4c2). Tested against a zero-row baseline instead, every single
     /// `dumpstar import --json` would refuse a database nobody had put
     /// anything into.
+    #[test_id(taa59sa)]
     #[test]
     fn importing_into_a_freshly_created_collection_is_not_a_conflict() {
         let fx = Fixture::new();
@@ -811,6 +822,7 @@ mod tests {
     /// ...and the refusal still fires on the seeded table itself once the
     /// collection holds more of it than it was born with. The baseline is
     /// "what a new collection has", not "this table is exempt".
+    #[test_id(tz5q41v)]
     #[test]
     fn import_refuses_a_target_holding_more_than_its_birth_state() {
         let fx = Fixture::new();
@@ -835,6 +847,7 @@ mod tests {
     /// carries no such key, and the import empties every table it does not
     /// mention. Left there, that is not a loud failure — it is every
     /// multiplier silently defaulting to 1.0 on the collection page.
+    #[test_id(twmu72g)]
     #[test]
     fn importing_a_pre_move_envelope_leaves_the_multipliers_seeded() {
         let fx = Fixture::new();

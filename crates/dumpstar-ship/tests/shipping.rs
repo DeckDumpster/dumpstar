@@ -23,6 +23,9 @@
 //! Every fixture here is treated as if it were real tenant data — which is to
 //! say there is none of it. The collections hold invented printing ids.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
@@ -247,6 +250,7 @@ fn ship(
 
 // ── the run ─────────────────────────────────────────────────────────────────
 
+#[test_id(tgr8l1u)]
 #[test]
 fn a_first_run_ships_every_event_under_the_tenant_s_own_prefix() {
     let world = World::new();
@@ -275,6 +279,7 @@ fn a_first_run_ships_every_event_under_the_tenant_s_own_prefix() {
     assert_eq!(cursor::pending(&world.collection(ALICE)).unwrap(), 0);
 }
 
+#[test_id(tsb3m4n)]
 #[test]
 fn a_second_run_ships_only_what_arrived_since() {
     let world = World::new();
@@ -292,6 +297,7 @@ fn a_second_run_ships_only_what_arrived_since() {
     assert!(keys[1].ends_with("part-seq-000000000004-000000000005.parquet.enc"));
 }
 
+#[test_id(t7obcas)]
 #[test]
 fn a_part_never_spans_two_days_and_a_long_run_is_split() {
     let world = World::new();
@@ -320,6 +326,7 @@ fn a_part_never_spans_two_days_and_a_long_run_is_split() {
 
 /// The bead's claim, in its own words: ship the same outbox range twice, the
 /// tenant zone is UNCHANGED by the second run.
+#[test_id(twto6jh)]
 #[test]
 fn shipping_the_same_rows_twice_leaves_the_zone_byte_identical() {
     let world = World::new();
@@ -372,6 +379,7 @@ impl ObjectStore for DiesAfter {
     }
 }
 
+#[test_id(tskyiab)]
 #[test]
 fn a_crash_after_a_part_lands_but_before_the_cursor_moves_re_ships_only_that_part() {
     let world = World::new();
@@ -445,6 +453,7 @@ fn a_crash_after_a_part_lands_but_before_the_cursor_moves_re_ships_only_that_par
 /// Deleting an unshipped outbox row is what a lost event looks like from
 /// here — the number is gone and, because `AUTOINCREMENT` never reissues one,
 /// it is never coming back.
+#[test_id(twrhkwu)]
 #[test]
 fn a_dropped_sequence_number_is_detected_recorded_and_alarmed() {
     let world = World::new();
@@ -482,6 +491,7 @@ fn a_dropped_sequence_number_is_detected_recorded_and_alarmed() {
 
 /// The other half of the decision: a gap is alarmed, not obeyed. The rows
 /// that are still there are already lost if the shipper refuses to move.
+#[test_id(tscltxj)]
 #[test]
 fn a_gap_does_not_stop_the_events_that_are_still_there() {
     let world = World::new();
@@ -502,6 +512,7 @@ fn a_gap_does_not_stop_the_events_that_are_still_there() {
     assert_eq!(cursor::gaps(&conn).unwrap().len(), 1);
 }
 
+#[test_id(tnd0isx)]
 #[test]
 fn a_gap_at_the_head_of_the_batch_is_seen_too() {
     let world = World::new();
@@ -528,6 +539,7 @@ fn a_gap_at_the_head_of_the_batch_is_seen_too() {
 
 // ── the key, and whose it is ────────────────────────────────────────────────
 
+#[test_id(tdfgndr)]
 #[test]
 fn each_tenant_s_parts_open_only_under_that_tenant_s_own_key() {
     let world = World::new();
@@ -573,6 +585,7 @@ fn each_tenant_s_parts_open_only_under_that_tenant_s_own_key() {
     }
 }
 
+#[test_id(t78uajt)]
 #[test]
 fn what_lands_in_the_zone_is_what_the_outbox_held() {
     let world = World::new();
@@ -607,6 +620,7 @@ fn what_lands_in_the_zone_is_what_the_outbox_held() {
 
 // ── who is shipped, and who is not ──────────────────────────────────────────
 
+#[test_id(tr6h1is)]
 #[test]
 fn a_tombstoned_tenant_is_not_shipped_and_is_not_an_anomaly() {
     let world = World::new();
@@ -635,6 +649,7 @@ fn a_tombstoned_tenant_is_not_shipped_and_is_not_an_anomaly() {
     assert_eq!(cursor::shipped_thru(&world.collection(BOB)).unwrap(), 0);
 }
 
+#[test_id(tk3dqji)]
 #[test]
 fn an_unregistered_tenant_is_skipped_and_named_rather_than_shipped() {
     let world = World::new();
@@ -667,6 +682,7 @@ fn an_unregistered_tenant_is_skipped_and_named_rather_than_shipped() {
     assert!(world.objects().keys().all(|k| k.contains(ALICE)));
 }
 
+#[test_id(tt46f12)]
 #[test]
 fn a_run_that_ships_nobody_at_all_is_a_failure_not_a_warning() {
     let world = World::new();
@@ -686,6 +702,7 @@ fn a_run_that_ships_nobody_at_all_is_a_failure_not_a_warning() {
     assert!(world.objects().is_empty());
 }
 
+#[test_id(tyiae9n)]
 #[test]
 fn a_registered_tenant_with_no_database_is_skipped_rather_than_invented() {
     let world = World::new();
@@ -699,6 +716,7 @@ fn a_registered_tenant_with_no_database_is_skipped_rather_than_invented() {
     assert!(report.skipped()[0].1.contains("no database at"));
 }
 
+#[test_id(tjihahe)]
 #[test]
 fn a_collection_with_an_empty_outbox_ships_nothing_and_is_clean() {
     // pd-whsw's shape: an existing collection whose outbox starts empty. The
@@ -738,6 +756,7 @@ fn a_collection_with_an_empty_outbox_ships_nothing_and_is_clean() {
 /// would have burned. Reset one without the other and the backfill's first
 /// event arrives above a cursor that never passed anything, which is a real
 /// gap and would be reported as one.
+#[test_id(tx19lut)]
 #[test]
 fn a_backfilled_collection_ships_as_ordinary_events() {
     let world = World::new();
@@ -824,6 +843,7 @@ fn a_backfilled_collection_ships_as_ordinary_events() {
 /// nothing behind. A transport that dropped an event would still produce a
 /// plausible projection — it is the *contents* that would be quietly stale,
 /// which is exactly the failure a row count cannot see.
+#[test_id(tq20wvr)]
 #[test]
 fn a_shipped_part_projects_back_to_the_live_collection() {
     let world = World::new();
@@ -914,6 +934,7 @@ fn a_shipped_part_projects_back_to_the_live_collection() {
 /// This is the claim the equivalence proof rests on. If the two tables differ
 /// here, the two valuations differ downstream for a reason that has nothing
 /// to do with arithmetic.
+#[test_id(tu9c5kk)]
 #[test]
 fn the_zone_read_back_materialises_the_collection_row_for_row() {
     let world = World::new();
@@ -982,6 +1003,7 @@ fn the_zone_read_back_materialises_the_collection_row_for_row() {
 /// a single and a sealed lot deliberately sharing `row_id = 1` — the ordinary
 /// shape of a collection, and the shape a reduction keyed on `row_id` alone
 /// silently merges.
+#[test_id(tg8bumm)]
 #[test]
 fn the_zone_read_back_materialises_the_sealed_lots_too() {
     let world = World::new();
@@ -1066,6 +1088,7 @@ fn the_zone_read_back_materialises_the_sealed_lots_too() {
 ///
 /// A reader that quietly fell back to `collection` — or a transform that
 /// joined the wrong table — passes every test above and fails this one.
+#[test_id(tnkpfgy)]
 #[test]
 fn a_change_that_has_not_shipped_is_not_in_the_staged_holdings() {
     let world = World::new();
@@ -1122,6 +1145,7 @@ fn a_change_that_has_not_shipped_is_not_in_the_staged_holdings() {
 
 /// A tenant reads their own partition and nobody else's, which the prefix
 /// gives — and could not read another's anyway, which the key gives.
+#[test_id(tbs8p4n)]
 #[test]
 fn a_tenant_reads_only_their_own_holdings() {
     let world = World::new();
@@ -1182,6 +1206,7 @@ fn a_tenant_reads_only_their_own_holdings() {
 /// provenance row. Not "no table": the transform's refusal to value a
 /// collection whose staging table is absent is what stops it valuing today
 /// from a materialisation someone took last week.
+#[test_id(tuezum2)]
 #[test]
 fn a_tenant_with_nothing_in_the_zone_stages_an_empty_table() {
     let world = World::new();
@@ -1227,6 +1252,7 @@ fn a_tenant_with_nothing_in_the_zone_stages_an_empty_table() {
 
 /// The staged tables are transport state. An envelope carrying them would
 /// restore a database that believes it has been shipped.
+#[test_id(t97jyju)]
 #[test]
 fn the_staged_holdings_are_not_carried_by_the_json_envelope() {
     let world = World::new();
@@ -1300,6 +1326,7 @@ impl ObjectStore for FailsFor {
     }
 }
 
+#[test_id(t5xd5nf)]
 #[test]
 fn one_tenant_s_shipping_failure_delays_no_other_tenant() {
     let world = World::new();
@@ -1345,6 +1372,7 @@ fn one_tenant_s_shipping_failure_delays_no_other_tenant() {
 /// Printing ids are opaque to the shipper; the SWU catalog's variants and
 /// finishes reach the zone as the payload the trigger wrote, and come back
 /// out of the read-back unchanged.
+#[test_id(tiuvjep)]
 #[test]
 fn swu_printings_of_every_variant_and_finish_round_trip_through_the_zone() {
     let world = World::new();
@@ -1402,6 +1430,7 @@ fn swu_printings_of_every_variant_and_finish_round_trip_through_the_zone() {
 
 // ── key state at creation (sp-yt37j5) ───────────────────────────────────────
 
+#[test_id(tvwrnif)]
 #[test]
 fn a_tenant_created_through_the_site_ships_without_a_manual_register() {
     let world = World::new();
@@ -1419,6 +1448,7 @@ fn a_tenant_created_through_the_site_ships_without_a_manual_register() {
     assert_eq!(report.events(), 2);
 }
 
+#[test_id(tux5kg2)]
 #[test]
 fn a_live_tenant_with_no_key_state_is_named_as_an_unkeyed_skip() {
     let world = World::new();

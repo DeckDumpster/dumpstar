@@ -178,6 +178,7 @@ fn bounded_for<T, E>(
 mod tests {
     use super::*;
 
+    #[test_id(thya1vn)]
     #[test]
     fn a_statement_past_the_bound_is_stopped_and_named() {
         let mut conn = Connection::open_in_memory().unwrap();
@@ -205,6 +206,7 @@ mod tests {
         assert!(started.elapsed() < Duration::from_secs(5));
     }
 
+    #[test_id(twfdxem)]
     #[test]
     fn a_call_inside_the_bound_is_untouched() {
         let mut conn = Connection::open_in_memory().unwrap();

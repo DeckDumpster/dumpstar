@@ -187,6 +187,7 @@ mod tests {
             .unwrap_or_else(|| panic!("no {id}"))
     }
 
+    #[test_id(t888hzo)]
     #[test]
     fn printing_rel_unions_catalog_and_user_printings() {
         let (_d, conn) = conn();
@@ -203,6 +204,7 @@ mod tests {
         assert_eq!(s_f.6, None);
     }
 
+    #[test_id(tred1h7)]
     #[test]
     fn a_user_printing_borrows_the_lead_printings_set_and_number() {
         let (_d, conn) = conn();
@@ -229,6 +231,7 @@ mod tests {
         assert_eq!(u.6.as_deref(), Some("orphan"));
     }
 
+    #[test_id(tdjwf0u)]
     #[test]
     fn lead_printing_id_prefers_standard_then_normal_then_lowest_id() {
         let (_d, conn) = conn();

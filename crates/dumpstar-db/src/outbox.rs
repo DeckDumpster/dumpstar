@@ -711,6 +711,7 @@ mod tests {
     // The shape of an event
     // -----------------------------------------------------------------
 
+    #[test_id(tp1yhc2)]
     #[test]
     fn adding_a_copy_appends_one_insert_event_carrying_the_new_row() {
         let (_dir, mut conn) = user_conn();
@@ -731,6 +732,7 @@ mod tests {
         assert!(payload["notes"].is_null(), "an unset column is JSON null");
     }
 
+    #[test_id(tj3otqv)]
     #[test]
     fn a_delete_event_carries_the_row_as_it_was() {
         let (_dir, mut conn) = user_conn();
@@ -763,6 +765,7 @@ mod tests {
     /// and dropping `'quantity', NEW.quantity` from the sealed insert trigger
     /// fails it with `sealed_collection insert event (seq 4) payload is
     /// missing: ["quantity"]`.
+    #[test_id(tqtqv9c)]
     #[test]
     fn every_column_of_every_source_reaches_the_payload() {
         let (_dir, mut conn) = user_conn();
@@ -816,6 +819,7 @@ mod tests {
     /// later, and `every_triggered_table_is_emittable` would not see it: that
     /// one compares the SET of tables, so a table with one trigger looks
     /// exactly like a table with three.
+    #[test_id(tp5g5o6)]
     #[test]
     fn every_source_carries_all_three_triggers() {
         let (_dir, conn) = user_conn();
@@ -840,6 +844,7 @@ mod tests {
     /// The reason the writer is a trigger and not a call site. Each of these
     /// is a separate function in `collection.rs`; none of them mentions the
     /// outbox.
+    #[test_id(t7m7xp2)]
     #[test]
     fn every_collection_mutation_appends_an_event() {
         let (_dir, mut conn) = user_conn();
@@ -887,6 +892,7 @@ mod tests {
     /// The same claim for the other half of the holdings (pd-4gop). Every
     /// function in `sealed.rs` that writes the table, and none of them
     /// mentions the outbox either.
+    #[test_id(trvozyf)]
     #[test]
     fn every_sealed_mutation_appends_an_event() {
         let (_dir, conn) = user_conn();
@@ -955,6 +961,7 @@ mod tests {
     /// the CSV importer, the JSON restore, the fixture seeder — never call
     /// `collection::add`. A writer bolted onto the service functions would
     /// miss all of them; a trigger cannot.
+    #[test_id(tzaglf9)]
     #[test]
     fn a_raw_sql_writer_that_never_heard_of_the_outbox_is_covered_anyway() {
         let (_dir, conn) = user_conn();
@@ -973,6 +980,7 @@ mod tests {
     /// And the same for sealed. `json_backup`'s restore writes
     /// `sealed_collection` with a column list of its own and the fixture
     /// seeder writes it directly; neither goes through `sealed::add`.
+    #[test_id(trex48e)]
     #[test]
     fn a_raw_sql_writer_of_sealed_rows_is_covered_anyway() {
         let (_dir, conn) = user_conn();
@@ -1011,6 +1019,7 @@ mod tests {
     ///
     /// Seen red: keying `project`'s map on `row_id` alone makes the sealed
     /// delete remove the single.
+    #[test_id(thtfhbe)]
     #[test]
     fn a_single_and_a_sealed_lot_can_share_a_row_id() {
         let (_dir, mut conn) = user_conn();
@@ -1042,6 +1051,7 @@ mod tests {
     /// other rather than only within a table. A consumer replaying a mixed
     /// stream in `seq` order is replaying it in the order the mutations
     /// happened.
+    #[test_id(tsmyxmt)]
     #[test]
     fn the_two_sources_share_one_interleaved_sequence() {
         let (_dir, mut conn) = user_conn();
@@ -1080,6 +1090,7 @@ mod tests {
     /// (The copy is added straight into the binder rather than moved into
     /// it, because a `move_to` leaves a `movement_log` row whose own foreign
     /// key refuses the binder delete outright — pd-hj2w.)
+    #[test_id(t3qfju6)]
     #[test]
     fn a_foreign_key_cascade_is_a_mutation_too() {
         let (_dir, mut conn) = user_conn();
@@ -1120,6 +1131,7 @@ mod tests {
     /// The in-process half of the atomicity claim: a mutation that does not
     /// commit leaves no event. (The out-of-process half — SIGKILL between
     /// the two — is `tests/outbox_atomicity.rs`.)
+    #[test_id(tz5rpt8)]
     #[test]
     fn a_rolled_back_mutation_leaves_no_event() {
         let (_dir, mut conn) = user_conn();
@@ -1146,6 +1158,7 @@ mod tests {
 
     /// The same, for a sealed lot. The triggers are separate statements in
     /// the schema file, so the claim is separate too.
+    #[test_id(tpyj44i)]
     #[test]
     fn a_rolled_back_sealed_mutation_leaves_no_event() {
         let (_dir, mut conn) = user_conn();
@@ -1175,6 +1188,7 @@ mod tests {
     /// back with everything else — so the shipper's "a gap means a lost
     /// event" reading survives a failed write. Asserted rather than assumed:
     /// if this ever stopped holding, gap detection would report phantoms.
+    #[test_id(tqmkujy)]
     #[test]
     fn a_rolled_back_mutation_does_not_burn_a_sequence_number() {
         let (_dir, mut conn) = user_conn();
@@ -1196,6 +1210,7 @@ mod tests {
     /// to another card's printing is refused after the row is read, and the
     /// FK check on commit is later still. Whatever the refusal, the pair
     /// stays consistent.
+    #[test_id(tc491v4)]
     #[test]
     fn a_refused_mutation_leaves_neither_a_change_nor_an_event() {
         let (_dir, mut conn) = user_conn();
@@ -1234,6 +1249,7 @@ mod tests {
     /// serialisation, etc.); without it four tight loops on one file can
     /// exhaust BUSY_TIMEOUT on a loaded box, which is not a shape production
     /// ever produces.
+    #[test_id(tlwzsgl)]
     #[test]
     fn the_sequence_is_monotonic_and_gap_free_under_concurrent_writers() {
         const WRITERS: usize = 4;
@@ -1308,6 +1324,7 @@ mod tests {
     /// The shipper will trim a shipped prefix. The numbers it trimmed must
     /// never come round again — a reused `seq` is an event silently
     /// overwritten in the tenant zone.
+    #[test_id(tekszbv)]
     #[test]
     fn a_trimmed_sequence_number_is_never_reused() {
         let (_dir, mut conn) = user_conn();
@@ -1331,6 +1348,7 @@ mod tests {
     /// are collection state and both are carried — a sealed lot silently
     /// missing from a backup is a lost holding, which is the same failure as
     /// a lost event pointed the other way.
+    #[test_id(tdyjxjz)]
     #[test]
     fn the_outbox_is_not_carried_by_the_json_envelope() {
         let (_dir, mut conn) = user_conn();
@@ -1366,6 +1384,7 @@ mod tests {
     /// have to describe both. `json_backup` empties every envelope table and
     /// re-inserts, so the sealed lot's clear-and-rewrite is exactly as
     /// visible as the single's.
+    #[test_id(thn8kcm)]
     #[test]
     fn a_restore_records_itself_rather_than_restoring_a_stale_log() {
         let (_dir, mut conn) = user_conn();
@@ -1412,6 +1431,7 @@ mod tests {
     /// collection someone emptied has an outbox full of the deletes that
     /// emptied it — which is not something to protect, and must not be read
     /// as a non-empty collection.
+    #[test_id(t9p9veq)]
     #[test]
     fn outbox_rows_alone_do_not_make_a_collection_look_occupied() {
         let (_dir, mut conn) = user_conn();
@@ -1429,6 +1449,7 @@ mod tests {
             .expect("an emptied collection is still an empty collection");
     }
 
+    #[test_id(t2zv5yz)]
     #[test]
     fn an_envelope_that_names_the_outbox_is_ignored_rather_than_restored() {
         let (_dir, mut conn) = user_conn();
@@ -1551,6 +1572,7 @@ mod tests {
     /// Throwing the events away is what "delete the zone" means here — the
     /// zone holds exactly this projection, so a zone with nothing in it and
     /// an outbox with nothing in it are the same starting point.
+    #[test_id(tvzoknw)]
     #[test]
     fn a_zone_rebuilt_by_backfill_equals_the_zone_incremental_shipping_built() {
         let (_dir, mut conn) = user_conn();
@@ -1603,6 +1625,7 @@ mod tests {
     /// with the ones already there and carry the same payloads, so the
     /// projection cannot move. A backfill is not something to be afraid of
     /// running.
+    #[test_id(tlcz5ss)]
     #[test]
     fn a_backfill_over_an_intact_outbox_changes_nothing() {
         let (_dir, mut conn) = user_conn();
@@ -1628,6 +1651,7 @@ mod tests {
     /// Seen red: ordering [`project`] by `seq` alone leaves this asserting
     /// `Damaged` and finding `Near Mint` — the redrive's stale condition
     /// silently overwriting the tenant's real one.
+    #[test_id(t191oyc)]
     #[test]
     fn a_stale_redrive_with_a_higher_seq_does_not_clobber_a_live_mutation() {
         let (_dir, mut conn) = user_conn();
@@ -1682,6 +1706,7 @@ mod tests {
     /// The property the test above depends on: [`emit`] dates an event with
     /// the row's own last-known change time. If it stamped `now`, a redrive
     /// would win every race by construction and rule 3 would be words.
+    #[test_id(ts623hz)]
     #[test]
     fn an_emitted_event_carries_the_rows_own_time_not_the_moment_of_emission() {
         let (_dir, mut conn) = user_conn();
@@ -1703,6 +1728,7 @@ mod tests {
     /// so it takes its own — normalised into the outbox's format, because
     /// `occurred_at` is the column the whole resolution rule sorts on and
     /// two formats in it do not order against each other.
+    #[test_id(tbqj16m)]
     #[test]
     fn a_row_that_never_emitted_is_dated_from_its_own_timestamp() {
         let (_dir, mut conn) = user_conn();
@@ -1727,6 +1753,7 @@ mod tests {
     /// putting an unorderable string in the sort column. An event dated
     /// there loses to everything, which is the safe reading of "we do not
     /// know when this row last changed".
+    #[test_id(t0z47js)]
     #[test]
     fn a_row_whose_own_timestamp_is_unreadable_is_dated_to_the_floor() {
         let (_dir, mut conn) = user_conn();
@@ -1749,6 +1776,7 @@ mod tests {
     /// columns in declaration order — the trigger by hand in
     /// `schema_user.sql`, the emitter from `pragma_table_info` — so this is
     /// the assertion that the two lists have not drifted.
+    #[test_id(taht8zh)]
     #[test]
     fn an_emitted_payload_is_byte_identical_to_the_triggers() {
         let (_dir, mut conn) = user_conn();
@@ -1764,6 +1792,7 @@ mod tests {
     /// nothing about the event is otherwise different — same table, same
     /// op, same payload shape. A consumer that branches on it is the thing
     /// this column must never cause.
+    #[test_id(thyw777)]
     #[test]
     fn provenance_is_recorded_and_is_the_only_difference() {
         let (_dir, mut conn) = user_conn();
@@ -1786,6 +1815,7 @@ mod tests {
     /// holding. A path that reached the zone directly would be a second
     /// writer, and the zone could then disagree with the outbox with
     /// nothing able to detect it.
+    #[test_id(teasy0g)]
     #[test]
     fn emitting_changes_no_holding() {
         let (_dir, mut conn) = user_conn();
@@ -1819,6 +1849,7 @@ mod tests {
     /// triggers a pre-pd-385w collection still carries are labelled
     /// `trigger`, because that is what they are, without those triggers
     /// having to be replaced.
+    #[test_id(tqstp7j)]
     #[test]
     fn a_collection_from_before_the_provenance_column_grows_one_on_open() {
         let dir = tempfile::tempdir().unwrap();
@@ -1892,6 +1923,7 @@ mod tests {
     /// That is the silent under-report this bead exists to prevent, reached
     /// from the deployment end rather than the code end: nothing about a box
     /// in that state looks broken.
+    #[test_id(tg44l3k)]
     #[test]
     fn a_collection_from_before_the_sealed_triggers_gains_them_and_backfills() {
         let dir = tempfile::tempdir().unwrap();
@@ -1968,6 +2000,7 @@ mod tests {
     /// Without it, a backfill would cover singles, report success, and
     /// leave every tenant's sealed product invisible to the zone — the same
     /// silent under-report the whole item exists to prevent, one layer in.
+    #[test_id(tom53lo)]
     #[test]
     fn every_triggered_table_is_emittable() {
         let (_dir, conn) = user_conn();
@@ -2012,6 +2045,7 @@ mod tests {
     /// Every table the emitter names must actually declare the column it
     /// dates undated rows from. A typo here would not fail loudly: the
     /// `strftime` would error at emit time, on the rare path, at 3am.
+    #[test_id(thw4yvl)]
     #[test]
     fn every_emittable_table_declares_its_timestamp_column() {
         let (_dir, conn) = user_conn();
@@ -2031,6 +2065,7 @@ mod tests {
     // Rule 4 — safe, but not silent
     // -----------------------------------------------------------------
 
+    #[test_id(tiqadjn)]
     #[test]
     fn a_second_backfill_refuses_and_says_when_the_first_was() {
         let (_dir, mut conn) = user_conn();
@@ -2049,6 +2084,7 @@ mod tests {
         assert!(message.contains("--force"), "...and what to do: {message}");
     }
 
+    #[test_id(t0kn7jb)]
     #[test]
     fn a_forced_second_backfill_runs_and_changes_nothing() {
         let (_dir, mut conn) = user_conn();
@@ -2071,6 +2107,7 @@ mod tests {
     /// A redrive is targeted and expected to repeat — the ledger records
     /// it, and nothing refuses it. Only the full backfill is the thing an
     /// operator can run twice by mistake.
+    #[test_id(tc4q2hh)]
     #[test]
     fn a_redrive_is_recorded_but_never_refused() {
         let (_dir, mut conn) = user_conn();
@@ -2104,6 +2141,7 @@ mod tests {
     /// arm from `scope_predicate` emits two events here instead of one, and
     /// `per_table` reports `sealed_collection 1` for a run that named a
     /// single.
+    #[test_id(txy1byq)]
     #[test]
     fn a_row_scope_redrives_only_its_own_table() {
         let (_dir, mut conn) = user_conn();
@@ -2146,6 +2184,7 @@ mod tests {
     /// predicate for it matches nothing, so the run would otherwise report
     /// "0 events" — which is exactly what a holding already shipped looks
     /// like, and the operator would believe the redrive had happened.
+    #[test_id(tc874an)]
     #[test]
     fn a_row_scope_naming_a_table_the_outbox_does_not_carry_is_refused() {
         let (_dir, mut conn) = user_conn();
@@ -2172,6 +2211,7 @@ mod tests {
         );
     }
 
+    #[test_id(t1g1xhh)]
     #[test]
     fn the_ledger_records_the_seq_range_the_run_appended() {
         let (_dir, mut conn) = user_conn();
@@ -2200,6 +2240,7 @@ mod tests {
     /// reused, which means the highest number PRESENT and the last number
     /// ALLOCATED are different values — and a redrive aimed at the range
     /// this reports would have named events that do not exist.
+    #[test_id(tait3k9)]
     #[test]
     fn the_reported_range_is_the_numbers_written_not_the_rows_present() {
         let (_dir, mut conn) = user_conn();
@@ -2219,6 +2260,7 @@ mod tests {
     /// A backfill of an empty collection is a real run that emitted
     /// nothing, not a no-op to hide. It takes a ledger row — so the next
     /// one still refuses — and no seq range, because it appended none.
+    #[test_id(this9hg)]
     #[test]
     fn a_backfill_of_an_empty_collection_is_recorded_with_no_range() {
         let (_dir, mut conn) = user_conn();
@@ -2234,6 +2276,7 @@ mod tests {
     // Redrive — the scopes
     // -----------------------------------------------------------------
 
+    #[test_id(tzk41ea)]
     #[test]
     fn a_seq_range_redrives_exactly_the_rows_that_range_named() {
         let (_dir, mut conn) = user_conn();
@@ -2258,6 +2301,7 @@ mod tests {
     /// slice removed a holding, replaying only the survivors would leave
     /// the zone holding a card the tenant does not own — so a row the scope
     /// names that is gone re-emits its last-known `delete`.
+    #[test_id(t1yet9j)]
     #[test]
     fn a_redrive_reproduces_the_removals_in_the_slice_it_covers() {
         let (_dir, mut conn) = user_conn();
@@ -2284,6 +2328,7 @@ mod tests {
     /// the rows", against a zone being rebuilt from nothing; re-emitting
     /// every historical removal would grow the outbox with events the
     /// rebuilt zone has no use for.
+    #[test_id(tiop2bh)]
     #[test]
     fn a_backfill_does_not_reemit_historical_removals() {
         let (_dir, mut conn) = user_conn();
@@ -2300,6 +2345,7 @@ mod tests {
         );
     }
 
+    #[test_id(ta5jlmk)]
     #[test]
     fn a_scope_that_names_no_row_emits_nothing_and_is_still_recorded() {
         let (_dir, mut conn) = user_conn();
@@ -2310,6 +2356,7 @@ mod tests {
         assert_eq!(runs(&conn).unwrap().len(), 1);
     }
 
+    #[test_id(tqph21v)]
     #[test]
     fn a_backwards_seq_range_is_refused() {
         let (_dir, mut conn) = user_conn();
@@ -2318,6 +2365,7 @@ mod tests {
         assert!(runs(&conn).unwrap().is_empty(), "a refusal is not a run");
     }
 
+    #[test_id(tcyjxee)]
     #[test]
     fn a_seq_range_starting_below_one_is_refused() {
         let (_dir, mut conn) = user_conn();
@@ -2337,6 +2385,7 @@ mod tests {
     /// The restore is modelled the way a physical one behaves: the file
     /// comes back holding both the rows and the outbox as they were at the
     /// restore point, and the events written after it are simply not there.
+    #[test_id(tgwypln)]
     #[test]
     fn a_redrive_reconciles_the_zone_to_a_database_restored_to_an_earlier_point() {
         let (_dir, mut conn) = user_conn();
@@ -2420,6 +2469,7 @@ mod tests {
     // Not collection state, part two
     // -----------------------------------------------------------------
 
+    #[test_id(tz42tpb)]
     #[test]
     fn the_emit_ledger_is_not_carried_by_the_json_envelope() {
         let (_dir, mut conn) = user_conn();

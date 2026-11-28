@@ -1,5 +1,8 @@
 //! Acceptance for catalog search (design row S11).
 
+#[macro_use]
+extern crate spira_test_id;
+
 use chrono::{TimeZone, Utc};
 use dumpstar_swu::job::run_once;
 use dumpstar_swu::search::{QueryError, SearchError, search};
@@ -22,6 +25,7 @@ fn ids(db: &std::path::Path, q: &str) -> Vec<String> {
         .collect()
 }
 
+#[test_id(tsd71fp)]
 #[test]
 fn attributes_and_text_filter_printings() {
     let (_d, db) = built();
@@ -45,6 +49,7 @@ fn attributes_and_text_filter_printings() {
     assert!(ids(&db, "cost:99").is_empty());
 }
 
+#[test_id(tle2ixu)]
 #[test]
 fn the_index_is_read_not_written_by_a_search() {
     let (_d, db) = built();
@@ -62,6 +67,7 @@ fn the_index_is_read_not_written_by_a_search() {
     );
 }
 
+#[test_id(tt65jnt)]
 #[test]
 fn bad_queries_are_refused_and_fts_syntax_is_inert() {
     let (_d, db) = built();

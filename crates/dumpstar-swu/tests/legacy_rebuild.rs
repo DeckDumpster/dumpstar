@@ -1,6 +1,9 @@
 //! A `shared.sqlite` written by the Pokémon-shaped schema dumpstar was forked
 //! with is detected and rebuilt, not failed on (sp-r7w5xi).
 
+#[macro_use]
+extern crate spira_test_id;
+
 use dumpstar_swu::job::run_once;
 use dumpstar_swu::{Catalog, FakeSource};
 use rusqlite::Connection;
@@ -14,6 +17,7 @@ fn legacy_file(dir: &std::path::Path) -> std::path::PathBuf {
     path
 }
 
+#[test_id(t5tl3hr)]
 #[test]
 fn open_writer_rebuilds_a_legacy_shaped_file() {
     let dir = tempfile::tempdir().unwrap();
@@ -57,6 +61,7 @@ fn open_writer_rebuilds_a_legacy_shaped_file() {
     );
 }
 
+#[test_id(tl7omag)]
 #[test]
 fn catalog_apply_over_a_legacy_file_succeeds_and_a_second_open_keeps_the_data() {
     let dir = tempfile::tempdir().unwrap();
@@ -91,6 +96,7 @@ INSERT INTO cards VALUES ('c1', 'Senator Chuchi', NULL);
 INSERT INTO printings VALUES ('u1', 'c1', 'SEC', '1125', 'Standard', 'Normal', NULL, NULL, NULL);
 ";
 
+#[test_id(tgzccwq)]
 #[test]
 fn a_file_from_the_swu_schema_before_variant_code_is_rebuilt() {
     let dir = tempfile::tempdir().unwrap();
@@ -119,6 +125,7 @@ fn a_file_from_the_swu_schema_before_variant_code_is_rebuilt() {
 
 /// sp-0mjd2y: adding a catalog column emptied production's catalog on deploy.
 /// A populated catalog lacking a column the schema gained keeps every row.
+#[test_id(tdtfxfm)]
 #[test]
 fn a_populated_catalog_missing_a_new_column_keeps_its_rows() {
     let dir = tempfile::tempdir().unwrap();

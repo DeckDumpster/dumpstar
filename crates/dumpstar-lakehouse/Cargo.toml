@@ -21,6 +21,7 @@ anyhow.workspace = true
 chrono.workspace = true
 
 [dev-dependencies]
+spira-test-id = { path = "../spira-test-id" }
 dumpstar-swu.workspace = true
 # row_identical.rs pulls in dumpstar-ingest/tests/support/mod.rs by path, which
 # re-exports from dumpstar_ingest::test_upstream — that module is gated behind

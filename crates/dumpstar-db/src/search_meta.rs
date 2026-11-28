@@ -351,6 +351,7 @@ mod tests {
         (dir, conn)
     }
 
+    #[test_id(tfau5h5)]
     #[test]
     fn keyword_help_lists_every_derived_keyword() {
         let json = keywords_json();
@@ -367,6 +368,7 @@ mod tests {
         assert!(help.contains("Support") && help.contains("Plot"));
     }
 
+    #[test_id(t03cwo7)]
     #[test]
     fn seeds_parse_and_have_unique_aliases() {
         // The embedded JSON must parse, and no alias may map to two keywords
@@ -392,6 +394,7 @@ mod tests {
         let _: Vec<SearchFlag> = serde_json::from_str(FLAGS_SEED).unwrap();
     }
 
+    #[test_id(tl5slzn)]
     #[test]
     fn reconcile_is_idempotent() {
         let (_d, mut conn) = shared();
@@ -406,6 +409,7 @@ mod tests {
         assert_eq!(n as usize, b.keywords);
     }
 
+    #[test_id(tzfgica)]
     #[test]
     fn load_registry_resolves_aliases() {
         let (_d, mut conn) = shared();
@@ -425,6 +429,7 @@ mod tests {
         assert_eq!(reg.resolve("energy"), None);
     }
 
+    #[test_id(txourv2)]
     #[test]
     fn rarities_are_ordered_low_to_high() {
         let (_d, mut conn) = shared();
@@ -445,6 +450,7 @@ mod tests {
         );
     }
 
+    #[test_id(tcwybdt)]
     #[test]
     fn rarity_lookup_folds_upstream_spelling_variants() {
         let (_d, mut conn) = shared();
@@ -467,6 +473,7 @@ mod tests {
         assert!(tiers.rank("Blorbo Rare") > tiers.rank("Special"));
     }
 
+    #[test_id(tnx5d1i)]
     #[test]
     fn flags_have_computed_and_variant_kinds() {
         let (_d, mut conn) = shared();
@@ -483,6 +490,7 @@ mod tests {
         assert_eq!(foil.match_str.as_deref(), Some("Foil"));
     }
 
+    #[test_id(tgyvluo)]
     #[test]
     fn rarity_sort_follows_the_stored_official_sort_value() {
         let (_d, mut conn) = shared();

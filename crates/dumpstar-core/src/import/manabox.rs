@@ -145,6 +145,7 @@ Set code,Set name,Collector number,Foil,Rarity,Quantity,ManaBox ID,Scryfall ID,P
 SOR,Spark of Rebellion,6,normal,Common,2,m1,s1,0.25,false,false,near_mint,en,USD
 SOR,Spark of Rebellion,262,foil,Legendary,1,m2,s2,42.00,true,false,lightly_played,en,USD";
 
+    #[test_id(tfr6m8h)]
     #[test]
     fn expands_quantity_one_row_per_copy() {
         let rows = parse(SAMPLE).unwrap();
@@ -169,6 +170,7 @@ SOR,Spark of Rebellion,262,foil,Legendary,1,m2,s2,42.00,true,false,lightly_playe
         assert_eq!(rare.source_line, 3);
     }
 
+    #[test_id(ty3i4sb)]
     #[test]
     fn missing_quantity_defaults_to_one() {
         let csv = "Set code,Collector number,Foil\nSOR,1,foil";
@@ -177,12 +179,14 @@ SOR,Spark of Rebellion,262,foil,Legendary,1,m2,s2,42.00,true,false,lightly_playe
         assert_eq!(rows[0].finish, "Foil");
     }
 
+    #[test_id(to5f3nf)]
     #[test]
     fn missing_required_column_is_an_error() {
         let csv = "Set code,Foil\nSOR,foil";
         assert!(matches!(parse(csv), Err(ImportError::MissingColumn(_))));
     }
 
+    #[test_id(t7qh6ov)]
     #[test]
     fn non_numeric_quantity_is_a_bad_row() {
         let csv = "Set code,Collector number,Quantity\nSOR,1,lots";

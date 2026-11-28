@@ -8,6 +8,9 @@
 //! after. The upstream is the in-process fake the raw-coverage gate in
 //! `src/data.rs` uses, so the run reaches its end without anybody's uptime.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use std::path::{Path, PathBuf};
 use std::process::Output;
 
@@ -69,6 +72,7 @@ fn databases(home: &Path) -> Vec<(PathBuf, Vec<u8>)> {
     out
 }
 
+#[test_id(tdg1ax8)]
 #[test]
 fn a_refresh_writes_no_tenant_database_and_no_catalog() {
     let home = tempfile::tempdir().unwrap();

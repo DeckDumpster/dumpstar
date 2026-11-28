@@ -319,6 +319,7 @@ mod tests {
         (name.into(), role.into(), side.map(str::to_string), optional)
     }
 
+    #[test_id(taz3hk1)]
     #[test]
     fn a_leader_cost_that_uses_the_force_is_a_non_optional_front_consumer() {
         assert_eq!(
@@ -334,6 +335,7 @@ mod tests {
     }
 
     /// The issue's acceptance: Obi-Wan Kenobi (LOF-8) is force / consumes / front / not optional.
+    #[test_id(tp5uhxx)]
     #[test]
     fn obi_wan_kenobi_lof_8_consumes_the_force_on_his_front_side() {
         let got = mechanics_of(
@@ -353,6 +355,7 @@ mod tests {
         );
     }
 
+    #[test_id(tqzosp2)]
     #[test]
     fn may_use_the_force_is_optional_and_reminder_text_is_not_a_second_mention() {
         assert_eq!(
@@ -364,6 +367,7 @@ mod tests {
         );
     }
 
+    #[test_id(tm4dkwf)]
     #[test]
     fn the_force_is_with_you_produces_unless_it_is_a_condition() {
         assert_eq!(
@@ -376,6 +380,7 @@ mod tests {
         );
     }
 
+    #[test_id(t6niauq)]
     #[test]
     fn a_token_is_produced_required_or_spent_by_the_nearest_verb() {
         assert_eq!(
@@ -397,6 +402,7 @@ mod tests {
         );
     }
 
+    #[test_id(t1bt9dj)]
     #[test]
     fn initiative_and_token_units() {
         assert_eq!(
@@ -412,6 +418,7 @@ mod tests {
         );
     }
 
+    #[test_id(tamffj4)]
     #[test]
     fn terms_the_derivation_missed_are_reported() {
         // The standing positive control: novel wording yields no mechanic.
@@ -435,6 +442,7 @@ mod tests {
     }
 
     /// Each phrase of sp-mlmq3w: (rules text, a stored mechanic it must yield).
+    #[test_id(tfzxb9a)]
     #[test]
     fn mechanic_vocabulary_wording_is_classified() {
         let cases: &[(&str, &str)] = &[
@@ -486,12 +494,14 @@ mod tests {
         }
     }
 
+    #[test_id(trqbo7x)]
     #[test]
     fn a_named_token_with_no_verb_is_not_unmatched() {
         let text = "Enemy Credit tokens lose all abilities.";
         assert!(unmatched_terms(Some(text), &[]).is_empty());
     }
 
+    #[test_id(thwxtrq)]
     #[test]
     fn the_force_trait_is_not_the_force() {
         for text in [
@@ -503,6 +513,7 @@ mod tests {
         }
     }
 
+    #[test_id(tpm996g)]
     #[test]
     fn a_card_with_no_mechanic_has_none() {
         assert!(of("Unit", "Sentinel\nRaid 2").is_empty());

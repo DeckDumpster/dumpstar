@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/dumpstar-swu",
+    "crates/dumpstar-ci-deny",
     "crates/dumpstar-cli",
     "crates/dumpstar-core",
     "crates/dumpstar-db",
@@ -11,6 +12,7 @@ members = [
     "crates/dumpstar-lakehouse",
     "crates/dumpstar-server",
     "crates/dumpstar-ship",
+    "crates/spira-test-id",
 ]
 
 [workspace.package]

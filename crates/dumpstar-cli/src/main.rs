@@ -3,6 +3,10 @@
 //! The clap command tree grows as features land (PLAN.md §2, §5). The
 //! `ingest` subcommand arrives with a later task.
 
+#[cfg(test)]
+#[macro_use]
+extern crate spira_test_id;
+
 mod catalog;
 mod collection;
 mod data;

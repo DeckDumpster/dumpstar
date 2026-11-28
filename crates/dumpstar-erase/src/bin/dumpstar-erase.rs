@@ -33,6 +33,10 @@
 //! and the other does not, the same asymmetry `dumpstar keys` draws between its
 //! two paths.
 
+#[cfg(test)]
+#[macro_use]
+extern crate spira_test_id;
+
 use std::io::Write;
 use std::path::PathBuf;
 
@@ -345,6 +349,7 @@ mod tests {
 
     /// Irreversible things are never implicit, and the refusal says what is
     /// irreversible about this one before an operator types `--yes`.
+    #[test_id(t7sf67k)]
     #[test]
     fn delete_refuses_without_yes() {
         let Ok(Cli {
@@ -362,6 +367,7 @@ mod tests {
 
     /// A stray copy without its object key cannot prove anything, so clap
     /// refuses the pair rather than the command discovering it later.
+    #[test_id(t6laepf)]
     #[test]
     fn a_stray_copy_without_its_object_key_is_refused() {
         let Err(err) = parse(&["verify", "--tenant", "alice", "--stray", "/tmp/copy.enc"]) else {
@@ -375,6 +381,7 @@ mod tests {
 
     /// `verify` takes no `--yes`: it reads, and a read that needed confirming
     /// would be a read nobody ran.
+    #[test_id(trowjvb)]
     #[test]
     fn verify_takes_no_confirmation() {
         assert!(parse(&["verify", "--tenant", "alice", "--yes"]).is_err());
@@ -382,6 +389,7 @@ mod tests {
     }
 
     /// 4 is not 1. See the module docs.
+    #[test_id(trtunl8)]
     #[test]
     fn not_proven_has_its_own_exit_status() {
         assert_eq!(EXIT_NOT_PROVEN, 4);

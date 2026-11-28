@@ -18,6 +18,9 @@
 //! Single queries come from a curated list; the boolean grammar (`and`, `or`,
 //! `-`, grouping) is then swept by combining every pair of atoms.
 
+#[macro_use]
+extern crate spira_test_id;
+
 use dumpstar_core::query::{Ast, KeywordRegistry, Op, parse};
 use dumpstar_db::search::{self, compile};
 use dumpstar_db::search_meta::{self, SearchFlag};
@@ -643,6 +646,7 @@ const ATOMS: &[&str] = &[
     "count<3",
 ];
 
+#[test_id(tircdhx)]
 #[test]
 fn every_atom_agrees_with_the_oracle() {
     let (_d, conn, reg, flags) = fixture();
@@ -658,6 +662,7 @@ fn every_atom_agrees_with_the_oracle() {
     );
 }
 
+#[test_id(tjut7qv)]
 #[test]
 fn boolean_combinations_agree_with_the_oracle() {
     let (_d, conn, reg, flags) = fixture();
@@ -679,6 +684,7 @@ fn boolean_combinations_agree_with_the_oracle() {
     assert!(checked > 10_000, "sweep shrank to {checked} queries");
 }
 
+#[test_id(tj5xe99)]
 #[test]
 fn unmodelled_keywords_are_skipped_not_guessed() {
     // The coverage claim: collection and pricing keywords are not card
@@ -696,6 +702,7 @@ fn unmodelled_keywords_are_skipped_not_guessed() {
     }
 }
 
+#[test_id(tdt8ulk)]
 #[test]
 fn the_oracle_is_not_vacuous() {
     // Positive control: a query that matches some printings and not others, so

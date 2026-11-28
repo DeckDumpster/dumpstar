@@ -84,6 +84,7 @@ mod tests {
     const CARDS: &str = r#"{"SOR-5":{"name":"Leader","subtitle":"Sub","type":"Leader","rarity":"Rare","cost":5,"game":{"aspects":["Villainy","Command"],"arenas":["Ground"],"hp":6,"epic_action":null}},"C1-3":{"name":"Base","subtitle":null,"type":"Base","rarity":"Common","cost":null,"game":{"aspects":["Vigilance"],"arenas":[],"hp":25,"epic_action":"Epic Action: Draw a card."}}}"#;
     const DIGEST: &str = "39b256e5fe319322da2c7e8a6cbf4eda2c5ae6471249ea1741894edb101eee3e";
 
+    #[test_id(tpe7j48)]
     #[test]
     fn the_fixture_deck_digests_to_its_pinned_value() {
         let lines: Value = serde_json::from_str(LINES).unwrap();

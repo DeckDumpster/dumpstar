@@ -13,6 +13,9 @@
 //! duration. `the_backoff_actually_waits` is the one exception, and it uses
 //! a budget small enough to measure without being slow.
 
+#[macro_use]
+extern crate spira_test_id;
+
 // Shared scaffolding: this binary uses Reply::status but not Reply::png, which only
 // dumpstar-lakehouse's row_identical.rs needs. CI runs clippy with -D warnings, so the
 // unused half is a build failure without this. Same allow prices_fixture.rs carries.
@@ -62,6 +65,7 @@ const ONE_GROUP: &str = r#"{"results":[{"groupId":1,"name":"Base Set","abbreviat
 
 /// The bug, in one test: a single 5xx used to end the run. Now the second
 /// attempt answers and the caller never learns there was a first.
+#[test_id(tbm08su)]
 #[test]
 fn a_5xx_is_retried_and_the_next_attempt_wins() {
     let upstream = FakeUpstream::start(|_, n| match n {
@@ -81,6 +85,7 @@ fn a_5xx_is_retried_and_the_next_attempt_wins() {
 }
 
 /// 429 is the upstream asking for a moment, not refusing the request.
+#[test_id(t1lkpqg)]
 #[test]
 fn a_429_is_retried() {
     let upstream = FakeUpstream::start(|_, n| match n {
@@ -100,6 +105,7 @@ fn a_429_is_retried() {
 
 /// A 404 is a fact about the URL. Asking again is noise, and four times the
 /// noise on a catalog-wide walk is a real cost.
+#[test_id(tacds10)]
 #[test]
 fn a_404_is_answered_once() {
     let upstream = FakeUpstream::start(|_, _| down(404));
@@ -116,6 +122,7 @@ fn a_404_is_answered_once() {
 
 /// Bounded, and still loud at the end of it. This is the No-Fallback rule
 /// holding: the retry buys attempts, not forgiveness.
+#[test_id(tdo324s)]
 #[test]
 fn the_budget_runs_out_and_the_failure_propagates() {
     let upstream = FakeUpstream::start(|_, _| down(503));
@@ -134,6 +141,7 @@ fn the_budget_runs_out_and_the_failure_propagates() {
 /// One attempt, no waiting — the behaviour both clients had before pd-nons,
 /// still expressible. `tests/lake/derive.sh` and friends rely on a fetch
 /// failing fast rather than sleeping through a budget.
+#[test_id(tn8hp4y)]
 #[test]
 fn a_client_with_no_budget_asks_once() {
     let upstream = FakeUpstream::start(|_, _| down(500));
@@ -151,6 +159,7 @@ fn a_client_with_no_budget_asks_once() {
 /// It backs off rather than hammering. Four attempts at 40ms doubling is
 /// 40 + 80 + 160 = 280ms of sleep; the assertion is a floor, so a slow
 /// machine cannot fail it.
+#[test_id(tpihsg1)]
 #[test]
 fn the_backoff_actually_waits() {
     let upstream = FakeUpstream::start(|_, _| down(503));
@@ -178,6 +187,7 @@ fn the_backoff_actually_waits() {
 /// one URL condemn a whole night's raw partition — and pd-up36's
 /// age-based alarming reads exactly that flag. What the manifest records is
 /// "this URL was not fetched", and after a successful retry it was.
+#[test_id(tacqhb8)]
 #[test]
 fn a_recovered_failure_is_not_recorded_in_the_manifest() {
     let upstream = FakeUpstream::start(|_, n| match n {
@@ -205,6 +215,7 @@ fn a_recovered_failure_is_not_recorded_in_the_manifest() {
 
 /// A URL that never answers records exactly one failure — the last attempt.
 /// Four rows for one URL would read as four lost endpoints.
+#[test_id(t1xan7q)]
 #[test]
 fn an_exhausted_budget_records_one_failure_not_one_per_attempt() {
     let upstream = FakeUpstream::start(|_, _| down(503));
